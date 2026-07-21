@@ -1,0 +1,20 @@
+[runtime]
+compose_service = "scientific"
+
+[dnp_call]
+parallel = false
+
+[cpi]
+err_const = 0.0000892303778101497
+
+# These values document the current scientific defaults. The present upstream
+# R scripts hard-code them, so the Python layer does not override them yet.
+[scientific_defaults]
+homozygous_lower_ratio = 0.1
+homozygous_upper_ratio = 0.9
+paternal_heterozygous_lower_ratio = 0.4
+paternal_heterozygous_upper_ratio = 0.6
+max_other_reads_ratio = 0.1
+minimum_fetal_reads = 2
+cpi_plot_lower_threshold = -4.0
+cpi_plot_upper_threshold = 4.0

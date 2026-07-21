@@ -1,0 +1,27 @@
+name: nipat
+
+services:
+  scientific:
+    image: nipat-scientific-runtime:0.1.0
+    build:
+      context: .
+      dockerfile: docker/scientific-runtime/Dockerfile
+    user: ${NIPAT_UID:-0}:${NIPAT_GID:-0}
+    working_dir: /workspace/nipat-desktop
+    volumes:
+      - type: bind
+        source: ${NIPAT_PROJECT_DIR:-.}
+        target: /workspace/nipat-desktop
+        read_only: true
+      - type: bind
+        source: ${NIPAT_DATA_DIR:-../data}
+        target: /workspace/data
+        read_only: true
+      - type: bind
+        source: ${NIPAT_RUNS_DIR:-../runs}
+        target: /workspace/runs
+    environment:
+      TZ: Europe/Rome
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      HOME: /tmp

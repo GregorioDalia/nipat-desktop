@@ -1,0 +1,5 @@
+* text=auto
+*.R text eol=lf
+scientific/SHA256SUMS text eol=lf
+*.sh text eol=lf
+scientific/vendor/** -whitespace
