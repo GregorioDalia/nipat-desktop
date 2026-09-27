@@ -764,7 +764,11 @@ cat(paste0("Number of individuals processed: ", length(samplelist), "\n"))
 
 
 # plot unassigned genotypes
-final_merged_data$NA_count <- rowSums(is.na(final_merged_data[, 6:ncol(final_merged_data)]))
+
+final_merged_data$NA_count <- rowSums(
+  is.na(final_merged_data[, 6:ncol(final_merged_data), drop = FALSE])
+)
+
 final_merged_data$DNP_name <- paste0(final_merged_data$chr, ":", final_merged_data$pos1, "-", final_merged_data$pos2)
 
 w <- ggplot(final_merged_data, aes(x = DNP_name, y = NA_count)) +
@@ -786,22 +790,33 @@ w <- ggplot(final_merged_data, aes(x = DNP_name, y = NA_count)) +
 make_upset_df <- function(df) {
   df$DNP <- paste(df$chr, paste(df$pos1, df$pos2, sep = "-"), sep = ":")
   gt_cols <- grep("^GT_", colnames(df), value = TRUE)
-  df_bin <- as.data.frame(lapply(df[, gt_cols], function(x) ifelse(is.na(x), 0, 1)))
+  df_bin <- as.data.frame(
+  lapply(df[, gt_cols, drop = FALSE], function(x) ifelse(is.na(x), 0, 1))
+  )
   colnames(df_bin) <- gsub("^GT_", "", colnames(df_bin))
   rownames(df_bin) <- df$DNP
   return(df_bin)
 }
 df_for_upset <- make_upset_df(final_merged_data)
 
+if (ncol(df_for_upset) >= 2) {
+  u <- upset(
+    df_for_upset,
+    intersect = colnames(df_for_upset),
+    min_size = 0,
+    name = "DNPs covered"
+  )
 
-u <- upset(
-  df_for_upset,
-  intersect = colnames(df_for_upset),
-  min_size = 0,
-  name = "DNPs covered"
-)
-ggsave(file.path(output, "summary", "DNPs_covered_UpSet_plot.pdf"),
-       plot=u, limitsize = FALSE, width =(ncol(df_for_upset) * 30), height=(ncol(df_for_upset) * 2))
+  ggsave(
+    file.path(output, "summary", "DNPs_covered_UpSet_plot.pdf"),
+    plot = u,
+    limitsize = FALSE,
+    width = ncol(df_for_upset) * 30,
+    height = ncol(df_for_upset) * 2
+  )
+} else {
+  message("Skipping UpSet plot: at least two samples are required.")
+}
 
 
 

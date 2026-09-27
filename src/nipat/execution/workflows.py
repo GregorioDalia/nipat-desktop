@@ -58,13 +58,13 @@ class Workflows:
             f"--bamlist={self.layout.container_path(bamlist)}",
             f"--DNPs={self.layout.container_path(panel)}",
             f"--reference={self.layout.container_path(reference)}",
-            f"--out={self.layout.container_path(run_dir / 'output')}",
+            "--out=output",
         ]
         if parallel:
             command.append("--parallel")
         self.runner.run(
             command,
-            working_dir=self.layout.container_path(run_dir / "work"),
+            working_dir=self.layout.container_path(run_dir),
         )
         return run_dir
 

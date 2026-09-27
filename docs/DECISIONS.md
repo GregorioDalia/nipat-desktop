@@ -1,6 +1,6 @@
 # Consolidated decisions
 
-- The current R scripts supplied on 2026-07-21 are the canonical scientific implementation.
+- The R scripts supplied on 2026-07-21 are the scientific baseline. The application includes the DNPcall compatibility fixes documented in `scientific/README.md`; the three NEWPAT scripts remain unchanged.
 - The first prototype covers DNPcall, SNPcall, contamination and CPI.
 - `DNP_list.txt` is the provisional trusted DNP panel.
 - The Python layer may derive `n°DNP`, `chr`, `pos1`, `pos2` mechanically from that list.

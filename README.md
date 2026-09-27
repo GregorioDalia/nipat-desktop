@@ -70,6 +70,9 @@ D:\Nipat_project\runs\first-dnp-call\output
 
 Add `--parallel` only after the initial serial run has been reproduced.
 
+For a single sample, DNPcall intentionally skips the UpSet plot. The local
+compatibility fixes and source hashes are documented in `scientific/README.md`.
+
 ## SNPcall
 
 The SNP list must be tab-separated with header `pos, ref, alt`, where `pos` is
@@ -112,6 +115,6 @@ explicitly reviewed run with `--err-const`.
 ## Development safeguards
 
 - Never place BAM, BAI, FASTA, FAI or generated results in this repository.
-- Never modify files under `scientific/vendor` in place.
+- Keep upstream archives unchanged; review and document any changes to `scientific/vendor` in `scientific/README.md` and update `scientific/SHA256SUMS`.
 - Use `--dry-run` before a new workflow to validate inputs and display commands.
 - Each named run is immutable: an existing run directory is never overwritten.
