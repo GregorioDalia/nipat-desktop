@@ -1,0 +1,4 @@
+chr1	100	101	AA	CC
+chr1	200	201	GG	TT
+chr1	300	301	AC	GT
+chr1	400	401	CC	AA

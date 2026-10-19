@@ -1,0 +1,5 @@
+chr	pos1	pos2	REF	ALT	N_REF	N_ALT	N_Other	total_count
+chr1	100	101	AA	CC	98	2	0	100
+chr1	200	201	GG	TT	97	3	0	100
+chr1	300	301	AC	GT	96	4	0	100
+chr1	400	401	CC	AA	99	1	0	100

@@ -158,40 +158,102 @@ closest_logCPI <- function(res_df, target_i) {
   res_df$log_CPI[idx]
 }
 
-plot_CPI <- function(df, cutoff_label, pair_name) {
+plot_CPI <- function(df, cutoff_label, pair_name,
+                     cfDNA_percent = NA_real_,
+                     cpi_medff = NA_real_) {
 
-  if (nrow(df)==0) {
-    return(ggplot() + ggtitle(paste(pair_name,"-",cutoff_label,"(no data)")))
+  if (nrow(df) == 0) {
+    return(
+      ggplot() +
+        theme_void() +
+        labs(title = paste(pair_name, "-", cutoff_label, "(no data)"))
+    )
   }
 
-  max_iter <- suppressWarnings(max(df$Iteration,na.rm=TRUE)); if(!is.finite(max_iter)) max_iter <- 2
-  range_len <- max_iter - 2
-  tick_step <- if (range_len <= 20) 1 else if (range_len <= 100) 20 else if (range_len <= 500) 50 else 100
-  tick_vals <- sort(unique(c(2, seq(from=max(2,tick_step), to=max_iter, by=tick_step))))
+  max_iter <- max(df$Iteration, na.rm = TRUE)
 
-  ggplot(df, aes(x=Iteration)) +
-    annotate("rect", xmin=-Inf, xmax=Inf, ymin=-Inf, ymax=-4,
-             fill="red", alpha=0.05) +
-    annotate("rect", xmin=-Inf, xmax=Inf, ymin=-4, ymax=4,
-             fill="grey", alpha=0.05) +
-    annotate("rect", xmin=-Inf, xmax=Inf, ymin=4, ymax=Inf,
-             fill="green", alpha=0.05) +
+  ticks <- if (max_iter <= 20) {
+    2:max_iter
+  } else if (max_iter <= 100) {
+    unique(c(2, seq(10, max_iter, by = 10), max_iter))
+  } else if (max_iter <= 500) {
+    unique(c(2, seq(25, max_iter, by = 25), max_iter))
+  } else {
+    unique(c(2, seq(50, max_iter, by = 50), max_iter))
+  }
 
-    geom_line(aes(y=log_CPI), color="black") +
-    geom_point(aes(y=log_CPI), color="black", size=1.5) +
-    geom_line(aes(y=NotMismatch), color="green") +
-    geom_line(aes(y=Mismatch), color="orange", linetype="dashed") +
+  cfDNA_lbl <- if (is.finite(cfDNA_percent)) {
+    sprintf("%.2f", cfDNA_percent)
+  } else {
+    "NA"
+  }
 
-    scale_y_continuous(name="log10(CPI)",
-                       sec.axis=sec_axis(~ ., name="match / mismatch sites")) +
-    scale_x_continuous(name="minimum number of fetal reads considered",
-                       limits=c(2,max_iter), breaks=tick_vals) +
-    labs(title=paste(pair_name,"-",cutoff_label)) +
-    theme_bw(base_size=9) +
-    theme(plot.title=element_text(size=9),
-          axis.title=element_text(size=8))
+  cpi_lbl <- if (is.finite(cpi_medff)) {
+    sprintf("%.3f", cpi_medff)
+  } else {
+    "NA"
+  }
+
+  annot_text <- paste0(
+    "atop(",
+    "'cfDNA: ", cfDNA_lbl, "%',",
+    "log[10](CPI) * ': ' * '", cpi_lbl, "'",
+    ")"
+  )
+
+  ggplot(df, aes(x = Iteration)) +
+    annotate("rect", xmin = -Inf, xmax = Inf,
+             ymin = -Inf, ymax = -4, fill = "red", alpha = 0.05) +
+    annotate("rect", xmin = -Inf, xmax = Inf,
+             ymin = -4, ymax = 4, fill = "grey", alpha = 0.05) +
+    annotate("rect", xmin = -Inf, xmax = Inf,
+             ymin = 4, ymax = Inf, fill = "green", alpha = 0.05) +
+
+    geom_line(aes(y = log_CPI), colour = "black") +
+    geom_point(aes(y = log_CPI), colour = "black", size = 1.3) +
+    geom_line(aes(y = NotMismatch), colour = "green") +
+    geom_line(aes(y = Mismatch), colour = "orange",
+              linetype = "dashed") +
+
+    annotate(
+      "label",
+      x = Inf, y = Inf,
+      label = annot_text,
+      parse = TRUE,
+      hjust = 1.05,
+      vjust = 1.10,
+      size = 3,
+      fill = "white",
+      colour = "black",
+      label.size = 0.2
+    ) +
+
+    scale_y_continuous(
+      name = expression(log[10](CPI)),
+      sec.axis = sec_axis(~ ., name = "Matching / mismatching sites"),
+      expand = expansion(mult = c(0.02, 0.14))
+    ) +
+
+    scale_x_continuous(
+      name = "minimum number of fetal reads considered",
+      breaks = ticks,
+      limits = c(2, max(3, max_iter)),
+      expand = expansion(mult = c(0.02, 0.02))
+    ) +
+
+    labs(title = paste(pair_name, "-", cutoff_label)) +
+
+    theme_bw(base_size = 9) +
+    theme(
+      plot.title = element_text(size = 9, hjust = 0),
+      axis.title = element_text(size = 8),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+      panel.border = element_rect(
+        colour = "black", fill = NA, linewidth = 0.6
+      ),
+      plot.margin = margin(8, 12, 8, 8)
+    )
 }
-
 
 ## main containers
 summary_table <- data.frame()
@@ -250,12 +312,35 @@ for (i in 1:nrow(coppie)) {
     res <- out$results
     per_cutoff_results[[cutoff_label]] <- res
 
-    target_i <- out$madre_info %>% dplyr::pull(fetal_reads) %>%
-      stats::median(na.rm=TRUE) %>% round()
-    per_cutoff_CPI_medreads <- c(per_cutoff_CPI_medreads,
-                                 closest_logCPI(res, target_i))
+    target_i <- out$madre_info %>%
+      dplyr::pull(fetal_reads) %>%
+      stats::median(na.rm = TRUE) %>%
+      round()
 
-    per_cutoff_plots[[cutoff_label]] <- plot_CPI(res, cutoff_label, pair_name)
+    cpi_at_med <- closest_logCPI(res, target_i)
+
+    per_cutoff_CPI_medreads <- c(
+      per_cutoff_CPI_medreads,
+      cpi_at_med
+    )
+
+    median_fetal_fraction <- out$madre_info %>%
+      dplyr::mutate(
+        fetal_fraction_site = 2 * fetal_reads /
+          (Ref_mother + Alt_mother)
+      ) %>%
+      dplyr::pull(fetal_fraction_site) %>%
+      stats::median(na.rm = TRUE)
+
+    cfDNA_percent <- median_fetal_fraction * 100
+
+    per_cutoff_plots[[cutoff_label]] <- plot_CPI(
+      res,
+      cutoff_label,
+      pair_name,
+      cfDNA_percent = cfDNA_percent,
+      cpi_medff = cpi_at_med
+    )
   }
 
   ## save combined plots in plots_dir
@@ -350,7 +435,7 @@ padre <- padre %>%
           TRUE ~ NA_real_
         ),
         fetal_fraction_site = 2*fetal_reads/(Ref_mother+Alt_mother)
-      ) %>% filter(!is.na(fetal_fraction_site), fetal_fraction_site>0)
+      ) %>% filter(!is.na(fetal_fraction_site), fetal_fraction_site > 0, fetal_reads >= 2)
 
     n_sites_mother <- nrow(madre_cutoff)
 

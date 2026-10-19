@@ -112,6 +112,22 @@ nipat cpi `
 The default `err_const` is `0.0000892303778101497`; override it only through an
 explicitly reviewed run with `--err-const`.
 
+### CPI numeric regression check
+
+With the scientific Docker image already built, run from the repository root:
+
+```powershell
+python scripts/verify_cpi_update.py
+```
+
+This runs the actual CPI workflow on two synthetic pairs and checks the CSV
+against analytical expectations, including the updated two-fetal-read minimum
+and a pair with no informative sites. It also checks that the three PDF files
+were produced. Each invocation creates a new directory under `runs` and prints
+its path. It does not require genomic input files or overwrite earlier runs.
+The fixture and calculations are documented in `tests/fixtures/cpi/README.md`.
+This integration check is separate from the Python-only unit tests.
+
 ## Development safeguards
 
 - Never place BAM, BAI, FASTA, FAI or generated results in this repository.
