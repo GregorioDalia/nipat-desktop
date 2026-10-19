@@ -1,8 +1,8 @@
 # Scientific sources
 
 The files below come from the supplied upstream projects. DNPcall includes the
-compatibility fixes documented below. CPI uses the unmodified upstream update
-recorded below; SNPcall and contamination retain the supplied baseline versions.
+compatibility fixes documented below. CPI and contamination use the unmodified
+upstream updates recorded below; SNPcall retains the supplied baseline version.
 `SHA256SUMS` records the exact versions currently used by the application.
 
 - `vendor/DNPcall/DNPcall.R`
@@ -54,3 +54,28 @@ unchanged. No local modifications were applied to this upstream script.
 Run `python scripts/verify_cpi_update.py` with Docker available to check the
 numeric summary against synthetic, analytically derived expectations. See
 `tests/fixtures/cpi/README.md` for inputs, calculations and test boundaries.
+
+## Contamination upstream update (2026-10-19)
+
+`vendor/NEWPAT/contamination/detect_contamination.R` is copied without local
+changes from [NEWPAT commit 17d2b8bbd09b1a0ff0651198c21e544aef197824](https://github.com/lpistacchia/NEWPAT/tree/17d2b8bbd09b1a0ff0651198c21e544aef197824).
+Its Git blob is `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
+The companion README is also copied from that commit. Its example tree refers
+to the full upstream repository; the regression inputs shipped here are under
+`tests/fixtures/contamination`. Previously supplied example files are retained.
+
+- Previous SHA-256: `146925d8dd5a3173e7bb692f3b9d7f5d68ce3b6e6e5508c9972b5954cdaf105d`.
+- Updated SHA-256: `28f0d0298cdce06c6d9f33ec5d7a224a8c9fa7dfb6fde87b930ee938e703cc08`.
+
+The script derives a missing `ratio_REF_ALT` from `N_REF / (N_REF + N_ALT)`.
+It includes informative sites with zero unexpected reads, which can change
+sample means and standard deviations, and writes `contamination_summary.txt`
+with `informative_DNPs` instead of the previous XLSX summary. It accepts the
+six count/coordinate columns without requiring REF, ALT or total_count. R
+dependencies are already present in the scientific runtime.
+
+Python validation follows that input schema. During staging only the copied
+filenames are normalized to `.txt` so the R directory reader includes them;
+file contents are unchanged. Duplicate resulting names are rejected.
+Run `python scripts/verify_contamination_update.py` to execute the numeric
+regression cases documented in `tests/fixtures/contamination/README.md`.

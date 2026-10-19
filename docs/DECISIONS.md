@@ -1,6 +1,6 @@
 # Consolidated decisions
 
-- The R scripts supplied on 2026-07-21 are the scientific baseline. DNPcall includes the compatibility fixes and CPI includes the upstream update recorded in `scientific/README.md`; SNPcall and contamination retain the supplied baseline versions.
+- The R scripts supplied on 2026-07-21 are the scientific baseline. DNPcall includes the compatibility fixes, while CPI and contamination include the upstream updates recorded in `scientific/README.md`; SNPcall retains the supplied baseline version.
 - The first prototype covers DNPcall, SNPcall, contamination and CPI.
 - `DNP_list.txt` is the provisional trusted DNP panel.
 - The Python layer may derive `n°DNP`, `chr`, `pos1`, `pos2` mechanically from that list.
@@ -11,11 +11,15 @@
 - The application is local and is being designed for Windows, Linux and macOS.
 - Genomic data and run outputs remain outside the Git repository.
 
-## Open scientific interface issue
+## Contamination interface
 
-The current DNPcall output does not include `ratio_REF_ALT`, while the vendored
-contamination script requires it. NEWPAT commit
-`17d2b8bbd09b1a0ff0651198c21e544aef197824` now computes the missing field as
-`N_REF / (N_REF + N_ALT)`, excluding zero-denominator sites. Updating contamination
-and its Python validation is a separate integration task. Until that update is
-applied, the current wrapper continues to reject input without `ratio_REF_ALT`.
+The DNPcall output does not include `ratio_REF_ALT`. The vendored contamination
+script from NEWPAT commit `17d2b8bbd09b1a0ff0651198c21e544aef197824` computes the
+missing field as `N_REF / (N_REF + N_ALT)`, excluding zero-denominator sites. An
+existing ratio column is passed through to the upstream script. Python validates
+the required count/coordinate columns and does not invent a scientific field.
+
+Contamination now includes informative sites with zero unexpected reads. The
+resulting counts, mean and standard deviation can differ from the baseline.
+The summary is a tab-separated TXT with an informative-site count. Samples with
+no informative sites have count zero and `NA` estimates.

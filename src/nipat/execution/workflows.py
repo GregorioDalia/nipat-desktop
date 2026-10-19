@@ -146,9 +146,10 @@ class Workflows:
         staged_dir = run_dir / "work" / "inputs"
         staged_dir.mkdir()
         for input_path in checked_inputs:
-            destination = staged_dir / input_path.name
+            # The R directory reader only includes lowercase .txt files.
+            destination = staged_dir / f"{input_path.stem}.txt"
             if destination.exists():
-                raise ValidationError(f"Nome file duplicato negli input: {input_path.name}")
+                raise ValidationError(f"Nome file duplicato nello staging: {destination.name}")
             shutil.copy2(input_path, destination)
 
         position_panel = run_dir / "work" / "DNPpanel.txt"

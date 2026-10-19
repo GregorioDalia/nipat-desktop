@@ -87,8 +87,11 @@ nipat snp-call `
 
 ## Contamination
 
-The command intentionally stops when an input lacks `ratio_REF_ALT`. That is the
-known interface mismatch awaiting scientific confirmation.
+Inputs require `chr`, `pos1`, `pos2`, `N_REF`, `N_ALT`, and `N_Other`.
+The upstream R script calculates `ratio_REF_ALT` when absent and uses it when
+provided. Input copies are staged with a lowercase `.txt` extension, as required
+by the R directory reader; originals remain unchanged and colliding names are
+rejected. Zero-contamination sites are included when informative.
 
 ```powershell
 nipat contamination `
@@ -96,6 +99,19 @@ nipat contamination `
   --input "D:\Nipat_project\data\test-cases\sample2.txt" `
   --panel "D:\Nipat_project\data\panels\DNP_list.txt"
 ```
+
+Results include per-sample TXT files and `contamination_summary.txt`, containing
+`informative_DNPs`, `mean_contamination`, and `sd_contamination`. Estimates are
+fractions: for example, `0.025` means 2.5%.
+
+With the scientific image already built, run the synthetic numeric check:
+
+```powershell
+python scripts/verify_contamination_update.py
+```
+
+It checks inputs with and without a ratio, zero-contamination sites, exclusions,
+and a sample with no informative sites. See `tests/fixtures/contamination/README.md`.
 
 ## CPI
 

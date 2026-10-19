@@ -20,13 +20,13 @@ contamination
 ├── README.md
 └── examples
     ├── inputs
-    │   ├── sample1.txt
-    │   ├── sample2.txt
-    │   ├── DNPpanel.txt
+    │   ├── full_output_S_Abkhasian-1.txt
+    │   ├── full_output_S_Basque-1.txt
+    │   └── list_of_DNPs.txt
     └── outputs
-        ├── contamination_sample1
-        └── contamination_sample2
-        └── contamination_summary
+        ├── contamination_full_output_S_Abkhasian-1.txt
+        ├── contamination_full_output_S_Basque-1.txt
+        └── contamination_summary.txt
 ```
 
 ---
@@ -36,7 +36,6 @@ contamination
 - **R** ≥ 4.4.2  
 - **R packages**:
   - dplyr ≥ 1.1.4
-  - openxlsx ≥ 4.2.8
   - tools  
 
 All required R packages must be installed before running the script.
@@ -52,33 +51,33 @@ cd NEWPAT/contamination
 
 ## Usage
 
-Run on a directory containing one or more DNPcall output files:
+Run on a directory containing one or more DNPcall individual output files:
 
 ```bash
 Rscript detect_contamination.R \
-  path/to/DNPpanel.txt \
-  path/to/input_directory/ \
-  path/to/output_directory/
+  path/to/list_of_DNPs \
+  path/to/input_directory \
+  path/to/output_directory
 ```
 
-Run on a single file:
+Run on a single DNPcall individual output file:
 
 ```bash
 Rscript detect_contamination.R \
-  path/to/DNPpanel.txt \
-  sample.txt \
-  path/to/output_directory/
+  path/to/list_of_DNPs \
+  full_output_sample.txt \
+  path/to/output_directory
 ```
 
 ---
 
-Arguments must be provided in the exact order: 'DNPpanel.txt', 'input_path', 'output_dir'.
+Arguments must be provided in the following order: `list_of_DNPs`, `input_path`, `output_dir`.
 
-| Position | Argument             | Description                                                             |
-| -------- | -------------------- | ----------------------------------------------------------------------- |
-| **1**    | **`'DNPpanel.txt'`** | Path to the DNP panel file (`n°DNP`, `chr`, `pos1`, `pos2`).            |
-| **2**    | **`'input_path'`**   | Directory **or** single file containing DNPcall workflow output tables. |
-| **3**    | **`'output_dir'`**   | Directory where output files will be saved (automatically created).     |
+| Position | Argument           | Description                                                                                                                                                                                                                                            |
+| -------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **1**    | **`list_of_DNPs`** | The same list of DNPs used as the `--DNPs` input in DNPcall. The columns must be in the following order: chromosome, position #1 of the DNP, position #2 of the DNP, reference allele, alternative allele. The file may contain a header or no header. |
+| **2**    | **`input_path`**   | Directory containing one or more DNPcall individual output files, or a single DNPcall individual output file.                                                                                                                                          |
+| **3**    | **`output_dir`**   | Directory where output files will be written. It is created automatically if it does not exist.                                                                                                                                                        |
 
 
 ## Output
@@ -91,14 +90,16 @@ One file per sample, containing all **informative DNPs** used for contamination 
 
 Each row includes:
 
-- `chr`  
-- `pos1`  
-- `pos2`  
-- `N_REF`  
-- `N_ALT`  
-- `N_Other`  
-- `N_unexpected`  
-- `contamination`  
+- `chr`
+- `pos1`
+- `pos2`
+- `N_REF`
+- `N_ALT`
+- `N_Other`
+- `ratio_REF_ALT`
+- `ratio_Other`
+- `N_unexpected`
+- `contamination`
 
 Contamination is computed as:
 
@@ -112,9 +113,9 @@ Because part of `N_unexpected` may derive from sequencing errors, this value rep
 
 ---
 
-### **2. `contamination_summary.xlsx`**
+### **2. `contamination_summary.txt`**
 
-An Excel file summarizing all processed samples.  
+A tab-delimited text file summarizing all processed samples.
 It contains, for each sample:
 
 - **sample name** 
