@@ -21,20 +21,53 @@ class ProjectLayout:
     compose_file: Path
 
     @classmethod
-    def discover(cls) -> "ProjectLayout":
+    def discover(
+        cls, *, data_dir: Path | str | None = None, runs_dir: Path | str | None = None
+    ) -> "ProjectLayout":
         project_dir = Path(
             os.environ.get("NIPAT_PROJECT_DIR", Path(__file__).resolve().parents[2])
-        ).resolve()
+        ).expanduser().resolve()
         workspace_dir = Path(
             os.environ.get("NIPAT_WORKSPACE_DIR", project_dir.parent)
-        ).resolve()
-        return cls(
+        ).expanduser().resolve()
+        layout = cls(
             project_dir=project_dir,
             workspace_dir=workspace_dir,
-            data_dir=workspace_dir / "data",
-            runs_dir=workspace_dir / "runs",
+            data_dir=Path(
+                data_dir if data_dir is not None else os.environ.get("NIPAT_DATA_DIR", workspace_dir / "data")
+            ).expanduser().resolve(),
+            runs_dir=Path(
+                runs_dir if runs_dir is not None else os.environ.get("NIPAT_RUNS_DIR", workspace_dir / "runs")
+            ).expanduser().resolve(),
             compose_file=project_dir / "compose.yaml",
         )
+        layout.validate_storage_roots()
+        return layout
+
+    def validate_storage_roots(self) -> None:
+        roots = {
+            "progetto": self.project_dir.resolve(),
+            "dati": self.data_dir.resolve(),
+            "risultati": self.runs_dir.resolve(),
+        }
+        for label, path in roots.items():
+            if path == Path(path.anchor):
+                raise ValidationError(f"La cartella {label} non può essere la radice di un disco: {path}")
+            if path.exists() and not path.is_dir():
+                raise ValidationError(f"Il percorso {label} non è una cartella: {path}")
+        items = list(roots.items())
+        for index, (label, path) in enumerate(items):
+            for other_label, other in items[index + 1:]:
+                if path.is_relative_to(other) or other.is_relative_to(path):
+                    raise ValidationError(
+                        f"Le cartelle {label} e {other_label} devono essere separate, "
+                        f"senza sovrapporsi: {path}; {other}"
+                    )
+
+    def ensure_storage_dirs(self) -> None:
+        self.validate_storage_roots()
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
 
     def container_path(self, host_path: Path) -> PurePosixPath:
         resolved = host_path.expanduser().resolve()
@@ -45,16 +78,17 @@ class ProjectLayout:
         )
         for host_root, container_root in mounts:
             try:
-                relative = resolved.relative_to(host_root)
+                relative = resolved.relative_to(host_root.resolve())
             except ValueError:
                 continue
             return container_root.joinpath(*relative.parts)
         raise ValidationError(
-            "Il percorso deve trovarsi nel progetto oppure nelle cartelle data/runs "
-            f"di {self.workspace_dir}: {resolved}"
+            "Percorso interno non presente nel progetto o nelle cartelle data/runs "
+            f"configurate: {resolved}. Dati: {self.data_dir}; risultati: {self.runs_dir}."
         )
 
     def new_run_dir(self, workflow: str, requested_name: str | None = None) -> Path:
+        self.ensure_storage_dirs()
         if requested_name:
             clean_name = _SAFE_RUN_NAME.sub("-", requested_name.strip()).strip("-.")
             if not clean_name:
@@ -64,8 +98,10 @@ class ProjectLayout:
             clean_name = f"{workflow}-{stamp}"
 
         run_dir = self.runs_dir / clean_name
-        if run_dir.exists():
-            raise ValidationError(f"La cartella dell'esecuzione esiste già: {run_dir}")
-        (run_dir / "work").mkdir(parents=True)
+        try:
+            run_dir.mkdir()
+        except FileExistsError as exc:
+            raise ValidationError(f"La cartella dell'esecuzione esiste già: {run_dir}") from exc
+        (run_dir / "work").mkdir()
         (run_dir / "output").mkdir()
         return run_dir

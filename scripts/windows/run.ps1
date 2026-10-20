@@ -1,4 +1,5 @@
-# No named PowerShell parameters: preserve all CLI flags, including --dry-run.
+# No named PowerShell parameters: preserve all CLI flags, including --data-dir/--runs-dir.
+# Keep the caller's working directory so Python resolves relative CLI paths there.
 $nipatCliArguments = @($args)
 . (Join-Path $PSScriptRoot "common.ps1")
 try {

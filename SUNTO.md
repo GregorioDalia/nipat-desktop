@@ -1,48 +1,51 @@
 # NIPAT: stato del progetto e funzionamento
 
-**Versione CLI 0.2.0a1, destinata alla validazione con l'esperta di dominio.**
-NIPAT riunisce quattro analisi in un unico strumento locale. Python gestisce
-file, controlli ed esecuzioni; i calcoli sono affidati agli script R di DNPcall
-e NEWPAT, eseguiti insieme a samtools in Docker. La GUI verrà dopo questa fase.
+**CLI 0.2.0a2 in preparazione per la validazione con l'esperta di dominio.**
+NIPAT riunisce quattro analisi locali: Python gestisce file ed esecuzioni,
+mentre gli script R di DNPcall e NEWPAT eseguono i calcoli con samtools in
+Docker. La GUI verrà dopo la validazione della CLI.
 
-## Che cosa è integrato
-
-| Analisi | Input principali | Risultati |
+| Analisi | Input disponibili | Risultati |
 | --- | --- | --- |
-| DNPcall | BAM con indice, riferimento FASTA con indice, pannello DNP | Conteggi e genotipi per sito, riepiloghi e grafici. |
-| SNPcall | BAM e riferimento indicizzati, lista SNP | Generazione automatica del pileup e tabella dei conteggi SNP. |
-| Contamination | Tabelle DNPcall e pannello DNP | Stima per sito e riepilogo per campione. |
-| CPI | Tabelle cfDNA materno/presunto padre, coppie da confrontare, frequenze di popolazione e pannello opzionale | Frazione fetale, CPI e grafici. |
+| DNPcall | Uno o più BAM, anche tramite lista; FASTA indicizzato e pannello DNP | Conteggi, genotipi, riepiloghi e grafici. |
+| SNPcall | BAM e FASTA indicizzato oppure pileup già pronto; lista SNP | Tabella dei conteggi SNP. |
+| Contamination | Tabelle DNPcall scelte singolarmente o da una cartella; pannello di coordinate | Stima per sito e riepilogo per campione. |
+| CPI | Tabelle materne/paterne, coppie e frequenze; tutti i siti, un pannello o più cutoff | Frazione fetale, CPI e grafici. |
 
-## Che cosa è stato fatto
+## Dove siamo
 
-Sono stati corretti i problemi di compatibilità di DNPcall con un solo campione
-e con i percorsi di output. CPI e Contamination sono stati aggiornati alla
-versione NEWPAT acquisita il 19 ottobre 2026. Contamination accetta direttamente
-i conteggi di DNPcall e calcola `ratio_REF_ALT = N_REF / (N_REF + N_ALT)`
-quando assente.
+La versione precedente ha corretto i problemi di compatibilità di DNPcall e
+integrato gli aggiornamenti CPI e Contamination di NEWPAT acquisiti il
+19 ottobre 2026. Le prove già svolte comprendono DNPcall e SNPcall su un
+campione reale, il passaggio DNPcall → Contamination, l'esempio SNPcall degli
+autori e casi sintetici CPI/Contamination. Sul PC Windows di sviluppo, per
+`0.2.0a1`, sono stati superati 48 test Python, con un test saltato, e i tre
+autotest numerici Docker.
 
-I controlli già eseguiti comprendono un campione reale DNPcall, il passaggio
-del suo output a Contamination, un campione reale SNPcall e la corrispondenza
-dell'esempio SNPcall con il riferimento degli autori. I test sintetici CPI e
-Contamination verificano valori attesi e casi senza siti informativi.
-Queste verifiche tecniche precedono la validazione scientifica su altri input.
+La revisione `0.2.0a2` elimina il vincolo che imponeva input dentro progetto,
+`data` o `runs` e rende disponibili nel menu tutte le modalità di input
+supportate. Non cambia gli algoritmi R né i valori predefiniti scientifici.
+Il 20 ottobre 2026 sono riusciti, sul PC Windows di sviluppo, setup, quattro
+gruppi di autotest e scelta della cartella risultati. DNPcall con input esterni
+ha riprodotto i precedenti 11 siti e tutte le 17 colonne di un BAM reale.
+Gli [esiti dettagliati](docs/DISTRIBUZIONE.md) distinguono queste prove dalla
+validazione della collega e dall'installazione su un altro PC, ancora da svolgere.
+Il tag `v0.2.0a1` resta invariato; la nuova revisione va pubblicata separatamente.
 
 ## Come si usa
 
-Su Windows a 64 bit, si scarica ed estrae da GitHub la versione indicata per
-la validazione. Serve Docker Desktop avviato in modalità container Linux.
-`1_SETUP.cmd` scarica Python locale, prepara il runtime scientifico ed esegue
-gli autotest; `2_AVVIA.cmd` apre la procedura guidata testuale. Il primo setup
-richiede Internet. Rimangono disponibili anche i comandi CLI diretti.
+Il canale scelto è GitHub: si scarica la versione indicata, si estrae il
+progetto e si avvia `1_SETUP.cmd`, poi `2_AVVIA.cmd`. Serve Docker Desktop
+avviato con container Linux; il primo setup richiede Internet e prepara
+Python locale e il runtime scientifico.
 
-Gli input si collocano nella cartella `data` accanto al progetto. Ogni analisi
-crea una nuova cartella in `runs`, con risultati, file intermedi, `run.json`
-e `execution.log`. I metadati registrano input, parametri, versioni ed esito;
-il log conserva comandi e messaggi. Il progetto e `data` sono montati in sola
-lettura; `runs` è scrivibile e i run esistenti non vengono sovrascritti.
-Durante le analisi i dati
-restano sul computer; l'installazione può richiedere download.
+Gli input possono restare nelle loro cartelle originali, anche su un'altra
+unità accessibile a Docker. NIPAT rende disponibili al container i file
+selezionati in sola lettura, senza copiare BAM e FASTA. Si può scegliere la
+cartella dei risultati: ogni analisi crea un nuovo run, conserva i nomi
+degli output scientifici e registra input, corrispondenze dei percorsi,
+parametri ed esito in `run.json` e `execution.log`. I run esistenti non vengono
+sovrascritti e i dati delle analisi restano sul computer.
 
 Per cominciare: [guida della collega](docs/GUIDA_COLLEGA.md).
 Per riportare le prove: [scheda di validazione](docs/VALIDAZIONE.md).

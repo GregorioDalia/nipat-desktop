@@ -1,5 +1,44 @@
 # Consolidated decisions
 
+## Input portability and complete CLI modes (0.2.0a2)
+
+- Input paths are user-selected and can be outside the project, `data` or
+  `runs`. Selective read-only file mounts expose the required inputs and
+  sidecars without copying large BAM/FASTA files or adding mounts of external
+  parent directories. Original-to-container mappings are recorded for each run.
+- `--data-dir` and `--runs-dir`, or their `NIPAT_DATA_DIR` / `NIPAT_RUNS_DIR`
+  environment variables, configure default locations. CLI options take
+  precedence and must precede the subcommand. Relative paths use the caller's
+  current directory; BAM-list entries use the list's parent directory.
+  Wizard option 5 changes the results root for subsequent runs in the current
+  session, after validation and directory creation; it does not persist a setting.
+- DNPcall accepts repeated BAM arguments or a BAM list, with optional parallel
+  execution. Stable numbered aliases avoid the R script's filename limitations;
+  the run records the original sample mapping. BAM indexes are optional for
+  the current `mpileup -l` execution; FASTA `.fai` and BGZF `.gzi` are required.
+  A small DNP-panel copy in `work` carries the validated coordinates and
+  uppercase REF/ALT alleles; the original panel is preserved.
+- SNPcall accepts either BAM/FASTA or a ready seven-column pileup with QNAME.
+  Contamination accepts individual tables or recursive TXT/TSV directory input
+  and coordinate panels. CPI accepts all sites, one panel or multiple labeled
+  cutoffs, including the native cutoff-map interface. The wizard exposes these
+  modes and the existing CPI error constant.
+- Each run is created in a new subdirectory of the chosen results root.
+  Scientific output filenames are preserved; existing run directories are
+  rejected. The scientific algorithms and defaults are unchanged in this revision.
+- Windows checks for `0.2.0a2` were observed on the maintainer's PC on
+  2026-10-20: 99 unit tests passed and one symlink test was skipped; after
+  fixing sibling imports under embedded Python, all 34 targeted CLI tests
+  passed. These are separate runs, not a full 101-test Windows run.
+  Setup and all four self-test groups passed, including external inputs on
+  another drive. The wizard accepted a relative results directory and exited
+  with code 0. A separate DNPcall real-BAM regression reproduced all 11 rows
+  and 17 columns, ignoring row order, with the original BAM mapping recorded.
+  See [distribution evidence](DISTRIBUZIONE.md) for scope and remaining work.
+- Preserve the existing `v0.2.0a1` tag and create `v0.2.0a2` only for the
+  verified commit. GitHub remains the distribution channel; Docker/WSL
+  prerequisite automation is outside this revision.
+
 ## CLI validation handoff (2026-10-20)
 
 - Consolidate run evidence before the GUI: `run.json` and a live/persistent
@@ -12,11 +51,11 @@
   Docker Desktop Linux containers are currently a manual prerequisite.
   Prerequisite installation automation is planned, not implemented in this release.
 - The text wizard calls the same Workflows services as the existing CLI.
-  DNPcall remains serial by default; advanced options remain in direct commands.
-- CLI 0.2.0a1 is a validation candidate. Bundled numerical checks cover the SNP
+  DNPcall remains serial by default.
+- CLI 0.2.0a1 was prepared as a validation candidate. Bundled numerical checks cover the SNP
   reference example and synthetic CPI/Contamination cases; domain validation
   and raw-BAM coverage are separate. No scientific algorithm changes here.
-- Windows setup was exercised on the maintainer's PC on 2026-10-20: 48 Python
+- Windows setup for 0.2.0a1 was exercised on the maintainer's PC on 2026-10-20: 48 Python
   tests passed, one symlink test was skipped, and all three real Docker numerical
   self-tests passed. Docker was already installed and the build reused cached
   layers; a clean-machine installation and the colleague's domain tests remain.
@@ -25,11 +64,13 @@
 
 - The R scripts supplied on 2026-07-21 are the scientific baseline. DNPcall includes the compatibility fixes, while CPI and contamination include the upstream updates recorded in `scientific/README.md`; SNPcall retains the supplied baseline version.
 - The first prototype covers DNPcall, SNPcall, contamination and CPI.
-- `DNP_list.txt` is the provisional trusted DNP panel.
-- The Python layer may derive `n°DNP`, `chr`, `pos1`, `pos2` mechanically from that list.
-- SNPcall pileup generation is performed automatically from BAM, FASTA and the SNP list.
+- The existing `DNP_list.txt` remains a provisional reference panel; users can
+  select other compatible panels. Python may derive the coordinate-only view
+  mechanically from the five-column DNP list.
+- SNPcall can generate pileup from BAM, FASTA and the SNP list, or accept an
+  existing compatible pileup.
 - Population-frequency tables remain user-selectable.
-- The current `err_const` default is frozen but exposed by the CPI command.
+- The current `err_const` default is frozen but exposed by the CPI command and wizard.
 - Scientific thresholds follow the recorded upstream versions. The CPI update applies the existing minimum of two fetal reads to its summary as well as its curves. Defaults are documented in `config/defaults.toml`.
 - The application is local and is being designed for Windows, Linux and macOS.
 - Genomic data and run outputs remain outside the Git repository.

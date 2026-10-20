@@ -5,12 +5,27 @@ function Get-NipatProject {
     return (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 }
 
+function Resolve-NipatDirectory([string] $Directory) {
+    # Resolve from the caller's current location without requiring the directory to exist.
+    # In particular, do not resolve relative settings against the launcher directory.
+    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Directory)
+}
+
 function Set-NipatEnvironment([string] $Project) {
     # These variables affect this child process only; the system is unchanged.
     $env:NIPAT_PROJECT_DIR = $Project
-    $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $Project
-    $env:NIPAT_DATA_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "data"
-    $env:NIPAT_RUNS_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "runs"
+    if ([string]::IsNullOrWhiteSpace($env:NIPAT_WORKSPACE_DIR)) {
+        $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $Project
+    }
+    $env:NIPAT_WORKSPACE_DIR = Resolve-NipatDirectory $env:NIPAT_WORKSPACE_DIR
+    if ([string]::IsNullOrWhiteSpace($env:NIPAT_DATA_DIR)) {
+        $env:NIPAT_DATA_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "data"
+    }
+    $env:NIPAT_DATA_DIR = Resolve-NipatDirectory $env:NIPAT_DATA_DIR
+    if ([string]::IsNullOrWhiteSpace($env:NIPAT_RUNS_DIR)) {
+        $env:NIPAT_RUNS_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "runs"
+    }
+    $env:NIPAT_RUNS_DIR = Resolve-NipatDirectory $env:NIPAT_RUNS_DIR
     $imageFile = Join-Path $Project ".runtime\runtime-image.txt"
     if (Test-Path -LiteralPath $imageFile -PathType Leaf) {
         $imageId = (Get-Content -LiteralPath $imageFile -Raw).Trim()
@@ -18,6 +33,23 @@ function Set-NipatEnvironment([string] $Project) {
             throw "Identificativo runtime non valido. Eseguire nuovamente 1_SETUP.cmd."
         }
         $env:NIPAT_RUNTIME_IMAGE = $imageId
+    }
+}
+
+function Initialize-NipatWritableDirectory([string] $Directory, [string] $Label) {
+    $probe = Join-Path $Directory (".nipat-write-check-" + [Guid]::NewGuid().ToString("N"))
+    $stream = $null
+    $created = $false
+    try {
+        [IO.Directory]::CreateDirectory($Directory) | Out-Null
+        $stream = [IO.File]::Open($probe, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $created = $true
+        $stream.WriteByte(0)
+    } catch {
+        throw "La cartella $Label non e' scrivibile: $Directory. $($_.Exception.Message)"
+    } finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+        if ($created) { [IO.File]::Delete($probe) }
     }
 }
 

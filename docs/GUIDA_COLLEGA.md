@@ -1,130 +1,166 @@
 # Guida alla prova della CLI
 
-Questa versione serve a verificare il funzionamento dei quattro workflow e
-l'adeguatezza dei risultati con input scelti dall'esperta di dominio. La GUI
-non è ancora presente: si può usare un menu testuale oppure la riga di comando.
+La CLI `0.2.0a2` serve a verificare i quattro workflow con input scelti
+dall'esperta di dominio. Si può usare un menu testuale oppure la riga di
+comando. Setup, autotest e una regressione DNPcall da BAM reale sono riusciti
+sul PC Windows di sviluppo; gli [esiti](DISTRIBUZIONE.md) non sostituiscono
+le prove con i propri input e sul proprio computer.
 
 ## Preparazione su Windows a 64 bit
 
-1. Installa e avvia [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/),
-   usando container Linux. Completa gli eventuali passaggi WSL richiesti da Docker.
-2. Dal link alla versione GitHub indicata per la validazione, scarica
-   l'archivio del progetto (nelle release: **Source code (zip)**).
-   Estrailo interamente in una cartella locale scrivibile,
-   preferibilmente con un percorso breve, per esempio `D:\Nipat_validazione`.
+1. Installa e avvia [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
+   con container Linux. Completa gli eventuali passaggi WSL richiesti da Docker.
+2. Dalla release GitHub indicata per la validazione, scarica **Source code (zip)**
+   ed estrai interamente il progetto in una cartella locale scrivibile.
    Non avviare i file direttamente dalla finestra dello ZIP.
-3. Nella cartella estratta che contiene `README.md` e `1_SETUP.cmd`, avvia
-   `1_SETUP.cmd`. Il nome della cartella può includere il tag della versione.
-   Il setup prepara Python locale,
-   le cartelle di lavoro e il runtime, poi esegue i controlli iniziali.
-4. Quando il setup termina con esito positivo, avvia `2_AVVIA.cmd`.
+3. Nella cartella che contiene `README.md`, avvia `1_SETUP.cmd`. Il setup
+   prepara Python locale e il runtime scientifico, poi esegue gli autotest.
+4. Dopo il completamento del setup, avvia `2_AVVIA.cmd`.
 
-Non servono Git, PyCharm, un'installazione separata di Python, R o samtools.
-Il setup scarica Python e costruisce il runtime Docker quando non è già
-disponibile. Servono Internet e tempo per la prima preparazione; i successivi
-avvii riusano l'ambiente locale.
-Il setup non installa automaticamente Docker e non cambia il Python di sistema.
+Non servono Git, PyCharm o installazioni separate di Python, R e samtools.
+Il primo setup richiede Internet e può durare diversi minuti. I successivi
+avvii riusano l'ambiente locale. Docker rimane un prerequisito manuale.
 
-Le cartelle `data` e `runs` vengono create accanto alla cartella del progetto:
+## Dove tenere input e risultati
 
-| Cartella | Contenuto |
-| --- | --- |
-| `data/samples` | BAM, relativi indici e altri input dei campioni. |
-| `data/reference` | FASTA e relativo indice. |
-| `data/panels` | Pannelli DNP/SNP e frequenze di popolazione. |
-| `data/test-cases` | Tabelle di prova, incluse quelle per CPI. |
-| `runs` | Nuove esecuzioni e relativi risultati. |
+Gli input possono restare nelle loro cartelle originali: selezionarli con il
+percorso completo, anche su un'altra unità accessibile a Docker. Non occorre
+copiare BAM e FASTA nel progetto. Sono ammessi percorsi contenenti spazi;
+il programma assegna ai file nomi interni compatibili con gli script R.
 
-Sono accettati percorsi all'interno del progetto, di `data` o di `runs`.
-Per provare file conservati altrove, copiarli in queste cartelle. Il progetto
-non contiene BAM, riferimenti genomici o campioni reali da distribuire.
+Il setup crea per comodità `data` e `runs` accanto al progetto. `data` non è
+un vincolo: i file selezionati possono trovarsi altrove. La cartella dei
+risultati si sceglie con **5 — Cartella risultati** nel menu: la scelta vale
+per le analisi successive nella sessione corrente e Invio mantiene il percorso
+mostrato. La nuova cartella viene controllata e creata; non può sovrapporsi
+al progetto o alla cartella dati. `:annulla` torna al menu senza cambiarla.
+Per configurare l'avvio si possono usare `--runs-dir` e `--data-dir`, oppure
+`NIPAT_RUNS_DIR` e `NIPAT_DATA_DIR`; le opzioni CLI prevalgono sulle variabili
+di ambiente. La scelta fatta nel menu non viene salvata per l'avvio successivo.
 
-## Prima prova
+Nei comandi CLI le opzioni globali vanno **prima del workflow**. I percorsi
+relativi partono dalla cartella corrente del terminale; quelli dentro una
+lista BAM partono dalla cartella della lista stessa. Nell'esempio seguente,
+eseguito dalla cartella del progetto, sostituire le cartelle con le proprie:
 
-Il setup esegue `nipat self-test`: verifica l'esempio SNPcall e i casi sintetici
-CPI e Contamination inclusi nel pacchetto. Questi controlli non richiedono i
-campioni dell'utilizzatrice e creano nuovi run. Attendere il messaggio finale
-di autotest superati: per CPI e Contamination il confronto numerico segue
-il completamento del workflow, quindi un `run.json` con esito positivo
-non basta, da solo, a dimostrare il superamento dell'autotest.
-Questi controlli non sostituiscono la prova
-DNPcall da BAM né la valutazione scientifica con i propri dati.
+```powershell
+.\nipat.cmd --data-dir "..\miei-dati" --runs-dir "..\miei-risultati" wizard
+```
 
-Per ripeterli, aprire PowerShell nella cartella che contiene `nipat.cmd`:
+Ogni analisi crea una nuova sottocartella sotto la destinazione scelta,
+conservando i nomi degli output scientifici. Non è necessario rinominare
+manualmente i risultati e un run esistente non viene sovrascritto.
+
+## Input dei quattro workflow
+
+**DNPcall.** Selezionare uno o più BAM, oppure una lista di BAM: un percorso
+per riga, senza intestazione. CLI: ripetere `--bam` oppure usare `--bamlist`,
+senza combinare le due modalità. Il FASTA richiede il relativo indice
+`.fai`; se compresso in BGZF richiede anche `.gzi`. Gli indici BAM sono
+facoltativi per l'attuale percorso `samtools mpileup -l`.
+Il pannello DNP è tabulato, senza intestazione, con cinque colonne:
+`chr`, `pos1`, `pos2`, `REF`, `ALT`. Le posizioni devono essere adiacenti e
+REF/ALT devono essere dinucleotidi.
+Il programma prepara in `work` una piccola copia del pannello con gli alleli
+REF/ALT in maiuscolo, lasciando invariato l'originale.
+L'esecuzione è seriale per impostazione predefinita; il menu e `--parallel`
+consentono quella parallela. DNPcall usa alias `sample_0001.bam`, ecc.:
+consultare la corrispondenza nei metadati del run per risalire ai campioni
+originali. Con un solo campione il grafico UpSet è intenzionalmente omesso.
+
+**SNPcall.** Scegliere BAM e FASTA indicizzato, per generare automaticamente
+il pileup, oppure fornire un pileup già pronto. In CLI: `--bam` con
+`--reference`, oppure `--pileup`. Il pileup deve avere almeno sette colonne
+samtools, con i nomi delle letture (QNAME) nella settima; le eventuali colonne
+successive sono ignorate da R. Un pileup standard senza QNAME non è equivalente.
+La lista SNP è tabulata, con intestazione
+`pos`, `ref`, `alt`, dove `pos` ha forma `chr1:1770788`.
+Il totale dei conteggi include le letture “altre”; il rapporto REF usa
+soltanto REF e ALT nel denominatore.
+
+**Contamination.** Selezionare singole tabelle oppure una cartella.
+La modalità cartella cerca ricorsivamente file `.txt` e `.tsv`, senza
+distinguere maiuscole e minuscole, ed esclude il pannello selezionato.
+Le tabelle devono contenere `chr`, `pos1`, `pos2`, `N_REF`, `N_ALT`,
+`N_Other`; gli output individuali DNPcall sono compatibili. Una cartella
+con riepiloghi o altri TXT/TSV non compatibili va filtrata scegliendo
+esplicitamente i singoli file. Nomi che collidono dopo l'adattamento per R
+sono segnalati e non vengono sovrascritti.
+Se presente, `ratio_REF_ALT` viene usato dallo script; altrimenti viene
+calcolato dai conteggi. Le stime sono frazioni: `0.025` significa 2.5%.
+Il pannello può essere il precedente DNP a cinque colonne oppure una tabella
+di coordinate: con intestazione deve includere `chr`, `pos1`, `pos2`;
+senza intestazione queste devono essere le prime tre colonne, in tale ordine.
+
+**CPI.** Selezionare la cartella delle tabelle della componente cfDNA materna
+e del presunto padre, le coppie e le frequenze di popolazione. Con i prefissi
+predefiniti, `A1:A1` individua `MotherA1.txt` e `FatherA1.txt`; più coppie si
+separano con virgole. Le frequenze richiedono `chr`, `pos1`, `pos2`,
+`Ref_f.pop`, `Alt_f.pop`. La scelta deve essere coerente con i campioni e
+il riferimento genomico; i nomi dei file non determinano il ruolo biologico.
+
+Per CPI si può usare un solo pannello (`--panel`), più pannelli etichettati
+(`--cutoff LABEL PATH`, ripetibile), una mappa nativa (`--cutoff-map`) oppure
+tutti i siti, omettendo i filtri. Le tre opzioni di filtro sono alternative.
+Sono accettati il pannello DNP a cinque colonne e i pannelli di coordinate
+native. Le etichette dei cutoff devono essere uniche e non contenere virgole
+né `=`. Preferire `--cutoff` per indicare separatamente etichetta e percorso,
+soprattutto se i nomi dei file contengono delimitatori della mappa nativa.
+Il parametro `err_const` è modificabile nel menu e tramite `--err-const`:
+il valore predefinito rimane `0.0000892303778101497`.
+
+## Esecuzione e controlli
+
+`2_AVVIA.cmd` mostra la destinazione dei risultati e chiede workflow, modalità
+di input e parametri. L'opzione 5 consente di cambiare la destinazione prima
+della prossima analisi. È possibile incollare percorsi completi tra virgolette.
+Scegliere un nome nuovo per il run oppure lasciare quello automatico.
+Per i comandi diretti, aprire PowerShell nella cartella di `nipat.cmd`:
+
+```powershell
+.\nipat.cmd --help
+.\nipat.cmd dnp-call --help
+.\nipat.cmd --runs-dir "..\risultati" --dry-run contamination `
+    --input "..\campioni\sample.txt" --panel "..\pannelli\DNPpanel.txt"
+```
+
+`--dry-run` controlla e prepara l'esecuzione senza avviare l'analisi
+scientifica; anche la successiva prova reale richiede un nuovo run.
+Il setup esegue quattro gruppi di controlli: l'esempio SNPcall, i casi sintetici
+CPI e Contamination e le nuove modalità con input esterni. Quest'ultimo gruppo
+prova SNPcall da pileup, Contamination da cartella e CPI con due cutoff oppure
+con tutti i siti. Per ripetere i controlli:
 
 ```powershell
 .\nipat.cmd doctor --runtime
 .\nipat.cmd self-test
+.\.runtime\python\python.exe scripts/verify_input_modes.py
 ```
 
-## Input dei quattro workflow
+Attendere l'esito finale di ciascun comando. Nei test CPI e Contamination
+il confronto numerico segue il completamento del workflow: un `run.json`
+positivo non basta a dimostrare il superamento dell'autotest. Il controllo
+aggiuntivo usa piccoli input di prova in percorsi esterni al progetto ed è
+già incluso in `self-test`; il comando separato ripete soltanto quel gruppo.
+Non aggiunge una verifica numerica DNPcall da BAM. La valutazione scientifica
+sui propri campioni rimane distinta.
 
-**DNPcall.** Richiede un BAM con il file `.bam.bai`, un FASTA con il file
-`.fa.fai` (o il corrispondente nome del FASTA seguito da `.fai`) e un pannello
-tabulato senza intestazione: `chr`, `pos1`, `pos2`, `REF`, `ALT`.
-Le due posizioni devono essere adiacenti e gli alleli devono essere dinucleotidi.
-Per un singolo campione il grafico UpSet è intenzionalmente omesso.
-Per un limite dello script DNPcall, usare nomi BAM/FASTA e sottocartelle
-senza spazi o simboli shell all'interno di `data` o `runs`, per esempio
-`samples/sample_01.bam` e `reference/genome.fa`. Il controllo iniziale segnala
-i percorsi incompatibili. Questa restrizione non riguarda gli spazi nel
-percorso Windows che precede le cartelle montate nel container.
-
-**SNPcall.** Richiede BAM e FASTA indicizzati e una lista tabulata con
-intestazione `pos`, `ref`, `alt`; `pos` ha forma `chr1:1770788`.
-Il programma prepara le regioni e il pileup automaticamente. Il totale include
-le letture “altre”; il rapporto REF usa soltanto REF e ALT nel denominatore.
-
-**Contamination.** Richiede una o più tabelle tabulate con `chr`, `pos1`,
-`pos2`, `N_REF`, `N_ALT`, `N_Other` e un pannello DNP. Gli output individuali
-DNPcall sono compatibili. Se presente, `ratio_REF_ALT` viene usato dallo script;
-se assente, viene calcolato dai conteggi. Le stime sono frazioni: `0.025`
-significa 2.5%. Zero e `NA` hanno significati diversi: `NA` può indicare
-l'assenza di siti informativi.
-
-**CPI.** Richiede una cartella con tabelle compatibili DNPcall della componente
-cfDNA materna e del presunto padre. Con i prefissi predefiniti, la coppia `A1:A1`
-individua `MotherA1.txt` e `FatherA1.txt`. Più coppie si separano con virgole.
-La tabella delle frequenze deve includere `chr`, `pos1`, `pos2`, `Ref_f.pop`,
-`Alt_f.pop`. La scelta dei campioni, del pannello, del riferimento genomico
-e delle frequenze deve essere coerente con il caso da valutare. Non dedurre
-il ruolo biologico di un campione dal solo nome del file.
-
-## Esecuzione e lettura dell'esito
-
-`2_AVVIA.cmd` chiede il workflow, gli input e i parametri necessari. Per i
-percorsi si può incollare il percorso completo, anche racchiuso tra virgolette;
-per DNPcall valgono le restrizioni indicate sopra. Scegliere un nome
-nuovo per ciascun run oppure lasciare il nome automatico.
-
-Per i comandi diretti:
-
-```powershell
-.\nipat.cmd --help
-.\nipat.cmd contamination --help
-.\nipat.cmd --dry-run contamination --input "D:\Nipat_validazione\data\samples\sample.txt" --panel "D:\Nipat_validazione\data\panels\DNP_list.txt"
-```
-
-`--dry-run` controlla e prepara l'esecuzione mostrando i comandi; non esegue
-l'analisi scientifica. Usare un nome nuovo anche per la successiva prova reale.
-
-Ogni run conserva `run.json`, `execution.log`, `work` e `output`. L'esito
-positivo indica il completamento dei comandi del workflow; la valutazione dei
-risultati è affidata all'esperta. Una cartella con output parziali, o un run che
-non ha registrato un esito finale, non dimostra il completamento dell'analisi.
-Le esecuzioni precedenti a questa versione possono essere prive dei metadati.
+Ogni run conserva `run.json`, `execution.log`, `work` e `output`.
+`work/input-mounts.json` e i metadati del run permettono di collegare i percorsi
+originali a quelli usati nel container. L'esito positivo indica che i comandi
+sono terminati correttamente; `NA` può essere un risultato atteso in assenza
+di siti informativi. Una cartella di output parziale non prova il completamento.
 
 ## Problemi e feedback
 
-- Se Docker non risponde, avviare Docker Desktop e attendere che il motore Linux
-  sia pronto, poi riprovare.
-- Se il percorso non è ammesso, spostare una copia dell'input in `data` o usare
-  direttamente un risultato sotto `runs`.
-- Se manca un indice, fornire l'indice corrispondente al BAM/FASTA selezionato.
+- Se Docker non risponde, avviarlo e attendere che il motore Linux sia pronto.
+- Se un file esterno non è accessibile al container, verificare la disponibilità
+  dell'unità e i permessi di accesso in Docker Desktop.
+- Se manca l'indice FASTA, fornire quello corrispondente al riferimento scelto.
 - Se il nome del run esiste già, sceglierne uno nuovo.
-- Se una prova fallisce, conservare il run e compilare
-  [la scheda di validazione](VALIDAZIONE.md) indicando atteso e osservato.
+- Per una prova fallita, conservare il run e compilare la
+  [scheda di validazione](VALIDAZIONE.md) con atteso e osservato.
 
-I log e i metadati possono contenere nomi e percorsi dei campioni. Prima di
-allegarli a una segnalazione pubblica, verificare che siano condivisibili.
-Non caricare su GitHub BAM, riferimenti o risultati contenenti dati dei campioni.
+Nomi e percorsi dei campioni compaiono nei metadati e non sono anonimizzati.
+Verificare i contenuti prima di allegarli a segnalazioni pubbliche; non
+caricare su GitHub dati genomici o risultati dei campioni.

@@ -46,6 +46,7 @@ scientific/vendor/NEWPAT/contamination/examples/inputs/sample2.txt
 scripts/build_validation_bundle.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
+scripts/verify_input_modes.py
 scripts/verify_snp_example.py
 scripts/windows/common.ps1
 scripts/windows/run.ps1
@@ -57,6 +58,7 @@ src/nipat/adapters/panels.py
 src/nipat/cli.py
 src/nipat/errors.py
 src/nipat/execution/__init__.py
+src/nipat/execution/mounts.py
 src/nipat/execution/runner.py
 src/nipat/execution/tracking.py
 src/nipat/execution/workflows.py
@@ -82,6 +84,8 @@ tests/test_cli_validation.py
 tests/test_contamination_workflow.py
 tests/test_distribution.py
 tests/test_dnp_workflow.py
+tests/test_input_mounts.py
+tests/test_input_modes.py
 tests/test_panels.py
 tests/test_paths.py
 tests/test_run_tracking.py

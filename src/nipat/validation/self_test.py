@@ -97,6 +97,8 @@ def run_self_tests(layout: ProjectLayout) -> None:
     environment = os.environ.copy()
     environment["NIPAT_PROJECT_DIR"] = str(layout.project_dir)
     environment["NIPAT_WORKSPACE_DIR"] = str(layout.workspace_dir)
+    environment["NIPAT_DATA_DIR"] = str(layout.data_dir)
+    environment["NIPAT_RUNS_DIR"] = str(layout.runs_dir)
     environment["PYTHONPATH"] = str(layout.project_dir / "src") + (
         os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else ""
     )
@@ -104,6 +106,7 @@ def run_self_tests(layout: ProjectLayout) -> None:
         ("SNPcall", "verify_snp_example.py"),
         ("CPI", "verify_cpi_update.py"),
         ("Contamination", "verify_contamination_update.py"),
+        ("percorsi esterni e modalità di input", "verify_input_modes.py"),
     )
     for label, filename in checks:
         script = layout.project_dir / "scripts" / filename
@@ -119,5 +122,5 @@ def run_self_tests(layout: ProjectLayout) -> None:
             raise RuntimeExecutionError(
                 f"Autotest {label} non superato. Consultare l'errore e i run appena creati."
             ) from exc
-    print("\nAutotest superati: SNPcall di esempio, CPI e Contamination sintetici.")
+    print("\nAutotest superati: esempi numerici, percorsi esterni e modalità di input.")
     print("DNPcall da BAM e validazione su campioni reali richiedono le prove di dominio.")

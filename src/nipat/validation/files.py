@@ -42,16 +42,20 @@ def require_sidecar(path: Path, suffix: str, label: str) -> Path:
     return sidecar
 
 
-def tabular_header(path: Path) -> list[str]:
+def tabular_header(path: Path, *, whitespace: bool = False) -> list[str]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         first_line = handle.readline()
     if not first_line:
         raise ValidationError(f"File vuoto: {path}")
+    if whitespace:
+        return [part.strip('\"\'') for part in first_line.split()]
     return next(csv.reader([first_line.rstrip("\r\n")], delimiter="\t"))
 
 
-def require_columns(path: Path, required: set[str], context: str) -> None:
-    current = set(tabular_header(path))
+def require_columns(
+    path: Path, required: set[str], context: str, *, whitespace: bool = False
+) -> None:
+    current = set(tabular_header(path, whitespace=whitespace))
     missing = sorted(required - current)
     if missing:
         raise ValidationError(
@@ -62,3 +66,24 @@ def require_columns(path: Path, required: set[str], context: str) -> None:
 def require_contamination_input(path: Path) -> None:
     # Upstream computes ratio_REF_ALT from counts when the column is absent.
     require_columns(path, CONTAMINATION_COLUMNS, "Input contamination non compatibile")
+
+
+def require_snp_pileup(path: Path) -> None:
+    """Check QNAME's required seventh-column position; R ignores later columns."""
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            fields = line.rstrip("\r\n").split("\t")
+            if len(fields) < 7:
+                raise ValidationError(
+                    "SNPcall richiede un pileup con almeno 7 colonne, con QNAME nella settima "
+                    "(--output-QNAME), senza intestazione."
+                )
+            try:
+                if int(fields[1]) < 1 or int(fields[3]) < 0:
+                    raise ValueError
+            except ValueError as exc:
+                raise ValidationError("Pileup SNP: prima riga non valida o intestazione presente.") from exc
+            return
+    raise ValidationError(f"Pileup SNP vuoto: {path}")

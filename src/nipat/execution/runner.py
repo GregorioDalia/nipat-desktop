@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Iterator, TextIO
 
 from nipat.errors import RuntimeExecutionError, ValidationError
+from nipat.execution.mounts import InputMounts
 from nipat.execution.tracking import RunRecord, file_evidence, project_evidence, utc_now
 from nipat.paths import ProjectLayout
 from nipat.validation.integrity import verify_sha256_manifest
@@ -23,9 +24,13 @@ class DockerComposeRunner:
         self._record: RunRecord | None = None
         self._log: TextIO | None = None
         self._image_id: str | None = None
+        self._input_mounts_file: Path | None = None
 
     def _base_command(self) -> list[str]:
-        return ["docker", "compose", "-f", str(self.layout.compose_file)]
+        command = ["docker", "compose", "-f", str(self.layout.compose_file)]
+        if self._input_mounts_file is not None:
+            command.extend(["-f", str(self._input_mounts_file)])
+        return command
 
     def _environment(self) -> dict[str, str]:
         environment = os.environ.copy()
@@ -130,7 +135,8 @@ class DockerComposeRunner:
 
     @contextmanager
     def record_run(
-        self, run_dir: Path, *, workflow: str, inputs: list[Path], parameters: dict[str, Any]
+        self, run_dir: Path, *, workflow: str, inputs: list[Path], parameters: dict[str, Any],
+        mounts: InputMounts | None = None,
     ) -> Iterator[RunRecord]:
         if self._record is not None:
             raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
@@ -141,8 +147,18 @@ class DockerComposeRunner:
                 self._log = log
                 try:
                     self._write(f"NIPAT {workflow}: {run_dir}\n")
+                    self.layout.ensure_storage_dirs()
                     record.data["inputs"] = [file_evidence(path) for path in inputs]
                     record.data["source"] = project_evidence(self.layout.project_dir)
+                    record.data["input_mounts"] = []
+                    if mounts is not None:
+                        if mounts.layout != self.layout:
+                            raise ValidationError("I mount appartengono a un altro workspace.")
+                        mount_file = run_dir / "work" / "input-mounts.json"
+                        mounts.write_override(mount_file)
+                        self._input_mounts_file = mount_file
+                        record.data["input_mounts"] = mounts.mappings
+                        record.data["compose_override"] = "work/input-mounts.json"
                     record.save()
                     verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")
                     if not self.dry_run:
@@ -167,6 +183,7 @@ class DockerComposeRunner:
             self._log = None
             self._record = None
             self._image_id = None
+            self._input_mounts_file = None
 
     def run(
         self, command: Iterable[str | PurePosixPath], *, working_dir: PurePosixPath | None = None
@@ -278,12 +295,7 @@ class DockerComposeRunner:
         if not self.layout.compose_file.is_file():
             raise ValidationError(f"compose.yaml non trovato: {self.layout.compose_file}")
         verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")
-        for required_dir in (
-            self.layout.data_dir / "reference", self.layout.data_dir / "samples",
-            self.layout.data_dir / "panels", self.layout.runs_dir,
-        ):
-            if not required_dir.is_dir():
-                raise ValidationError(f"Cartella di workspace non trovata: {required_dir}")
+        self.layout.ensure_storage_dirs()
         self._capture(["docker", "compose", "version"])
         if check_runtime:
             try:

@@ -1,7 +1,12 @@
 # Registrazione delle esecuzioni
 
 Ogni nuova analisi conserva `run.json` ed `execution.log` nella propria
-cartella sotto `runs`, accanto a `work` e `output`.
+cartella sotto la radice dei risultati scelta dall'utente, accanto a `work`
+e `output`. La radice predefinita è `runs` accanto al progetto; si può cambiarla
+con `--runs-dir`, `NIPAT_RUNS_DIR` o l'opzione **5 — Cartella risultati** del
+menu. La scelta nel menu vale per i run successivi nella sessione corrente.
+I nomi degli output scientifici
+rimangono quelli prodotti dagli script, all'interno del nuovo run.
 
 Il JSON descrive il workflow completo. Per SNPcall, il successo del comando
 samtools non conclude il run: deve terminare anche lo script R. Le date sono
@@ -31,6 +36,15 @@ Gli input fino a 16 MiB ricevono un hash SHA-256. Per file più grandi, come
 BAM e FASTA, vengono registrati percorso, dimensione e data di modifica,
 con indicazione esplicita dell'assenza dell'hash. Questi metadati non provano
 l'identità dei contenuti: conservare gli originali usati nelle prove.
+
+Gli input possono provenire da percorsi esterni al progetto. Ogni esecuzione
+registra la corrispondenza fra i file originali e i percorsi montati in sola
+lettura nel container, anche in `work/input-mounts.json`. I file BAM e FASTA
+non vengono copiati per spostarli dentro il progetto. Gli adattamenti di
+piccole tabelle e i file intermedi sono conservati in `work`.
+Per DNPcall gli alias `sample_0001.bam`, ecc. evitano le limitazioni dei nomi
+nello script R: la corrispondenza dei campioni nei metadati permette di
+attribuire i risultati ai BAM originali.
 
 Il log salva i comandi e l'output combinato standard/errori, continuando
 a mostrarlo nel terminale. I file JSON vengono sostituiti atomicamente dopo
