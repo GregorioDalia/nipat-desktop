@@ -32,6 +32,11 @@ RestartApplications=no
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[Dirs]
+; Shortcuts have a valid working directory even before WSL setup/reboot completes.
+Name: "{localappdata}\NIPAT\data"; Flags: uninsneveruninstall
+Name: "{localappdata}\NIPAT\runs"; Flags: uninsneveruninstall
+
 [Tasks]
 Name: "desktopicon"; Description: "Crea un collegamento NIPAT sul desktop"; Flags: unchecked
 

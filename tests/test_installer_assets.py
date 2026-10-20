@@ -2,6 +2,8 @@
 
 import copy
 import gzip
+import hashlib
+import io
 import importlib.util
 import json
 import subprocess
@@ -18,6 +20,12 @@ SPEC = importlib.util.spec_from_file_location(
 )
 assets = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(assets)
+PROVENANCE_SPEC = importlib.util.spec_from_file_location(
+    "runtime_provenance", Path(__file__).resolve().parents[1]
+    / "installer" / "runtime" / "write-provenance.py",
+)
+provenance = importlib.util.module_from_spec(PROVENANCE_SPEC)
+PROVENANCE_SPEC.loader.exec_module(provenance)
 
 COMMIT = "a" * 40
 SCIENTIFIC = "sha256:" + "b" * 64
@@ -80,6 +88,32 @@ class InstallerAssetTests(unittest.TestCase):
                 rootfs=self.rootfs, scientific_image=self.scientific,
                 rootfs_provenance=provenance,
             )
+
+    def test_engine_notices_match_installed_version_and_record_exact_bytes(self):
+        payloads = (b"license fixture", b"notice fixture")
+        with patch.object(provenance.urllib.request, "urlopen", side_effect=[
+            io.BytesIO(content) for content in payloads
+        ]) as request:
+            record = provenance.collect_engine_notices(
+                "Docker version 29.9.1, build dfc520d", self.root / "engine-docs",
+            )
+        self.assertEqual(record["source_tag"], "docker-v29.9.1")
+        self.assertEqual([call.args[0] for call in request.call_args_list], [
+            "https://raw.githubusercontent.com/moby/moby/docker-v29.9.1/LICENSE",
+            "https://raw.githubusercontent.com/moby/moby/docker-v29.9.1/NOTICE",
+        ])
+        for entry, content in zip(record["files"], payloads):
+            self.assertEqual(Path(entry["path"]).read_bytes(), content)
+            self.assertEqual(entry["sha256"], hashlib.sha256(content).hexdigest())
+
+    def test_engine_notices_fail_clearly_when_version_or_upstream_is_unavailable(self):
+        with self.assertRaisesRegex(ValueError, "Cannot identify"):
+            provenance.collect_engine_notices("unknown", self.root / "engine-docs")
+        with patch.object(provenance.urllib.request, "urlopen", side_effect=OSError("not found")):
+            with self.assertRaisesRegex(ValueError, "Cannot preserve.*docker-v29.9.1/LICENSE"):
+                provenance.collect_engine_notices(
+                    "Docker version 29.9.1, build dfc520d", self.root / "engine-docs",
+                )
 
     def test_asset_rejects_empty_uncompressed_and_oversized_files(self):
         path = self.root / "invalid.tar.gz"

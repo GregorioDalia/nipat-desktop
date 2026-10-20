@@ -91,7 +91,7 @@ class DockerComposeRunner:
             result = subprocess.run(
                 command, cwd=self.layout.project_dir, env=self._environment(),
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=timeout, check=False,
+                timeout=timeout, check=False, stdin=subprocess.DEVNULL,
             )
             check["returncode"] = result.returncode
             self._write(result.stdout, terminal=result.returncode != 0)

@@ -47,7 +47,9 @@ RUN chmod 0755 /usr/local/bin/nipat-engine \
     && printf 'nipat-runtime-v1\n' > /etc/nipat-runtime-id \
     && python3 /usr/local/lib/nipat/write-provenance.py "$SOURCE_COMMIT" "$DEBIAN_BASE" \
     && bash -n /usr/local/bin/nipat-engine \
-    && test -f /usr/share/doc/docker-ce/copyright \
+    && test -s /usr/share/doc/docker-ce/README.md \
+    && test -s /usr/share/doc/docker-ce/upstream-LICENSE \
+    && test -s /usr/share/doc/docker-ce/upstream-NOTICE \
     && install -d -m 0700 /var/lib/nipat
 
 CMD ["/bin/bash"]

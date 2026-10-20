@@ -160,7 +160,7 @@ class WslDockerTransport(DockerTransport):
             try:
                 result = subprocess.run(
                     command, capture_output=True, text=True, encoding="utf-8",
-                    errors="replace", timeout=30, check=False,
+                    errors="replace", timeout=30, check=False, stdin=subprocess.DEVNULL,
                 )
             except (OSError, subprocess.TimeoutExpired) as exc:
                 raise RuntimeExecutionError(self.unavailable_message) from exc
