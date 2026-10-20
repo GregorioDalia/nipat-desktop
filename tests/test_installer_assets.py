@@ -6,6 +6,7 @@ import hashlib
 import io
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -79,6 +80,23 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(entry["url"],
                              "https://github.com/GregorioDalia/nipat-desktop/releases/"
                              f"download/v0.3.0a1/{path.name}")
+
+    def test_manifest_and_stage_accept_noncanonical_project_root(self):
+        prior_directory = Path.cwd()
+        try:
+            os.chdir(self.root)
+            manifest = assets.make_manifest(
+                Path("project"), source_commit=COMMIT, runtime_image=SCIENTIFIC,
+                rootfs=self.rootfs, scientific_image=self.scientific,
+                rootfs_provenance=self.provenance,
+            )
+            self.assertEqual(manifest["source_sha256"], self.manifest["source_sha256"])
+            with patch.object(assets.bundle, "require_python_archive"):
+                app = assets.stage_app(Path("project"), self.manifest_path,
+                                       self.root / "relative-stage", self.python_archive)
+            self.assertTrue((app / "README.md").is_file())
+        finally:
+            os.chdir(prior_directory)
 
     def test_manifest_rejects_provenance_from_another_source(self):
         provenance = dict(self.provenance, source_commit="e" * 40)

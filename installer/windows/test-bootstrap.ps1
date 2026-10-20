@@ -82,9 +82,11 @@ try {
 
     $statePath = Join-Path $temporary 'state.json'
     Write-NipatJsonAtomic $statePath ([ordered]@{ schema_version = 1; phase = 'starting' })
-    Write-NipatJsonAtomic $statePath ([ordered]@{ schema_version = 1; phase = 'ready' })
-    $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    $unicodePath = 'C:\Users\Jos' + [char]0x00E9 + '\Dati ' + [char]0x6D4B + [char]0x8BD5
+    Write-NipatJsonAtomic $statePath ([ordered]@{ schema_version = 1; phase = 'ready'; data_dir = $unicodePath })
+    $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-Test ($state.phase -eq 'ready') 'atomic state replacement retains complete JSON'
+    Assert-Test ($state.data_dir -ceq $unicodePath) 'UTF-8 state preserves Unicode user paths on Windows PowerShell 5.1'
     Assert-Test (@(Get-ChildItem -LiteralPath $temporary -Filter '.write-*').Count -eq 0) 'atomic state leaves no temporary files'
 
     Assert-Test ((ConvertTo-NipatNativeArgument 'plain') -ceq 'plain') 'native plain argument'

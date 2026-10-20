@@ -45,7 +45,7 @@ try {
     $manifest = Read-NipatInstallerManifest (Join-Path $project '.distribution\installer-manifest.json')
     $previous = $null
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
-        $previous = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        $previous = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($previous.schema_version -ne 1) { throw 'Stato installer non riconosciuto. Conservare il log e contattare il supporto.' }
         if (-not $AssetDirectory -and $previous.PSObject.Properties['asset_directory']) { $AssetDirectory = $previous.asset_directory }
     }
@@ -104,7 +104,7 @@ try {
         $registered = $names -contains $distro
         $ownership = $null
         if (Test-Path -LiteralPath $ownershipPath -PathType Leaf) {
-            $ownership = Get-Content -LiteralPath $ownershipPath -Raw | ConvertFrom-Json
+            $ownership = Get-Content -LiteralPath $ownershipPath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($ownership.schema_version -ne 1 -or $ownership.distro -ne $distro -or
                 $ownership.owner_id -cnotmatch '^[a-f0-9]{32}$' -or
                 $ownership.rootfs_sha256 -cne $manifest.assets.rootfs.sha256 -or

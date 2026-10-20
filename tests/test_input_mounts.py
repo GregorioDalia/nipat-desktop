@@ -39,7 +39,7 @@ class InputMountTests(unittest.TestCase):
         self.assertEqual(target.suffix, ".bam")
         self.assertRegex(target.name, r"^[A-Za-z0-9._-]+$")
         volume = mounts.compose_override()["services"]["scientific"]["volumes"][0]
-        self.assertEqual(volume["source"], str(self.source).replace("$", "$$"))
+        self.assertEqual(volume["source"], str(self.source.resolve()).replace("$", "$$"))
         self.assertEqual(volume["target"], str(target))
         self.assertTrue(volume["read_only"])
         self.assertFalse(volume["bind"]["create_host_path"])

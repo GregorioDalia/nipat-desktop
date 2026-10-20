@@ -61,6 +61,30 @@ begin
       'Applicazione e distribuzione Linux appartengono al tuo utente Windows.', mbError, MB_OK);
 end;
 
+function QuoteNipatArgument(Value: String): String;
+var
+  I, J, Backslashes: Integer;
+begin
+  { Windows argv quoting: backslashes before quotes and at the end are doubled. }
+  Result := '"';
+  Backslashes := 0;
+  for I := 1 to Length(Value) do begin
+    if Value[I] = '\' then
+      Backslashes := Backslashes + 1
+    else begin
+      if Value[I] = '"' then begin
+        for J := 1 to (Backslashes * 2 + 1) do Result := Result + '\';
+      end else begin
+        for J := 1 to Backslashes do Result := Result + '\';
+      end;
+      Result := Result + Value[I];
+      Backslashes := 0;
+    end;
+  end;
+  for J := 1 to (Backslashes * 2) do Result := Result + '\';
+  Result := Result + '"';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AssetDir, Parameters: String;
@@ -70,8 +94,9 @@ begin
     AssetDir := ExpandConstant('{param:ASSETDIR|}');
     if AssetDir = '' then
       AssetDir := ExtractFilePath(ExpandConstant('{srcexe}')) + 'assets';
-    Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File "' +
-      ExpandConstant('{app}\installer\windows\bootstrap.ps1') + '" -AssetDirectory "' + AssetDir + '"';
+    Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
+      QuoteNipatArgument(ExpandConstant('{app}\installer\windows\bootstrap.ps1')) +
+      ' -AssetDirectory ' + QuoteNipatArgument(AssetDir);
     Started := ExecAsOriginalUser(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, BootstrapResult);
     if not Started then BootstrapResult := 1;

@@ -120,7 +120,9 @@ class WslRunnerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        root = Path(self.temp.name)
+        # TemporaryDirectory may use a Windows 8.3 alias while production input
+        # validation resolves the same files to their long paths.
+        root = Path(self.temp.name).resolve()
         project = root / "application"
         (project / "scientific").mkdir(parents=True)
         script = project / "scientific" / "test.R"
@@ -219,7 +221,7 @@ class WslRunnerTests(unittest.TestCase):
         self.assertEqual(len(compose_files), 2)
         self.assertTrue(all(value.startswith("/actual-mount/d/") for value in compose_files))
         self.assertIn("NIPAT_RUNTIME_IMAGE=" + self.image, argv)
-        self.assertEqual(record["input_mounts"][0]["host_path"], str(self.source))
+        self.assertEqual(record["input_mounts"][0]["host_path"], str(self.source.resolve()))
         override = json.loads((run / "work" / "input-mounts.json").read_text(encoding="utf-8"))
         volume = override["services"]["scientific"]["volumes"][0]
         self.assertTrue(volume["source"].startswith("/actual-mount/d/"))

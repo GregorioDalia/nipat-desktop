@@ -160,6 +160,7 @@ def package_sources(
     project: Path, destination: Path, python_zip: Path,
     runtime_archive: Path | None = None, runtime_metadata: dict | None = None,
 ) -> dict:
+    project = project.resolve()
     files = source_files(project)
     mandatory = {"compose.yaml", "pyproject.toml", "1_SETUP.cmd", "2_AVVIA.cmd", "nipat.cmd"}
     names = {path.relative_to(project).as_posix() for path in files}

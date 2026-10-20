@@ -32,13 +32,13 @@ class PathTests(unittest.TestCase):
                 "NIPAT_RUNS_DIR": str(root / "external-results"),
             }):
                 layout = ProjectLayout.discover()
-                self.assertEqual(layout.data_dir, root / "external-data")
-                self.assertEqual(layout.runs_dir, root / "external-results")
+                self.assertEqual(layout.data_dir, (root / "external-data").resolve())
+                self.assertEqual(layout.runs_dir, (root / "external-results").resolve())
                 explicit = ProjectLayout.discover(
                     data_dir=root / "chosen-data", runs_dir=root / "chosen-results"
                 )
-                self.assertEqual(explicit.data_dir, root / "chosen-data")
-                self.assertEqual(explicit.runs_dir, root / "chosen-results")
+                self.assertEqual(explicit.data_dir, (root / "chosen-data").resolve())
+                self.assertEqual(explicit.runs_dir, (root / "chosen-results").resolve())
                 explicit.ensure_storage_dirs()
                 self.assertTrue(explicit.data_dir.is_dir())
                 self.assertTrue(explicit.runs_dir.is_dir())

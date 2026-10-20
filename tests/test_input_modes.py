@@ -68,7 +68,10 @@ class InputModeTests(unittest.TestCase):
         self.assertEqual(pileup.read_bytes(), before)
         mappings = self.runner.records[0]["mounts"].mappings
         self.assertTrue(all(item["read_only"] for item in mappings))
-        self.assertEqual({item["host_path"] for item in mappings}, {str(panel), str(pileup)})
+        self.assertEqual(
+            {item["host_path"] for item in mappings},
+            {str(panel.resolve()), str(pileup.resolve())},
+        )
 
     def test_snp_rejects_six_column_pileup_before_creating_run(self):
         panel = self.write("SNP.tsv", "pos\tref\talt\nchr1:100\tA\tC\n")
@@ -138,7 +141,7 @@ class InputModeTests(unittest.TestCase):
                          f"Full panel={self.layout.container_path(run / 'work' / 'cutoff_001.tsv')},"
                          f"Second={self.layout.container_path(run / 'work' / 'cutoff_002.tsv')}")
         self.assertEqual(first.read_bytes(), original)
-        self.assertEqual(self.runner.records[0]["parameters"]["cutoffs"][0]["path"], str(first))
+        self.assertEqual(self.runner.records[0]["parameters"]["cutoffs"][0]["path"], str(first.resolve()))
 
     def test_cpi_native_map_and_alias_match_expected_mapping(self):
         args = self.cpi_args()

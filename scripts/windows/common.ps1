@@ -17,7 +17,7 @@ function Set-NipatEnvironment([string] $Project) {
     $installed = $null
     $backendFile = Join-Path $Project ".runtime\backend.json"
     if (Test-Path -LiteralPath $backendFile -PathType Leaf) {
-        $installed = Get-Content -LiteralPath $backendFile -Raw | ConvertFrom-Json
+        $installed = Get-Content -LiteralPath $backendFile -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($installed.schema_version -ne 1 -or $installed.backend -ne 'wsl' -or
             $installed.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
             $installed.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
@@ -169,7 +169,7 @@ function Install-NipatRuntime([string] $Project) {
         throw "Pacchetto runtime incompleto: servono runtime.tar e runtime.json insieme."
     }
     if (Test-Path -LiteralPath $archive -PathType Leaf) {
-        $metadata = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+        $metadata = Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($metadata.schema_version -ne 1 -or $metadata.image_id -notmatch '^sha256:[a-f0-9]{64}$' -or
             $metadata.archive_sha256 -notmatch '^[a-f0-9]{64}$' -or
             $metadata.os -ne "linux" -or $metadata.architecture -ne "amd64") {

@@ -99,6 +99,8 @@ def make_manifest(
     project: Path, *, source_commit: str, runtime_image: str,
     rootfs: Path, scientific_image: Path, rootfs_provenance: dict,
 ) -> dict:
+    # source_files canonicalizes paths, including Windows 8.3 aliases.
+    project = project.resolve()
     if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
         raise ValueError("source_commit deve essere lo SHA Git completo dei sorgenti compilati.")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime_image):
@@ -202,6 +204,7 @@ def validate_manifest(manifest: dict) -> None:
 
 
 def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path) -> Path:
+    project = project.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     validate_manifest(manifest)
     if checked_version(project) != manifest["version"]:

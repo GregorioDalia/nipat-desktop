@@ -9,8 +9,8 @@ try {
         if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
             throw 'Installazione da completare: aprire NIPAT - completa preparazione dal menu Start.'
         }
-        $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
-        $manifest = Get-Content -LiteralPath (Join-Path $project '.distribution\installer-manifest.json') -Raw | ConvertFrom-Json
+        $state = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $manifest = Get-Content -LiteralPath (Join-Path $project '.distribution\installer-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($state.schema_version -ne 1 -or $state.phase -ne 'ready' -or
             $state.source_commit -ne $manifest.source_commit -or $state.runtime_image -ne $manifest.runtime_image) {
             throw 'Installazione non verificata per questa versione: aprire NIPAT - completa preparazione dal menu Start.'
