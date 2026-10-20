@@ -135,9 +135,12 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          $target = Join-Path $PWD 'build/windows-installer/app/installer/windows/EnableWsl.exe'
-          & $compiler /nologo /target:exe /platform:x64 /win32manifest:installer/windows/EnableWsl.manifest "/out:$target" installer/windows/EnableWsl.cs
+          $source = (Resolve-Path 'installer/windows/EnableWsl.cs').Path
+          $manifest = (Resolve-Path 'installer/windows/EnableWsl.manifest').Path
+          $target = Join-Path (Resolve-Path 'build/windows-installer/app/installer/windows').Path 'EnableWsl.exe'
+          & $compiler /nologo /target:exe /platform:x64 "/win32manifest:$manifest" "/out:$target" $source
           if ($LASTEXITCODE -ne 0) { throw 'WSL helper compilation failed.' }
+          if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'WSL helper was not written into the installer stage.' }
       - name: Install verified Inno Setup compiler
         shell: powershell
         run: |
@@ -157,9 +160,10 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $stage = (Resolve-Path 'build/windows-installer').Path
+          $script = (Resolve-Path 'installer/windows/NIPAT.iss').Path
           $output = Join-Path $PWD 'build/output'
           New-Item -ItemType Directory -Path $output -Force | Out-Null
-          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" installer/windows/NIPAT.iss
+          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" $script
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           Copy-Item "$stage/app/.distribution/installer-manifest.json" $output
           $exe = Join-Path $output 'NIPAT-Setup.exe'
