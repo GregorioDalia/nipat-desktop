@@ -98,8 +98,15 @@ try {
     Assert-Test ($probe.Text -ceq 'marker' -and $probe.ErrorText -ceq 'warning') 'native stderr warning does not corrupt marker output'
     $failure = Invoke-NipatWsl @('-NoLogo', '-NoProfile', '-Command', 'exit 7') -AllowFailure -TimeoutSeconds 20
     Assert-Test ($failure.ExitCode -eq 7) 'native failure is inspectable'
-    $stdin = Invoke-NipatWsl @('-NoLogo', '-NoProfile', '-Command', "if (`$null -eq [Console]::ReadLine()) { 'closed' }") -TimeoutSeconds 20
-    Assert-Test ($stdin.Text -eq 'closed') 'native stdin closed to prevent interactive prompts'
+    $inputEncodingBefore = [Console]::InputEncoding
+    $inputEncodingSignature = $inputEncodingBefore.CodePage.ToString() + ':' + [Convert]::ToBase64String($inputEncodingBefore.GetPreamble())
+    # Read raw bytes through EOF: Console.ReadLine may hide or reinterpret a BOM.
+    $stdinProbe = '$bytes = New-Object IO.MemoryStream; [Console]::OpenStandardInput().CopyTo($bytes); [Console]::WriteLine($bytes.Length); $bytes.Dispose()'
+    $stdin = Invoke-NipatWsl @('-NoLogo', '-NoProfile', '-Command', $stdinProbe) -TimeoutSeconds 20
+    Assert-Test ($stdin.Text -ceq '0') ("native stdin reaches EOF with zero bytes; stdout=$($stdin.Text); stderr=$($stdin.ErrorText); exit=$($stdin.ExitCode)")
+    $inputEncodingAfter = [Console]::InputEncoding
+    $afterSignature = $inputEncodingAfter.CodePage.ToString() + ':' + [Convert]::ToBase64String($inputEncodingAfter.GetPreamble())
+    Assert-Test ($afterSignature -ceq $inputEncodingSignature) 'native launch restores original console input encoding'
     Assert-Rejected { Invoke-NipatWsl @('-NoLogo', '-NoProfile', '-Command', 'Start-Sleep -Seconds 10') -TimeoutSeconds 1 } 'native probe timeout is bounded'
     Write-Host "PASS: $assertions installer assertions."
 } finally {

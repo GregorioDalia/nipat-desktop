@@ -128,8 +128,25 @@ function Invoke-NipatWsl([string[]] $Arguments, [switch] $AllowFailure, [int] $T
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $start
     try {
-        if (-not $process.Start()) { throw 'Impossibile avviare wsl.exe.' }
-        # No readiness probe or WSL operation may wait for an interactive install/OOBE prompt.
+        $inputEncoding = New-Object Text.UTF8Encoding($false)
+        $restoreConsoleEncoding = $false
+        $previousInputEncoding = $null
+        try {
+            if ($null -ne $start.PSObject.Properties['StandardInputEncoding']) {
+                $start.StandardInputEncoding = $inputEncoding
+            } else {
+                # .NET Framework uses Console.InputEncoding and AutoFlush when creating
+                # StandardInput: even Start() can write a BOM to an otherwise empty pipe.
+                # Bootstrap is single-threaded; restore the console immediately after Start.
+                $previousInputEncoding = [Console]::InputEncoding
+                [Console]::InputEncoding = $inputEncoding
+                $restoreConsoleEncoding = $true
+            }
+            if (-not $process.Start()) { throw 'Impossibile avviare wsl.exe.' }
+        } finally {
+            if ($restoreConsoleEncoding) { [Console]::InputEncoding = $previousInputEncoding }
+        }
+        # No bytes (including a BOM) and EOF: never wait for an install/OOBE prompt.
         $process.StandardInput.Close()
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
