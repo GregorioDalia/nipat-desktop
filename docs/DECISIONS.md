@@ -1,5 +1,24 @@
 # Consolidated decisions
 
+## Managed Windows installer (0.3.0a1 candidate)
+
+- Distribute a per-user `NIPAT-Setup.exe` through GitHub Releases, targeting
+  Windows 11 x64 for the first installation trial.
+- Preserve the scientific Linux image. Use a dedicated WSL2 distribution with
+  Docker Engine to avoid a separate Docker Desktop installation.
+- Keep Windows Python input validation and native Docker execution available;
+  opt into WSL through the installed configuration.
+- Build and test the scientific image in CI. Embed asset hashes in the installer
+  and verify archives and the imported image ID before reporting success.
+- Elevate only Windows prerequisite activation. Register the distro under the
+  invoking user; never automatically replace an existing distro.
+- Complete self-tests before reporting setup success. CI success does not
+  establish clean-machine installation success or scientific validity.
+- Retain `v0.2.0a2` and its evidence. Do not transfer its successful Docker
+  Desktop tests to the new WSL installation claim.
+- Use “Guida per l’utilizzo” and generic domain validation terminology in
+  public documentation; rename the guide to `docs/GUIDA_UTILIZZO.md`.
+
 ## Input portability and complete CLI modes (0.2.0a2)
 
 - Input paths are user-selected and can be outside the project, `data` or

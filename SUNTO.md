@@ -1,6 +1,6 @@
 # NIPAT: stato del progetto e funzionamento
 
-**CLI 0.2.0a2 in preparazione per la validazione con l'esperta di dominio.**
+**CLI per la validazione di dominio; installatore Windows 0.3.0a1 in sviluppo.**
 NIPAT riunisce quattro analisi locali: Python gestisce file ed esecuzioni,
 mentre gli script R di DNPcall e NEWPAT eseguono i calcoli con samtools in
 Docker. La GUI verrà dopo la validazione della CLI.
@@ -29,23 +29,30 @@ Il 20 ottobre 2026 sono riusciti, sul PC Windows di sviluppo, setup, quattro
 gruppi di autotest e scelta della cartella risultati. DNPcall con input esterni
 ha riprodotto i precedenti 11 siti e tutte le 17 colonne di un BAM reale.
 Gli [esiti dettagliati](docs/DISTRIBUZIONE.md) distinguono queste prove dalla
-validazione della collega e dall'installazione su un altro PC, ancora da svolgere.
-Il tag `v0.2.0a1` resta invariato; la nuova revisione va pubblicata separatamente.
+validazione di dominio e dall'installazione su un altro PC, ancora da svolgere.
+La release pubblicata `v0.2.0a2` resta invariata. La revisione `0.3.0a1`
+aggiunge un installatore che prepara WSL2 e Docker Engine in un ambiente
+dedicato. Mantiene i quattro workflow e gli script scientifici esistenti.
+L’installazione completa su Windows è ancora da verificare.
 
 ## Come si usa
 
-Il canale scelto è GitHub: si scarica la versione indicata, si estrae il
-progetto e si avvia `1_SETUP.cmd`, poi `2_AVVIA.cmd`. Serve Docker Desktop
-avviato con container Linux; il primo setup richiede Internet e prepara
-Python locale e il runtime scientifico.
+Il canale di distribuzione è GitHub. L’installatore in preparazione consente di
+scaricare `NIPAT-Setup.exe`, avviarlo e ottenere il collegamento **NIPAT**:
+la configurazione gestisce Python, WSL2, Docker Engine e il runtime scientifico,
+poi esegue gli autotest. Può richiedere autorizzazione amministrativa e riavvio
+per attivare WSL2. Il primo download richiede Internet; le analisi sono locali.
+Per la release già pubblicata `0.2.0a2` resta il percorso con archivio sorgente,
+`1_SETUP.cmd`, `2_AVVIA.cmd` e Docker Desktop avviato.
 
 Gli input possono restare nelle loro cartelle originali, anche su un'altra
-unità accessibile a Docker. NIPAT rende disponibili al container i file
+unità locale accessibile al runtime. Il nuovo backend WSL non supporta
+inizialmente condivisioni UNC o unità di rete. NIPAT rende disponibili al container i file
 selezionati in sola lettura, senza copiare BAM e FASTA. Si può scegliere la
 cartella dei risultati: ogni analisi crea un nuovo run, conserva i nomi
 degli output scientifici e registra input, corrispondenze dei percorsi,
 parametri ed esito in `run.json` e `execution.log`. I run esistenti non vengono
 sovrascritti e i dati delle analisi restano sul computer.
 
-Per cominciare: [guida della collega](docs/GUIDA_COLLEGA.md).
+Per cominciare: [guida per l’utilizzo](docs/GUIDA_UTILIZZO.md).
 Per riportare le prove: [scheda di validazione](docs/VALIDAZIONE.md).

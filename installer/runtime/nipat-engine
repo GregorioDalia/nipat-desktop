@@ -1,0 +1,67 @@
+#!/bin/bash
+# Starts only the daemon in NIPAT's marked, dedicated distribution.
+set -euo pipefail
+trap 'printf "NIPAT: runtime startup interrupted.\n" >&2; exit 130' INT TERM
+
+if [[ "${1:-}" != "ensure" || $# -ne 1 ]]; then
+    printf 'Usage: nipat-engine ensure\n' >&2
+    exit 2
+fi
+if [[ $(id -u) -ne 0 ]]; then
+    printf 'NIPAT: the dedicated runtime must be started as root.\n' >&2
+    exit 2
+fi
+if [[ ! -f /etc/nipat-runtime-id ]] || \
+        [[ $(cat /etc/nipat-runtime-id) != "nipat-runtime-v1" ]]; then
+    printf 'NIPAT: refusing to start Docker in an unrecognized distribution.\n' >&2
+    exit 2
+fi
+python3 - <<'PY'
+import json
+from pathlib import Path
+try:
+    marker = json.loads(Path('/etc/nipat-runtime.json').read_text())
+    if marker.get('vendor') != 'nipat-desktop' or marker.get('schema_version') != 1:
+        raise ValueError('unexpected vendor or schema')
+except (OSError, ValueError) as error:
+    raise SystemExit(f'NIPAT: invalid dedicated-runtime marker: {error}')
+PY
+
+unset DOCKER_HOST DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
+socket='unix:///var/run/docker.sock'
+ready() {
+    timeout 5 docker --host "$socket" info --format '{{.ServerVersion}}' >/dev/null 2>&1
+}
+install -d -m 0755 /run/lock /var/log/nipat
+exec 9>/run/lock/nipat-engine.lock
+if ! flock --wait 120 9; then
+    printf 'NIPAT: another runtime startup is still in progress. Retry shortly.\n' >&2
+    exit 1
+fi
+if ready; then
+    exit 0
+fi
+
+pidfile=/run/nipat-dockerd.pid
+if [[ -f "$pidfile" ]]; then
+    pid=$(cat "$pidfile")
+    if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
+        rm -f "$pidfile"
+    fi
+fi
+if [[ ! -f "$pidfile" ]]; then
+    # Do not inherit descriptor 9: the daemon must not retain the startup lock.
+    nohup dockerd --host "$socket" --pidfile "$pidfile" \
+        --data-root /var/lib/docker --exec-root /run/nipat-docker \
+        </dev/null >>/var/log/nipat/dockerd.log 2>&1 9>&- &
+fi
+deadline=$((SECONDS + 90))
+while ((SECONDS < deadline)); do
+    if ready; then
+        exit 0
+    fi
+    sleep 1
+done
+printf 'NIPAT: Docker did not become ready. See /var/log/nipat/dockerd.log in this distribution.\n' >&2
+tail -n 30 /var/log/nipat/dockerd.log >&2 || true
+exit 1

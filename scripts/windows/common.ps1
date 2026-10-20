@@ -14,20 +14,41 @@ function Resolve-NipatDirectory([string] $Directory) {
 function Set-NipatEnvironment([string] $Project) {
     # These variables affect this child process only; the system is unchanged.
     $env:NIPAT_PROJECT_DIR = $Project
+    $installed = $null
+    $backendFile = Join-Path $Project ".runtime\backend.json"
+    if (Test-Path -LiteralPath $backendFile -PathType Leaf) {
+        $installed = Get-Content -LiteralPath $backendFile -Raw | ConvertFrom-Json
+        if ($installed.schema_version -ne 1 -or $installed.backend -ne 'wsl' -or
+            $installed.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
+            $installed.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
+            -not [IO.Path]::IsPathRooted($installed.data_dir) -or
+            -not [IO.Path]::IsPathRooted($installed.runs_dir)) {
+            throw "Configurazione dell installer non valida: riaprire 1_SETUP.cmd."
+        }
+        $env:NIPAT_BACKEND = 'wsl'
+        $env:NIPAT_WSL_DISTRO = $installed.wsl_distro
+        $env:NIPAT_RUNTIME_IMAGE = $installed.runtime_image
+    }
     if ([string]::IsNullOrWhiteSpace($env:NIPAT_WORKSPACE_DIR)) {
-        $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $Project
+        if ($null -ne $installed) {
+            $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $installed.data_dir
+        } else {
+            $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $Project
+        }
     }
     $env:NIPAT_WORKSPACE_DIR = Resolve-NipatDirectory $env:NIPAT_WORKSPACE_DIR
     if ([string]::IsNullOrWhiteSpace($env:NIPAT_DATA_DIR)) {
-        $env:NIPAT_DATA_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "data"
+        if ($null -ne $installed) { $env:NIPAT_DATA_DIR = $installed.data_dir }
+        else { $env:NIPAT_DATA_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "data" }
     }
     $env:NIPAT_DATA_DIR = Resolve-NipatDirectory $env:NIPAT_DATA_DIR
     if ([string]::IsNullOrWhiteSpace($env:NIPAT_RUNS_DIR)) {
-        $env:NIPAT_RUNS_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "runs"
+        if ($null -ne $installed) { $env:NIPAT_RUNS_DIR = $installed.runs_dir }
+        else { $env:NIPAT_RUNS_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "runs" }
     }
     $env:NIPAT_RUNS_DIR = Resolve-NipatDirectory $env:NIPAT_RUNS_DIR
     $imageFile = Join-Path $Project ".runtime\runtime-image.txt"
-    if (Test-Path -LiteralPath $imageFile -PathType Leaf) {
+    if ($null -eq $installed -and (Test-Path -LiteralPath $imageFile -PathType Leaf)) {
         $imageId = (Get-Content -LiteralPath $imageFile -Raw).Trim()
         if ($imageId -notmatch '^sha256:[a-f0-9]{64}$') {
             throw "Identificativo runtime non valido. Eseguire nuovamente 1_SETUP.cmd."

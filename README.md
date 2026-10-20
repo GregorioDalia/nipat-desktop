@@ -1,17 +1,21 @@
 # NIPAT Desktop
 
-**CLI 0.2.0a2, being prepared for domain validation.** Start with the Italian
-[project overview](SUNTO.md) and [tester guide](docs/GUIDA_COLLEGA.md).
-This revision accepts user-selected input locations and exposes the native
-input modes of the four scientific workflows. Windows setup, self-tests and
-a real-BAM DNPcall regression passed on the maintainer's PC on 2026-10-20.
-See the [validation evidence](docs/DISTRIBUZIONE.md); the existing `v0.2.0a1`
-tag remains unchanged.
+**CLI 0.3.0a1 — Windows installer candidate, pending installation validation.**
+Start with the Italian [project overview](SUNTO.md) and
+[usage guide](docs/GUIDA_UTILIZZO.md).
 
-On Windows x64, `1_SETUP.cmd` prepares local Python, the Docker runtime and
-bundled self-tests; `2_AVVIA.cmd` opens a text wizard. Testers obtain a versioned
-source archive from GitHub, following the [distribution guide](docs/DISTRIBUZIONE.md).
-Docker Desktop with Linux containers is currently a manual prerequisite.
+The new distribution builds `NIPAT-Setup.exe` on GitHub. It prepares portable
+Python and a dedicated WSL2 environment with Docker Engine, imports a prebuilt
+scientific image, and runs self-tests. Docker Desktop is not required for this
+installation mode. Initial WSL activation can require administrator consent
+and a restart; setup resumes under the original Windows account.
+The initial installer target is **Windows 11 x64**.
+
+This is a development candidate, not evidence of successful installation on a
+clean PC. See the [installer validation procedure](docs/INSTALLATORE_WINDOWS.md).
+The published `v0.2.0a2` remains unchanged and uses the source archive plus
+Docker Desktop. The source setup (`1_SETUP.cmd`, then `2_AVVIA.cmd`) remains
+available. See [distribution and prior evidence](docs/DISTRIBUZIONE.md).
 
 Python handles input validation, mechanical format adaptation and execution;
 the scientific calculations remain in the DNPcall and NEWPAT R scripts.
@@ -19,12 +23,15 @@ The desktop GUI will use the same application layer after CLI validation.
 
 ## Input locations and results
 
-Select existing files wherever they are stored on the computer. NIPAT mounts
+Select existing files accessible to the selected runtime. The WSL installer
+initially supports fixed local Windows drive paths; UNC shares and network drives
+are not supported by this backend. NIPAT mounts
 the selected inputs read-only for each run; large BAM/FASTA files do not need
 to be copied into the project. Container aliases handle paths containing spaces
 and preserve the association with the original files in the run metadata.
 
-By default, `data` and `runs` are beside the project. `data` is a convenience
+For source checkouts, `data` and `runs` are beside the project. The installer
+uses `%LOCALAPPDATA%\NIPAT\data` and `%LOCALAPPDATA%\NIPAT\runs`. `data` is a convenience
 directory, not a boundary for input selection. Use global `--data-dir` and
 `--runs-dir`, or `NIPAT_DATA_DIR` and `NIPAT_RUNS_DIR`, to choose other locations.
 Wizard option **5 — Cartella risultati** changes the results root for the
@@ -80,7 +87,7 @@ plot is intentionally omitted.
 Contamination accepts inputs without `ratio_REF_ALT`: the upstream script
 calculates it from REF/ALT counts. Estimates are fractions, so `0.025` means 2.5%.
 The default CPI `--err-const` remains `0.0000892303778101497` and is editable
-in the wizard or CLI. See the [tester guide](docs/GUIDA_COLLEGA.md) for formats.
+in the wizard or CLI. See the [usage guide](docs/GUIDA_UTILIZZO.md) for formats.
 
 ## Checks and development
 
@@ -97,7 +104,7 @@ CPI and Contamination regressions, and the new external-input checks. The last
 group exercises direct SNP pileup, recursive Contamination input and CPI with
 two labeled cutoffs or all sites; the standalone script repeats that group.
 These checks require Docker and do not add numerical DNPcall-from-BAM coverage.
-All four groups passed on Windows. A separate DNPcall run from a real BAM,
+All four groups passed on Windows with Docker Desktop in `0.2.0a2`. A separate DNPcall run from a real BAM,
 using external inputs and a different results root, reproduced all 11 rows
 and 17 columns of its previous individual output. These checks support the
 validation handoff; domain testing and installation on another PC remain.

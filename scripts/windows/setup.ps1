@@ -1,5 +1,10 @@
 . (Join-Path $PSScriptRoot "common.ps1")
 $project = Get-NipatProject
+# Only a staged installer contains this trusted manifest. Source/portable setup is unchanged.
+if (Test-Path -LiteralPath (Join-Path $project ".distribution\installer-manifest.json") -PathType Leaf) {
+    & (Join-Path $project "installer\windows\bootstrap.ps1")
+    exit $LASTEXITCODE
+}
 $transcriptStarted = $false
 $result = 1
 try {

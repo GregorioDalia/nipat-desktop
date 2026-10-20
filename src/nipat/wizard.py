@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
@@ -83,7 +84,10 @@ def run_wizard(
     write("NIPAT - CLI guidata per la validazione")
     write(f"Dati: {layout.data_dir}")
     write(f"Risultati: {layout.runs_dir}")
-    write("Gli input possono trovarsi in qualsiasi cartella accessibile a Docker.")
+    if os.environ.get("NIPAT_BACKEND", "").strip().lower() == "wsl":
+        write("Gli input possono trovarsi su dischi locali; le unità di rete non sono supportate.")
+    else:
+        write("Gli input possono trovarsi in qualsiasi cartella accessibile a Docker.")
     write("Sono accettati percorsi completi o relativi alla cartella corrente.")
     write("Per cambiare la cartella risultati usare l'opzione 5 del menu.")
     write("Le cartelle dei run esistenti non vengono sovrascritte. :annulla torna al menu.")

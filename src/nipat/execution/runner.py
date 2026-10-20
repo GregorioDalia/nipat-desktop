@@ -13,6 +13,7 @@ from typing import Any, Iterable, Iterator, TextIO
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.mounts import InputMounts
 from nipat.execution.tracking import RunRecord, file_evidence, project_evidence, utc_now
+from nipat.execution.transport import DockerTransport
 from nipat.paths import ProjectLayout
 from nipat.validation.integrity import verify_sha256_manifest
 
@@ -25,11 +26,13 @@ class DockerComposeRunner:
         self._log: TextIO | None = None
         self._image_id: str | None = None
         self._input_mounts_file: Path | None = None
+        self._transport = DockerTransport.from_environment(dry_run=dry_run)
+        self._backend_ready = False
 
     def _base_command(self) -> list[str]:
-        command = ["docker", "compose", "-f", str(self.layout.compose_file)]
+        command = ["docker", "compose", "-f", self._transport.host_path(self.layout.compose_file)]
         if self._input_mounts_file is not None:
-            command.extend(["-f", str(self._input_mounts_file)])
+            command.extend(["-f", self._transport.host_path(self._input_mounts_file)])
         return command
 
     def _environment(self) -> dict[str, str]:
@@ -62,6 +65,23 @@ class DockerComposeRunner:
             sys.stdout.flush()
 
     def _capture(self, command: list[str], *, container_name: str | None = None) -> str:
+        self._ensure_backend()
+        return self._capture_process(
+            self._transport.command(command, self._environment()), container_name=container_name,
+        )
+
+    def _ensure_backend(self) -> None:
+        if self.dry_run or self._backend_ready:
+            return
+        command = self._transport.ensure_command()
+        if command is not None:
+            # The helper bounds both its startup lock and the daemon readiness wait.
+            self._capture_process(command, timeout=240)
+        self._backend_ready = True
+
+    def _capture_process(
+        self, command: list[str], *, container_name: str | None = None, timeout: int = 90,
+    ) -> str:
         check = {"argv": command, "started_at": utc_now(), "returncode": None}
         if self._record:
             self._record.data["checks"].append(check)
@@ -71,7 +91,7 @@ class DockerComposeRunner:
             result = subprocess.run(
                 command, cwd=self.layout.project_dir, env=self._environment(),
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
-                timeout=90, check=False,
+                timeout=timeout, check=False,
             )
             check["returncode"] = result.returncode
             self._write(result.stdout, terminal=result.returncode != 0)
@@ -79,13 +99,16 @@ class DockerComposeRunner:
             if result.returncode:
                 raise RuntimeExecutionError(
                     f"Controllo del runtime fallito (codice {result.returncode}). "
-                    "Verificare Docker Desktop e preparare il runtime con build-runtime."
+                    + self._transport.unavailable_message
                 )
             return result.stdout.strip()
         except FileNotFoundError as exc:
-            raise RuntimeExecutionError("Docker non è disponibile nel PATH.") from exc
+            raise RuntimeExecutionError(self._transport.unavailable_message) from exc
         except subprocess.TimeoutExpired as exc:
-            raise RuntimeExecutionError("Il controllo del runtime ha superato 90 secondi.") from exc
+            raise RuntimeExecutionError(
+                f"Il controllo del runtime ha superato {timeout} secondi. "
+                + self._transport.unavailable_message
+            ) from exc
         finally:
             if container_name is not None and check["returncode"] != 0:
                 check["container_cleanup"] = self._stop_container(container_name)
@@ -111,6 +134,7 @@ class DockerComposeRunner:
         self._image_id = image_id
         if self._record:
             self._record.data["runtime"] = {
+                **self._transport.metadata,
                 "requested_image": image_name, "image_id": image_id,
                 "os": image_os, "architecture": architecture,
             }
@@ -142,6 +166,9 @@ class DockerComposeRunner:
             raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
         record = RunRecord(run_dir, workflow, parameters)
         self._record = record
+        # A wizard can reuse this runner after WSL has stopped between analyses.
+        self._backend_ready = False
+        record.data["transport"] = self._transport.metadata
         try:
             with record.log_path.open("x", encoding="utf-8", newline="\n") as log:
                 self._log = log
@@ -155,7 +182,7 @@ class DockerComposeRunner:
                         if mounts.layout != self.layout:
                             raise ValidationError("I mount appartengono a un altro workspace.")
                         mount_file = run_dir / "work" / "input-mounts.json"
-                        mounts.write_override(mount_file)
+                        mounts.write_override(mount_file, source_path=self._transport.host_path)
                         self._input_mounts_file = mount_file
                         record.data["input_mounts"] = mounts.mappings
                         record.data["compose_override"] = "work/input-mounts.json"
@@ -184,10 +211,15 @@ class DockerComposeRunner:
             self._record = None
             self._image_id = None
             self._input_mounts_file = None
+            self._backend_ready = False
 
     def run(
         self, command: Iterable[str | PurePosixPath], *, working_dir: PurePosixPath | None = None
     ) -> None:
+        if self._record is None:
+            self._backend_ready = False
+        if not self.dry_run:
+            self._ensure_backend()
         container_name = "nipat-run-" + uuid.uuid4().hex
         docker_command = self._base_command() + [
             "run", "--rm", "-T", "--pull", "never", "--name", container_name,
@@ -196,6 +228,7 @@ class DockerComposeRunner:
             docker_command.extend(["--workdir", str(working_dir)])
         docker_command.append("scientific")
         docker_command.extend(str(part) for part in command)
+        docker_command = self._transport.command(docker_command, self._environment())
         stage: dict[str, Any] = {
             "argv": docker_command, "working_dir": str(working_dir) if working_dir else None,
             "container_name": container_name, "started_at": utc_now(),
@@ -231,11 +264,11 @@ class DockerComposeRunner:
             stage["status"] = "succeeded"
         except FileNotFoundError as exc:
             stage["status"] = "failed"
-            raise RuntimeExecutionError("Docker non è disponibile. Avvia Docker Desktop e riprova.") from exc
+            raise RuntimeExecutionError(self._transport.unavailable_message) from exc
         except BaseException as exc:
             interrupted = isinstance(exc, (KeyboardInterrupt, SystemExit))
             if interrupted or (process is not None and process.poll() is None):
-                # Stopping the CLI alone can leave its container running on Docker Desktop.
+                # Stopping the client alone can leave its container running in the engine.
                 stage["container_cleanup"] = self._stop_container(container_name)
             if process is not None and process.poll() is None:
                 process.terminate()
@@ -256,9 +289,13 @@ class DockerComposeRunner:
                 self._record.save()
 
     def _stop_container(self, container_name: str) -> dict[str, Any]:
+        command = None
         try:
+            command = self._transport.command(
+                ["docker", "rm", "--force", container_name], self._environment(),
+            )
             result = subprocess.run(
-                ["docker", "rm", "--force", container_name], env=self._environment(),
+                command, env=self._environment(),
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=15, check=False,
             )
@@ -266,17 +303,22 @@ class DockerComposeRunner:
                 "status": "removed" if result.returncode == 0 else "not_confirmed",
                 "returncode": result.returncode, "message": result.stderr.strip(),
             }
-        except (OSError, subprocess.SubprocessError) as exc:
+        except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
             cleanup = {"status": "not_confirmed", "returncode": None, "message": str(exc)}
+        cleanup["argv"] = command
         if cleanup["status"] == "not_confirmed":
             self._write(
                 f"Arresto del container {container_name} non confermato; "
-                "verificarne lo stato in Docker Desktop.\n"
+                "verificarne lo stato nel runtime NIPAT.\n"
             )
         return cleanup
 
     def build(self) -> None:
+        self._backend_ready = False
+        if not self.dry_run:
+            self._ensure_backend()
         command = self._base_command() + ["build", "scientific"]
+        command = self._transport.command(command, self._environment())
         self._write("$ " + subprocess.list2cmdline(command) + "\n")
         if self.dry_run:
             return
@@ -285,13 +327,17 @@ class DockerComposeRunner:
                 command, cwd=self.layout.project_dir, env=self._environment(), check=True,
             )
         except FileNotFoundError as exc:
-            raise RuntimeExecutionError("Docker non è disponibile.") from exc
+            raise RuntimeExecutionError(self._transport.unavailable_message) from exc
         except subprocess.CalledProcessError as exc:
             raise RuntimeExecutionError(f"Build del runtime fallita con codice {exc.returncode}.") from exc
 
     def doctor(self, check_runtime: bool) -> None:
-        if shutil.which("docker") is None:
-            raise ValidationError("Comando 'docker' non trovato nel PATH.")
+        self._backend_ready = False
+        if shutil.which(self._transport.executable) is None:
+            raise ValidationError(
+                f"Comando '{self._transport.executable}' non trovato nel PATH. "
+                + self._transport.unavailable_message
+            )
         if not self.layout.compose_file.is_file():
             raise ValidationError(f"compose.yaml non trovato: {self.layout.compose_file}")
         verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")

@@ -1,0 +1,174 @@
+name: Windows installer (review build)
+
+on:
+  push:
+    branches: [feature/windows-installer-wsl]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-runtime:
+    # A push already builds this branch; do not repeat the same expensive PR build.
+    if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PYTHONPATH: src
+      NIPAT_RUNTIME_IMAGE: nipat-scientific-runtime:installer-test
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Python unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Check dedicated daemon helper syntax
+        run: bash -n installer/runtime/nipat-engine
+      - name: Build scientific runtime
+        run: docker build --pull --platform linux/amd64 --tag "$NIPAT_RUNTIME_IMAGE" --file docker/scientific-runtime/Dockerfile .
+      - name: Scientific regression and input-mode checks
+        env:
+          NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
+          NIPAT_RUNS_DIR: ${{ runner.temp }}/nipat-validation/runs
+        run: |
+          mkdir -p "$NIPAT_DATA_DIR" "$NIPAT_RUNS_DIR"
+          python -m nipat doctor --runtime
+          python -m nipat self-test
+      - name: Resolve Debian base and build dedicated WSL filesystem
+        run: |
+          docker pull --platform linux/amd64 debian:bookworm-slim
+          base=$(docker image inspect --format '{{index .RepoDigests 0}}' debian:bookworm-slim)
+          case "$base" in *@sha256:*) ;; *) echo "Base image digest not resolved" >&2; exit 1 ;; esac
+          docker build --platform linux/amd64 --build-arg "DEBIAN_BASE=$base" \
+            --build-arg "SOURCE_COMMIT=$(git rev-parse HEAD)" \
+            --tag nipat-wsl-rootfs:installer-test --file installer/runtime/Dockerfile .
+      - name: Check daemon startup in isolated Linux container
+        # This exercises the helper on Linux; it is not a live Windows/WSL installation test.
+        run: |
+          docker run --rm --privileged --cgroupns=host --entrypoint /bin/bash \
+            nipat-wsl-rootfs:installer-test -euc \
+            '/usr/local/bin/nipat-engine ensure; /usr/local/bin/nipat-engine ensure; docker info --format "{{.OSType}}"; docker compose version'
+      - name: Export pinned assets and trusted installer manifest
+        run: |
+          python scripts/build_windows_installer_assets.py export \
+            --output-dir build/assets --source-commit "$(git rev-parse HEAD)" \
+            --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:installer-test
+          python scripts/build_windows_installer_assets.py stage \
+            --manifest build/assets/installer-manifest.json --stage-dir build/windows-installer
+      - name: Retain runtime assets for reviewed release or offline setup
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-runtime-assets
+          path: build/assets/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain exact app and trusted manifest for Windows compilation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-installer-inputs
+          path: build/windows-installer/
+          include-hidden-files: true
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain regression logs and metadata
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-scientific-check-logs
+          path: |
+            ${{ runner.temp }}/nipat-validation/runs/**/run.json
+            ${{ runner.temp }}/nipat-validation/runs/**/execution.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+  windows-installer:
+    needs: linux-runtime
+    runs-on: windows-2022
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Download staged app and trusted manifest
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-installer-inputs
+          path: build/windows-installer
+      - name: Windows Python unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Parse scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+      - name: Test bootstrap guards with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
+      - name: Compile the narrowly scoped WSL elevation helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
+          $target = Join-Path $PWD 'build/windows-installer/app/installer/windows/EnableWsl.exe'
+          & $compiler /nologo /target:exe /platform:x64 /win32manifest:installer/windows/EnableWsl.manifest "/out:$target" installer/windows/EnableWsl.cs
+          if ($LASTEXITCODE -ne 0) { throw 'WSL helper compilation failed.' }
+      - name: Install verified Inno Setup compiler
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          Invoke-WebRequest -UseBasicParsing 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $download
+          $signature = Get-AuthenticodeSignature -LiteralPath $download
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)CN=Pyrsys B\.V\.(?:,|$)') {
+            throw 'Inno Setup Authenticode signature or publisher is invalid.'
+          }
+          $inno = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+          $process = Start-Process -FilePath $download -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$inno`"")
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
+          "NIPAT_ISCC=$inno\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Compile installer with embedded trusted manifest
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = (Resolve-Path 'build/windows-installer').Path
+          $output = Join-Path $PWD 'build/output'
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" installer/windows/NIPAT.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+          Copy-Item "$stage/app/.distribution/installer-manifest.json" $output
+          $exe = Join-Path $output 'NIPAT-Setup.exe'
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  NIPAT-Setup.exe" | Set-Content -LiteralPath "$output/SHA256SUMS" -Encoding ascii
+      - name: Retain installer for review (no release publication)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-windows-setup
+          path: build/output/
+          retention-days: 14
+          if-no-files-found: error

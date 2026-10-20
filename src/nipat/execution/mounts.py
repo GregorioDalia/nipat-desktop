@@ -6,7 +6,7 @@ import json
 import re
 import unicodedata
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Callable
 
 from nipat.errors import ValidationError
 from nipat.paths import ProjectLayout
@@ -76,7 +76,7 @@ class InputMounts:
         self._files[target] = source
         return target
 
-    def compose_override(self) -> dict[str, Any]:
+    def compose_override(self, *, source_path: Callable[[Path], str] = str) -> dict[str, Any]:
         volumes = []
         for target, source in self._files.items():
             # A disappeared source must not become an empty directory in Docker.
@@ -84,15 +84,17 @@ class InputMounts:
                 raise ValidationError(f"File di input non più disponibile: {source}")
             volumes.append({
                 "type": "bind",
-                "source": str(source).replace("$", "$$"),
+                "source": source_path(source).replace("$", "$$"),
                 "target": str(target).replace("$", "$$"),
                 "read_only": True,
                 "bind": {"create_host_path": False},
             })
         return {"services": {"scientific": {"volumes": volumes}}}
 
-    def write_override(self, destination: Path) -> None:
-        document = self.compose_override()
+    def write_override(
+        self, destination: Path, *, source_path: Callable[[Path], str] = str,
+    ) -> None:
+        document = self.compose_override(source_path=source_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
         # An immutable run must not replace evidence from a prior invocation.
         with destination.open("x", encoding="utf-8", newline="\n") as handle:

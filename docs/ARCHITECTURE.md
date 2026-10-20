@@ -35,3 +35,24 @@ root. Existing runs are never overwritten by the application.
 On Linux and macOS the container uses the invoking user's UID/GID. Docker
 Desktop uses its normal default mapping on Windows. The future GUI must call
 the same `Workflows` service, rather than invoke R or Docker directly.
+
+## Managed Windows runtime
+
+The installer adds an explicit `NIPAT_BACKEND=wsl` transport. Windows Python
+continues to validate user paths and retain original file evidence. Docker
+commands run through `wsl.exe` in the dedicated `NIPAT-Runtime` distribution;
+Compose paths and bind sources are translated for that environment. Argument
+lists are passed directly, without constructing shell commands. Linux container
+paths and scientific arguments are not rewritten.
+
+The default transport still calls the host Docker CLI. The managed transport
+starts its own Docker daemon through the distro helper, and uses that same
+transport for probes, execution and cancellation. It does not change the
+user’s Docker context or stop other WSL distributions. The source setup does
+not automatically opt into WSL.
+
+The installer runs per user. Only Windows prerequisite enablement is elevated;
+distro import and configuration run under the original account. Runtime assets
+are built in CI, hashed and declared in the manifest embedded in the installer.
+Installation logs and state support retries and reboot continuation. Scientific
+algorithms and their SHA256 manifest are unchanged in this revision.

@@ -1,4 +1,4 @@
-# Scheda per le prove dell'esperta di dominio
+# Scheda per le prove di validazione di dominio
 
 Il successo degli autotest verifica la riproduzione dei casi inclusi. Questa
 scheda serve a valutare il comportamento con altri input e a distinguere
@@ -21,7 +21,7 @@ Per ciascuna prova registrare:
 | Difficoltà di utilizzo o messaggi poco chiari | |
 | File condivisibili per riprodurre la prova | |
 
-La selezione dei casi spetta all'esperta. Sono particolarmente utili campioni
+La selezione dei casi richiede competenze di dominio. Sono particolarmente utili campioni
 con risultati noti, coperture differenti, siti con letture inattese, casi
 senza siti informativi e input con intestazioni o percorsi non validi.
 Per CPI servono coppie e frequenze appropriate; per DNPcall/SNPcall un confronto
@@ -39,7 +39,7 @@ risultati distinti per le etichette selezionate.
 Le verifiche Windows di `0.2.0a2`, incluso `scripts/verify_input_modes.py` e
 un confronto DNPcall da BAM reale con un run precedente, sono descritte in
 [DISTRIBUZIONE.md](DISTRIBUZIONE.md). Coprono i casi riportati sul PC di sviluppo;
-le prove dell'esperta devono estendere la copertura e valutare i risultati
+le prove di dominio devono estendere la copertura e valutare i risultati
 scientifici su riferimenti indipendenti quando disponibili.
 
 Annotare separatamente un errore del programma e un risultato scientifico

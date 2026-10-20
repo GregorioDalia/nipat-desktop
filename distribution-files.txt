@@ -2,6 +2,7 @@
 # Update explicitly when adding a deliverable; local data and outputs never belong here.
 .dockerignore
 .gitattributes
+.github/workflows/windows-installer.yml
 .gitignore
 1_SETUP.cmd
 2_AVVIA.cmd
@@ -15,8 +16,19 @@ docs/ARCHITECTURE.md
 docs/DECISIONS.md
 docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md
-docs/GUIDA_COLLEGA.md
+docs/GUIDA_UTILIZZO.md
+docs/INSTALLATORE_WINDOWS.md
 docs/VALIDAZIONE.md
+installer/runtime/Dockerfile
+installer/runtime/nipat-engine
+installer/runtime/write-provenance.py
+installer/runtime/wsl.conf
+installer/windows/EnableWsl.cs
+installer/windows/EnableWsl.manifest
+installer/windows/NIPAT.iss
+installer/windows/bootstrap-common.ps1
+installer/windows/bootstrap.ps1
+installer/windows/test-bootstrap.ps1
 nipat.cmd
 pyproject.toml
 scientific/README.md
@@ -44,6 +56,7 @@ scientific/vendor/NEWPAT/contamination/examples/inputs/DNPpanel.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample1.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample2.txt
 scripts/build_validation_bundle.py
+scripts/build_windows_installer_assets.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
 scripts/verify_input_modes.py
@@ -61,6 +74,7 @@ src/nipat/execution/__init__.py
 src/nipat/execution/mounts.py
 src/nipat/execution/runner.py
 src/nipat/execution/tracking.py
+src/nipat/execution/transport.py
 src/nipat/execution/workflows.py
 src/nipat/paths.py
 src/nipat/validation/__init__.py
@@ -84,9 +98,11 @@ tests/test_cli_validation.py
 tests/test_contamination_workflow.py
 tests/test_distribution.py
 tests/test_dnp_workflow.py
-tests/test_input_mounts.py
 tests/test_input_modes.py
+tests/test_input_mounts.py
+tests/test_installer_assets.py
 tests/test_panels.py
 tests/test_paths.py
 tests/test_run_tracking.py
 tests/test_validation.py
+tests/test_wsl_transport.py

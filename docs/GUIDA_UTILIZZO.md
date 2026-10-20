@@ -1,34 +1,55 @@
-# Guida alla prova della CLI
+# Guida per l’utilizzo
 
-La CLI `0.2.0a2` serve a verificare i quattro workflow con input scelti
-dall'esperta di dominio. Si può usare un menu testuale oppure la riga di
-comando. Setup, autotest e una regressione DNPcall da BAM reale sono riusciti
-sul PC Windows di sviluppo; gli [esiti](DISTRIBUZIONE.md) non sostituiscono
-le prove con i propri input e sul proprio computer.
+NIPAT mette a disposizione quattro workflow tramite un menu testuale o la
+riga di comando. Gli input e i risultati rimangono sul computer.
+Gli autotest inclusi verificano casi noti; la validazione con altri input e
+riferimenti scientifici indipendenti resta necessaria.
 
-## Preparazione su Windows a 64 bit
+## Installazione guidata Windows
 
-1. Installa e avvia [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/)
-   con container Linux. Completa gli eventuali passaggi WSL richiesti da Docker.
-2. Dalla release GitHub indicata per la validazione, scarica **Source code (zip)**
-   ed estrai interamente il progetto in una cartella locale scrivibile.
-   Non avviare i file direttamente dalla finestra dello ZIP.
-3. Nella cartella che contiene `README.md`, avvia `1_SETUP.cmd`. Il setup
-   prepara Python locale e il runtime scientifico, poi esegue gli autotest.
-4. Dopo il completamento del setup, avvia `2_AVVIA.cmd`.
+L’installatore `0.3.0a1` è un candidato in verifica, distinto dalla release
+pubblicata `0.2.0a2`. Quando disponibile nella release indicata per le prove:
 
-Non servono Git, PyCharm o installazioni separate di Python, R e samtools.
-Il primo setup richiede Internet e può durare diversi minuti. I successivi
-avvii riusano l'ambiente locale. Docker rimane un prerequisito manuale.
+1. Scaricare l’asset **NIPAT-Setup.exe** dalla release GitHub.
+2. Avviare il file con doppio clic dal proprio account Windows, senza scegliere
+   “Esegui come amministratore”. La configurazione chiede l’autorizzazione
+   amministrativa soltanto se serve attivare WSL.
+3. Completare la configurazione. Se viene richiesto un riavvio, salvare il
+   lavoro e riavviare; la procedura riprende al successivo accesso allo stesso account.
+4. Attendere il completamento degli autotest, quindi aprire **NIPAT** dal
+   menu Start o dal collegamento sul desktop.
+
+La prima versione dell’installatore è destinata a Windows 11 x64, con
+virtualizzazione disponibile. Non richiede installazioni manuali separate di
+Python, R, samtools o Docker Desktop. Richiede Internet per i download iniziali
+ed eventuale intervento IT quando le impostazioni del computer impediscono WSL.
+Per le prove prima della pubblicazione degli asset, seguire
+[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
+
+## Installazione da sorgenti con Docker già disponibile
+
+Questo è anche il percorso della release `0.2.0a2`:
+
+1. Installare e avviare Docker Desktop con container Linux.
+2. Scaricare **Source code (zip)** dalla release GitHub ed estrarlo interamente
+   in una cartella locale scrivibile.
+3. Avviare `1_SETUP.cmd`, quindi, a configurazione completata, `2_AVVIA.cmd`.
+
+Il setup da sorgenti prepara Python locale e il runtime scientifico ed esegue
+gli autotest. Non servono Git, PyCharm o installazioni separate di Python, R
+e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
 
 ## Dove tenere input e risultati
 
 Gli input possono restare nelle loro cartelle originali: selezionarli con il
-percorso completo, anche su un'altra unità accessibile a Docker. Non occorre
-copiare BAM e FASTA nel progetto. Sono ammessi percorsi contenenti spazi;
+percorso completo, anche su un’altra unità locale accessibile al runtime. Non occorre
+copiare BAM e FASTA nel progetto. Il backend WSL inizialmente non accetta
+condivisioni UNC o unità di rete. Sono ammessi percorsi contenenti spazi;
 il programma assegna ai file nomi interni compatibili con gli script R.
 
-Il setup crea per comodità `data` e `runs` accanto al progetto. `data` non è
+L’installatore usa `%LOCALAPPDATA%\NIPAT\data` e
+`%LOCALAPPDATA%\NIPAT\runs`; il setup da sorgenti crea `data` e `runs`
+accanto al progetto. `data` non è
 un vincolo: i file selezionati possono trovarsi altrove. La cartella dei
 risultati si sceglie con **5 — Cartella risultati** nel menu: la scelta vale
 per le analisi successive nella sessione corrente e Invio mantiene il percorso
