@@ -40,32 +40,48 @@ class Workflows:
         run_name: str | None,
     ) -> Path:
         bam = require_file(bam, "BAM")
-        require_sidecar(bam, ".bai", "Indice BAM")
+        bam_index = require_sidecar(bam, ".bai", "Indice BAM")
         reference = require_file(reference, "FASTA")
-        require_sidecar(reference, ".fai", "Indice FASTA")
+        reference_index = require_sidecar(reference, ".fai", "Indice FASTA")
         panel = require_file(panel, "Pannello DNP")
         read_dnp_list(panel)
-        for path in (bam, reference, panel):
+        for path in (bam, bam_index, reference, reference_index, panel):
             self.layout.container_path(path)
 
-        run_dir = self.layout.new_run_dir("dnp-call", run_name)
-        bamlist = run_dir / "work" / "bamlist.txt"
-        bamlist.write_text(f"{self.layout.container_path(bam)}\n", encoding="utf-8")
+        # Upstream DNPcall reads BAM paths with scan() and builds unquoted
+        # samtools shell arguments. Reject unsupported container paths early.
+        for path in (bam, reference):
+            mapped = str(self.layout.container_path(path))
+            if any(char.isspace() or char in "'\"`$;&|<>()[]{}*?!\\" for char in mapped):
+                raise ValidationError(
+                    "DNPcall richiede percorsi BAM/FASTA senza spazi o simboli shell "
+                    "all'interno di data/runs. Usare nomi semplici, per esempio "
+                    f"sample_01.bam e reference.fa. Percorso: {path}"
+                )
 
-        command: list[str | PurePosixPath] = [
-            "Rscript",
-            self._script("scientific/vendor/DNPcall/DNPcall.R"),
-            f"--bamlist={self.layout.container_path(bamlist)}",
-            f"--DNPs={self.layout.container_path(panel)}",
-            f"--reference={self.layout.container_path(reference)}",
-            "--out=output",
-        ]
-        if parallel:
-            command.append("--parallel")
-        self.runner.run(
-            command,
-            working_dir=self.layout.container_path(run_dir),
-        )
+        run_dir = self.layout.new_run_dir("dnp-call", run_name)
+        with self.runner.record_run(
+            run_dir, workflow="dnp-call", inputs=[bam, bam_index, reference, reference_index, panel],
+            parameters={"bam": str(bam), "reference": str(reference),
+                        "panel": str(panel), "parallel": parallel},
+        ):
+            bamlist = run_dir / "work" / "bamlist.txt"
+            bamlist.write_text(f"{self.layout.container_path(bam)}\n", encoding="utf-8")
+
+            command: list[str | PurePosixPath] = [
+                "Rscript",
+                self._script("scientific/vendor/DNPcall/DNPcall.R"),
+                f"--bamlist={self.layout.container_path(bamlist)}",
+                f"--DNPs={self.layout.container_path(panel)}",
+                f"--reference={self.layout.container_path(reference)}",
+                "--out=output",
+            ]
+            if parallel:
+                command.append("--parallel")
+            self.runner.run(
+                command,
+                working_dir=self.layout.container_path(run_dir),
+            )
         return run_dir
 
     def snp_call(
@@ -77,51 +93,55 @@ class Workflows:
         run_name: str | None,
     ) -> Path:
         bam = require_file(bam, "BAM")
-        require_sidecar(bam, ".bai", "Indice BAM")
+        bam_index = require_sidecar(bam, ".bai", "Indice BAM")
         reference = require_file(reference, "FASTA")
-        require_sidecar(reference, ".fai", "Indice FASTA")
+        reference_index = require_sidecar(reference, ".fai", "Indice FASTA")
         panel = require_file(panel, "Lista SNP")
         positions = read_snp_positions(panel)
-        for path in (bam, reference, panel):
+        for path in (bam, bam_index, reference, reference_index, panel):
             self.layout.container_path(path)
 
         run_dir = self.layout.new_run_dir("snp-call", run_name)
-        bed_file = run_dir / "work" / "snp_regions.bed"
-        pileup_file = run_dir / "work" / "pileup.txt"
-        output_file = run_dir / "output" / "SNPcall_output.txt"
-        write_snp_bed(positions, bed_file)
+        with self.runner.record_run(
+            run_dir, workflow="snp-call", inputs=[bam, bam_index, reference, reference_index, panel],
+            parameters={"bam": str(bam), "reference": str(reference), "panel": str(panel)},
+        ):
+            bed_file = run_dir / "work" / "snp_regions.bed"
+            pileup_file = run_dir / "work" / "pileup.txt"
+            output_file = run_dir / "output" / "SNPcall_output.txt"
+            write_snp_bed(positions, bed_file)
 
-        self.runner.run(
-            [
-                "samtools",
-                "mpileup",
-                "-f",
-                self.layout.container_path(reference),
-                "-l",
-                self.layout.container_path(bed_file),
-                "--output-QNAME",
-                "--no-output-ins",
-                "--no-output-del",
-                "--no-output-ends",
-                "-o",
-                self.layout.container_path(pileup_file),
-                self.layout.container_path(bam),
-            ],
-            working_dir=self.layout.container_path(run_dir / "work"),
-        )
-        self.runner.run(
-            [
-                "Rscript",
-                self._script("scientific/vendor/NEWPAT/SNPcall/SNPcall.R"),
-                "--pileup",
-                self.layout.container_path(pileup_file),
-                "--snplist",
-                self.layout.container_path(panel),
-                "--out",
-                self.layout.container_path(output_file),
-            ],
-            working_dir=self.layout.container_path(run_dir / "work"),
-        )
+            self.runner.run(
+                [
+                    "samtools",
+                    "mpileup",
+                    "-f",
+                    self.layout.container_path(reference),
+                    "-l",
+                    self.layout.container_path(bed_file),
+                    "--output-QNAME",
+                    "--no-output-ins",
+                    "--no-output-del",
+                    "--no-output-ends",
+                    "-o",
+                    self.layout.container_path(pileup_file),
+                    self.layout.container_path(bam),
+                ],
+                working_dir=self.layout.container_path(run_dir / "work"),
+            )
+            self.runner.run(
+                [
+                    "Rscript",
+                    self._script("scientific/vendor/NEWPAT/SNPcall/SNPcall.R"),
+                    "--pileup",
+                    self.layout.container_path(pileup_file),
+                    "--snplist",
+                    self.layout.container_path(panel),
+                    "--out",
+                    self.layout.container_path(output_file),
+                ],
+                working_dir=self.layout.container_path(run_dir / "work"),
+            )
         return run_dir
 
     def contamination(
@@ -133,6 +153,7 @@ class Workflows:
     ) -> Path:
         panel = require_file(panel, "Pannello DNP")
         records = read_dnp_list(panel)
+        self.layout.container_path(panel)
         if not inputs:
             raise ValidationError("Indicare almeno un file DNPcall con --input.")
         checked_inputs: list[Path] = []
@@ -143,27 +164,31 @@ class Workflows:
             checked_inputs.append(checked)
 
         run_dir = self.layout.new_run_dir("contamination", run_name)
-        staged_dir = run_dir / "work" / "inputs"
-        staged_dir.mkdir()
-        for input_path in checked_inputs:
-            # The R directory reader only includes lowercase .txt files.
-            destination = staged_dir / f"{input_path.stem}.txt"
-            if destination.exists():
-                raise ValidationError(f"Nome file duplicato nello staging: {destination.name}")
-            shutil.copy2(input_path, destination)
+        with self.runner.record_run(
+            run_dir, workflow="contamination", inputs=[panel, *checked_inputs],
+            parameters={"panel": str(panel), "inputs": [str(path) for path in checked_inputs]},
+        ):
+            staged_dir = run_dir / "work" / "inputs"
+            staged_dir.mkdir()
+            for input_path in checked_inputs:
+                # The R directory reader only includes lowercase .txt files.
+                destination = staged_dir / f"{input_path.stem}.txt"
+                if destination.exists():
+                    raise ValidationError(f"Nome file duplicato nello staging: {destination.name}")
+                shutil.copy2(input_path, destination)
 
-        position_panel = run_dir / "work" / "DNPpanel.txt"
-        write_position_panel(records, position_panel)
-        self.runner.run(
-            [
-                "Rscript",
-                self._script("scientific/vendor/NEWPAT/contamination/detect_contamination.R"),
-                self.layout.container_path(position_panel),
-                self.layout.container_path(staged_dir),
-                self.layout.container_path(run_dir / "output"),
-            ],
-            working_dir=self.layout.container_path(run_dir / "work"),
-        )
+            position_panel = run_dir / "work" / "DNPpanel.txt"
+            write_position_panel(records, position_panel)
+            self.runner.run(
+                [
+                    "Rscript",
+                    self._script("scientific/vendor/NEWPAT/contamination/detect_contamination.R"),
+                    self.layout.container_path(position_panel),
+                    self.layout.container_path(staged_dir),
+                    self.layout.container_path(run_dir / "output"),
+                ],
+                working_dir=self.layout.container_path(run_dir / "work"),
+            )
         return run_dir
 
     def cpi(
@@ -188,6 +213,7 @@ class Workflows:
         self.layout.container_path(input_dir)
         self.layout.container_path(popfreq)
 
+        checked_inputs = [popfreq]
         for pair in (part.strip() for part in pairs.split(",")):
             identifiers = pair.split(":")
             if len(identifiers) != 2 or not all(identifiers):
@@ -196,36 +222,48 @@ class Workflows:
             father = require_file(input_dir / f"{father_prefix}{identifiers[1]}.txt", "Padre")
             require_columns(mother, DNP_OUTPUT_COLUMNS, "Input madre non compatibile")
             require_columns(father, DNP_OUTPUT_COLUMNS, "Input padre non compatibile")
+            self.layout.container_path(mother)
+            self.layout.container_path(father)
+            checked_inputs.extend([mother, father])
 
-        cutoff: Path | None = None
+        records = None
         if panel is not None:
             panel = require_file(panel, "Pannello DNP")
             records = read_dnp_list(panel)
-            run_dir = self.layout.new_run_dir("cpi", run_name)
-            cutoff = run_dir / "work" / "DNPpanel.txt"
-            write_position_panel(records, cutoff)
-        else:
-            run_dir = self.layout.new_run_dir("cpi", run_name)
+            self.layout.container_path(panel)
+            checked_inputs.append(panel)
+        run_dir = self.layout.new_run_dir("cpi", run_name)
+        with self.runner.record_run(
+            run_dir, workflow="cpi", inputs=checked_inputs,
+            parameters={"pairs": pairs, "mother_prefix": mother_prefix,
+                        "father_prefix": father_prefix, "err_const": err_const,
+                        "input_dir": str(input_dir), "popfreq": str(popfreq),
+                        "panel": str(panel) if panel else None},
+        ):
+            cutoff: Path | None = None
+            if records is not None:
+                cutoff = run_dir / "work" / "DNPpanel.txt"
+                write_position_panel(records, cutoff)
 
-        command: list[str | PurePosixPath] = [
-            "Rscript",
-            self._script("scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R"),
-            "--pileup_dir",
-            self.layout.container_path(input_dir),
-            "--out_dir",
-            self.layout.container_path(run_dir / "output"),
-            "--pairs",
-            pairs,
-            "--mother_prefix",
-            mother_prefix,
-            "--father_prefix",
-            father_prefix,
-            "--popfreq",
-            self.layout.container_path(popfreq),
-            "--err_const",
-            str(err_const),
-        ]
-        if cutoff is not None:
-            command.extend(["--cutoff_map", self.layout.container_path(cutoff)])
-        self.runner.run(command, working_dir=self.layout.container_path(run_dir / "work"))
+            command: list[str | PurePosixPath] = [
+                "Rscript",
+                self._script("scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R"),
+                "--pileup_dir",
+                self.layout.container_path(input_dir),
+                "--out_dir",
+                self.layout.container_path(run_dir / "output"),
+                "--pairs",
+                pairs,
+                "--mother_prefix",
+                mother_prefix,
+                "--father_prefix",
+                father_prefix,
+                "--popfreq",
+                self.layout.container_path(popfreq),
+                "--err_const",
+                str(err_const),
+            ]
+            if cutoff is not None:
+                command.extend(["--cutoff_map", self.layout.container_path(cutoff)])
+            self.runner.run(command, working_dir=self.layout.container_path(run_dir / "work"))
         return run_dir

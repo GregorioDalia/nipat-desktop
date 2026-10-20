@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 
 from nipat.errors import ValidationError
@@ -13,6 +14,9 @@ class RecordingRunner:
 
     def run(self, command, *, working_dir=None):
         self.calls.append((list(map(str, command)), str(working_dir)))
+
+    def record_run(self, *args, **kwargs):
+        return nullcontext()
 
 
 class ContaminationWorkflowTests(unittest.TestCase):

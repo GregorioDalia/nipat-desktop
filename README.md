@@ -1,5 +1,13 @@
 # NIPAT Desktop
 
+**CLI 0.2.0a1 for domain validation.** Start with the short Italian
+[project overview](SUNTO.md) and the [tester guide](docs/GUIDA_COLLEGA.md).
+On Windows x64, `1_SETUP.cmd` prepares local Python, Docker runtime and bundled
+self-tests; `2_AVVIA.cmd` opens a text wizard. The [distribution guide](docs/DISTRIBUZIONE.md)
+describes distribution through a versioned GitHub release. Testers download
+the source archive from GitHub; setup downloads Python and builds the scientific
+runtime locally. Docker Desktop with Linux containers is currently required.
+
 Local Python orchestration for four existing scientific R workflows:
 
 - DNPcall;
@@ -9,6 +17,19 @@ Local Python orchestration for four existing scientific R workflows:
 
 The current milestone is a reproducible command-line prototype. The desktop GUI
 will be built on the same application layer after the four workflows are reproduced.
+
+Each new workflow run records `run.json` and `execution.log` alongside `work`
+and `output`. Metadata tracks the complete workflow, commands, input evidence,
+code hashes and resolved Docker image ID. `--dry-run` is recorded as planned,
+never as a completed analysis. See [execution records](docs/ESECUZIONI.md).
+
+```powershell
+nipat wizard
+nipat self-test
+```
+
+The self-test runs the bundled SNP reference case and synthetic CPI/Contamination
+regressions. It does not replace validation from raw BAMs or domain evaluation.
 
 ## Expected workspace
 

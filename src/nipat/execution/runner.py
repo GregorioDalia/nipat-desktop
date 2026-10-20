@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+import sys
+import uuid
+from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import Any, Iterable, Iterator, TextIO
 
 from nipat.errors import RuntimeExecutionError, ValidationError
+from nipat.execution.tracking import RunRecord, file_evidence, project_evidence, utc_now
 from nipat.paths import ProjectLayout
 from nipat.validation.integrity import verify_sha256_manifest
 
@@ -15,6 +20,9 @@ class DockerComposeRunner:
     def __init__(self, layout: ProjectLayout, dry_run: bool = False) -> None:
         self.layout = layout
         self.dry_run = dry_run
+        self._record: RunRecord | None = None
+        self._log: TextIO | None = None
+        self._image_id: str | None = None
 
     def _base_command(self) -> list[str]:
         return ["docker", "compose", "-f", str(self.layout.compose_file)]
@@ -25,59 +33,244 @@ class DockerComposeRunner:
         environment["NIPAT_PROJECT_DIR"] = str(self.layout.project_dir)
         environment["NIPAT_DATA_DIR"] = str(self.layout.data_dir)
         environment["NIPAT_RUNS_DIR"] = str(self.layout.runs_dir)
+        if self._image_id:
+            environment["NIPAT_RUNTIME_IMAGE"] = self._image_id
         if hasattr(os, "getuid") and hasattr(os, "getgid"):
             environment["NIPAT_UID"] = str(os.getuid())
             environment["NIPAT_GID"] = str(os.getgid())
         return environment
 
+    def _write(self, text: str, *, terminal: bool = True) -> None:
+        if self._log is not None:
+            self._log.write(text)
+            self._log.flush()
+        if not terminal:
+            return
+        try:
+            sys.stdout.write(text)
+            sys.stdout.flush()
+        except UnicodeEncodeError:
+            safe = text.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
+                sys.stdout.encoding or "utf-8"
+            )
+            sys.stdout.write(safe)
+            sys.stdout.flush()
+
+    def _capture(self, command: list[str], *, container_name: str | None = None) -> str:
+        check = {"argv": command, "started_at": utc_now(), "returncode": None}
+        if self._record:
+            self._record.data["checks"].append(check)
+            self._record.save()
+        self._write("$ " + subprocess.list2cmdline(command) + "\n", terminal=False)
+        try:
+            result = subprocess.run(
+                command, cwd=self.layout.project_dir, env=self._environment(),
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=90, check=False,
+            )
+            check["returncode"] = result.returncode
+            self._write(result.stdout, terminal=result.returncode != 0)
+            self._write(result.stderr, terminal=result.returncode != 0)
+            if result.returncode:
+                raise RuntimeExecutionError(
+                    f"Controllo del runtime fallito (codice {result.returncode}). "
+                    "Verificare Docker Desktop e preparare il runtime con build-runtime."
+                )
+            return result.stdout.strip()
+        except FileNotFoundError as exc:
+            raise RuntimeExecutionError("Docker non è disponibile nel PATH.") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeExecutionError("Il controllo del runtime ha superato 90 secondi.") from exc
+        finally:
+            if container_name is not None and check["returncode"] != 0:
+                check["container_cleanup"] = self._stop_container(container_name)
+            check["finished_at"] = utc_now()
+            if self._record:
+                self._record.save()
+
+    def _prepare_runtime(self) -> None:
+        os_type = self._capture(["docker", "info", "--format", "{{.OSType}}"])
+        if os_type != "linux":
+            raise RuntimeExecutionError("Il runtime NIPAT richiede Docker con container Linux.")
+        config = json.loads(self._capture(self._base_command() + ["config", "--format", "json"]))
+        image_name = config["services"]["scientific"]["image"]
+        inspected = json.loads(self._capture([
+            "docker", "image", "inspect", image_name,
+            "--format", '{"id":{{json .Id}},"os":{{json .Os}},"architecture":{{json .Architecture}}}',
+        ]))
+        image_id, image_os, architecture = (
+            inspected["id"], inspected["os"], inspected["architecture"]
+        )
+        if image_os != "linux":
+            raise RuntimeExecutionError("L'immagine scientifica deve essere Linux.")
+        self._image_id = image_id
+        if self._record:
+            self._record.data["runtime"] = {
+                "requested_image": image_name, "image_id": image_id,
+                "os": image_os, "architecture": architecture,
+            }
+            self._record.save()
+        # Pin execution to this image ID; later changes to its tag cannot change this run.
+        probe_name = "nipat-probe-" + uuid.uuid4().hex
+        versions = self._capture([
+            "docker", "run", "--rm", "--pull=never", "--name", probe_name, image_id, "sh", "-c",
+            "set -e; Rscript -e 'cat(R.version.string, \"\\n\"); "
+            "p <- c(\"argparse\",\"ComplexUpset\",\"dplyr\",\"ggplot2\",\"openxlsx\","
+            "\"optparse\",\"patchwork\",\"purrr\",\"readr\",\"readxl\",\"stringr\","
+            "\"tidyr\",\"tidyverse\"); "
+            "for (x in p) cat(x, as.character(packageVersion(x)), \"\\n\")'; "
+            "samtools --version",
+        ], container_name=probe_name)
+        if self._record:
+            self._record.data["runtime"]["versions_output"] = versions
+            self._record.save()
+            self._write("Runtime scientifico pronto.\n")
+        else:
+            self._write(f"Runtime: {image_id} ({architecture})\n{versions}\n")
+
+    @contextmanager
+    def record_run(
+        self, run_dir: Path, *, workflow: str, inputs: list[Path], parameters: dict[str, Any]
+    ) -> Iterator[RunRecord]:
+        if self._record is not None:
+            raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
+        record = RunRecord(run_dir, workflow, parameters)
+        self._record = record
+        try:
+            with record.log_path.open("x", encoding="utf-8", newline="\n") as log:
+                self._log = log
+                try:
+                    self._write(f"NIPAT {workflow}: {run_dir}\n")
+                    record.data["inputs"] = [file_evidence(path) for path in inputs]
+                    record.data["source"] = project_evidence(self.layout.project_dir)
+                    record.save()
+                    verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")
+                    if not self.dry_run:
+                        self._prepare_runtime()
+                    record.data["status"] = "planned" if self.dry_run else "running"
+                    record.save()
+                    yield record
+                except BaseException as exc:
+                    record.data["status"] = (
+                        "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
+                    )
+                    record.data["error"] = {"type": type(exc).__name__, "message": str(exc)}
+                    self._write(f"{record.data['status']}: {type(exc).__name__}: {exc}\n")
+                    raise
+                else:
+                    record.data["status"] = "planned" if self.dry_run else "succeeded"
+                    self._write(f"{record.data['status']}: {workflow}\n")
+                finally:
+                    record.data["finished_at"] = utc_now()
+                    record.save()
+        finally:
+            self._log = None
+            self._record = None
+            self._image_id = None
+
     def run(
-        self,
-        command: Iterable[str | PurePosixPath],
-        *,
-        working_dir: PurePosixPath | None = None,
+        self, command: Iterable[str | PurePosixPath], *, working_dir: PurePosixPath | None = None
     ) -> None:
-        docker_command = self._base_command() + ["run", "--rm"]
+        container_name = "nipat-run-" + uuid.uuid4().hex
+        docker_command = self._base_command() + [
+            "run", "--rm", "-T", "--pull", "never", "--name", container_name,
+        ]
         if working_dir is not None:
             docker_command.extend(["--workdir", str(working_dir)])
         docker_command.append("scientific")
         docker_command.extend(str(part) for part in command)
-        print("$", subprocess.list2cmdline(docker_command), flush=True)
+        stage: dict[str, Any] = {
+            "argv": docker_command, "working_dir": str(working_dir) if working_dir else None,
+            "container_name": container_name, "started_at": utc_now(),
+            "finished_at": None, "returncode": None,
+            "status": "planned" if self.dry_run else "running",
+        }
+        if self._record:
+            self._record.data["commands"].append(stage)
+            self._record.save()
+        self._write("$ " + subprocess.list2cmdline(docker_command) + "\n")
         if self.dry_run:
+            stage["finished_at"] = utc_now()
+            if self._record:
+                self._record.save()
             return
+        process = None
         try:
-            subprocess.run(
-                docker_command,
-                cwd=self.layout.project_dir,
-                env=self._environment(),
-                check=True,
+            process = subprocess.Popen(
+                docker_command, cwd=self.layout.project_dir, env=self._environment(),
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                text=True, encoding="utf-8", errors="replace", bufsize=1,
             )
+            assert process.stdout is not None
+            with process.stdout:
+                for line in process.stdout:
+                    self._write(line)
+            stage["returncode"] = process.wait()
+            if stage["returncode"]:
+                stage["status"] = "failed"
+                raise RuntimeExecutionError(
+                    f"Il runtime scientifico è terminato con codice {stage['returncode']}."
+                )
+            stage["status"] = "succeeded"
         except FileNotFoundError as exc:
-            raise RuntimeExecutionError(
-                "Docker non è disponibile. Avvia Docker Desktop e riprova."
-            ) from exc
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeExecutionError(
-                f"Il runtime scientifico è terminato con codice {exc.returncode}."
-            ) from exc
+            stage["status"] = "failed"
+            raise RuntimeExecutionError("Docker non è disponibile. Avvia Docker Desktop e riprova.") from exc
+        except BaseException as exc:
+            interrupted = isinstance(exc, (KeyboardInterrupt, SystemExit))
+            if interrupted or (process is not None and process.poll() is None):
+                # Stopping the CLI alone can leave its container running on Docker Desktop.
+                stage["container_cleanup"] = self._stop_container(container_name)
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+            stage["status"] = (
+                "interrupted" if interrupted else "failed"
+            )
+            if process is not None:
+                stage["returncode"] = process.poll()
+            raise
+        finally:
+            stage["finished_at"] = utc_now()
+            if self._record:
+                self._record.save()
+
+    def _stop_container(self, container_name: str) -> dict[str, Any]:
+        try:
+            result = subprocess.run(
+                ["docker", "rm", "--force", container_name], env=self._environment(),
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=15, check=False,
+            )
+            cleanup = {
+                "status": "removed" if result.returncode == 0 else "not_confirmed",
+                "returncode": result.returncode, "message": result.stderr.strip(),
+            }
+        except (OSError, subprocess.SubprocessError) as exc:
+            cleanup = {"status": "not_confirmed", "returncode": None, "message": str(exc)}
+        if cleanup["status"] == "not_confirmed":
+            self._write(
+                f"Arresto del container {container_name} non confermato; "
+                "verificarne lo stato in Docker Desktop.\n"
+            )
+        return cleanup
 
     def build(self) -> None:
         command = self._base_command() + ["build", "scientific"]
-        print("$", subprocess.list2cmdline(command), flush=True)
+        self._write("$ " + subprocess.list2cmdline(command) + "\n")
         if self.dry_run:
             return
         try:
             subprocess.run(
-                command,
-                cwd=self.layout.project_dir,
-                env=self._environment(),
-                check=True,
+                command, cwd=self.layout.project_dir, env=self._environment(), check=True,
             )
         except FileNotFoundError as exc:
             raise RuntimeExecutionError("Docker non è disponibile.") from exc
         except subprocess.CalledProcessError as exc:
-            raise RuntimeExecutionError(
-                f"Build del runtime fallita con codice {exc.returncode}."
-            ) from exc
+            raise RuntimeExecutionError(f"Build del runtime fallita con codice {exc.returncode}.") from exc
 
     def doctor(self, check_runtime: bool) -> None:
         if shutil.which("docker") is None:
@@ -86,22 +279,14 @@ class DockerComposeRunner:
             raise ValidationError(f"compose.yaml non trovato: {self.layout.compose_file}")
         verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")
         for required_dir in (
-            self.layout.data_dir / "reference",
-            self.layout.data_dir / "samples",
-            self.layout.data_dir / "panels",
-            self.layout.runs_dir,
+            self.layout.data_dir / "reference", self.layout.data_dir / "samples",
+            self.layout.data_dir / "panels", self.layout.runs_dir,
         ):
             if not required_dir.is_dir():
                 raise ValidationError(f"Cartella di workspace non trovata: {required_dir}")
-        try:
-            subprocess.run(["docker", "compose", "version"], check=True)
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeExecutionError("Docker Compose non è disponibile.") from exc
+        self._capture(["docker", "compose", "version"])
         if check_runtime:
-            self.run(
-                [
-                    "bash",
-                    "-lc",
-                    "R --version | head -n 1; samtools --version | head -n 1; python3 --version",
-                ]
-            )
+            try:
+                self._prepare_runtime()
+            finally:
+                self._image_id = None
