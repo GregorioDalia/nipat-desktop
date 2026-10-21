@@ -7,12 +7,16 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 from urllib.parse import urljoin
+import zipfile
 
 REPO = "GregorioDalia/nipat-desktop"
 MANIFEST = "installer-manifest.json"
+PYTHON_NAME = "python-3.12.10-embed-amd64.zip"
+PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
 
 
 def require(condition, message):
@@ -60,7 +64,79 @@ def checksums(path):
     return result
 
 
-def prepare_assets(setup, runtime, output, commit, read_source=source_bytes):
+def requires_desktop_bundle(version):
+    # The first published WSL candidate predates the dual distribution protocol.
+    return version != "0.3.0a1"
+
+
+def verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit):
+    """Verify the portable ZIP without extracting or executing its contents."""
+    require(desktop is not None, "Docker Desktop package is required for this release")
+    version = manifest["version"]
+    name = f"NIPAT-DockerDesktop-{version}-windows-x64.zip"
+    path = desktop / name
+    require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < 2 * 1024**3,
+            "Missing or invalid Docker Desktop package")
+    evidence_path = desktop / "package-build.json"
+    require(evidence_path.is_file() and not evidence_path.is_symlink(), "Missing Docker package build evidence")
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
+    launcher = setup / "NIPAT.exe"
+    require(launcher.is_file() and not launcher.is_symlink() and launcher.stat().st_size > 0,
+            "Missing WSL build launcher evidence")
+    launcher_hash = sha256(launcher)
+    expected_evidence = {
+        "schema_version": 1, "version": version, "source_commit": commit,
+        "file": name, "sha256": sha256(path), "size": path.stat().st_size,
+        "launcher_sha256": launcher_hash,
+    }
+    require(evidence == expected_evidence, "Docker package build hash/source/version mismatch")
+    scientific = manifest["assets"]["scientific_image"]
+    expected_runtime = {
+        "schema_version": 1, "image_id": manifest["runtime_image"],
+        "source_reference": manifest["release_tag"], "os": "linux", "architecture": "amd64",
+        "archive_sha256": scientific["sha256"], "archive_bytes": scientific["size"],
+        "source_commit": commit, "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+    }
+    expected_launcher = {"file": "NIPAT.exe", "sha256": launcher_hash, "size": launcher.stat().st_size}
+    expected_python = {"version": "3.12.10", "architecture": "amd64", "archive_sha256": PYTHON_SHA256}
+    prefix = "nipat-desktop/"
+    expected_names = {prefix + source for source in manifest["source_sha256"]}
+    expected_names |= {prefix + item for item in (
+        "release.json", "NIPAT.exe", f".distribution/{PYTHON_NAME}",
+        ".distribution/runtime.tar", ".distribution/runtime.json",
+    )}
+    with zipfile.ZipFile(path) as archive:
+        entries = archive.infolist()
+        names = [entry.filename for entry in entries]
+        require(len(names) == len(set(name.casefold() for name in names))
+                and set(names) == expected_names, "Docker ZIP contains missing, duplicate or unexpected files")
+        require(all(not entry.is_dir() and not stat.S_ISLNK(entry.external_attr >> 16)
+                    and not entry.flag_bits & 1 for entry in entries), "Docker ZIP contains unsupported entries")
+        release = json.loads(archive.read(prefix + "release.json"))
+        require(release.get("schema_version") == 1 and release.get("package_version") == version
+                and release.get("source_git") == {"commit": commit, "dirty": False, "available": True}
+                and release.get("source_sha256") == manifest["source_sha256"],
+                "Docker package source/version mismatch")
+        require(release.get("runtime") == expected_runtime
+                and json.loads(archive.read(prefix + ".distribution/runtime.json")) == expected_runtime,
+                "Docker package runtime differs from WSL runtime")
+        require(release.get("launcher") == expected_launcher, "Docker launcher metadata mismatch")
+        require(release.get("python") == expected_python, "Docker Python metadata mismatch")
+        hashes = dict(manifest["source_sha256"])
+        hashes.update({"NIPAT.exe": launcher_hash, f".distribution/{PYTHON_NAME}": PYTHON_SHA256,
+                       ".distribution/runtime.tar": scientific["sha256"]})
+        require(archive.getinfo(prefix + ".distribution/runtime.tar").file_size == scientific["size"],
+                "Docker runtime archive size differs from WSL runtime")
+        require(archive.getinfo(prefix + "NIPAT.exe").file_size == launcher.stat().st_size,
+                "Docker launcher size differs from WSL launcher")
+        for item, expected in hashes.items():
+            with archive.open(prefix + item) as stream:
+                digest = hashlib.file_digest(stream, "sha256").hexdigest()
+            require(digest == expected, f"Docker ZIP content hash mismatch: {item}")
+    return path
+
+
+def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, desktop=None):
     manifest_bytes = (setup / MANIFEST).read_bytes()
     require(manifest_bytes == (runtime / MANIFEST).read_bytes(), "Installer/runtime manifests differ")
     manifest = json.loads(manifest_bytes)
@@ -101,6 +177,10 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes):
             "Installer checksum mismatch")
     require(checksums(runtime / "SHA256SUMS") == {n: h for n, h in digests.items() if n != "NIPAT-Setup.exe"},
             "Runtime/manifest checksum mismatch")
+    if requires_desktop_bundle(version) or desktop is not None:
+        portable = verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit)
+        files[portable.name] = portable
+        digests[portable.name] = sha256(portable)
     output.mkdir()
     for name, path in files.items():
         shutil.copyfile(path, output / name)
@@ -146,7 +226,8 @@ def find_release(tag):
 def create_draft(tag, version, commit, notes, payload_path):
     payload_path.write_text(json.dumps({
         "tag_name": tag, "target_commitish": commit,
-        "name": f"NIPAT CLI {version} — Windows con WSL2", "body": notes,
+        "name": f"NIPAT CLI {version} — Windows con " +
+                ("WSL2 e Docker Desktop" if requires_desktop_bundle(version) else "WSL2"), "body": notes,
         "draft": True, "prerelease": True, "make_latest": "false",
     }), encoding="utf-8")
     # The list endpoint may lag behind a successful creation. Retain the exact
@@ -176,9 +257,15 @@ def main():
         root = Path(temporary)
         command("gh", "run", "download", args.run_id, "--repo", REPO,
                 "--name", "nipat-windows-setup", "--name", "nipat-runtime-assets", "--dir", str(root / "artifacts"))
+        build_manifest = json.loads((root / "artifacts/nipat-runtime-assets" / MANIFEST).read_text(encoding="utf-8"))
+        desktop = None
+        if requires_desktop_bundle(build_manifest["version"]):
+            desktop = root / "artifacts/nipat-docker-desktop"
+            command("gh", "run", "download", args.run_id, "--repo", REPO,
+                    "--name", "nipat-docker-desktop", "--dir", str(desktop))
         output = root / "release"
         manifest = prepare_assets(root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
-                                  output, commit)
+                                  output, commit, desktop=desktop)
         tag = manifest["release_tag"]
         notes = source_bytes(commit, f"docs/RELEASE_{manifest['version']}.md").decode("utf-8").strip()
         notes = re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
@@ -209,7 +296,7 @@ def main():
         if summary:
             with open(summary, "a", encoding="utf-8") as stream:
                 stream.write(f"Published [{tag}]({published['html_url']}) from `{commit}`.\n\n")
-                stream.write("All five release assets were checked against their SHA-256 digests before publication.\n")
+                stream.write(f"All {len(files)} release assets were checked against their SHA-256 digests before publication.\n")
 
 
 if __name__ == "__main__":

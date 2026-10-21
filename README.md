@@ -1,11 +1,18 @@
 # NIPAT Desktop
 
-**Development candidate: CLI 0.3.0a2 — guided terminal experience.**
+**Development candidate: CLI 0.3.0a2 — guided terminal experience and Windows launcher.**
 The published Windows installer remains **v0.3.0a1**, for domain testing with
 working WSL2. The new interface is described in the
 [0.3.0a2 candidate notes](docs/RELEASE_0.3.0a2.md).
 Start with the Italian [project overview](SUNTO.md) and
 [usage guide](docs/GUIDA_UTILIZZO.md).
+
+The candidate provides a common **`NIPAT.exe`** launcher for the WSL installer
+and the Docker Desktop package. Double-clicking it opens the guided CLI;
+confirming **Avvia analisi** runs the R scripts and the other tools required by
+the workflow. Users do not need to open PowerShell manually. The candidate
+packages must be reviewed before publication; share the versioned release of
+the tested interface, not an older installer or a moving development branch.
 
 The new distribution builds `NIPAT-Setup.exe` on GitHub. It prepares portable
 Python and a dedicated WSL2 environment with Docker Engine, imports a prebuilt
@@ -22,6 +29,13 @@ on a clean PC remain unverified. See the
 The published `v0.2.0a2` remains unchanged and uses the source archive plus
 Docker Desktop. The source setup (`1_SETUP.cmd`, then `2_AVVIA.cmd`) remains
 available. See [distribution and prior evidence](docs/DISTRIBUZIONE.md).
+
+For the new candidate, GitHub Actions also prepares
+`NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip`, with portable Python,
+`NIPAT.exe` and the same verified scientific archive used by the WSL package.
+Docker Desktop with Linux containers must already be installed and running.
+Extract the entire ZIP, double-click `1_SETUP.cmd` once, then open `NIPAT.exe`.
+This ZIP and `NIPAT-Setup.exe` are two delivery modes of the same version.
 
 Python handles input validation, mechanical format adaptation and execution;
 the scientific calculations remain in the DNPcall and NEWPAT R scripts.
@@ -81,7 +95,7 @@ never overwritten. See [execution records](docs/ESECUZIONI.md).
 Run these commands from the directory containing `nipat.cmd`: the extracted
 project, or `%LOCALAPPDATA%\Programs\NIPAT` for the installed application.
 Replace the example paths with your files; all input modes are also available
-in `2_AVVIA.cmd` or the **NIPAT** Start-menu shortcut.
+in `NIPAT.exe`, `2_AVVIA.cmd` or the **NIPAT** Start-menu shortcut.
 
 ```powershell
 $samples = "..\campioni"
@@ -156,8 +170,27 @@ For development, use Python 3.12 from a project virtual environment, install
 with `python -m pip install -e ".[dev]"`, then run `nipat build-runtime` and
 `python -m unittest discover -s tests -v` from the repository root.
 
+On Windows, source users can build the launcher once with the system .NET
+Framework compiler, after the usual setup:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\installer\windows\build-launcher.ps1 -OutputPath .\NIPAT.exe
+```
+
+Keep the generated executable in the project root. `NIPAT.exe` opens the
+wizard by default and also accepts the direct CLI arguments. It uses the
+backend configured for that copy of NIPAT; it does not select a separate
+installation elsewhere on the computer.
+
 - Keep genomic inputs, generated results and local environments outside Git.
 - Preserve upstream archives. Document scientific source changes in
   `scientific/README.md` and update `scientific/SHA256SUMS`.
 - Use global `--dry-run` before a workflow to check inputs and inspect commands.
   It prepares a new run recorded as `planned`, without executing the analysis.
+
+## License
+
+Original NIPAT code is available under **GPL-3.0-or-later**; see [LICENSE](LICENSE).
+Bundled components retain their respective licenses and attribution, described
+in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Interface localization is
+planned; the current guided interface remains in Italian.

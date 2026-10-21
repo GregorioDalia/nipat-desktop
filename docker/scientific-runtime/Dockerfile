@@ -33,6 +33,12 @@ RUN apt-get update \
     && ./configure --prefix=/usr/local \
     && make -j"$(nproc)" \
     && make install \
+    && install -D -m 0644 LICENSE /usr/share/doc/nipat-samtools/samtools/LICENSE \
+    && install -D -m 0644 "htslib-${SAMTOOLS_VERSION}/LICENSE" \
+        /usr/share/doc/nipat-samtools/htslib/LICENSE \
+    && install -D -m 0644 "htslib-${SAMTOOLS_VERSION}/htscodecs/LICENSE.md" \
+        /usr/share/doc/nipat-samtools/htscodecs/LICENSE.md \
+    && install -D -m 0644 lz4/LICENSE /usr/share/doc/nipat-samtools/lz4/LICENSE \
     && rm -rf /tmp/samtools-src /tmp/samtools.tar.bz2 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

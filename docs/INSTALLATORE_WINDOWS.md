@@ -1,9 +1,11 @@
 # Installatore Windows: compilazione e verifica
 
-La revisione `0.3.0a1` introduce un candidato `NIPAT-Setup.exe` per
-**Windows 11 x64**. La release precedente `0.2.0a2` resta disponibile con
-Docker Desktop. Questo documento distingue la costruzione dell’installatore
-dalla verifica dell’installazione completa e dalla validazione scientifica.
+La revisione pubblicata `0.3.0a1` introduce `NIPAT-Setup.exe` per
+**Windows 11 x64**. Il candidato `0.3.0a2` aggiunge il launcher `NIPAT.exe`
+e un pacchetto Docker Desktop della stessa versione, mantenendo il percorso
+WSL. Questo documento distingue la costruzione dei pacchetti dalla verifica
+dell'installazione completa e dalla validazione scientifica. La nuova
+versione non è ancora pubblicata.
 
 **Perimetro della prima consegna per le prove di dominio (21 ottobre 2026):**
 Windows 11 x64 con WSL2 già funzionante. Il percorso di attivazione iniziale
@@ -21,7 +23,8 @@ autotest e riportare `NIPAT: ready` prima delle analisi.
    allo stesso account. Il collegamento per la configurazione consente anche
    una ripresa manuale dopo un errore.
 5. Il setup importa l’ambiente dedicato, carica l’immagine scientifica e lancia
-   gli autotest. Il collegamento **NIPAT** apre il menu CLI.
+   gli autotest. Il collegamento **NIPAT** apre il menu CLI; nel candidato
+   `0.3.0a2` richiama `NIPAT.exe`, senza richiedere un terminale già aperto.
 
 Le dipendenze vengono gestite dalla configurazione. Internet è necessario
 per scaricare i componenti; le analisi successive si svolgono localmente.
@@ -46,7 +49,11 @@ di questa revisione. Non vengono modificati gli algoritmi R.
 La disinstallazione rimuove i file applicativi e la ripresa automatica, ma
 conserva dati, risultati, cache e distribuzione WSL. Una nuova installazione
 può riutilizzare solo lo stesso rootfs verificato; la migrazione a un rootfs
-diverso non è automatica in questo candidato.
+diverso non è automatica in questo candidato. Anche un aggiornamento dei
+soli sorgenti applicativi può essere accompagnato da un nuovo rootfs della
+build: non presumere che il nuovo EXE aggiorni una distribuzione già installata.
+In caso di blocco, conservare i log e predisporre la migrazione senza eliminare
+dati o distribuzioni per forzare la procedura.
 
 L’installatore non sostituisce automaticamente una distribuzione esistente:
 controlla il marcatore NIPAT e l’associazione all’installazione corrente prima
@@ -68,7 +75,10 @@ Il workflow `.github/workflows/windows-installer.yml`:
 4. Prepara solo i sorgenti presenti in `distribution-files.txt`, il Python
    verificato e il manifest dell’installatore.
 5. Su Windows esegue i test e il controllo della sintassi PowerShell, compila
-   l’helper per WSL e l’installatore Inno Setup, quindi conserva gli artefatti.
+   e verifica `NIPAT.exe`, compila l'helper per WSL e l'installatore Inno Setup.
+6. Prepara il pacchetto Docker Desktop con lo stesso launcher, gli stessi
+   sorgenti e l'archivio scientifico già esportato. Conserva separatamente gli
+   artefatti del setup WSL, del runtime e dello ZIP Docker per la revisione.
 
 Il manifest fidato è incorporato nell’EXE. Per impostazione predefinita gli
 archivi vengono scaricati dagli URL della stessa release GitHub. Il setup
@@ -185,24 +195,28 @@ anche della documentazione, richiede una nuova build coerente di EXE e asset.
 
 ## Pubblicazione della versione verificata
 
-Dopo le prove, creare un nuovo tag sul commit esatto compilato e una
-**pre-release** corrispondente alla versione del manifest. Allegare l’EXE,
-i due archivi e il manifest prodotti dalla stessa esecuzione. Gli artefatti
-del setup e del runtime contengono entrambi un file `SHA256SUMS`, con elenchi
-diversi: verificare i rispettivi file e combinarli in un solo `SHA256SUMS`
-per la release, senza perdere l'hash dell'EXE o quelli degli archivi.
-Le etichette e i nomi degli asset devono corrispondere agli URL incorporati
-nell’installer. Verificare la firma del codice se disponibile; il candidato
-compilato senza certificato è privo di firma e Windows può mostrare l’avviso
-per autore non riconosciuto.
+Dopo la revisione dei pacchetti, seguire
+[.github/RELEASE.md](../.github/RELEASE.md) per pubblicare una **pre-release**
+dal commit esatto compilato e integrato. La procedura trasferisce gli asset di
+una build ammessa e riuscita, controllando manifest, sorgenti e checksum; una
+build di pull request non è direttamente pubblicabile. Per il candidato con
+doppia distribuzione vengono verificati anche contenuto dello ZIP Docker,
+launcher comune e identità dell'archivio scientifico. Il file `SHA256SUMS`
+della release comprende tutti gli asset pubblicati.
 
 Riportare nelle note della release i controlli effettivamente superati e le
-prove ancora aperte. Condividere il link alla release: chi utilizza NIPAT
-scarica soltanto l’EXE; sarà la configurazione a ottenere gli altri asset.
-Non sostituire gli asset di una versione già consegnata: usare una nuova
-versione. I pacchetti conservano le licenze dei componenti; prima della
-redistribuzione verificare che materiale e sorgenti richiesti dalle relative
-licenze siano disponibili.
+prove ancora aperte. Condividere il link alla versione con l'interfaccia
+verificata. Chi sceglie WSL scarica `NIPAT-Setup.exe`, che ottiene gli archivi
+della stessa release; chi dispone di Docker Desktop scarica lo ZIP dedicato.
+`NIPAT.exe` è contenuto in entrambi i pacchetti e richiede i relativi file di
+supporto: non distribuirlo isolatamente.
+
+Verificare la firma del codice se disponibile; gli eseguibili compilati senza
+certificato sono privi di firma e Windows può mostrare l'avviso per autore non
+riconosciuto. Non sostituire gli asset di una versione già consegnata: usare
+una nuova versione. Il codice originale NIPAT è GPL-3.0-or-later; conservare
+[licenze e attribuzioni](../THIRD_PARTY_NOTICES.md) dei componenti inclusi e
+rendere disponibili i materiali richiesti dalle rispettive licenze.
 
 ## Riferimenti tecnici
 

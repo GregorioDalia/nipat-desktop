@@ -21,3 +21,5 @@ runs/
 .runtime/
 .distribution/
 release.json
+/NIPAT.exe
+/NIPAT.pdb

@@ -5,13 +5,39 @@ riga di comando. Gli input e i risultati rimangono sul computer.
 Gli autotest inclusi verificano casi noti; la validazione con altri input e
 riferimenti scientifici indipendenti resta necessaria.
 
-L'installatore pubblicato è **`0.3.0a1`**. Il candidato da sorgenti
-**`0.3.0a2`** introduce il menu e le schermate descritti nella sezione
-[Menu guidato del candidato 0.3.0a2](#menu-guidato-del-candidato-030a2).
-Queste nuove interazioni richiedono ancora la verifica manuale su Windows;
-la disponibilità dei sorgenti non equivale alla pubblicazione di un nuovo EXE.
+L'installatore pubblicato è **`0.3.0a1`**. Il candidato **`0.3.0a2`**
+introduce il menu descritto sotto e l'avvio tramite **`NIPAT.exe`** in entrambi
+i pacchetti Windows. Il nuovo candidato non è ancora una release pubblicata:
+la consegna per i test esterni dovrà identificare esattamente la versione
+dell'interfaccia verificata, insieme alla relativa guida.
 
-## Installazione guidata Windows
+## Avvio del candidato 0.3.0a2
+
+Il doppio clic su **`NIPAT.exe`** apre direttamente la CLI guidata. Non occorre
+aprire PowerShell né scrivere un comando per raggiungere il menu. L'interfaccia
+resta testuale e usa lo stesso motore di esecuzione dei comandi diretti.
+`NIPAT-Setup.exe` è invece il programma di installazione della modalità WSL.
+
+Alla pubblicazione della nuova pre-release, scegliere uno dei due pacchetti:
+
+| Pacchetto | Preparazione | Avvio successivo |
+| --- | --- | --- |
+| `NIPAT-Setup.exe` | Doppio clic; completare configurazione e autotest dell'ambiente WSL dedicato. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Collegamento **NIPAT** nel menu Start o sul desktop, che apre `NIPAT.exe`. |
+| `NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip` | Docker Desktop installato e avviato con container Linux; estrarre tutto lo ZIP e aprire `1_SETUP.cmd` con doppio clic. | Doppio clic su `NIPAT.exe` nella cartella estratta. |
+
+Il pacchetto Docker include Python portabile e l'archivio scientifico già
+verificato. Non spostare il solo `NIPAT.exe`: deve restare con le cartelle e
+i file del pacchetto. Le due modalità utilizzano lo stesso archivio scientifico;
+la scelta riguarda l'ambiente che lo esegue. L'EXE usa la configurazione della
+propria copia di NIPAT e non sceglie automaticamente altre installazioni sul PC.
+
+L'aggiornamento di una distribuzione WSL NIPAT esistente non è ancora automatico:
+se il setup segnala un ambiente diverso, conservare i dati e il log e richiedere
+la procedura di migrazione. La nuova installazione e l'aggiornamento sono prove
+distinte. I controlli della build non sostituiscono la prova manuale del pacchetto
+finale su Windows.
+
+## Installazione guidata Windows pubblicata: 0.3.0a1
 
 La pre-release `0.3.0a1` è destinata alle prove della CLI su **Windows 11 x64
 con WSL2 già funzionante**. L'attivazione iniziale di WSL e la ripresa dopo
@@ -55,6 +81,18 @@ Il setup da sorgenti prepara Python locale e il runtime scientifico ed esegue
 gli autotest. Non servono Git, PyCharm o installazioni separate di Python, R
 e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
 
+Per sviluppatori che utilizzano il checkout del candidato, dopo il setup è
+possibile compilare `NIPAT.exe` nella radice del progetto con il compilatore
+.NET Framework presente in Windows:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\installer\windows\build-launcher.ps1 -OutputPath .\NIPAT.exe
+```
+
+La compilazione è un passaggio per chi usa i sorgenti; il launcher è già incluso
+nei pacchetti Windows costruiti per la distribuzione. `2_AVVIA.cmd` e `nipat.cmd`
+restano disponibili.
+
 ## Menu guidato del candidato 0.3.0a2
 
 All'apertura, il banner NIPAT riporta la versione. Il menu presenta i quattro
@@ -96,8 +134,10 @@ dei percorsi con Tab non è incluso in questa revisione.
 
 Al termine della compilazione viene mostrato un riepilogo di file, parametri
 e destinazione. Controllarlo, modificare i campi necessari e scegliere
-**Avvia analisi**. Questa conferma avvia lo stesso workflow disponibile nella
-CLI diretta; non modifica automaticamente parametri scientifici o input.
+**Avvia analisi**. Questa conferma esegue gli script R e gli altri strumenti
+previsti dal workflow, come samtools quando occorre preparare il pileup da BAM.
+Il calcolo scientifico è reale. Il workflow è lo stesso della CLI diretta e
+non modifica automaticamente parametri scientifici o input.
 Se l'avvio segnala un errore, correggere i valori conservati prima di riprovare.
 
 La schermata finale permette di aprire la cartella dei risultati, l'intero
@@ -105,6 +145,11 @@ run o il log e di visualizzare un riepilogo dell'esecuzione. Il riepilogo
 descrive metadati e file disponibili: non interpreta i risultati scientifici.
 Un `dry-run` viene presentato come **Esecuzione pianificata**, senza attribuirgli
 risultati di un'analisi eseguita.
+
+La simulazione si richiede esplicitamente, per esempio con
+`NIPAT.exe --dry-run wizard`. Per l'analisi reale si usa `NIPAT.exe` senza
+argomenti, oppure `nipat.cmd wizard`: si rimuove solo `--dry-run`, mantenendo
+`wizard` se si usa il comando diretto.
 
 Il richiamo dell'ultima esecuzione e la scelta della cartella risultati valgono
 solo per la sessione corrente. Questa revisione non introduce preferenze

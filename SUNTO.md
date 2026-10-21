@@ -1,8 +1,9 @@
 # NIPAT: stato del progetto e funzionamento
 
-**Installatore pubblicato: CLI 0.3.0a1. Candidato da sorgenti: CLI 0.3.0a2.**
+**Installatore pubblicato: CLI 0.3.0a1. Candidato in revisione: CLI 0.3.0a2.**
 L'installatore è destinato alle prove di dominio su Windows 11 x64 con WSL2
-funzionante; il nuovo candidato introduce la revisione dell'interfaccia testuale.
+funzionante; il nuovo candidato introduce la revisione dell'interfaccia testuale
+e l'avvio con `NIPAT.exe` per entrambe le modalità di distribuzione.
 NIPAT riunisce quattro analisi locali: Python gestisce file ed esecuzioni,
 mentre gli script R di DNPcall e NEWPAT eseguono i calcoli con samtools in
 Docker. La GUI verrà dopo la validazione della CLI.
@@ -51,6 +52,11 @@ e log e di consultare i metadati dell'esecuzione. Le nuove interazioni del
 terminale sono da verificare manualmente su Windows; le prove delle versioni
 precedenti non attestano questa revisione. Algoritmi, modalità di input e
 parametri scientifici predefiniti restano quelli esistenti.
+Il candidato prepara due pacchetti della stessa versione, con lo stesso
+archivio scientifico verificato: installatore WSL e ZIP per Docker Desktop.
+Entrambi aprono la CLI con doppio clic su `NIPAT.exe`. La consegna esterna
+attenderà la pubblicazione del pacchetto finale con l'interfaccia più recente
+verificata dal manutentore; l'installatore `0.3.0a1` non la contiene.
 
 ## Come si usa
 
@@ -64,6 +70,14 @@ le analisi sono locali. Il caso senza WSL funzionante è fuori dal perimetro
 di questa prima consegna per le prove di dominio.
 Per la release già pubblicata `0.2.0a2` resta il percorso con archivio sorgente,
 `1_SETUP.cmd`, `2_AVVIA.cmd` e Docker Desktop avviato.
+
+Per il candidato `0.3.0a2`, il collegamento dell'installazione WSL avvia
+`NIPAT.exe`. Il pacchetto Docker richiede invece di estrarre tutto lo ZIP,
+aprire `1_SETUP.cmd` una volta con Docker Desktop attivo e poi `NIPAT.exe`.
+Il menu non richiede di aprire PowerShell. Confermare **Avvia analisi** esegue
+realmente gli script R e gli altri strumenti previsti dal workflow.
+L'aggiornamento di un ambiente WSL NIPAT già presente richiede ancora una
+procedura di migrazione; non è automatico.
 
 Gli input possono restare nelle loro cartelle originali, anche su un'altra
 unità locale accessibile al runtime. Il nuovo backend WSL non supporta
@@ -86,3 +100,8 @@ interventi successivi.
 
 Per cominciare: [guida per l’utilizzo](docs/GUIDA_UTILIZZO.md).
 Per riportare le prove: [scheda di validazione](docs/VALIDAZIONE.md).
+
+Il codice originale NIPAT è open source con licenza
+[GPL-3.0-or-later](LICENSE); i componenti inclusi conservano le proprie
+[licenze e attribuzioni](THIRD_PARTY_NOTICES.md). La scelta della lingua
+è prevista per una revisione successiva.

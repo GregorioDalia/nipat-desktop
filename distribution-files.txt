@@ -6,8 +6,10 @@
 .gitignore
 1_SETUP.cmd
 2_AVVIA.cmd
+LICENSE
 README.md
 SUNTO.md
+THIRD_PARTY_NOTICES.md
 compose.yaml
 config/defaults.toml
 distribution-files.txt
@@ -28,9 +30,14 @@ installer/runtime/wsl.conf
 installer/windows/EnableWsl.cs
 installer/windows/EnableWsl.manifest
 installer/windows/NIPAT.iss
+installer/windows/NipatLauncher.cs
+installer/windows/NipatLauncher.manifest
 installer/windows/bootstrap-common.ps1
 installer/windows/bootstrap.ps1
+installer/windows/build-launcher.ps1
+installer/windows/launch.ps1
 installer/windows/test-bootstrap.ps1
+installer/windows/test-launcher.ps1
 installer/windows/test-runtime-image.ps1
 installer/windows/test-scientific-image.ps1
 nipat.cmd
@@ -68,6 +75,7 @@ scripts/verify_snp_example.py
 scripts/windows/common.ps1
 scripts/windows/run.ps1
 scripts/windows/setup.ps1
+scripts/windows/test-portable-runtime.ps1
 src/nipat/__init__.py
 src/nipat/__main__.py
 src/nipat/adapters/__init__.py

@@ -1,5 +1,33 @@
 # Consolidated decisions
 
+## Common Windows launcher and dual delivery (0.3.0a2 candidate)
+
+- The external validation handoff must use the latest interface reviewed by the
+  maintainer. Keep published `v0.3.0a1` unchanged; publish the new candidate only
+  after reviewing the actual versioned packages, rather than sharing a moving
+  development branch or an older installer.
+- Ship a common `NIPAT.exe` in both the WSL installer and Docker Desktop ZIP.
+  Double-click opens the guided CLI; explicit analysis confirmation executes the
+  same R scripts and workflow tools as the direct CLI. PowerShell may be used
+  internally by the launcher, but users do not need to open it manually.
+- Preserve `nipat.cmd` and `2_AVVIA.cmd`, caller-relative input paths, and all
+  direct CLI arguments. The EXE uses the configuration of its own application
+  directory; it does not automatically switch to another installed copy.
+- Build both packages from one source commit and reuse the same SHA-256-verified
+  scientific archive. Resolve the imported image's local ID from its verified
+  load receipt in either backend; do not assume equality across engine stores.
+- Keep Docker Desktop as the prerequisite for the Docker ZIP. The WSL installer
+  manages its dedicated engine. Setup and self-tests precede domain analyses.
+- Apply GPL-3.0-or-later to original NIPAT code and preserve the licenses and
+  attribution of vendored components. Do not imply a broader grant for upstream
+  code than its own license provides.
+- Plan interface localization through separate message catalogs, with English
+  as the reference language and an Italian option. This is future work; current
+  guided messages remain Italian and scientific file schemas remain unchanged.
+- Safe migration of an existing WSL installation remains pending. Do not
+  automatically unregister a distribution or delete data to make an upgrade
+  proceed. Record final-package checks separately from historical source tests.
+
 ## Guided terminal experience (0.3.0a2 candidate)
 
 - Add a versioned NIPAT banner and a vertical menu. Arrow/Enter interaction is

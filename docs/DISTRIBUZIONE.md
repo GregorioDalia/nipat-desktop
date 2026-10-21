@@ -1,13 +1,49 @@
 # Distribuzione tramite GitHub
 
-La release pubblicata `v0.2.0a2` identifica il commit
-`70e944b5dcbf84954492798dc387e8d61134343c`. Si utilizza tramite archivio
-sorgente, `1_SETUP.cmd` e `2_AVVIA.cmd`, con Docker Desktop già attivo.
-I tag `v0.2.0a1` e `v0.2.0a2` restano invariati.
+## Candidato 0.3.0a2: due pacchetti della stessa versione
 
-## Nuovo installatore: candidato 0.3.0a1
+La prossima consegna per i test esterni deve contenere l'interfaccia più
+recente verificata dal manutentore. Il candidato `0.3.0a2` non è ancora
+pubblicato; l'installatore disponibile in GitHub Releases resta `v0.3.0a1`.
+La disponibilità di un branch o di un artefatto CI non equivale a una nuova
+release pronta per la consegna.
 
-Il nuovo percorso prepara **NIPAT-Setup.exe** attraverso GitHub Actions.
+La build del candidato prepara due modalità di distribuzione:
+
+| Asset | Contenuto e prerequisiti | Avvio |
+| --- | --- | --- |
+| `NIPAT-Setup.exe` | Applicazione, Python portabile e manifest per scaricare e verificare il runtime scientifico e l'ambiente WSL dedicato. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Setup guidato; poi collegamento **NIPAT** che avvia `NIPAT.exe`. |
+| `NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip` | Applicazione, `NIPAT.exe`, Python portabile e runtime scientifico incluso. Richiede Docker Desktop installato e avviato con container Linux. | Estrarre tutto; aprire `1_SETUP.cmd` una volta e poi `NIPAT.exe`. |
+
+`NIPAT.exe` apre la CLI guidata senza richiedere un terminale già aperto.
+L'installatore e il pacchetto Docker usano lo stesso launcher e i sorgenti dello
+stesso commit. Il pacchetto Docker riutilizza esattamente l'archivio scientifico
+esportato per WSL, identificato da dimensione e SHA-256; non lo ricostruisce sul
+PC dell'utilizzatore. L'identificativo locale dell'immagine viene risolto dopo
+l'importazione, perché motori diversi possono identificare oggetti differenti.
+
+Gli artefatti di revisione restano separati dalla pubblicazione. La procedura
+in [.github/RELEASE.md](../.github/RELEASE.md) verifica commit, manifest,
+contenuto dei pacchetti e checksum prima di pubblicare una pre-release.
+Una build di pull request serve alla revisione; il commit scelto deve essere
+integrato e costruito con la procedura ammessa per la pubblicazione.
+Non sostituire gli asset di una release già distribuita.
+
+Prima della consegna, provare il pacchetto finale su Windows: completamento del
+setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
+un'esecuzione reale. La validazione di dominio utilizza la
+[scheda dedicata](VALIDAZIONE.md), con risultati attesi e osservati.
+Gli aggiornamenti delle installazioni WSL esistenti richiedono ancora una
+procedura di migrazione: un rootfs diverso può essere rifiutato dal setup e
+la disinstallazione non equivale alla sua sostituzione sicura.
+
+Il codice originale NIPAT è distribuito con licenza GPL-3.0-or-later; le licenze
+e le attribuzioni dei componenti inclusi sono conservate in
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) e nei rispettivi percorsi.
+
+## Installatore pubblicato 0.3.0a1
+
+Il percorso pubblicato prepara **NIPAT-Setup.exe** attraverso GitHub Actions.
 L’installatore contiene l’applicazione e un manifest con gli hash dei due
 asset della stessa versione: ambiente WSL dedicato e immagine scientifica.
 Li scarica dalla release GitHub e li verifica prima di importarli.
@@ -39,11 +75,12 @@ distribuito. Sono evidenze distinte, dettagliate in
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md); non attestano la prima
 installazione del nuovo EXE su un altro PC né una validazione di dominio completa.
 
-Il bundle ZIP di `scripts/build_validation_bundle.py` rimane un’utilità per
-la distribuzione da sorgenti con Docker già disponibile. Non è l’installatore
-WSL e non sostituisce l’asset `.exe`.
-
 ## Evidenze della release precedente
+
+La release `v0.2.0a2` identifica il commit
+`70e944b5dcbf84954492798dc387e8d61134343c`. Si utilizza tramite archivio
+sorgente, `1_SETUP.cmd` e `2_AVVIA.cmd`, con Docker Desktop già attivo.
+I tag `v0.2.0a1` e `v0.2.0a2` restano invariati.
 
 ### Verifiche osservate il 20 ottobre 2026
 

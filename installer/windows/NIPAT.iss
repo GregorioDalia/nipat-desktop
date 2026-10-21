@@ -12,6 +12,7 @@ AppName=NIPAT
 AppVersion={#NipatVersion}
 AppPublisher=NIPAT contributors
 AppPublisherURL=https://github.com/GregorioDalia/nipat-desktop
+LicenseFile={#StageDir}\app\LICENSE
 DefaultDirName={localappdata}\Programs\NIPAT
 DisableDirPage=yes
 DefaultGroupName=NIPAT
@@ -41,8 +42,8 @@ Name: "{localappdata}\NIPAT\runs"; Flags: uninsneveruninstall
 Name: "desktopicon"; Description: "Crea un collegamento NIPAT sul desktop"; Flags: unchecked
 
 [Icons]
-Name: "{autodesktop}\NIPAT"; Filename: "{app}\2_AVVIA.cmd"; WorkingDir: "{localappdata}\NIPAT\data"; Tasks: desktopicon
-Name: "{group}\NIPAT"; Filename: "{app}\2_AVVIA.cmd"; WorkingDir: "{localappdata}\NIPAT\data"
+Name: "{autodesktop}\NIPAT"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\NIPAT\data"; Tasks: desktopicon
+Name: "{group}\NIPAT"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\NIPAT\data"
 Name: "{group}\NIPAT - completa preparazione"; Filename: "{app}\1_SETUP.cmd"; WorkingDir: "{app}"
 Name: "{group}\Guida NIPAT"; Filename: "{app}\docs\GUIDA_UTILIZZO.md"
 Name: "{group}\Disinstalla NIPAT"; Filename: "{uninstallexe}"

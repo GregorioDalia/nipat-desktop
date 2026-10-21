@@ -1,11 +1,14 @@
 import copy
+import gzip
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import struct
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 
 SPEC = importlib.util.spec_from_file_location("publisher", Path(__file__).with_name("publish_windows_release.py"))
 publisher = importlib.util.module_from_spec(SPEC)
@@ -45,9 +48,65 @@ class ReleaseGuards(unittest.TestCase):
             [publisher.MANIFEST] + [a["file"] for a in self.manifest["assets"].values()])):
             (folder / "SHA256SUMS").write_text("".join(f"{publisher.sha256(folder/n)}  {n}\n" for n in names))
 
-    def prepare(self):
+    def prepare(self, desktop=None):
         return publisher.prepare_assets(self.setup, self.runtime, self.root / "release", COMMIT,
-                                        read_source=lambda commit, name: self.sources[name])
+                                        read_source=lambda commit, name: self.sources[name], desktop=desktop)
+
+    def make_dual_package(self):
+        self.manifest["version"] = "0.3.0a2"
+        self.manifest["release_tag"] = "v0.3.0a2"
+        self.manifest["runtime_image"] = "sha256:" + "b" * 64
+        for entry in self.manifest["assets"].values():
+            old = entry["file"]
+            entry["file"] = old.replace("0.3.0a1", "0.3.0a2")
+            entry["url"] = entry["url"].replace("0.3.0a1", "0.3.0a2")
+            (self.runtime / old).rename(self.runtime / entry["file"])
+        self.write_manifests()
+        self.desktop = self.root / "desktop"
+        self.desktop.mkdir()
+        self.package_name = "NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip"
+        launcher = b"MZ launcher fixture"
+        (self.setup / "NIPAT.exe").write_bytes(launcher)
+        python_archive = b"portable Python fixture"
+        python_hash = hashlib.sha256(python_archive).hexdigest()
+        pin = patch.object(publisher, "PYTHON_SHA256", python_hash)
+        pin.start()
+        self.addCleanup(pin.stop)
+        scientific = self.manifest["assets"]["scientific_image"]
+        runtime = {
+            "schema_version": 1, "image_id": self.manifest["runtime_image"],
+            "source_reference": "v0.3.0a2", "os": "linux", "architecture": "amd64",
+            "archive_sha256": scientific["sha256"], "archive_bytes": scientific["size"],
+            "source_commit": COMMIT, "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
+        }
+        release = {
+            "schema_version": 1, "package_version": "0.3.0a2",
+            "source_git": {"commit": COMMIT, "dirty": False, "available": True},
+            "source_sha256": self.manifest["source_sha256"], "runtime": runtime,
+            "launcher": {"file": "NIPAT.exe", "sha256": hashlib.sha256(launcher).hexdigest(), "size": len(launcher)},
+            "python": {"version": "3.12.10", "architecture": "amd64", "archive_sha256": python_hash},
+        }
+        self.package_entries = {"nipat-desktop/" + name: contents for name, contents in self.sources.items()}
+        self.package_entries.update({
+            "nipat-desktop/release.json": json.dumps(release).encode(),
+            "nipat-desktop/NIPAT.exe": launcher,
+            "nipat-desktop/.distribution/" + publisher.PYTHON_NAME: python_archive,
+            "nipat-desktop/.distribution/runtime.tar": (self.runtime / scientific["file"]).read_bytes(),
+            "nipat-desktop/.distribution/runtime.json": json.dumps(runtime).encode(),
+        })
+        self.write_package()
+
+    def write_package(self):
+        path = self.desktop / self.package_name
+        with zipfile.ZipFile(path, "w") as archive:
+            for name, contents in self.package_entries.items():
+                archive.writestr(name, contents)
+        evidence = {
+            "schema_version": 1, "version": "0.3.0a2", "source_commit": COMMIT,
+            "file": self.package_name, "sha256": publisher.sha256(path), "size": path.stat().st_size,
+            "launcher_sha256": publisher.sha256(self.setup / "NIPAT.exe"),
+        }
+        (self.desktop / "package-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     def test_combines_both_checksum_lists_without_losing_exe(self):
         self.prepare()
@@ -87,6 +146,117 @@ class ReleaseGuards(unittest.TestCase):
         self.write_manifests()
         with self.assertRaisesRegex(ValueError, "Rootfs source mismatch"):
             self.prepare()
+
+    def test_new_release_requires_and_publishes_verified_docker_zip(self):
+        self.make_dual_package()
+        with self.assertRaisesRegex(ValueError, "Docker Desktop package is required"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
+        self.prepare(desktop=self.desktop)
+        result = publisher.checksums(self.root / "release/SHA256SUMS")
+        self.assertEqual(len(result), 5)
+        self.assertIn(self.package_name, result)
+        self.assertNotIn("NIPAT.exe", result)  # It is included in each package, not a standalone release asset.
+        self.assertEqual((self.root / "release" / self.package_name).read_bytes(),
+                         (self.desktop / self.package_name).read_bytes())
+
+    def test_rejects_docker_zip_corruption_against_build_evidence(self):
+        self.make_dual_package()
+        with (self.desktop / self.package_name).open("ab") as stream:
+            stream.write(b"changed")
+        with self.assertRaisesRegex(ValueError, "build hash/source/version"):
+            self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_rejects_docker_source_different_from_verified_commit(self):
+        self.make_dual_package()
+        self.package_entries["nipat-desktop/README.md"] = b"changed source"
+        self.write_package()
+        with self.assertRaisesRegex(ValueError, "content hash mismatch: README"):
+            self.prepare(desktop=self.desktop)
+
+    def test_rejects_extra_docker_files_even_with_matching_outer_hash(self):
+        self.make_dual_package()
+        self.package_entries["nipat-desktop/data/patient.txt"] = b"unapproved data"
+        self.write_package()
+        with self.assertRaisesRegex(ValueError, "unexpected files"):
+            self.prepare(desktop=self.desktop)
+
+    def test_rejects_docker_launcher_different_from_wsl_launcher(self):
+        self.make_dual_package()
+        self.package_entries["nipat-desktop/NIPAT.exe"] = b"MZ different binary"
+        self.write_package()
+        with self.assertRaisesRegex(ValueError, "Docker launcher size|content hash mismatch: NIPAT"):
+            self.prepare(desktop=self.desktop)
+
+    def test_rejects_different_scientific_archive_inside_docker_package(self):
+        self.make_dual_package()
+        data = self.package_entries["nipat-desktop/.distribution/runtime.tar"]
+        self.package_entries["nipat-desktop/.distribution/runtime.tar"] = b"x" * len(data)
+        self.write_package()
+        with self.assertRaisesRegex(ValueError, "content hash mismatch: .distribution/runtime.tar"):
+            self.prepare(desktop=self.desktop)
+
+    def test_rejects_mixed_docker_package_release_metadata(self):
+        self.make_dual_package()
+        entry = "nipat-desktop/release.json"
+        original = json.loads(self.package_entries[entry])
+        for key, changed in (("source_git", {"commit": "d" * 40, "dirty": False, "available": True}),
+                             ("package_version", "0.3.0a1"), ("runtime", {}), ("python", {})):
+            with self.subTest(key=key):
+                release = copy.deepcopy(original)
+                release[key] = changed
+                self.package_entries[entry] = json.dumps(release).encode()
+                self.write_package()
+                with self.assertRaises(ValueError):
+                    self.prepare(desktop=self.desktop)
+
+    def test_real_bundle_builder_matches_publication_protocol(self):
+        self.make_dual_package()
+        script = Path(__file__).resolve().parents[2] / "scripts/build_validation_bundle.py"
+        spec = importlib.util.spec_from_file_location("release_bundle_integration", script)
+        bundle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bundle)
+        self.sources.update({name: b"fixture\n" for name in
+                             ("1_SETUP.cmd", "2_AVVIA.cmd", "nipat.cmd", "compose.yaml")})
+        self.sources["pyproject.toml"] = b'[project]\nversion = "0.3.0a2"\n'
+        self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
+        project = self.root / "project"
+        project.mkdir()
+        for name, content in self.sources.items():
+            (project / name).write_bytes(content)
+        self.manifest["source_sha256"] = {name: hashlib.sha256(content).hexdigest()
+                                          for name, content in self.sources.items()}
+        scientific = self.manifest["assets"]["scientific_image"]
+        scientific_path = self.runtime / scientific["file"]
+        scientific_path.write_bytes(gzip.compress(b"scientific fixture", mtime=0))
+        scientific.update(sha256=publisher.sha256(scientific_path), size=scientific_path.stat().st_size)
+        self.write_manifests()
+        header = bytearray(154)
+        header[:2] = b"MZ"
+        struct.pack_into("<I", header, 60, 128)
+        header[128:132] = b"PE\0\0"
+        struct.pack_into("<H", header, 132, 0x8664)
+        struct.pack_into("<H", header, 152, 0x20B)
+        launcher = self.setup / "NIPAT.exe"
+        launcher.write_bytes(header)
+        python_zip = self.root / "python.zip"
+        python_zip.write_bytes(b"portable Python fixture")
+        package = self.desktop / self.package_name
+        package.unlink()
+        with patch.object(bundle, "git_source", return_value={"commit": COMMIT, "dirty": False, "available": True}), \
+                patch.object(bundle, "PYTHON_SHA256", publisher.PYTHON_SHA256):
+            runtime, metadata = bundle.verified_installer_runtime(project, scientific_path, self.setup / publisher.MANIFEST)
+            bundle.package_sources(project, package, python_zip, runtime, metadata, launcher)
+        evidence = {
+            "schema_version": 1, "version": "0.3.0a2", "source_commit": COMMIT,
+            "file": self.package_name, "sha256": publisher.sha256(package), "size": package.stat().st_size,
+            "launcher_sha256": publisher.sha256(launcher),
+        }
+        (self.desktop / "package-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+        self.prepare(desktop=self.desktop)
+        self.assertEqual(publisher.checksums(self.root / "release/SHA256SUMS")[self.package_name],
+                         publisher.sha256(package))
 
     def test_build_must_be_successful_same_source_and_not_from_a_fork(self):
         run = {"id": 123, "head_sha": COMMIT, "status": "completed", "conclusion": "success", "event": "push",
