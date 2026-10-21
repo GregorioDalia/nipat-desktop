@@ -120,8 +120,6 @@ jobs:
     env:
       PYTHONPATH: src
       NIPAT_RUNTIME_IMAGE: nipat-scientific-runtime:ci-test
-      NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
-      NIPAT_RUNS_DIR: ${{ runner.temp }}/nipat-validation/runs
     steps:
       - name: Checkout source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -146,6 +144,9 @@ jobs:
           cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
           cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
       - name: Scientific regression and input-mode checks
+        env:
+          NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
+          NIPAT_RUNS_DIR: ${{ runner.temp }}/nipat-validation/runs
         run: |
           mkdir -p "$NIPAT_DATA_DIR" "$NIPAT_RUNS_DIR"
           python -m nipat doctor --runtime
