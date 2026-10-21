@@ -1,9 +1,21 @@
 name: Windows installer (review build)
 
 on:
-  push:
-    branches: [feature/windows-installer-wsl]
+  # The stable CI gate runs on every PR. Large installer builds are reviewed
+  # only for packaging/runtime changes, or requested explicitly for a release.
   pull_request:
+    paths:
+      - 'installer/**'
+      - 'docker/**'
+      - 'scripts/windows/**'
+      - 'scripts/build_*'
+      - 'distribution-files.txt'
+      - 'compose.yaml'
+      - 'pyproject.toml'
+      - 'src/nipat/__init__.py'
+      - '.dockerignore'
+      - '.github/workflows/windows-installer.yml'
+      - '.github/scripts/**'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +28,6 @@ concurrency:
 jobs:
   windows-checks:
     # Run the quick Windows checks before exporting the large Linux runtime assets.
-    if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: windows-2022
     timeout-minutes: 15
     env:
@@ -82,8 +93,6 @@ jobs:
 
   linux-runtime:
     needs: windows-checks
-    # A push already builds this branch; do not repeat the same expensive PR build.
-    if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -104,8 +113,20 @@ jobs:
         run: python -m unittest discover -s .github/scripts -p 'test_publish_windows_release.py' -v
       - name: Check dedicated daemon helper syntax
         run: bash -n installer/runtime/nipat-engine
-      - name: Build scientific runtime
-        run: docker build --pull --platform linux/amd64 --tag "$NIPAT_RUNTIME_IMAGE" --file docker/scientific-runtime/Dockerfile .
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Build scientific runtime using the dependency cache
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: docker/scientific-runtime/Dockerfile
+          platforms: linux/amd64
+          tags: ${{ env.NIPAT_RUNTIME_IMAGE }}
+          load: true
+          pull: true
+          provenance: false
+          cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
+          cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
       - name: Scientific regression and input-mode checks
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
@@ -114,14 +135,19 @@ jobs:
           mkdir -p "$NIPAT_DATA_DIR" "$NIPAT_RUNS_DIR"
           python -m nipat doctor --runtime
           python -m nipat self-test
-      - name: Resolve Debian base and build dedicated WSL filesystem
-        run: |
-          docker pull --platform linux/amd64 debian:bookworm-slim
-          base=$(docker image inspect --format '{{index .RepoDigests 0}}' debian:bookworm-slim)
-          case "$base" in *@sha256:*) ;; *) echo "Base image digest not resolved" >&2; exit 1 ;; esac
-          docker build --platform linux/amd64 --build-arg "DEBIAN_BASE=$base" \
-            --build-arg "SOURCE_COMMIT=$(git rev-parse HEAD)" \
-            --tag nipat-wsl-rootfs:installer-test --file installer/runtime/Dockerfile .
+      - name: Build dedicated WSL filesystem from pinned dependencies
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: installer/runtime/Dockerfile
+          platforms: linux/amd64
+          tags: nipat-wsl-rootfs:installer-test
+          build-args: SOURCE_COMMIT=${{ github.sha }}
+          load: true
+          pull: true
+          provenance: false
+          cache-from: type=gha,version=2,scope=nipat-wsl-rootfs-linux-amd64
+          cache-to: type=gha,version=2,scope=nipat-wsl-rootfs-linux-amd64,mode=max,ignore-error=true
       - name: Check daemon startup in isolated Linux container
         # This exercises the helper on Linux; it is not a live Windows/WSL installation test.
         run: |

@@ -21,8 +21,13 @@ administrator consent and a restart. Activation and restart on a clean PC
 remain outside the initial domain-testing scope.
 
 The Docker Desktop application prepares its environment automatically when
-needed, then opens the guided CLI; after a failed preparation, reopen the same
-icon to retry. Users do not run a separate setup script. Confirming **Avvia analisi**
+needed, then opens the guided CLI. **Docker Desktop may initially contain no
+images or containers.** The `0.4.1` EXE includes the scientific runtime archive:
+preparation verifies and imports it automatically before running the self-tests.
+No manual `docker pull`, image build, separate archive download or setup script
+is required. Docker Desktop must already be installed and running with Linux
+containers. After a failed preparation, reopen the same icon to retry.
+Confirming **Avvia analisi**
 runs the R scripts and the other tools required by the workflow. No manual
 PowerShell session is required. Follow the [Docker Desktop test procedure](docs/VALIDAZIONE.md#prima-prova-con-docker-desktop)
 to record setup, a real analysis and its outputs. Record installation and
@@ -139,6 +144,12 @@ The default CPI `--err-const` remains `0.0000892303778101497` and is editable
 in the wizard or CLI. See the [usage guide](docs/GUIDA_UTILIZZO.md) for formats.
 
 ## Checks and development
+
+The development branch adds [continuous integration and dependency controls](docs/CI_CD.md):
+Python and Windows checks on every pull request and push to `main`, scientific
+regressions when relevant files change, and one aggregate `required` check.
+Full installer builds and publication remain separate. These changes apply to
+future builds; they do not change the published `0.4.1` installers or their assets.
 
 After setup, repeat the runtime checks with:
 

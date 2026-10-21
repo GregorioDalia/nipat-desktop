@@ -41,6 +41,13 @@ Per chi dispone già di **Docker Desktop** con container Linux, l'alternativa è
    il menu. Agli avvii successivi si apre il menu senza ripetere gli autotest
    già completati per quella versione.
 
+**Docker Desktop può essere vuoto, senza immagini né container.** L'EXE
+`0.4.1` contiene già l'archivio del runtime scientifico: durante la preparazione
+NIPAT ne verifica l'integrità e lo importa automaticamente in Docker Desktop,
+prima di eseguire gli autotest. Non occorre scaricare altri componenti NIPAT,
+eseguire `docker pull` o costruire immagini. Il prerequisito è Docker Desktop
+installato e avviato in modalità Linux.
+
 Non occorre estrarre archivi né eseguire `1_SETUP.cmd`. Se la preparazione
 fallisce, conservare il log, verificare che Docker Desktop sia disponibile e
 riaprire la stessa icona per riprovare. Le due installazioni possono coesistere:
@@ -81,6 +88,8 @@ Questo è anche il percorso della release `0.2.0a2`:
 Il setup da sorgenti prepara Python locale e il runtime scientifico ed esegue
 gli autotest. Non servono Git, PyCharm o installazioni separate di Python, R
 e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
+L'archivio dei soli sorgenti non contiene il runtime incorporato negli EXE:
+la preparazione può quindi richiedere download e la costruzione dell'immagine.
 
 Per sviluppatori che utilizzano il checkout dei sorgenti, dopo il setup è
 possibile compilare `NIPAT.exe` nella radice del progetto con il compilatore

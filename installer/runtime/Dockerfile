@@ -1,14 +1,16 @@
 # This filesystem is imported into NIPAT's dedicated WSL distribution.
-# CI resolves the base tag to a digest before building the release assets.
-ARG DEBIAN_BASE=debian:bookworm-slim
+# Use the base and engine versions from the verified 0.4.1 build (run 39686775980).
+ARG DEBIAN_BASE=debian:bookworm-slim@sha256:7ff6ba31527b9e336162fa061746c366c4b2032f4d2cff2078bea43f78efe3f8
 FROM ${DEBIAN_BASE}
 
 ARG DEBIAN_BASE
-ARG SOURCE_COMMIT
+ARG DOCKER_ENGINE_VERSION=5:29.9.2-1~debian.12~bookworm
+ARG CONTAINERD_VERSION=2.4.2-3~debian.12~bookworm
+ARG BUILDX_VERSION=0.38.1-1~debian.12~bookworm
+ARG COMPOSE_VERSION=5.6.1-1~debian.12~bookworm
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN test -n "$SOURCE_COMMIT" \
-    && rm -f /etc/dpkg/dpkg.cfg.d/docker \
+RUN rm -f /etc/dpkg/dpkg.cfg.d/docker \
     && printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d \
     && chmod 0755 /usr/sbin/policy-rc.d \
     && apt-get update \
@@ -28,11 +30,14 @@ RUN test -n "$SOURCE_COMMIT" \
         > /etc/apt/sources.list.d/docker.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin \
+        "docker-ce=${DOCKER_ENGINE_VERSION}" "docker-ce-cli=${DOCKER_ENGINE_VERSION}" \
+        "containerd.io=${CONTAINERD_VERSION}" "docker-buildx-plugin=${BUILDX_VERSION}" \
+        "docker-compose-plugin=${COMPOSE_VERSION}" \
     && dpkg-query -W -f='${Package}\t${Version}\n' \
         > /usr/share/nipat/apt-versions.tsv \
-    && apt-cache show docker-ce docker-ce-cli containerd.io \
-        docker-buildx-plugin docker-compose-plugin \
+    && apt-cache show "docker-ce=${DOCKER_ENGINE_VERSION}" "docker-ce-cli=${DOCKER_ENGINE_VERSION}" \
+        "containerd.io=${CONTAINERD_VERSION}" "docker-buildx-plugin=${BUILDX_VERSION}" \
+        "docker-compose-plugin=${COMPOSE_VERSION}" \
         > /usr/share/nipat/docker-package-metadata.txt \
     && docker --version \
     && docker compose version \
@@ -43,7 +48,10 @@ RUN test -n "$SOURCE_COMMIT" \
 COPY installer/runtime/nipat-engine /usr/local/bin/nipat-engine
 COPY installer/runtime/wsl.conf /etc/wsl.conf
 COPY installer/runtime/write-provenance.py /usr/local/lib/nipat/write-provenance.py
-RUN chmod 0755 /usr/local/bin/nipat-engine \
+# Keep commit-specific provenance outside the reusable dependency layers.
+ARG SOURCE_COMMIT
+RUN test -n "$SOURCE_COMMIT" \
+    && chmod 0755 /usr/local/bin/nipat-engine \
     && printf 'nipat-runtime-v1\n' > /etc/nipat-runtime-id \
     && python3 /usr/local/lib/nipat/write-provenance.py "$SOURCE_COMMIT" "$DEBIAN_BASE" \
     && bash -n /usr/local/bin/nipat-engine \
