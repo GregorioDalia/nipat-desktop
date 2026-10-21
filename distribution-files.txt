@@ -29,6 +29,8 @@ installer/windows/NIPAT.iss
 installer/windows/bootstrap-common.ps1
 installer/windows/bootstrap.ps1
 installer/windows/test-bootstrap.ps1
+installer/windows/test-runtime-image.ps1
+installer/windows/test-scientific-image.ps1
 nipat.cmd
 pyproject.toml
 scientific/README.md

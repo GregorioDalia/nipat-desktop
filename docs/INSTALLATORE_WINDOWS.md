@@ -29,7 +29,8 @@ richiedere intervento IT. L’installatore non modifica tali policy.
 - Distribuzione WSL2: `NIPAT-Runtime`, dedicata a NIPAT.
 - Python portabile 3.12.10, senza modificare il PATH del sistema.
 - Docker Engine e Compose nel solo ambiente dedicato; Docker Desktop non serve.
-- Runtime scientifico precompilato, identificato dal suo ID Docker.
+- Runtime scientifico precompilato: archivio verificato con SHA-256 e immagine
+  fissata all'ID restituito dal motore locale durante il caricamento.
 
 Gli input rimangono nelle cartelle scelte dall’utente e vengono montati in
 sola lettura. Il backend WSL inizialmente supporta percorsi su dischi locali fissi
@@ -56,6 +57,8 @@ Il workflow `.github/workflows/windows-installer.yml`:
 3. Registra commit, versioni dei pacchetti, dimensioni, ID immagine e SHA-256
    nel materiale di distribuzione. Ogni asset deve rientrare nel limite
    imposto dal builder per GitHub Releases.
+   Carica inoltre l'archivio esportato in un motore nuovo del rootfs distribuito,
+   esegue R e samtools e ripete il caricamento per verificare la ripresa del setup.
 4. Prepara solo i sorgenti presenti in `distribution-files.txt`, il Python
    verificato e il manifest dell’installatore.
 5. Su Windows esegue i test e il controllo della sintassi PowerShell, compila
@@ -63,8 +66,18 @@ Il workflow `.github/workflows/windows-installer.yml`:
 
 Il manifest fidato è incorporato nell’EXE. Per impostazione predefinita gli
 archivi vengono scaricati dagli URL della stessa release GitHub. Il setup
-verifica gli hash prima dell’importazione e l’ID dell’immagine dopo `docker load`.
+verifica gli hash prima dell’importazione. Dopo `docker load` acquisisce l'unico
+ID immutabile riportato per quell'archivio, verifica Linux amd64 e lo usa per
+le esecuzioni. L'ID della build viene conservato separatamente: il motore
+classico identifica la configurazione dell'immagine, mentre containerd usa il
+manifest/index. I due ID non sono quindi necessariamente uguali.
 Non scarica un manifest sostitutivo dalla rete.
+
+Il setup registra ID della build, ID locale e SHA-256 dell'archivio nello stato
+e nella configurazione. Il launcher ne verifica la corrispondenza con la release.
+Ogni ripresa del setup riverifica e ricarica l'archivio; l'avvio ordinario usa
+direttamente l'ID locale registrato. Gli archivi esportati devono contenere una
+sola immagine senza tag: risposte assenti, ambigue o con errori vengono rifiutate.
 
 Il workflow **non pubblica automaticamente** una release. Conservare il log
 e gli artefatti della compilazione utilizzata per le prove. Non ricostruire
@@ -104,6 +117,45 @@ La compilazione su GitHub non copre l’avvio di WSL e l’interazione con UAC
 su un PC fisico. Gli autotest numerici non coprono tutti i casi DNPcall da BAM:
 proseguire con la [scheda di validazione](VALIDAZIONE.md).
 
+### Correzione e prova locale del setup (21 ottobre 2026)
+
+Il candidato compilato dal commit `19507bb3991d636fef3e594b9636c5ae2ee656e4`
+ha superato l'importazione WSL e il caricamento dell'archivio su un PC Windows.
+Il controllo successivo cercava l'ID della build (`bbc352...`) mentre Docker
+29.9.1 con containerd riportava `dc9773...`; il setup si arrestava correttamente
+senza dichiarare l'installazione pronta. La correzione descritta sopra elimina
+l'assunzione di identita' degli ID fra i due motori.
+
+Sul PC di prova la correzione locale `image-id-v1`, applicata al candidato
+di quel commit, ha poi permesso al setup di terminare con `NIPAT: ready`.
+Il log fornito dall'utilizzatore documenta:
+
+- 29 controlli dell'installer e 34 controlli dell'identita' dell'immagine
+  superati da `powershell.exe` prima della sostituzione dei tre script.
+- Caricamento dell'archivio verificato, risoluzione dell'ID locale `dc9773...`
+  e preparazione di Python portabile 3.12.10.
+- `doctor --runtime` superato nel backend `NIPAT-Runtime`, con R 4.4.2,
+  pacchetti richiesti disponibili e samtools 1.21.
+- Regressioni SNPcall (9 righe), CPI (valori CSV e tre PDF) e Contamination
+  (riepilogo e valori per sito) superate.
+- Quattro prove su input esterni superate: SNPcall da pileup, Contamination
+  da directory ricorsiva, CPI con due pannelli e CPI ALL. I percorsi di prova
+  includono spazi e caratteri speciali; gli input sono rimasti invariati.
+- Avvio ordinario verificato dopo `wsl --terminate NIPAT-Runtime`:
+  `nipat.cmd doctor --runtime` ha riavviato il motore dedicato, verificato
+  l'immagine locale e le dipendenze; `2_AVVIA.cmd` ha aperto il menu CLI
+  e si e' chiuso regolarmente con l'opzione 0.
+
+Questa evidenza riguarda il candidato con tre script corretti localmente,
+non ancora un nuovo EXE compilato dalla revisione corretta. Restano da
+verificare l'installazione completa su Windows 11 x64 pulito (inclusi
+abilitazione WSL e riavvio Windows) e DNPcall da BAM nel backend WSL. I test sui dati
+di esempio non costituiscono validazione scientifica su campioni reali.
+
+La prova di caricamento nel motore distribuito e' stata aggiunta al workflow.
+Al momento della prova locale non era ancora stata eseguita su GitHub;
+l'esito della compilazione va verificato per lo specifico commit utilizzato.
+
 ## Pubblicazione della versione verificata
 
 Dopo le prove, creare un nuovo tag sul commit esatto compilato e una
@@ -127,4 +179,5 @@ licenze siano disponibili.
 - [Installazione WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 - [Importazione e comandi WSL](https://learn.microsoft.com/en-us/windows/wsl/basic-commands).
 - [Docker Engine su Debian](https://docs.docker.com/engine/install/debian/).
+- [Identificativi delle immagini con graphdriver e containerd](https://github.com/moby/moby/issues/51934).
 - [Inno Setup: privilegi](https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm).

@@ -10,6 +10,14 @@
   opt into WSL through the installed configuration.
 - Build and test the scientific image in CI. Embed asset hashes in the installer
   and verify archives and the imported image ID before reporting success.
+- Do not equate the builder's image ID with the destination engine's ID:
+  graphdriver and containerd identify different objects. Load the SHA-256-verified
+  single-image archive, require one immutable ID in its load receipt, inspect
+  Linux amd64, and persist both IDs plus the archive hash. Never choose an image
+  from a daemon-wide listing. Check the persisted release binding at launch.
+- Add an actual exported-archive load/run/reload gate in the shipped engine.
+  Prepare this correction locally first; do not trigger another GitHub build
+  until the Windows installation trial has been reviewed.
 - Elevate only Windows prerequisite activation. Register the distro under the
   invoking user; never automatically replace an existing distro.
 - Complete self-tests before reporting setup success. CI success does not

@@ -5,6 +5,7 @@ $nipatCliArguments = @($args)
 try {
     $project = Get-NipatProject
     if (Test-Path -LiteralPath (Join-Path $project '.distribution\installer-manifest.json') -PathType Leaf) {
+        . (Join-Path $project 'installer\windows\bootstrap-common.ps1')
         $statePath = Join-Path $project '.runtime\installer\state.json'
         if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) {
             throw 'Installazione da completare: aprire NIPAT - completa preparazione dal menu Start.'
@@ -15,6 +16,8 @@ try {
             $state.source_commit -ne $manifest.source_commit -or $state.runtime_image -ne $manifest.runtime_image) {
             throw 'Installazione non verificata per questa versione: aprire NIPAT - completa preparazione dal menu Start.'
         }
+        $configuration = Get-Content -LiteralPath (Join-Path $project '.runtime\backend.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        Assert-NipatRuntimeBinding $manifest $state $configuration
     }
     Set-NipatEnvironment $project
     $python = Get-NipatPython $project

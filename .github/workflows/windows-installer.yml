@@ -66,6 +66,13 @@ jobs:
             --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:installer-test
           python scripts/build_windows_installer_assets.py stage \
             --manifest build/assets/installer-manifest.json --stage-dir build/windows-installer
+      - name: Load and execute exported image in the shipped engine
+        shell: pwsh
+        run: |
+          ./installer/windows/test-runtime-image.ps1 `
+            -ManifestPath build/assets/installer-manifest.json `
+            -AssetDirectory build/assets `
+            -RootfsImage nipat-wsl-rootfs:installer-test
       - name: Retain runtime assets for reviewed release or offline setup
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -130,6 +137,9 @@ jobs:
       - name: Test bootstrap guards with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
+      - name: Test scientific image identity with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
       - name: Compile the narrowly scoped WSL elevation helper
         shell: powershell
         run: |

@@ -53,6 +53,7 @@ try {
     $state = [ordered]@{
         schema_version = 1; version = $manifest.version; release_tag = $manifest.release_tag
         source_commit = $manifest.source_commit; runtime_image = $manifest.runtime_image
+        resolved_runtime_image = $null; runtime_archive_sha256 = $null
         phase = 'starting'; updated_utc = [DateTime]::UtcNow.ToString('o')
         asset_directory = $AssetDirectory; last_error = $null
     }
@@ -145,23 +146,18 @@ try {
         Write-NipatJsonAtomic $ownershipPath $ownership
         Save-NipatPhase 'loading_scientific_image'
         Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', '/usr/local/bin/nipat-engine', 'ensure') -TimeoutSeconds 240 | Out-Null
-        $inspection = Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', 'docker', 'image', 'inspect', '--format', '{{.Id}} {{.Os}} {{.Architecture}}', $manifest.runtime_image) -AllowFailure
-        if ($inspection.ExitCode -ne 0) {
-            $imageArchive = Get-NipatAsset $manifest.assets.scientific_image $cache $AssetDirectory
-            $linuxArchive = Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', 'wslpath', '-a', '-u', $imageArchive)
-            Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', 'docker', 'image', 'load', '--input', $linuxArchive.Text) -TimeoutSeconds 3600 | Out-Null
-            $inspection = Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', 'docker', 'image', 'inspect', '--format', '{{.Id}} {{.Os}} {{.Architecture}}', $manifest.runtime_image)
-        }
-        if ($inspection.Text -cne ($manifest.runtime_image + ' linux amd64')) {
-            throw 'L immagine scientifica non corrisponde all identificativo Linux amd64 del manifest.'
-        }
+        $runtimeImage = Install-NipatScientificImage $manifest $cache $AssetDirectory $distro
+        $state.resolved_runtime_image = $runtimeImage
+        $state.runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
         $configuration = [ordered]@{
             schema_version = 1; backend = 'wsl'; wsl_distro = $distro
-            runtime_image = $manifest.runtime_image; data_dir = (Join-Path $base 'data'); runs_dir = (Join-Path $base 'runs')
+            runtime_image = $runtimeImage; source_runtime_image = $manifest.runtime_image
+            runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
+            data_dir = (Join-Path $base 'data'); runs_dir = (Join-Path $base 'runs')
             release_tag = $manifest.release_tag; source_commit = $manifest.source_commit
         }
         Write-NipatJsonAtomic (Join-Path $project '.runtime\backend.json') $configuration
-        $manifest.runtime_image | Set-Content -LiteralPath (Join-Path $project '.runtime\runtime-image.txt') -Encoding ASCII
+        $runtimeImage | Set-Content -LiteralPath (Join-Path $project '.runtime\runtime-image.txt') -Encoding ASCII
         Set-NipatEnvironment $project
         if (-not (Test-Path -LiteralPath $env:NIPAT_DATA_DIR -PathType Container)) {
             [IO.Directory]::CreateDirectory($env:NIPAT_DATA_DIR) | Out-Null
