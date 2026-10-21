@@ -33,10 +33,18 @@ function Invoke-NipatWsl([string[]] $Arguments, [switch] $AllowFailure, [int] $T
 }
 try {
     $created = $true
+    # A nested engine cannot unpack overlayfs whiteouts into the outer
+    # container's writable layer. Give both data stores fresh host-backed
+    # anonymous volumes, as for Docker-in-Docker, and remove only these on exit.
     & $script:NativeInvoke @('run', '--detach', '--name', $script:TestContainer,
-        '--privileged', '--cgroupns=host', '--mount',
+        '--privileged', '--cgroupns=host',
+        '--mount', 'type=volume,target=/var/lib/docker',
+        '--mount', 'type=volume,target=/var/lib/containerd', '--mount',
         ('type=bind,source=' + $script:TestCache + ',target=/nipat-cache,readonly'),
         '--entrypoint', '/bin/sleep', $RootfsImage, 'infinity') -TimeoutSeconds 120 | Out-Null
+    $storage = & $script:NativeInvoke @('exec', $script:TestContainer,
+        'stat', '-f', '-c', '%T %n', '/var/lib/docker', '/var/lib/containerd')
+    Write-Host $storage.Text
     & $script:NativeInvoke @('exec', $script:TestContainer, '/usr/local/bin/nipat-engine', 'ensure') -TimeoutSeconds 240 | Out-Null
     $info = Invoke-NipatRuntimeDocker 'NIPAT-Test' @('info', '--format', '{{.ServerVersion}} {{.Driver}} {{json .DriverStatus}}')
     Write-Host $info.Text
@@ -49,7 +57,7 @@ try {
     Write-Host "PASS: exported scientific asset loaded, executed and reloaded in the shipped engine: $imageId"
 } finally {
     if ($created) {
-        & $script:NativeInvoke @('container', 'rm', '--force', $script:TestContainer) -AllowFailure -TimeoutSeconds 60 | Out-Null
+        & $script:NativeInvoke @('container', 'rm', '--force', '--volumes', $script:TestContainer) -AllowFailure -TimeoutSeconds 60 | Out-Null
     }
     if (Test-Path -LiteralPath $script:TestCache) { Remove-Item -LiteralPath $script:TestCache -Recurse -Force }
 }

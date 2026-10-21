@@ -156,6 +156,15 @@ La prova di caricamento nel motore distribuito e' stata aggiunta al workflow.
 Al momento della prova locale non era ancora stata eseguita su GitHub;
 l'esito della compilazione va verificato per lo specifico commit utilizzato.
 
+La prima esecuzione di questo nuovo controllo (`39580501326`) ha rilevato
+un errore di estrazione dei whiteout nel container Linux del test. Il motore
+annidato usava il filesystem overlay del container esterno come archivio.
+Il test ora assegna volumi anonimi separati a `/var/lib/docker` e
+`/var/lib/containerd`, registra il filesystem e rimuove quei volumi alla fine.
+Questo adeguamento riguarda l'ambiente CI; il setup WSL continua a usare
+il disco della propria distribuzione. Il controllo sugli errori di caricamento
+rimane attivo, cosi' come l'esecuzione e il secondo caricamento dell'immagine.
+
 ## Pubblicazione della versione verificata
 
 Dopo le prove, creare un nuovo tag sul commit esatto compilato e una
