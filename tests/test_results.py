@@ -37,7 +37,7 @@ class ResultsTests(unittest.TestCase):
             "schema_version": 1, "workflow": "dnp-call", "status": "succeeded",
             "started_at": "2026-10-21T15:00:00Z", "finished_at": "2026-10-21T15:01:00Z",
             "inputs": [{"path": "sample.bam"}, {"path": "reference.fa"}],
-            "source": {"nipat_version": "0.3.0a2"},
+            "source": {"nipat_version": "0.4.0"},
         }
         self.save_metadata()
 
@@ -76,7 +76,7 @@ class ResultsTests(unittest.TestCase):
         show_results(ui, self.run)
         self.assertIn("Workflow: dnp-call", ui.lines)
         self.assertIn("File di input registrati: 2", ui.lines)
-        self.assertIn("Versione NIPAT: 0.3.0a2", ui.lines)
+        self.assertIn("Versione NIPAT: 0.4.0", ui.lines)
         file_lines = [line for line in ui.lines if line.startswith("  ")]
         self.assertEqual(len(file_lines), 12)
         self.assertIn("sample_00.txt", file_lines[0])

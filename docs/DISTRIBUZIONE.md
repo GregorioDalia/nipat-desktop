@@ -1,19 +1,18 @@
 # Distribuzione tramite GitHub
 
-## Candidato 0.3.0a2: due pacchetti della stessa versione
+## Pre-release 0.4.0: due pacchetti per le prove di dominio
 
-La prossima consegna per i test esterni deve contenere l'interfaccia più
-recente verificata dal manutentore. Il candidato `0.3.0a2` non è ancora
-pubblicato; l'installatore disponibile in GitHub Releases resta `v0.3.0a1`.
-La disponibilità di un branch o di un artefatto CI non equivale a una nuova
-release pronta per la consegna.
+[NIPAT 0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0) identifica la versione da
+condividere per il testing di dominio, con l'interfaccia guidata e il launcher
+Windows. È una pre-release, non una dichiarazione di validazione scientifica
+completa. Le [note della versione](RELEASE_0.4.0.md) ne precisano il perimetro.
 
-La build del candidato prepara due modalità di distribuzione:
+La release offre due modalità di distribuzione:
 
 | Asset | Contenuto e prerequisiti | Avvio |
 | --- | --- | --- |
-| `NIPAT-Setup.exe` | Un solo file con applicazione, Python portabile, ambiente Linux interno e runtime scientifico incorporati. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Doppio clic per installare; poi icona **NIPAT** che avvia `NIPAT.exe`. |
-| `NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip` | Applicazione, `NIPAT.exe`, Python portabile e runtime scientifico incluso. Richiede Docker Desktop installato e avviato con container Linux. | Estrarre tutto; aprire `1_SETUP.cmd` una volta e poi `NIPAT.exe`. |
+| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe) | Un solo file con applicazione, Python portabile, ambiente Linux interno e runtime scientifico incorporati. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Doppio clic per installare; poi icona **NIPAT** che avvia `NIPAT.exe`. |
+| [NIPAT-DockerDesktop-0.4.0-windows-x64.zip](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip) | Applicazione, `NIPAT.exe`, Python portabile e runtime scientifico incluso. Richiede Docker Desktop installato e avviato con container Linux. | Estrarre tutto; aprire `1_SETUP.cmd` una volta e poi `NIPAT.exe`. |
 
 `NIPAT.exe` apre la CLI guidata senza richiedere un terminale già aperto.
 L'installatore è il percorso principale: l'utilizzatore scarica soltanto
@@ -32,14 +31,14 @@ Una build di pull request serve alla revisione; il commit scelto deve essere
 integrato e costruito con la procedura ammessa per la pubblicazione.
 Non sostituire gli asset di una release già distribuita.
 
-Prima della consegna, provare il pacchetto finale su Windows: completamento del
-setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
+Per ciascuna installazione, registrare la prova del pacchetto su Windows:
+completamento del setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
 un'esecuzione reale. La validazione di dominio utilizza la
 [scheda dedicata](VALIDAZIONE.md), con risultati attesi e osservati.
 L'aggiornamento riguarda l'ambiente Linux interno usato da NIPAT per le analisi:
-non richiede una manutenzione manuale di Windows o WSL. Il candidato prepara
-un ambiente separato quando cambia il rootfs. Conserva quello precedente e le cartelle
-dati/risultati, verifica il nuovo ambiente con `doctor` e `self-test`, quindi
+non richiede una manutenzione manuale di Windows o WSL. Il setup prepara
+un ambiente separato quando cambia il rootfs. Conserva quello precedente e
+le cartelle dati/risultati, verifica il nuovo ambiente con `doctor` e `self-test`, quindi
 attiva la nuova configurazione. La ripetizione del setup riprende lo stesso
 target; non occorre eliminare distribuzioni o sovrascrivere la configurazione.
 Se il setup non termina, la nuova applicazione resta bloccata: i vecchi file
@@ -51,7 +50,7 @@ Il codice originale NIPAT è distribuito con licenza GPL-3.0-or-later; le licenz
 e le attribuzioni dei componenti inclusi sono conservate in
 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) e nei rispettivi percorsi.
 
-## Installatore pubblicato 0.3.0a1
+## Versione precedente: installatore 0.3.0a1
 
 Il percorso pubblicato prepara **NIPAT-Setup.exe** attraverso GitHub Actions.
 L’installatore contiene l’applicazione e un manifest con gli hash dei due

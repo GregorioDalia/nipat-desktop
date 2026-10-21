@@ -53,18 +53,18 @@ class ReleaseGuards(unittest.TestCase):
                                         read_source=lambda commit, name: self.sources[name], desktop=desktop)
 
     def make_dual_package(self):
-        self.manifest["version"] = "0.3.0a2"
-        self.manifest["release_tag"] = "v0.3.0a2"
+        self.manifest["version"] = "0.4.0"
+        self.manifest["release_tag"] = "v0.4.0"
         self.manifest["runtime_image"] = "sha256:" + "b" * 64
         for entry in self.manifest["assets"].values():
             old = entry["file"]
-            entry["file"] = old.replace("0.3.0a1", "0.3.0a2")
-            entry["url"] = entry["url"].replace("0.3.0a1", "0.3.0a2")
+            entry["file"] = old.replace("0.3.0a1", "0.4.0")
+            entry["url"] = entry["url"].replace("0.3.0a1", "0.4.0")
             (self.runtime / old).rename(self.runtime / entry["file"])
         self.write_manifests()
         self.desktop = self.root / "desktop"
         self.desktop.mkdir()
-        self.package_name = "NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip"
+        self.package_name = "NIPAT-DockerDesktop-0.4.0-windows-x64.zip"
         launcher = b"MZ launcher fixture"
         (self.setup / "NIPAT.exe").write_bytes(launcher)
         python_archive = b"portable Python fixture"
@@ -75,12 +75,12 @@ class ReleaseGuards(unittest.TestCase):
         scientific = self.manifest["assets"]["scientific_image"]
         runtime = {
             "schema_version": 1, "image_id": self.manifest["runtime_image"],
-            "source_reference": "v0.3.0a2", "os": "linux", "architecture": "amd64",
+            "source_reference": "v0.4.0", "os": "linux", "architecture": "amd64",
             "archive_sha256": scientific["sha256"], "archive_bytes": scientific["size"],
             "source_commit": COMMIT, "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
         }
         release = {
-            "schema_version": 1, "package_version": "0.3.0a2",
+            "schema_version": 1, "package_version": "0.4.0",
             "source_git": {"commit": COMMIT, "dirty": False, "available": True},
             "source_sha256": self.manifest["source_sha256"], "runtime": runtime,
             "launcher": {"file": "NIPAT.exe", "sha256": hashlib.sha256(launcher).hexdigest(), "size": len(launcher)},
@@ -102,7 +102,7 @@ class ReleaseGuards(unittest.TestCase):
             for name, contents in self.package_entries.items():
                 archive.writestr(name, contents)
         evidence = {
-            "schema_version": 1, "version": "0.3.0a2", "source_commit": COMMIT,
+            "schema_version": 1, "version": "0.4.0", "source_commit": COMMIT,
             "file": self.package_name, "sha256": publisher.sha256(path), "size": path.stat().st_size,
             "launcher_sha256": publisher.sha256(self.setup / "NIPAT.exe"),
         }
@@ -277,7 +277,7 @@ class ReleaseGuards(unittest.TestCase):
         spec.loader.exec_module(bundle)
         self.sources.update({name: b"fixture\n" for name in
                              ("1_SETUP.cmd", "2_AVVIA.cmd", "nipat.cmd", "compose.yaml")})
-        self.sources["pyproject.toml"] = b'[project]\nversion = "0.3.0a2"\n'
+        self.sources["pyproject.toml"] = b'[project]\nversion = "0.4.0"\n'
         self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
         project = self.root / "project"
         project.mkdir()
@@ -307,7 +307,7 @@ class ReleaseGuards(unittest.TestCase):
             runtime, metadata = bundle.verified_installer_runtime(project, scientific_path, self.setup / publisher.MANIFEST)
             bundle.package_sources(project, package, python_zip, runtime, metadata, launcher)
         evidence = {
-            "schema_version": 1, "version": "0.3.0a2", "source_commit": COMMIT,
+            "schema_version": 1, "version": "0.4.0", "source_commit": COMMIT,
             "file": self.package_name, "sha256": publisher.sha256(package), "size": package.stat().st_size,
             "launcher_sha256": publisher.sha256(launcher),
         }
@@ -360,6 +360,21 @@ class ReleaseGuards(unittest.TestCase):
         self.assertTrue(sent["draft"])
         self.assertTrue(sent["prerelease"])
         self.assertEqual(call.call_count, 1)
+
+    def test_numeric_version_is_still_published_as_a_prerelease(self):
+        payload = self.root / "create.json"
+        with patch.object(publisher, "command", return_value='{"id": 12345}'):
+            publisher.create_draft("v0.4.0", "0.4.0", COMMIT, "Domain validation", payload)
+        sent = json.loads(payload.read_text())
+        self.assertEqual(sent["tag_name"], "v0.4.0")
+        self.assertTrue(sent["draft"])
+        self.assertTrue(sent["prerelease"])
+        self.assertEqual(sent["make_latest"], "false")
+        release = dict(sent, assets=[])
+        publisher.verify_uploaded(release, {}, COMMIT, "v0.4.0", "Domain validation", complete=True)
+        release["prerelease"] = False
+        with self.assertRaisesRegex(ValueError, "draft pre-release"):
+            publisher.verify_uploaded(release, {}, COMMIT, "v0.4.0", "Domain validation", complete=True)
 
 
 if __name__ == "__main__":

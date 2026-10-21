@@ -1,11 +1,11 @@
 # Installatore Windows: compilazione e verifica
 
-La revisione pubblicata `0.3.0a1` introduce `NIPAT-Setup.exe` per
-**Windows 11 x64**. Il candidato `0.3.0a2` incorpora tutti i componenti NIPAT
-in un unico installatore, aggiunge il launcher `NIPAT.exe` e un pacchetto
-Docker Desktop della stessa versione. Questo documento distingue la
-costruzione dei pacchetti dalla verifica dell'installazione completa e dalla
-validazione scientifica. La nuova versione non è ancora pubblicata.
+La pre-release **0.4.0** fornisce `NIPAT-Setup.exe` per **Windows 11 x64**:
+un unico file con i componenti NIPAT incorporati, il launcher `NIPAT.exe` e
+l'ambiente scientifico. È disponibile anche il pacchetto Docker Desktop della
+stessa versione. Questo documento distingue costruzione e verifica tecnica
+dei pacchetti dalla validazione scientifica; il rilascio è destinato al testing
+di dominio, non ne dichiara il completamento.
 
 **Perimetro della prima consegna per le prove di dominio (21 ottobre 2026):**
 Windows 11 x64 con WSL2 già funzionante. Il percorso di attivazione iniziale
@@ -15,7 +15,8 @@ autotest e riportare `NIPAT: ready` prima delle analisi.
 
 ## Flusso previsto per l’utilizzo
 
-1. Scaricare il solo `NIPAT-Setup.exe` dalla release GitHub della versione.
+1. Scaricare il solo [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe)
+   dalla [pre-release v0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
 2. Avviare il file dal proprio account Windows, senza “Esegui come amministratore”.
 3. Il setup prepara l’applicazione e i componenti incorporati. Se WSL non è
    disponibile, richiede l’autorizzazione amministrativa per abilitarne i prerequisiti.
@@ -24,10 +25,10 @@ autotest e riportare `NIPAT: ready` prima delle analisi.
    una ripresa manuale dopo un errore.
 5. Il setup prepara l’ambiente Linux interno di NIPAT e lancia gli autotest.
    Attendere `NIPAT: ready`, poi aprire l'icona **NIPAT** sul desktop o nel
-   menu Start. Nel candidato `0.3.0a2` richiama `NIPAT.exe`, senza richiedere
+   menu Start. Il collegamento richiama `NIPAT.exe`, senza richiedere
    un terminale già aperto.
 
-Il candidato non richiede download separati dei componenti NIPAT né cartelle
+Il setup non richiede download separati dei componenti NIPAT né cartelle
 di archivi da preparare. WSL permette di eseguire l'ambiente Linux interno su
 Windows: la sua eventuale attivazione può richiedere Internet. Le analisi si
 svolgono localmente.
@@ -53,7 +54,7 @@ Windows; condivisioni UNC e unità di rete non sono incluse. La GUI non fa parte
 di questa revisione. Non vengono modificati gli algoritmi R.
 
 La disinstallazione rimuove i file applicativi e la ripresa automatica, ma
-conserva dati, risultati, cache e distribuzioni WSL. Il candidato aggiorna
+conserva dati, risultati, cache e distribuzioni WSL. Il setup aggiorna
 l'ambiente scientifico affiancandone uno nuovo quando cambia il rootfs, anche
 se la modifica applicativa riguarda soltanto l'interfaccia.
 
@@ -151,9 +152,11 @@ un runtime diverso fra verifica e distribuzione.
 
 ## Prova prima della pubblicazione
 
-Il candidato `0.3.0a2` non ha ancora un URL pubblico di release. Per la prova
-usare gli artefatti GitHub Actions di una sola build riuscita del workflow
-**Windows installer (review build)**, identificata dal commit da verificare.
+Per la verifica tecnica prima di una futura pubblicazione usare gli artefatti
+GitHub Actions di una sola build riuscita del workflow **Windows installer
+(review build)**, identificata dal commit da verificare. Per provare `0.4.0`
+già confezionato, utilizzare direttamente il pacchetto della
+[release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
 
 Per aggiornare una copia NIPAT WSL già installata:
 
@@ -300,7 +303,7 @@ Dopo la revisione dei pacchetti, seguire
 [.github/RELEASE.md](../.github/RELEASE.md) per pubblicare una **pre-release**
 dal commit esatto compilato e integrato. La procedura trasferisce gli asset di
 una build ammessa e riuscita, controllando manifest, sorgenti e checksum; una
-build di pull request non è direttamente pubblicabile. Per il candidato con
+build di pull request non è direttamente pubblicabile. Per la
 doppia distribuzione vengono verificati anche contenuto dello ZIP Docker,
 launcher comune e identità dell'archivio scientifico. Il file `SHA256SUMS`
 della release comprende tutti gli asset pubblicati.

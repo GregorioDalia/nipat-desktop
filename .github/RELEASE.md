@@ -6,6 +6,11 @@ del manutentore. Si avvia manualmente da Actions sul branch `main`, indicando
 l'ID della build **Windows installer (review build)** e il suo commit completo.
 Il commit deve essere già integrato in `main`.
 
+La versione `0.4.0` usa il tag `v0.4.0`, ma viene pubblicata con lo stato
+GitHub **Pre-release** per la validazione di dominio. Il suffisso della
+versione non determina questo stato: la procedura imposta e verifica sempre
+`prerelease: true` e non contrassegna la pubblicazione come `Latest`.
+
 La build esegue prima i controlli rapidi `windows-checks`, comprese le prove
 di ripresa dell'aggiornamento WSL e del launcher compilato. Solo dopo il loro
 successo costruisce ed esporta il runtime Linux. Il job finale scarica lo stesso

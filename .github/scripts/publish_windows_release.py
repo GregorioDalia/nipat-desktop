@@ -168,8 +168,8 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     require(manifest_bytes == (runtime / MANIFEST).read_bytes(), "Installer/runtime manifests differ")
     manifest = json.loads(manifest_bytes)
     version = manifest["version"]
-    require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:a|b|rc)[0-9]+", version),
-            "Only explicitly versioned pre-releases are supported")
+    require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+            "Version must be numeric major.minor.patch with an optional a/b/rc suffix")
     tag = f"v{version}"
     require(manifest["schema_version"] == 1 and manifest["release_tag"] == tag
             and manifest["source_commit"] == commit, "Manifest release/source mismatch")

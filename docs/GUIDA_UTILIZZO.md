@@ -5,18 +5,17 @@ riga di comando. Gli input e i risultati rimangono sul computer.
 Gli autotest inclusi verificano casi noti; la validazione con altri input e
 riferimenti scientifici indipendenti resta necessaria.
 
-L'installatore pubblicato è **`0.3.0a1`**. Il candidato **`0.3.0a2`**
-introduce il menu descritto sotto e l'avvio tramite **`NIPAT.exe`** in entrambi
-i pacchetti Windows. Il nuovo candidato non è ancora una release pubblicata:
-la consegna per i test esterni dovrà identificare esattamente la versione
-dell'interfaccia verificata, insieme alla relativa guida.
+Questa guida accompagna **NIPAT 0.4.0**, pre-release destinata alle prove di
+dominio su Windows 11 x64. La disponibilità per il testing non equivale a
+validazione scientifica completata. I due pacchetti contengono la stessa
+interfaccia e gli stessi workflow.
 
-## Installazione e avvio del candidato 0.3.0a2
+## Installazione e avvio di NIPAT 0.4.0
 
-Il percorso principale richiede un solo file: **`NIPAT-Setup.exe`**. Alla
-pubblicazione della nuova pre-release:
+Il percorso principale richiede un solo file, **`NIPAT-Setup.exe`**:
 
-1. Scaricare `NIPAT-Setup.exe` dalla relativa pagina GitHub.
+1. Scaricare [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe)
+   dalla [pre-release v0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
 2. Fare doppio clic dal proprio account Windows e attendere il completamento
    della configurazione e degli autotest: **`NIPAT: ready`**.
 3. Aprire l'icona **NIPAT** sul desktop o nel menu Start.
@@ -33,10 +32,11 @@ percorso resta da verificare separatamente e può essere limitato dalle policy
 del computer.
 
 Per chi dispone già di **Docker Desktop** con container Linux, l'alternativa è
-`NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip`: estrarre tutto il pacchetto, aprire
-`1_SETUP.cmd` una volta con doppio clic e poi `NIPAT.exe`. Il launcher deve
+[NIPAT-DockerDesktop-0.4.0-windows-x64.zip](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip):
+estrarre tutto il pacchetto, aprire `1_SETUP.cmd` una volta con doppio clic e poi `NIPAT.exe`. Il launcher deve
 restare nella cartella estratta, insieme ai file del pacchetto. Le due modalità
-usano lo stesso codice e lo stesso runtime scientifico verificato.
+usano lo stesso codice e lo stesso runtime scientifico verificato. Per la
+prima prova seguire la [procedura Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop).
 
 Quando si installa una nuova versione, NIPAT prepara anche il proprio ambiente
 Linux se necessario. Questa preparazione riguarda NIPAT, non una procedura
@@ -55,7 +55,7 @@ nella [procedura di verifica](INSTALLATORE_WINDOWS.md#prova-prima-della-pubblica
 La [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
 contiene la precedente interfaccia. Il suo setup scarica automaticamente gli
 archivi runtime e non include la nuova procedura di aggiornamento; non è il
-pacchetto da usare per verificare l'interfaccia del candidato `0.3.0a2`.
+pacchetto da usare per verificare l'interfaccia della versione `0.4.0`.
 Le [note di quella versione](RELEASE_0.3.0a1.md) ne descrivono il perimetro.
 Non eliminare ambienti già installati per forzare il setup di una versione
 precedente.
@@ -73,7 +73,7 @@ Il setup da sorgenti prepara Python locale e il runtime scientifico ed esegue
 gli autotest. Non servono Git, PyCharm o installazioni separate di Python, R
 e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
 
-Per sviluppatori che utilizzano il checkout del candidato, dopo il setup è
+Per sviluppatori che utilizzano il checkout dei sorgenti, dopo il setup è
 possibile compilare `NIPAT.exe` nella radice del progetto con il compilatore
 .NET Framework presente in Windows:
 
@@ -85,7 +85,7 @@ La compilazione è un passaggio per chi usa i sorgenti; il launcher è già incl
 nei pacchetti Windows costruiti per la distribuzione. `2_AVVIA.cmd` e `nipat.cmd`
 restano disponibili.
 
-## Menu guidato del candidato 0.3.0a2
+## Menu guidato
 
 All'apertura, il banner NIPAT riporta la versione. Il menu presenta i quattro
 workflow con una breve descrizione. Nei terminali interattivi supportati si
@@ -294,7 +294,7 @@ di siti informativi. Una cartella di output parziale non prova il completamento.
 
 ## Risultati intermedi e analisi in sequenza
 
-Al termine viene mostrato il percorso del run. Nel candidato `0.3.0a2`,
+Al termine viene mostrato il percorso del run. In `0.4.0`,
 la schermata finale permette anche di aprire direttamente le cartelle e il log;
 con **6 — Ultima esecuzione** si può richiamare la stessa schermata durante la
 sessione. Per le esecuzioni precedenti, aprire il percorso in Esplora file:

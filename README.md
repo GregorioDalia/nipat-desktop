@@ -1,63 +1,47 @@
 # NIPAT Desktop
 
-**Development candidate: CLI 0.3.0a2 — guided terminal experience and Windows launcher.**
-The published Windows installer remains **v0.3.0a1**, for domain testing with
-working WSL2. The new interface is described in the
-[0.3.0a2 candidate notes](docs/RELEASE_0.3.0a2.md).
-Start with the Italian [project overview](SUNTO.md) and
+**CLI 0.4.0 — pre-release for domain testing on Windows 11 x64.**
+This version provides the guided terminal interface, a common Windows launcher
+and two distribution options. It is ready to be evaluated with domain data;
+it is not a completed scientific validation.
+See the [v0.4.0 release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0),
+[release notes](docs/RELEASE_0.4.0.md), Italian [overview](SUNTO.md) and
 [usage guide](docs/GUIDA_UTILIZZO.md).
 
-The candidate provides a common **`NIPAT.exe`** launcher for the WSL installer
-and the Docker Desktop package. Double-clicking it opens the guided CLI;
-confirming **Avvia analisi** runs the R scripts and the other tools required by
-the workflow. Users do not need to open PowerShell manually. The candidate
-packages must be reviewed before publication; share the versioned release of
-the tested interface, not an older installer or a moving development branch.
+| Package | Preparation | Start |
+| --- | --- | --- |
+| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe) | Double-click the single installer and wait for `NIPAT: ready`. The initial testing scope assumes working WSL2. | Open the **NIPAT** desktop or Start-menu icon. |
+| [Docker Desktop ZIP](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip) | Start Docker Desktop with Linux containers, extract the entire ZIP and double-click `1_SETUP.cmd` once. | Open `NIPAT.exe` in the extracted folder. |
 
-The candidate's main distribution is a single **`NIPAT-Setup.exe`** download.
-Double-click it to install, then open the **NIPAT** icon. The EXE includes
-portable Python, the dedicated Linux environment and the scientific runtime;
-setup verifies and prepares them automatically, then runs self-tests. Users
-do not need to arrange runtime archives or install Docker Desktop separately.
-Windows runs the internal Linux environment through WSL2. Initial WSL
-activation may require Internet, administrator consent and a restart; setup
-resumes under the original Windows account.
-The initial installer target is **Windows 11 x64**.
+Both packages include portable Python, **`NIPAT.exe`** and the same verified
+scientific runtime. The installer also includes NIPAT's internal Linux
+environment; users do not need to arrange archives or install Docker Desktop
+for that option. Initial Windows WSL activation may require Internet,
+administrator consent and a restart. Activation and restart on a clean PC
+remain outside the initial domain-testing scope.
 
-The current testing scope assumes **WSL2 is already working**. Download
-`NIPAT-Setup.exe` from the versioned GitHub release and wait for `NIPAT: ready`
-before starting analyses. Initial WSL activation and Windows restart/resume
-on a clean PC remain unverified. See the
-[installer evidence and remaining checks](docs/INSTALLATORE_WINDOWS.md).
-The published `v0.2.0a2` remains unchanged and uses the source archive plus
-Docker Desktop. The source setup (`1_SETUP.cmd`, then `2_AVVIA.cmd`) remains
-available. See [distribution and prior evidence](docs/DISTRIBUZIONE.md).
+Double-clicking `NIPAT.exe` opens the guided CLI. Confirming **Avvia analisi**
+runs the R scripts and the other tools required by the workflow. No manual
+PowerShell session is required. Follow the [Docker Desktop test procedure](docs/VALIDAZIONE.md#prima-prova-con-docker-desktop)
+to record setup, a real analysis and its outputs. Record installation and
+analysis outcomes separately for each package.
 
-For the new candidate, GitHub Actions also prepares
-`NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip`, with portable Python,
-`NIPAT.exe` and the same verified scientific archive used by the WSL package.
-Docker Desktop with Linux containers must already be installed and running.
-Extract the entire ZIP, double-click `1_SETUP.cmd` once, then open `NIPAT.exe`.
-This ZIP and `NIPAT-Setup.exe` are two delivery modes of the same version.
-
-When updating NIPAT, setup also manages its internal Linux environment. This
-is part of installing NIPAT, not a manual Windows or WSL maintenance task.
-The candidate prepares a separate owned distribution when its root filesystem
-changes, keeps the previous environment and data locations, and activates the
-new backend only after `doctor` and scientific self-tests.
-An interrupted setup can be resumed. This preserves the previous runtime, not
-a complete application rollback: the installer replaces application files
-before preparation, and the updated app remains blocked until setup succeeds.
-The final-package fresh-install and upgrade checks on Windows remain distinct
-from automated tests; see the [review procedure](docs/INSTALLATORE_WINDOWS.md).
+When updating NIPAT, setup manages its internal Linux environment, preserves
+the previous environment and data locations, and activates a new backend only
+after runtime checks and scientific self-tests. An interrupted setup can be
+resumed. The updated application remains blocked until setup succeeds; old
+application files are not automatically restored. See the
+[installer checks](docs/INSTALLATORE_WINDOWS.md).
 
 Python handles input validation, mechanical format adaptation and execution;
 the scientific calculations remain in the DNPcall and NEWPAT R scripts.
 The desktop GUI will use the same application layer after CLI validation.
+Previous releases and their evidence are retained in the
+[distribution history](docs/DISTRIBUZIONE.md).
 
-## Guided CLI candidate (0.3.0a2)
+## Guided CLI (0.4.0)
 
-The source candidate adds a NIPAT banner with version, a vertical menu and
+The interface provides a NIPAT banner with version, a vertical menu and
 arrow/Enter navigation in supported interactive terminals. Numbered choices
 remain available; redirected output and simple terminals use plain text.
 Contextual instructions accompany mode selection and input fields in all four
@@ -79,8 +63,8 @@ Persistent preferences, a cross-session history and automatic workflow chaining
 are not part of this revision. The direct CLI and scientific input modes remain
 available, and the interface adds no external Python dependencies.
 
-The new terminal interactions require manual Windows verification; record those
-results separately from the existing installer and scientific evidence below.
+Record package-specific Windows interaction checks separately from the
+historical installer and scientific evidence below.
 
 ## Input locations and results
 

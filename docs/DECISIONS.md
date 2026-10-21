@@ -1,5 +1,18 @@
 # Consolidated decisions
 
+## Domain-testing pre-release 0.4.0
+
+- Consolidate the guided CLI and both Windows distributions as `v0.4.0`, marked
+  as a GitHub pre-release for domain testing, not completed scientific validation.
+- The maintainer authorizes this handoff assuming working WSL2. Record this as
+  the accepted testing scope, not a new independent Windows installation test
+  or a successful Docker Desktop test.
+- Provide versioned download links for the single `NIPAT-Setup.exe` and
+  `NIPAT-DockerDesktop-0.4.0-windows-x64.zip`. Keep prior release notes and
+  evidence historical; do not transfer their outcomes to new packages.
+- Document Docker Desktop setup and a real DNPcall-to-Contamination trial,
+  with expected/observed results and setup/run logs, before extending coverage.
+
 ## Common Windows launcher and dual delivery (0.3.0a2 candidate)
 
 - The external validation handoff must use the latest interface reviewed by the

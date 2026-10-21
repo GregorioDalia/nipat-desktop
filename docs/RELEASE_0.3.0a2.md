@@ -1,9 +1,8 @@
 # NIPAT CLI 0.3.0a2 — interazione guidata e avvio Windows
 
-Candidato per la revisione dell'interfaccia testuale e dei due pacchetti Windows.
-L'installatore attualmente pubblicato resta `v0.3.0a1`; queste note non annunciano
-una nuova release già disponibile. La consegna per i test esterni dovrà utilizzare
-il pacchetto finale con l'interfaccia più recente verificata dal manutentore.
+Note storiche del candidato `0.3.0a2`, conservate per distinguere le evidenze
+raccolte durante lo sviluppo. La versione destinata alla consegna per il testing
+è [0.4.0](RELEASE_0.4.0.md); questi appunti non ne attestano le prove.
 
 ## Novità
 
