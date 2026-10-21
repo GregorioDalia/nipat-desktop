@@ -23,6 +23,7 @@ docs/INSTALLATORE_WINDOWS.md
 docs/RELEASE_0.3.0a1.md
 docs/RELEASE_0.3.0a2.md
 docs/RELEASE_0.4.0.md
+docs/RELEASE_0.4.1.md
 docs/VALIDAZIONE.md
 installer/runtime/Dockerfile
 installer/runtime/nipat-engine
@@ -31,6 +32,7 @@ installer/runtime/wsl.conf
 installer/windows/EnableWsl.cs
 installer/windows/EnableWsl.manifest
 installer/windows/NIPAT.iss
+installer/windows/NIPAT-DockerDesktop.iss
 installer/windows/NipatLauncher.cs
 installer/windows/NipatLauncher.manifest
 installer/windows/bootstrap-common.ps1
@@ -70,15 +72,18 @@ scientific/vendor/NEWPAT/contamination/examples/inputs/DNPpanel.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample1.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample2.txt
 scripts/build_validation_bundle.py
+scripts/build_docker_installer.py
 scripts/build_windows_installer_assets.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
 scripts/verify_input_modes.py
 scripts/verify_snp_example.py
 scripts/windows/common.ps1
+scripts/windows/portable-bootstrap.ps1
 scripts/windows/run.ps1
 scripts/windows/setup.ps1
 scripts/windows/test-portable-runtime.ps1
+scripts/windows/test-portable-bootstrap.ps1
 src/nipat/__init__.py
 src/nipat/__main__.py
 src/nipat/adapters/__init__.py
@@ -115,6 +120,7 @@ tests/fixtures/cpi/samples/MotherNoSites.txt
 tests/test_cli_validation.py
 tests/test_contamination_workflow.py
 tests/test_distribution.py
+tests/test_docker_installer.py
 tests/test_dnp_workflow.py
 tests/test_input_modes.py
 tests/test_input_mounts.py

@@ -1,9 +1,9 @@
 # Installatore Windows: compilazione e verifica
 
-La pre-release **0.4.0** fornisce `NIPAT-Setup.exe` per **Windows 11 x64**:
+La pre-release **0.4.1** fornisce `NIPAT-Setup.exe` per **Windows 11 x64**:
 un unico file con i componenti NIPAT incorporati, il launcher `NIPAT.exe` e
-l'ambiente scientifico. È disponibile anche il pacchetto Docker Desktop della
-stessa versione. Questo documento distingue costruzione e verifica tecnica
+l'ambiente scientifico. L'alternativa `NIPAT-DockerDesktop-Setup.exe` installa
+la stessa applicazione per l'uso con Docker Desktop già disponibile. Questo documento distingue costruzione e verifica tecnica
 dei pacchetti dalla validazione scientifica; il rilascio è destinato al testing
 di dominio, non ne dichiara il completamento.
 
@@ -15,8 +15,8 @@ autotest e riportare `NIPAT: ready` prima delle analisi.
 
 ## Flusso previsto per l’utilizzo
 
-1. Scaricare il solo [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe)
-   dalla [pre-release v0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
+1. Scaricare il solo [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe)
+   dalla [pre-release v0.4.1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1).
 2. Avviare il file dal proprio account Windows, senza “Esegui come amministratore”.
 3. Il setup prepara l’applicazione e i componenti incorporati. Se WSL non è
    disponibile, richiede l’autorizzazione amministrativa per abilitarne i prerequisiti.
@@ -35,7 +35,25 @@ svolgono localmente.
 Virtualizzazione disabilitata o restrizioni dell’ente possono impedire WSL e
 richiedere intervento IT. L’installatore non modifica tali policy.
 
-## Componenti e confini
+## Installatore per Docker Desktop
+
+Scaricare [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe),
+avviare Docker Desktop con container Linux e installare con doppio clic.
+Il setup avvia automaticamente la preparazione degli strumenti, `doctor`
+e gli autotest. Aprire **NIPAT (Docker Desktop)** per usare il menu: se la
+preparazione non è terminata, l'icona la riprende automaticamente.
+Dopo un errore si riprova dalla stessa icona. La normale procedura non
+richiede estrazione di ZIP o avvio di `1_SETUP.cmd`.
+
+La copia Docker Desktop usa `%LOCALAPPDATA%\Programs\NIPAT-DockerDesktop`
+per l'applicazione e `%LOCALAPPDATA%\NIPAT-DockerDesktop\data` e `runs`
+per dati e risultati predefiniti. Nella cartella applicativa,
+`.runtime\setup.log` riepiloga la preparazione e `.runtime\setup-checks.log`
+contiene i dettagli di `doctor` e degli autotest; conservarli entrambi. Queste cartelle sono separate
+da quelle WSL. La [procedura di prova](VALIDAZIONE.md#prima-prova-con-docker-desktop)
+registra preparazione e analisi sul pacchetto effettivamente usato.
+
+## Componenti e confini del percorso WSL
 
 - Applicazione per utente: `%LOCALAPPDATA%\Programs\NIPAT`.
 - Dati e risultati predefiniti: `%LOCALAPPDATA%\NIPAT\data` e `runs`.
@@ -124,8 +142,9 @@ Il workflow `.github/workflows/windows-installer.yml`:
    e l'installatore Inno Setup. Quest'ultimo incorpora anche i due archivi
    verificati dell'ambiente Linux e del runtime scientifico.
 6. Prepara il pacchetto Docker Desktop con lo stesso launcher, gli stessi
-   sorgenti e l'archivio scientifico già esportato. Conserva separatamente gli
-   artefatti del setup WSL, del runtime e dello ZIP Docker per la revisione.
+   sorgenti e l'archivio scientifico già esportato, poi lo incorpora
+   nell'installatore Docker Desktop. Lo ZIP viene conservato come artefatto
+   di costruzione e verifica; per l'utilizzo si distribuisce il relativo EXE.
 
 Il manifest fidato e i due archivi sono incorporati nell’EXE. Il setup estrae
 automaticamente gli archivi nella cache dell'utente
@@ -154,9 +173,9 @@ un runtime diverso fra verifica e distribuzione.
 
 Per la verifica tecnica prima di una futura pubblicazione usare gli artefatti
 GitHub Actions di una sola build riuscita del workflow **Windows installer
-(review build)**, identificata dal commit da verificare. Per provare `0.4.0`
+(review build)**, identificata dal commit da verificare. Per provare `0.4.1`
 già confezionato, utilizzare direttamente il pacchetto della
-[release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
+[release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1).
 
 Per aggiornare una copia NIPAT WSL già installata:
 
@@ -213,8 +232,8 @@ configurazione della copia installata. Nei nuovi pacchetti non è necessariament
 
 Questo controllo va eseguito senza analisi in corso. I comandi con il nome
 fisso `NIPAT-Runtime` nella sezione storica sottostante descrivono soltanto il
-candidato precedente. Per il pacchetto Docker Desktop, estrarre lo ZIP della
-stessa build e seguire la preparazione descritta nella [guida](GUIDA_UTILIZZO.md).
+candidato precedente. Per Docker Desktop usare il relativo installatore
+della stessa build e seguire la preparazione descritta nella [guida](GUIDA_UTILIZZO.md).
 
 Registrare versione di Windows, versione WSL, commit, ID del workflow e ID
 immagine insieme agli esiti. La matrice completa di verifica dell'installatore
@@ -304,15 +323,16 @@ Dopo la revisione dei pacchetti, seguire
 dal commit esatto compilato e integrato. La procedura trasferisce gli asset di
 una build ammessa e riuscita, controllando manifest, sorgenti e checksum; una
 build di pull request non è direttamente pubblicabile. Per la
-doppia distribuzione vengono verificati anche contenuto dello ZIP Docker,
-launcher comune e identità dell'archivio scientifico. Il file `SHA256SUMS`
+doppia distribuzione vengono verificati anche il contenuto Docker incorporato
+nell'EXE, il launcher comune e l'identità dell'archivio scientifico. Lo ZIP
+resta un artefatto intermedio di verifica. Il file `SHA256SUMS`
 della release comprende tutti gli asset pubblicati.
 
 Riportare nelle note della release i controlli effettivamente superati e le
 prove ancora aperte. Condividere il link alla versione con l'interfaccia
 verificata. Il percorso principale richiede soltanto `NIPAT-Setup.exe`, con
-gli archivi già incorporati; chi dispone di Docker Desktop può scaricare lo
-ZIP dedicato.
+gli archivi già incorporati; chi dispone di Docker Desktop può scaricare
+`NIPAT-DockerDesktop-Setup.exe`.
 `NIPAT.exe` è contenuto in entrambi i pacchetti e richiede i relativi file di
 supporto: non distribuirlo isolatamente.
 

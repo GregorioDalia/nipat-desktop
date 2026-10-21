@@ -1,32 +1,34 @@
 # NIPAT Desktop
 
-**CLI 0.4.0 — pre-release for domain testing on Windows 11 x64.**
+**CLI 0.4.1 — pre-release for domain testing on Windows 11 x64.**
 This version provides the guided terminal interface, a common Windows launcher
 and two distribution options. It is ready to be evaluated with domain data;
 it is not a completed scientific validation.
-See the [v0.4.0 release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0),
-[release notes](docs/RELEASE_0.4.0.md), Italian [overview](SUNTO.md) and
+See the [v0.4.1 release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1),
+[release notes](docs/RELEASE_0.4.1.md), Italian [overview](SUNTO.md) and
 [usage guide](docs/GUIDA_UTILIZZO.md).
 
 | Package | Preparation | Start |
 | --- | --- | --- |
-| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe) | Double-click the single installer and wait for `NIPAT: ready`. The initial testing scope assumes working WSL2. | Open the **NIPAT** desktop or Start-menu icon. |
-| [Docker Desktop ZIP](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip) | Start Docker Desktop with Linux containers, extract the entire ZIP and double-click `1_SETUP.cmd` once. | Open `NIPAT.exe` in the extracted folder. |
+| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe) | Double-click the single installer and wait for `NIPAT: ready`. The initial testing scope assumes working WSL2. | Open the **NIPAT** desktop or Start-menu icon. |
+| [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe) | Start Docker Desktop with Linux containers, then double-click the installer. Preparation and self-tests run automatically before the menu. | Open the **NIPAT (Docker Desktop)** icon. |
 
-Both packages include portable Python, **`NIPAT.exe`** and the same verified
-scientific runtime. The installer also includes NIPAT's internal Linux
+Both single-file installers include portable Python, **`NIPAT.exe`** and the
+same verified scientific runtime. The WSL installer also includes NIPAT's internal Linux
 environment; users do not need to arrange archives or install Docker Desktop
 for that option. Initial Windows WSL activation may require Internet,
 administrator consent and a restart. Activation and restart on a clean PC
 remain outside the initial domain-testing scope.
 
-Double-clicking `NIPAT.exe` opens the guided CLI. Confirming **Avvia analisi**
+The Docker Desktop application prepares its environment automatically when
+needed, then opens the guided CLI; after a failed preparation, reopen the same
+icon to retry. Users do not run a separate setup script. Confirming **Avvia analisi**
 runs the R scripts and the other tools required by the workflow. No manual
 PowerShell session is required. Follow the [Docker Desktop test procedure](docs/VALIDAZIONE.md#prima-prova-con-docker-desktop)
 to record setup, a real analysis and its outputs. Record installation and
 analysis outcomes separately for each package.
 
-When updating NIPAT, setup manages its internal Linux environment, preserves
+When updating the WSL installation, setup manages its internal Linux environment, preserves
 the previous environment and data locations, and activates a new backend only
 after runtime checks and scientific self-tests. An interrupted setup can be
 resumed. The updated application remains blocked until setup succeeds; old
@@ -39,7 +41,7 @@ The desktop GUI will use the same application layer after CLI validation.
 Previous releases and their evidence are retained in the
 [distribution history](docs/DISTRIBUZIONE.md).
 
-## Guided CLI (0.4.0)
+## Guided CLI (0.4.1)
 
 The interface provides a NIPAT banner with version, a vertical menu and
 arrow/Enter navigation in supported interactive terminals. Numbered choices

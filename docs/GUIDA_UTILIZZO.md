@@ -5,17 +5,17 @@ riga di comando. Gli input e i risultati rimangono sul computer.
 Gli autotest inclusi verificano casi noti; la validazione con altri input e
 riferimenti scientifici indipendenti resta necessaria.
 
-Questa guida accompagna **NIPAT 0.4.0**, pre-release destinata alle prove di
+Questa guida accompagna **NIPAT 0.4.1**, pre-release destinata alle prove di
 dominio su Windows 11 x64. La disponibilità per il testing non equivale a
 validazione scientifica completata. I due pacchetti contengono la stessa
 interfaccia e gli stessi workflow.
 
-## Installazione e avvio di NIPAT 0.4.0
+## Installazione e avvio di NIPAT 0.4.1
 
 Il percorso principale richiede un solo file, **`NIPAT-Setup.exe`**:
 
-1. Scaricare [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe)
-   dalla [pre-release v0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
+1. Scaricare [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe)
+   dalla [pre-release v0.4.1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1).
 2. Fare doppio clic dal proprio account Windows e attendere il completamento
    della configurazione e degli autotest: **`NIPAT: ready`**.
 3. Aprire l'icona **NIPAT** sul desktop o nel menu Start.
@@ -32,18 +32,27 @@ percorso resta da verificare separatamente e può essere limitato dalle policy
 del computer.
 
 Per chi dispone già di **Docker Desktop** con container Linux, l'alternativa è
-[NIPAT-DockerDesktop-0.4.0-windows-x64.zip](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip):
-estrarre tutto il pacchetto, aprire `1_SETUP.cmd` una volta con doppio clic e poi `NIPAT.exe`. Il launcher deve
-restare nella cartella estratta, insieme ai file del pacchetto. Le due modalità
-usano lo stesso codice e lo stesso runtime scientifico verificato. Per la
-prima prova seguire la [procedura Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop).
+[NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe):
 
-Quando si installa una nuova versione, NIPAT prepara anche il proprio ambiente
-Linux se necessario. Questa preparazione riguarda NIPAT, non una procedura
+1. Avviare Docker Desktop in modalità Linux.
+2. Scaricare l'EXE ed eseguirlo con doppio clic.
+3. Aprire l'icona **NIPAT (Docker Desktop)**. La preparazione degli strumenti e
+   gli autotest partono automaticamente quando necessari; al termine compare
+   il menu. Agli avvii successivi si apre il menu senza ripetere gli autotest
+   già completati per quella versione.
+
+Non occorre estrarre archivi né eseguire `1_SETUP.cmd`. Se la preparazione
+fallisce, conservare il log, verificare che Docker Desktop sia disponibile e
+riaprire la stessa icona per riprovare. Le due installazioni possono coesistere:
+per questa prova usare **NIPAT (Docker Desktop)**, non l'icona della copia WSL.
+Per una prima analisi seguire la [procedura Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop).
+
+Per la copia WSL, quando si installa una nuova versione NIPAT prepara anche
+il proprio ambiente Linux se necessario. Questa preparazione riguarda NIPAT, non una procedura
 manuale di aggiornamento di Windows o WSL. Conserva l'ambiente precedente e
 le cartelle dati e risultati, e attiva il nuovo ambiente dopo gli autotest.
 
-Se la preparazione fallisce, conservare il log e aprire **NIPAT - completa
+Per la copia WSL, se la preparazione fallisce, conservare il log e aprire **NIPAT - completa
 preparazione** dal menu Start. I componenti necessari alla ripresa vengono
 conservati automaticamente. La nuova applicazione resta bloccata finché la
 preparazione non termina. Le prove reali del pacchetto finale, sia di prima
@@ -55,7 +64,7 @@ nella [procedura di verifica](INSTALLATORE_WINDOWS.md#prova-prima-della-pubblica
 La [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
 contiene la precedente interfaccia. Il suo setup scarica automaticamente gli
 archivi runtime e non include la nuova procedura di aggiornamento; non è il
-pacchetto da usare per verificare l'interfaccia della versione `0.4.0`.
+pacchetto da usare per verificare l'interfaccia della versione `0.4.1`.
 Le [note di quella versione](RELEASE_0.3.0a1.md) ne descrivono il perimetro.
 Non eliminare ambienti già installati per forzare il setup di una versione
 precedente.
@@ -158,8 +167,9 @@ copiare BAM e FASTA nel progetto. Il backend WSL inizialmente non accetta
 condivisioni UNC o unità di rete. Sono ammessi percorsi contenenti spazi;
 il programma assegna ai file nomi interni compatibili con gli script R.
 
-L’installatore usa `%LOCALAPPDATA%\NIPAT\data` e
-`%LOCALAPPDATA%\NIPAT\runs`; il setup da sorgenti crea `data` e `runs`
+L’installatore WSL usa `%LOCALAPPDATA%\NIPAT\data` e
+`%LOCALAPPDATA%\NIPAT\runs`; quello Docker Desktop usa
+`%LOCALAPPDATA%\NIPAT-DockerDesktop\data` e `runs`. Il setup da sorgenti crea `data` e `runs`
 accanto al progetto. `data` non è
 un vincolo: i file selezionati possono trovarsi altrove. La cartella dei
 risultati si sceglie con **5 — Cartella risultati** nel menu: la scelta vale
@@ -294,7 +304,7 @@ di siti informativi. Una cartella di output parziale non prova il completamento.
 
 ## Risultati intermedi e analisi in sequenza
 
-Al termine viene mostrato il percorso del run. In `0.4.0`,
+Al termine viene mostrato il percorso del run. In `0.4.1`,
 la schermata finale permette anche di aprire direttamente le cartelle e il log;
 con **6 — Ultima esecuzione** si può richiamare la stessa schermata durante la
 sessione. Per le esecuzioni precedenti, aprire il percorso in Esplora file:
@@ -328,9 +338,14 @@ la sola presenza di un output DNPcall non definisce il ruolo biologico del campi
   Start. Docker Desktop non è necessario; il launcher avvia il motore dedicato.
 - **Installazione da sorgenti con Docker Desktop:** avviare Docker Desktop
   e attendere che il motore Linux sia pronto.
+- **Installatore Docker Desktop:** dopo un errore di preparazione conservare
+  `setup.log` e `setup-checks.log` in
+  `%LOCALAPPDATA%\Programs\NIPAT-DockerDesktop\.runtime`, verificare
+  che Docker Desktop sia avviato in modalità Linux e riaprire l'icona
+  **NIPAT (Docker Desktop)**.
 - Se un file non è accessibile, controllare percorso, disponibilità dell'unità
   e permessi Windows. Il backend WSL richiede un disco locale fisso; per il
-  percorso da sorgenti controllare anche l'accesso ai file in Docker Desktop.
+  percorso Docker Desktop controllare anche l'accesso ai file in Docker Desktop.
 - Se manca l'indice FASTA, fornire quello corrispondente al riferimento scelto.
 - Se il nome del run esiste già, sceglierne uno nuovo.
 - Per una prova fallita, conservare il run e compilare la
