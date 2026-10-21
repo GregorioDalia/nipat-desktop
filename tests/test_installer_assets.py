@@ -7,12 +7,15 @@ import io
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from nipat import __version__
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -34,6 +37,21 @@ ROOTFS = "sha256:" + "c" * 64
 
 
 class InstallerAssetTests(unittest.TestCase):
+    def test_repository_release_versions_agree(self):
+        # Packaging spans Python, PowerShell and Inno Setup. Catch a version
+        # bump that the installer would reject before exporting large assets.
+        project = Path(__file__).resolve().parents[1]
+        version = assets.checked_version(project)
+        self.assertEqual(__version__, version)
+        bootstrap = (project / "installer/windows/bootstrap-common.ps1").read_text(encoding="utf-8")
+        guard = re.search(r"\$manifest\.version -ne '([^']+)'", bootstrap)
+        self.assertIsNotNone(guard, "Expected an explicit supported installer version")
+        self.assertEqual(guard.group(1), version)
+        setup = (project / "installer/windows/NIPAT.iss").read_text(encoding="utf-8")
+        definition = re.search(r'#define NipatVersion "([^"]+)"', setup)
+        self.assertIsNotNone(definition, "Expected the installer display version")
+        self.assertEqual(definition.group(1), version)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -41,7 +59,7 @@ class InstallerAssetTests(unittest.TestCase):
         self.project = self.root / "project"
         self.project.mkdir()
         (self.project / "pyproject.toml").write_text(
-            '[project]\nversion = "0.3.0a1"\n', encoding="utf-8",
+            '[project]\nversion = "0.4.0"\n', encoding="utf-8",
         )
         (self.project / "README.md").write_text("Approved source\n", encoding="utf-8")
         (self.project / "distribution-files.txt").write_text(
@@ -79,7 +97,7 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(entry["size"], path.stat().st_size)
             self.assertEqual(entry["url"],
                              "https://github.com/GregorioDalia/nipat-desktop/releases/"
-                             f"download/v0.3.0a1/{path.name}")
+                             f"download/v0.4.0/{path.name}")
 
     def test_manifest_and_stage_accept_noncanonical_project_root(self):
         prior_directory = Path.cwd()
@@ -138,10 +156,10 @@ class InstallerAssetTests(unittest.TestCase):
         for content in (b"", b"not gzip"):
             path.write_bytes(content)
             with self.subTest(content=content), self.assertRaises(ValueError):
-                assets.asset_metadata(path, "v0.3.0a1")
+                assets.asset_metadata(path, "v0.4.0")
         with patch.object(assets, "MAX_ASSET_BYTES", self.rootfs.stat().st_size):
             with self.assertRaisesRegex(ValueError, "2 GiB"):
-                assets.asset_metadata(self.rootfs, "v0.3.0a1")
+                assets.asset_metadata(self.rootfs, "v0.4.0")
 
     def test_manifest_rejects_untrusted_or_invalid_download_metadata(self):
         mutations = [
@@ -157,7 +175,7 @@ class InstallerAssetTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 assets.validate_manifest(manifest)
         for key, value in [("source_commit", "main"), ("runtime_image", "latest"),
-                           ("release_tag", "v0.4.0")]:
+                           ("release_tag", "v0.5.0")]:
             manifest = dict(self.manifest, **{key: value})
             with self.subTest(key=key), self.assertRaises(ValueError):
                 assets.validate_manifest(manifest)
@@ -174,6 +192,83 @@ class InstallerAssetTests(unittest.TestCase):
         release = json.loads((app / "release.json").read_text())
         self.assertEqual(release["source_git"]["commit"], COMMIT)
         self.assertEqual(release["runtime"]["image_id"], SCIENTIFIC)
+
+    def test_stage_embeds_exact_archives_directly_into_persistent_cache(self):
+        stage = self.root / "stage"
+        with patch.object(assets.bundle, "require_python_archive"):
+            assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+        include = stage / assets.RUNTIME_INCLUDE_NAME
+        recipe = include.read_text(encoding="utf-8")
+        lines = [line for line in recipe.splitlines() if line.startswith("Source:")]
+        self.assertEqual(len(lines), 2)
+        self.assertNotIn(str(self.root), recipe)
+        self.assertFalse(list(stage.rglob("*.tar.gz")), "Staging must not duplicate the large archives")
+        for line, key in zip(lines, ("rootfs", "scientific_image")):
+            fields = dict(re.findall(r'(\w+): "([^"]*)"', line))
+            entry = self.manifest["assets"][key]
+            self.assertEqual(fields["Source"], "{#RuntimeAssetsDir}\\" + entry["file"])
+            self.assertEqual(fields["DestDir"], "{localappdata}\\NIPAT\\cache")
+            self.assertEqual(fields["DestName"], entry["sha256"] + "-" + entry["file"])
+            self.assertEqual(fields["Hash"], entry["sha256"])
+            flags = line.rsplit("Flags: ", 1)[1].split()
+            self.assertEqual(set(flags), {"ignoreversion", "uninsneveruninstall", "nocompression", "solidbreak"})
+        self.assertEqual(assets.verify_embedded_inputs(self.manifest_path, stage, self.root), include)
+
+    def test_manifest_rejects_runtime_names_that_collide_on_windows(self):
+        for name in ("rootfs.tar.gz", "ROOTFS.tar.gz"):
+            manifest = copy.deepcopy(self.manifest)
+            manifest["assets"]["scientific_image"]["file"] = name
+            manifest["assets"]["scientific_image"]["url"] = manifest["assets"]["rootfs"]["url"].rsplit("/", 1)[0] + "/" + name
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "distinti"):
+                assets.validate_manifest(manifest)
+
+    def test_stage_rejects_missing_or_altered_runtime_before_creating_output(self):
+        original = self.rootfs.read_bytes()
+        stage = self.root / "stage"
+        for mode in ("missing", "altered"):
+            if mode == "missing":
+                self.rootfs.unlink()
+            else:
+                self.rootfs.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+            self.assertFalse(stage.exists())
+            self.rootfs.write_bytes(original)
+
+    def test_precompile_rejects_payload_changes_after_staging(self):
+        stage = self.root / "stage"
+        with patch.object(assets.bundle, "require_python_archive"):
+            assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+        original = self.scientific.read_bytes()
+        self.scientific.write_bytes(original[:-1] + bytes([original[-1] ^ 1]))
+        with self.assertRaisesRegex(ValueError, "diverso dal manifest"):
+            assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
+
+    def test_precompile_rejects_modified_recipe_or_embedded_manifest(self):
+        stage = self.root / "stage"
+        with patch.object(assets.bundle, "require_python_archive"):
+            assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+        include = stage / assets.RUNTIME_INCLUDE_NAME
+        original = include.read_text(encoding="utf-8")
+        include.write_text(original.replace("nocompression", "external"), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "istruzioni"):
+            assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
+        include.write_text(original, encoding="utf-8")
+        embedded_manifest = stage / "app" / ".distribution" / assets.MANIFEST_NAME
+        embedded_manifest.write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "manifest incorporato"):
+            assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
+
+    def test_precompile_cli_uses_downloaded_assets_without_python_download(self):
+        stage = self.root / "stage"
+        with patch.object(assets.bundle, "require_python_archive"):
+            assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+        result = subprocess.run([
+            sys.executable, str(Path(assets.__file__)), "verify-embedded",
+            "--manifest", str(self.manifest_path), "--stage-dir", str(stage),
+            "--assets-dir", str(self.root),
+        ], capture_output=True, text=True, check=True)
+        self.assertEqual(result.stdout.strip(), str(stage / assets.RUNTIME_INCLUDE_NAME))
 
     def test_stage_rejects_modified_sources_before_creating_output(self):
         (self.project / "README.md").write_text("changed", encoding="utf-8")

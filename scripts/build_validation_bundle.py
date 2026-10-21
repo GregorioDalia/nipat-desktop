@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
+import struct
 import subprocess
 import sys
 import tempfile
@@ -156,9 +158,80 @@ def export_runtime(project: Path, image: str, temporary: Path) -> tuple[Path, di
     return destination, metadata
 
 
+def require_launcher(path: Path) -> Path:
+    """Accept only an explicit Windows x64 PE; never harvest local executables."""
+    if path.is_symlink() or not path.is_file():
+        raise ValueError(f"Launcher mancante o collegamento simbolico: {path}")
+    with path.open("rb") as stream:
+        header = stream.read(64)
+        if len(header) != 64 or header[:2] != b"MZ":
+            raise ValueError("Il launcher deve essere un eseguibile Windows x64.")
+        offset = struct.unpack_from("<I", header, 60)[0]
+        if offset < 64 or offset > path.stat().st_size - 26:
+            raise ValueError("Intestazione PE del launcher non valida.")
+        stream.seek(offset)
+        pe = stream.read(26)
+        if (pe[:4] != b"PE\0\0" or struct.unpack_from("<H", pe, 4)[0] != 0x8664
+                or struct.unpack_from("<H", pe, 24)[0] != 0x20B):
+            raise ValueError("Il launcher deve essere un eseguibile Windows x64 PE32+.")
+    return path
+
+
+def verified_installer_runtime(project: Path, archive: Path, manifest_path: Path) -> tuple[Path, dict]:
+    """Reuse the exact verified WSL scientific asset without a local Docker engine."""
+    spec = importlib.util.spec_from_file_location(
+        "nipat_installer_assets_for_bundle", Path(__file__).with_name("build_windows_installer_assets.py")
+    )
+    installer_assets = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer_assets)
+    if manifest_path.is_symlink() or not manifest_path.is_file():
+        raise ValueError("Manifest installer mancante o non valido.")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    installer_assets.validate_manifest(manifest)
+    if installer_assets.checked_version(project) != manifest["version"]:
+        raise ValueError("Versione dei sorgenti diversa dal manifest runtime.")
+    hashes = {path.relative_to(project.resolve()).as_posix(): sha256_file(path)
+              for path in source_files(project)}
+    expected_hashes = manifest.get("source_sha256")
+    if hashes != expected_hashes:
+        if isinstance(expected_hashes, dict):
+            differences = [f"mancante: {name!r}" for name in sorted(set(expected_hashes) - set(hashes), key=str)]
+            differences += [f"aggiunto: {name!r}" for name in sorted(set(hashes) - set(expected_hashes))]
+            differences += [f"modificato: {name!r}" for name in sorted(set(hashes) & set(expected_hashes))
+                            if hashes[name] != expected_hashes[name]]
+            detail = "; ".join(differences[:8])
+            if len(differences) > 8:
+                detail += f"; altri {len(differences) - 8} file"
+        else:
+            detail = "mappa source_sha256 assente o non valida"
+        raise ValueError(f"I sorgenti non corrispondono al manifest compilato in CI: {detail}.")
+    source = git_source(project)
+    if source["available"] and (source["commit"] != manifest["source_commit"] or source["dirty"] is not False):
+        raise ValueError("Il checkout Git deve essere pulito e corrispondere al commit del manifest.")
+    asset = manifest["assets"]["scientific_image"]
+    if (archive.name != asset["file"] or archive.is_symlink() or not archive.is_file()
+            or archive.stat().st_size != asset["size"] or sha256_file(archive) != asset["sha256"]):
+        raise ValueError("Archivio scientifico diverso da quello verificato nel manifest.")
+    with archive.open("rb") as stream:
+        if stream.read(2) != b"\x1f\x8b":
+            raise ValueError("L'archivio scientifico verificato deve essere gzip.")
+    return archive, {
+        "schema_version": 1,
+        "image_id": manifest["runtime_image"],
+        "source_reference": manifest["release_tag"],
+        "os": "linux",
+        "architecture": "amd64",
+        "archive_sha256": asset["sha256"],
+        "archive_bytes": asset["size"],
+        "source_commit": manifest["source_commit"],
+        "installer_manifest_sha256": sha256_file(manifest_path),
+    }
+
+
 def package_sources(
     project: Path, destination: Path, python_zip: Path,
     runtime_archive: Path | None = None, runtime_metadata: dict | None = None,
+    launcher: Path | None = None,
 ) -> dict:
     project = project.resolve()
     files = source_files(project)
@@ -168,6 +241,10 @@ def package_sources(
         raise ValueError(f"Pacchetto sorgente incompleto: {sorted(mandatory - names)}")
     if (runtime_archive is None) != (runtime_metadata is None):
         raise ValueError("Archivio e manifest runtime devono essere forniti insieme.")
+    if launcher is not None:
+        require_launcher(launcher)
+        if any(name.casefold() == "nipat.exe" for name in names):
+            raise ValueError("NIPAT.exe deve essere fornito come launcher, non nel manifest sorgente.")
     import tomllib
     with (project / "pyproject.toml").open("rb") as stream:
         version = tomllib.load(stream)["project"]["version"]
@@ -183,6 +260,10 @@ def package_sources(
         "python": {"version": "3.12.10", "architecture": "amd64", "archive_sha256": PYTHON_SHA256},
         "runtime": runtime_metadata,
     }
+    if launcher is not None:
+        release["launcher"] = {
+            "file": "NIPAT.exe", "sha256": sha256_file(launcher), "size": launcher.stat().st_size,
+        }
     prior_release = project / "release.json"
     if prior_release.is_file():
         previous = json.loads(prior_release.read_text(encoding="utf-8"))
@@ -203,8 +284,14 @@ def package_sources(
                     archive.write(source, f"nipat-desktop/{relative}")
                 archive.writestr("nipat-desktop/release.json", json.dumps(release, indent=2, ensure_ascii=False) + "\n")
                 archive.write(python_zip, f"nipat-desktop/.distribution/{PYTHON_NAME}", compress_type=zipfile.ZIP_STORED)
+                if launcher is not None:
+                    archive.write(launcher, "nipat-desktop/NIPAT.exe")
                 if runtime_archive is not None:
-                    archive.write(runtime_archive, "nipat-desktop/.distribution/runtime.tar", compress_type=zipfile.ZIP_DEFLATED)
+                    with runtime_archive.open("rb") as stream:
+                        compressed = stream.read(2) == b"\x1f\x8b"
+                    # docker load detects gzip from content; retain the portable setup's path.
+                    archive.write(runtime_archive, "nipat-desktop/.distribution/runtime.tar",
+                                  compress_type=zipfile.ZIP_STORED if compressed else zipfile.ZIP_DEFLATED)
                     archive.writestr("nipat-desktop/.distribution/runtime.json", json.dumps(runtime_metadata, indent=2) + "\n")
     except BaseException:
         if created:
@@ -219,6 +306,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--python-archive", type=Path, help="ZIP Python 3.12.10 x64; altrimenti scaricato dal sito ufficiale")
     parser.add_argument("--include-runtime", action="store_true", help="include l'immagine Docker locale, senza ricostruirla")
     parser.add_argument("--runtime-image", help="tag o ID locale da esportare; predefinito: runtime configurato")
+    parser.add_argument("--runtime-archive", type=Path, help="asset scientifico gzip della build installer verificata")
+    parser.add_argument("--runtime-manifest", type=Path, help="installer-manifest.json della stessa build")
+    parser.add_argument("--launcher", type=Path, help="NIPAT.exe x64 compilato e verificato dalla CI Windows")
     args = parser.parse_args(argv)
     project = Path(__file__).resolve().parents[1]
     destination = args.output.expanduser().resolve()
@@ -227,13 +317,21 @@ def main(argv: list[str] | None = None) -> int:
             raise ValueError(f"Il pacchetto esiste gia': {destination}")
         if args.runtime_image and not args.include_runtime:
             raise ValueError("--runtime-image richiede --include-runtime.")
+        if bool(args.runtime_archive) != bool(args.runtime_manifest):
+            raise ValueError("--runtime-archive e --runtime-manifest devono essere forniti insieme.")
+        if args.runtime_archive and (args.include_runtime or args.runtime_image):
+            raise ValueError("Usare l'archivio verificato oppure l'esportazione Docker locale, non entrambi.")
+        if args.launcher is not None:
+            require_launcher(args.launcher)
         with tempfile.TemporaryDirectory(prefix="nipat-bundle-") as directory:
             temporary = Path(directory)
             portable = python_archive(project, args.python_archive, temporary)
             runtime = metadata = None
             if args.include_runtime:
                 runtime, metadata = export_runtime(project, selected_image(project, args.runtime_image), temporary)
-            release = package_sources(project, destination, portable, runtime, metadata)
+            elif args.runtime_archive:
+                runtime, metadata = verified_installer_runtime(project, args.runtime_archive, args.runtime_manifest)
+            release = package_sources(project, destination, portable, runtime, metadata, args.launcher)
         print(f"Pacchetto creato: {destination}")
         print(f"Versione: {release['package_version']}; runtime Docker incluso: {'si' if metadata else 'no'}")
         print(f"SHA256: {sha256_file(destination)}")

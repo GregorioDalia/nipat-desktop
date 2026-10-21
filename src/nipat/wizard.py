@@ -1,20 +1,102 @@
-"""Text prompts for the same application services exposed by the direct CLI."""
+"""Guided, editable CLI over the same services as the direct commands."""
 
 from __future__ import annotations
 
-import math
 import os
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
+from nipat import __version__
 from nipat.errors import NipatError
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
+from nipat.results import show_results
+from nipat.terminal import Terminal
+from nipat.wizard_forms import Back, Cancelled, WorkflowForm, navigation, unquote
 
 
-class _Cancelled(Exception):
-    pass
+MAIN_MENU = [
+    ("1", "DNPcall", "Dinucleotidi da uno o piu' BAM"),
+    ("2", "SNPcall", "SNP da BAM o pileup esistente"),
+    ("3", "Contamination", "Stima da tabelle compatibili"),
+    ("4", "CPI", "Frazione fetale e indice di paternita'"),
+    ("5", "Cartella risultati", "Destinazione per questa sessione"),
+    ("6", "Ultima esecuzione", "Risultati e log della sessione"),
+    ("7", "Guida all'uso", "Istruzioni e verifica degli strumenti"),
+    ("0", "Esci", ""),
+]
+
+
+def _results_directory(ui: Terminal, layout: ProjectLayout, workflows: Workflows) -> ProjectLayout:
+    ui.heading("Cartella risultati / Destinazione delle prossime analisi")
+    while True:
+        ui.message("Inserire il percorso della cartella oppure premere Invio per mantenere quella indicata.", kind="muted")
+        ui.message("Sono accettati percorsi completi o relativi alla cartella corrente, anche tra virgolette.", kind="muted")
+        ui.message("La scelta vale per questa sessione; i risultati precedenti restano nella loro cartella.", kind="muted")
+        ui.message(":indietro o :annulla torna al menu senza cambiare destinazione.", kind="muted")
+        answer = navigation(ui.prompt("Cartella risultati", default=str(layout.runs_dir), path=True))
+        try:
+            path = Path(unquote(answer or str(layout.runs_dir))).expanduser().resolve()
+            updated = replace(layout, runs_dir=path)
+            updated.validate_storage_roots()
+            updated.runs_dir.mkdir(parents=True, exist_ok=True)
+        except (NipatError, OSError, ValueError) as exc:
+            ui.message(str(exc), kind="error")
+            continue
+        workflows.layout = updated
+        workflows.runner.layout = updated
+        ui.message(f"Cartella risultati per questa sessione: {path}", kind="success")
+        return updated
+
+
+def _help(ui: Terminal, workflows: Workflows, layout: ProjectLayout, dry_run: bool) -> None:
+    while True:
+        ui.message("Consultare le istruzioni oppure verificare gli strumenti necessari alle analisi.", kind="muted")
+        ui.message("In modalita' simulazione la verifica degli strumenti non viene eseguita. 0 torna al menu principale." if dry_run else
+                   "La verifica avvia l'ambiente di analisi senza elaborare campioni. 0 torna al menu principale.", kind="muted")
+        action = ui.menu("Guida all'uso", [
+            ("1", "Come usare NIPAT", "Input, comandi di navigazione e risultati"),
+            ("2", "Verifica strumenti di analisi", "Controlla l'ambiente, R e samtools"),
+            ("0", "Torna al menu", ""),
+        ], default="0").strip().casefold()
+        if action in {"0", ":indietro", ":annulla"}:
+            return
+        if action == "1":
+            ui.heading("Come usare NIPAT")
+            for instruction in (
+                "Selezionare un'analisi dal menu e seguire le indicazioni mostrate prima di ogni campo.",
+                "Per un file, incollare il percorso completo oppure un percorso relativo alla cartella corrente.",
+                "In Windows si puo' usare 'Copia come percorso': le virgolette vengono accettate.",
+                "Nelle liste di file inserire un percorso alla volta; dopo almeno un file, Invio conclude la lista.",
+                "Negli altri campi Invio mantiene il valore tra parentesi oppure lascia vuoto un campo facoltativo.",
+                "Un campo obbligatorio senza valore iniziale richiede una risposta prima di proseguire.",
+                ":indietro torna al campo precedente; :annulla torna al menu; :vuoto svuota un campo facoltativo.",
+                "I percorsi relativi contenuti in una bamlist partono dalla cartella della bamlist.",
+                "Il riepilogo permette di correggere gli input. L'analisi parte solo dopo la conferma di avvio.",
+                "Con --dry-run vengono preparati i comandi, senza eseguire l'analisi o produrre risultati scientifici.",
+                "Ogni esecuzione ha una cartella distinta: output contiene i risultati, work i file intermedi.",
+                "run.json registra gli input e lo stato; execution.log conserva i dettagli del processo.",
+                "Il punto 6 del menu riapre l'ultima esecuzione della sessione. I risultati precedenti restano su disco.",
+                "Per concatenare analisi, utilizzare i file prodotti come input del workflow successivo.",
+                "I comandi diretti sono disponibili con nipat.cmd --help.",
+                f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}",
+            ):
+                ui.message(instruction, kind="muted")
+        elif action == "2":
+            if dry_run:
+                ui.message("Modalita' simulazione (--dry-run): la verifica degli strumenti non viene eseguita.", kind="muted")
+                ui.message("Per controllarli, avviare NIPAT senza --dry-run e scegliere di nuovo questa voce.", kind="muted")
+                continue
+            ui.heading("Verifica strumenti di analisi")
+            ui.message("Il controllo avvia l'ambiente e verifica gli strumenti; non esegue analisi sui dati.", kind="muted")
+            ui.message("Verifica in corso...")
+            workflows.runner.doctor(True)
+            ui.message("Controllo completato: ambiente di analisi, R e samtools disponibili.", kind="success")
+            ui.message("Il controllo riguarda gli strumenti. Gli input saranno verificati quando si prepara un'analisi.", kind="muted")
+        else:
+            ui.message("Scegliere 1 per le istruzioni, 2 per la verifica oppure 0 per tornare al menu.", kind="muted")
 
 
 def run_wizard(
@@ -26,175 +108,67 @@ def run_wizard(
     read: Callable[[str], str] = input,
     write: Callable[[str], None] = print,
 ) -> int:
-    """Collect arguments without constructing or evaluating shell commands."""
-
-    def ask(label: str, *, default: str = "", required: bool = True) -> str:
-        suffix = f" [{default}]" if default else ""
-        while True:
-            answer = read(f"{label}{suffix}: ").strip()
-            if answer.casefold() == ":annulla":
-                raise _Cancelled
-            if answer:
-                return answer
-            if default or not required:
-                return default
-            write("Il valore e' obbligatorio; :annulla torna al menu.")
-
-    def path(label: str, *, required: bool = True, default: str = "") -> Path | None:
-        while True:
-            answer = ask(label, required=required, default=default)
-            if len(answer) >= 2 and answer[0] == answer[-1] and answer[0] in "\"'":
-                answer = answer[1:-1]
-            if answer:
-                return Path(answer).expanduser()
-            if not required:
-                return None
-            write("Il percorso non puo' essere vuoto.")
-
-    def run_name() -> str | None:
-        return ask("Nome nuova esecuzione (Invio = automatico)", required=False) or None
-
-    def mode(label: str, options: set[str], *, default: str = "1") -> str:
-        while True:
-            answer = ask(label, default=default)
-            if answer in options:
-                return answer
-            write("Scegliere una delle opzioni indicate.")
-
-    def paths(label: str) -> list[Path]:
-        write("Inserire un percorso per riga; Invio termina la lista.")
-        selected: list[Path] = []
-        while True:
-            item = path(label, required=not selected)
-            if item is None:
-                return selected
-            selected.append(item)
-
-    def nonnegative_number(label: str, default: float) -> float:
-        while True:
-            text = ask(label, default=str(default))
-            try:
-                number = float(text)
-            except ValueError:
-                number = float("nan")
-            if math.isfinite(number) and number >= 0:
-                return number
-            write("Inserire un numero finito maggiore o uguale a zero, usando il punto decimale.")
-
-    write("NIPAT - CLI guidata per la validazione")
-    write(f"Dati: {layout.data_dir}")
-    write(f"Risultati: {layout.runs_dir}")
-    if os.environ.get("NIPAT_BACKEND", "").strip().lower() == "wsl":
-        write("Gli input possono trovarsi su dischi locali; le unità di rete non sono supportate.")
-    else:
-        write("Gli input possono trovarsi in qualsiasi cartella accessibile a Docker.")
-    write("Sono accettati percorsi completi o relativi alla cartella corrente.")
-    write("Per cambiare la cartella risultati usare l'opzione 5 del menu.")
-    write("Le cartelle dei run esistenti non vengono sovrascritte. :annulla torna al menu.")
-    if dry_run:
-        write("Modalita' dry-run: convalida e prepara i comandi, senza eseguire Docker.")
+    """Collect and review values, then call a workflow only after confirmation."""
+    ui = Terminal(read=read, write=write)
     had_failure = False
+    last_run: Path | None = None
     try:
+        ui.banner(__version__, dry_run)
+        ui.message(f"Risultati: {layout.runs_dir}")
+        ui.message(f"Cartella corrente: {Path.cwd()}", kind="muted")
+        if os.environ.get("NIPAT_BACKEND", "").strip().lower() == "wsl":
+            ui.message("Input su dischi locali; le unita' di rete non sono supportate.", kind="muted")
+        else:
+            ui.message("Input in cartelle accessibili a Docker.", kind="muted")
+        ui.message(":indietro corregge il campo precedente; :annulla torna al menu.", kind="muted")
         while True:
-            write("\n1 DNPcall   2 SNPcall   3 Contamination   4 CPI   5 Cartella risultati   0 Esci")
-            choice = read("Scelta: ").strip()
-            if choice == "0":
+            choice = ui.menu("Menu principale", MAIN_MENU)
+            if choice in {"0", ":annulla", ":indietro"}:
                 return 2 if had_failure else 0
-            if choice not in {"1", "2", "3", "4", "5"}:
-                write("Scegliere un numero da 0 a 5.")
+            if choice not in {item[0] for item in MAIN_MENU}:
+                ui.message("Scegliere una delle opzioni indicate (0-7).", kind="error")
                 continue
             try:
                 if choice == "5":
-                    selected = path("Cartella risultati", default=str(layout.runs_dir))
-                    updated_layout = replace(layout, runs_dir=selected.resolve())
-                    updated_layout.validate_storage_roots()
-                    updated_layout.runs_dir.mkdir(parents=True, exist_ok=True)
-                    layout = updated_layout
-                    workflows.layout = updated_layout
-                    workflows.runner.layout = updated_layout
-                    write(f"Cartella risultati per le prossime esecuzioni: {layout.runs_dir}")
+                    layout = _results_directory(ui, layout, workflows)
                     continue
-                if choice == "1":
-                    input_mode = mode("Input: 1 uno o piu' BAM, 2 file bamlist", {"1", "2"})
-                    bams, bamlist = None, None
-                    if input_mode == "1":
-                        bams = paths("BAM (eventuale indice accanto al file)")
+                if choice == "6":
+                    if last_run is None:
+                        ui.message("Nessuna esecuzione completata o pianificata in questa sessione.")
                     else:
-                        bamlist = path("File bamlist (un percorso BAM per riga)")
-                        write("I percorsi relativi nella bamlist partono dalla sua cartella.")
-                    reference = path("FASTA (con indice .fai; .gzi se compresso)")
-                    panel = path("Pannello DNP")
-                    parallel = mode("Esecuzione parallela? 1 no, 2 si", {"1", "2"}) == "2"
-                    run_dir = workflows.dnp_call(
-                        bams=bams, bamlist=bamlist, reference=reference, panel=panel,
-                        parallel=parallel, run_name=run_name(),
-                    )
-                elif choice == "2":
-                    input_mode = mode("Input: 1 BAM, 2 pileup esistente", {"1", "2"})
-                    bam, pileup, reference = None, None, None
-                    if input_mode == "1":
-                        bam = path("BAM (eventuale indice accanto al file)")
-                        reference = path("FASTA (con indice .fai; .gzi se compresso)")
-                    else:
-                        pileup = path("Pileup compatibile con SNPcall")
-                    panel = path("Lista SNP (pos, ref, alt)")
-                    run_dir = workflows.snp_call(
-                        bam=bam, pileup=pileup, reference=reference,
-                        panel=panel, run_name=run_name(),
-                    )
-                elif choice == "3":
-                    input_mode = mode("Input: 1 tabelle singole, 2 cartella", {"1", "2"})
-                    inputs, input_dir = None, None
-                    if input_mode == "1":
-                        inputs = paths("Tabella campione")
-                    else:
-                        input_dir = path("Cartella di input (TXT/TSV, anche nelle sottocartelle)")
-                    panel = path("Pannello DNP")
-                    run_dir = workflows.contamination(
-                        inputs=inputs, input_dir=input_dir, panel=panel, run_name=run_name(),
-                    )
+                        show_results(ui, last_run, dry_run=dry_run)
+                    continue
+                if choice == "7":
+                    _help(ui, workflows, layout, dry_run)
+                    continue
+                form = WorkflowForm(choice, ui, layout, err_const)
+                form.collect()
+                while form.review(dry_run=dry_run):
+                    ui.heading(f"{form.title} / {'Preparazione dry-run' if dry_run else 'Esecuzione'}")
+                    ui.message("I dettagli del processo vengono conservati anche in execution.log.")
+                    started = time.monotonic()
+                    try:
+                        method = {"1": workflows.dnp_call, "2": workflows.snp_call,
+                                  "3": workflows.contamination, "4": workflows.cpi}[choice]
+                        run_dir = method(**form.arguments())
+                    except (NipatError, OSError) as exc:
+                        had_failure = True
+                        ui.message(f"Operazione non riuscita: {exc}", kind="error")
+                        ui.message("I valori inseriti sono conservati: modificarli dal riepilogo.")
+                        continue
+                    last_run = run_dir
+                    ui.message(f"Tempo trascorso: {time.monotonic() - started:.1f} s")
+                    show_results(ui, run_dir, dry_run=dry_run)
+                    break
                 else:
-                    input_dir = path("Cartella con le tabelle cfDNA materno e presunto padre")
-                    write("Le coppie usano gli identificativi nei nomi: A1:A1 oppure A1:A1,A2:A2.")
-                    pairs = ask("Coppie")
-                    mother_prefix = ask("Prefisso file cfDNA materno", default="Mother")
-                    father_prefix = ask("Prefisso file presunto padre", default="Father")
-                    popfreq = path("Tabella frequenze di popolazione")
-                    cutoff_mode = mode(
-                        "Cutoff: 0 tutti i siti, 1 pannello singolo, "
-                        "2 etichette e file, 3 mappa nativa",
-                        {"0", "1", "2", "3"}, default="0",
-                    )
-                    panel, cutoffs, cutoff_map = None, None, None
-                    if cutoff_mode == "1":
-                        panel = path("Pannello di coordinate DNP")
-                    elif cutoff_mode == "2":
-                        cutoffs = []
-                        while True:
-                            label = ask("Etichetta cutoff (Invio termina la lista)",
-                                        required=not cutoffs)
-                            if not label:
-                                break
-                            cutoffs.append((label, path("File cutoff")))
-                    elif cutoff_mode == "3":
-                        cutoff_map = ask("Mappa cutoff (etichetta=file,etichetta2=file2)")
-                    selected_error = nonnegative_number("Costante di errore", err_const)
-                    run_dir = workflows.cpi(
-                        input_dir=input_dir, pairs=pairs,
-                        mother_prefix=mother_prefix, father_prefix=father_prefix,
-                        popfreq=popfreq, panel=panel, cutoffs=cutoffs, cutoff_map=cutoff_map,
-                        err_const=selected_error,
-                        run_name=run_name(),
-                    )
-                label = "Esecuzione pianificata" if dry_run else "Esecuzione completata"
-                write(f"{label}: {run_dir}")
-                write(f"Dettagli: {run_dir / 'run.json'}")
-                write(f"Log: {run_dir / 'execution.log'}")
-            except _Cancelled:
-                write("Operazione annullata prima dell'avvio.")
+                    ui.message("Operazione annullata prima dell'avvio.")
+            except (Cancelled, Back):
+                ui.message("Operazione annullata prima dell'avvio.")
             except (NipatError, OSError) as exc:
                 had_failure = True
-                write(f"Operazione non riuscita: {exc}")
+                ui.message(f"Operazione non riuscita: {exc}", kind="error")
     except (EOFError, KeyboardInterrupt):
-        write("\nSessione interrotta.")
+        ui.message("\nSessione interrotta.")
         return 130
+    finally:
+        ui.close()

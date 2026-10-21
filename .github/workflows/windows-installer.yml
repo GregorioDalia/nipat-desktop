@@ -14,7 +14,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-checks:
+    # Run the quick Windows checks before exporting the large Linux runtime assets.
+    if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: windows-2022
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Preserve source bytes for manifest verification
+        shell: powershell
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - name: Checkout exact source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Windows Python unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Parse scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+      - name: Test bootstrap guards with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
+      - name: Test scientific image identity with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
+      - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
+      - name: Test resumable WSL migration with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
+      - name: Compile the shared NIPAT executable
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/launcher/NIPAT.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
+      - name: Test the shared executable with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
+      - name: Retain the tested shared launcher
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-tested-launcher
+          path: build/launcher/NIPAT.exe
+          retention-days: 14
+          if-no-files-found: error
+
   linux-runtime:
+    needs: windows-checks
     # A push already builds this branch; do not repeat the same expensive PR build.
     if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
@@ -33,6 +97,8 @@ jobs:
           python-version: '3.12.10'
       - name: Python unit tests
         run: python -m unittest discover -s tests -v
+      - name: Release package guard tests
+        run: python -m unittest discover -s .github/scripts -p 'test_publish_windows_release.py' -v
       - name: Check dedicated daemon helper syntax
         run: bash -n installer/runtime/nipat-engine
       - name: Build scientific runtime
@@ -102,12 +168,17 @@ jobs:
           if-no-files-found: ignore
 
   windows-installer:
-    needs: linux-runtime
+    needs: [linux-runtime, windows-checks]
     runs-on: windows-2022
     timeout-minutes: 30
     env:
       PYTHONPATH: src
     steps:
+      - name: Preserve source bytes for manifest verification
+        shell: powershell
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
       - name: Checkout exact source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -121,25 +192,37 @@ jobs:
         with:
           name: nipat-installer-inputs
           path: build/windows-installer
-      - name: Windows Python unit tests
-        run: python -m unittest discover -s tests -v
-      - name: Parse scripts with Windows PowerShell 5.1
+      - name: Download exact runtime archives for both distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-runtime-assets
+          path: build/assets
+      - name: Download the tested shared launcher into the installer stage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-tested-launcher
+          path: build/windows-installer/app
+      - name: Package Docker Desktop with the same launcher and scientific archive
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          $manifest = Get-Content -LiteralPath 'build/assets/installer-manifest.json' -Raw -Encoding UTF8 | ConvertFrom-Json
+          $output = Join-Path $PWD 'build/docker-desktop'
+          $zipName = "NIPAT-DockerDesktop-$($manifest.version)-windows-x64.zip"
+          $zip = Join-Path $output $zipName
+          $launcher = Join-Path $PWD 'build/windows-installer/app/NIPAT.exe'
+          $pythonZip = Join-Path $PWD 'build/windows-installer/app/.distribution/python-3.12.10-embed-amd64.zip'
+          $runtime = Join-Path (Join-Path $PWD 'build/assets') $manifest.assets.scientific_image.file
+          python scripts/build_validation_bundle.py --output $zip --python-archive $pythonZip `
+            --launcher $launcher --runtime-archive $runtime --runtime-manifest 'build/assets/installer-manifest.json'
+          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop package creation failed.' }
+          $record = [ordered]@{
+            schema_version = 1; version = $manifest.version; source_commit = $manifest.source_commit
+            file = $zipName; sha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+            size = (Get-Item -LiteralPath $zip).Length
+            launcher_sha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
           }
-      - name: Test bootstrap guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
-      - name: Test scientific image identity with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
+          [IO.File]::WriteAllText((Join-Path $output 'package-build.json'), ($record | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
       - name: Compile the narrowly scoped WSL elevation helper
         shell: powershell
         run: |
@@ -165,24 +248,80 @@ jobs:
           $process = Start-Process -FilePath $download -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$inno`"")
           if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
           "NIPAT_ISCC=$inno\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Compile installer with embedded trusted manifest
+      - name: Compile the self-contained installer with verified embedded runtimes
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $stage = (Resolve-Path 'build/windows-installer').Path
+          $assets = (Resolve-Path 'build/assets').Path
           $script = (Resolve-Path 'installer/windows/NIPAT.iss').Path
           $output = Join-Path $PWD 'build/output'
           New-Item -ItemType Directory -Path $output -Force | Out-Null
-          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" $script
+          python scripts/build_windows_installer_assets.py verify-embedded `
+            --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs do not match the trusted manifest.' }
+          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DRuntimeAssetsDir=$assets" "/DOutputDir=$output" $script
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+          python scripts/build_windows_installer_assets.py verify-embedded `
+            --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs changed during compilation.' }
+          if (@(Get-ChildItem -LiteralPath $output -Filter '*.bin' -File).Count -ne 0) {
+            throw 'The installer must be a single EXE without companion data files.'
+          }
           Copy-Item "$stage/app/.distribution/installer-manifest.json" $output
+          # Retained as build evidence to bind both packages to the same launcher.
+          Copy-Item "$stage/app/NIPAT.exe" $output
           $exe = Join-Path $output 'NIPAT-Setup.exe'
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $exe).Length
+          if ($size -le 0 -or $size -ge 2GB) { throw 'The single-file installer must be smaller than 2 GiB.' }
+          $manifestPath = Join-Path $output 'installer-manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          $embedded = [ordered]@{}
+          foreach ($key in @('rootfs', 'scientific_image')) {
+            $asset = $manifest.assets.$key
+            $embedded[$key] = [ordered]@{ file = $asset.file; sha256 = $asset.sha256; size = $asset.size }
+          }
+          $record = [ordered]@{
+            schema_version = 1; distribution = 'self-contained-wsl'
+            version = $manifest.version; source_commit = $manifest.source_commit
+            file = 'NIPAT-Setup.exe'; sha256 = $hash; size = $size
+            installer_manifest_sha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            launcher_sha256 = (Get-FileHash -LiteralPath "$stage/app/NIPAT.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+            embedded_assets = $embedded
+          }
+          [IO.File]::WriteAllText((Join-Path $output 'installer-build.json'), ($record | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
           "$hash  NIPAT-Setup.exe" | Set-Content -LiteralPath "$output/SHA256SUMS" -Encoding ascii
+      - name: Verify both final packages without publishing
+        shell: powershell
+        run: |
+          @'
+          import importlib.util
+          import json
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("publisher", ".github/scripts/publish_windows_release.py")
+          publisher = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(publisher)
+          manifest = json.loads(Path("build/assets/installer-manifest.json").read_text())
+          publisher.prepare_assets(Path("build/output"), Path("build/assets"),
+                                   Path("build/verified-release"), manifest["source_commit"],
+                                   desktop=Path("build/docker-desktop"))
+          print("PASS: WSL and Docker Desktop packages identify the same source, launcher and scientific archive.")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Final distribution verification failed.' }
       - name: Retain installer for review (no release publication)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nipat-windows-setup
           path: build/output/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Retain Docker Desktop package for review (no release publication)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-docker-desktop
+          path: build/docker-desktop/
+          compression-level: 0
           retention-days: 14
           if-no-files-found: error

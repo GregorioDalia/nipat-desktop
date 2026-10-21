@@ -16,14 +16,14 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
 function New-TestManifest {
     $assets = [ordered]@{}
     foreach ($name in @('rootfs', 'scientific_image')) {
-        $file = $name + '-0.3.0a1.tar.gz'
+        $file = $name + '-0.4.0.tar.gz'
         $assets[$name] = [ordered]@{
             file = $file; sha256 = ('b' * 64); size = 123
-            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.3.0a1/' + $file)
+            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/' + $file)
         }
     }
     return [ordered]@{
-        schema_version = 1; version = '0.3.0a1'; release_tag = 'v0.3.0a1'
+        schema_version = 1; version = '0.4.0'; release_tag = 'v0.4.0'
         source_commit = ('a' * 40); runtime_image = ('sha256:' + ('c' * 64)); assets = $assets
     }
 }
@@ -32,10 +32,19 @@ try {
     $manifest = New-TestManifest
     Write-NipatJsonAtomic $manifestPath $manifest
     $parsed = Read-NipatInstallerManifest $manifestPath
-    Assert-Test ($parsed.release_tag -eq 'v0.3.0a1') 'accept valid release manifest'
+    Assert-Test ($parsed.release_tag -eq 'v0.4.0') 'accept valid release manifest'
+    $manifest = New-TestManifest
+    $manifest.version = '0.3.0a1'
+    $manifest.release_tag = 'v0.3.0a1'
+    foreach ($name in @('rootfs', 'scientific_image')) {
+        $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.4.0', '0.3.0a1')
+        $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.4.0', '0.3.0a1')
+    }
+    Write-NipatJsonAtomic $manifestPath $manifest
+    Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject unsupported version even with consistent tag and asset URLs'
     foreach ($url in @('https://example.org/rootfs.tar.gz',
-        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.3.0a1/rootfs-0.3.0a1.tar.gz?redirect=1',
-        'https://github.com/other/repo/releases/download/v0.3.0a1/rootfs-0.3.0a1.tar.gz')) {
+        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/rootfs-0.4.0.tar.gz?redirect=1',
+        'https://github.com/other/repo/releases/download/v0.4.0/rootfs-0.4.0.tar.gz')) {
         $manifest = New-TestManifest
         $manifest.assets.rootfs.url = $url
         Write-NipatJsonAtomic $manifestPath $manifest
@@ -76,6 +85,20 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $assetDirectory $asset.file), [byte[]]@(1, 2, 3, 4))
     $cached = Get-NipatAsset $asset $cacheDirectory $assetDirectory
     Assert-Test (Test-NipatAsset $cached $asset) 'offline asset copied and reverified in cache'
+    # Inno installs directly to this same hash-addressed cache before bootstrap starts.
+    # No original extraction medium, URL or download is needed after installation/reboot.
+    Remove-Item -LiteralPath $assetDirectory -Recurse -Force
+    function Invoke-WebRequest { throw 'Unexpected download while embedded cache is valid.' }
+    try {
+        $cacheOnly = Get-NipatAsset $asset $cacheDirectory ''
+        Assert-Test ($cacheOnly -ceq $cached) 'embedded cache works with no asset directory or download'
+        $afterRemoval = Get-NipatAsset $asset $cacheDirectory $assetDirectory
+        Assert-Test ($afterRemoval -ceq $cached) 'cached archive remains usable after installer media is removed'
+        Assert-Test (@(Get-ChildItem -LiteralPath $cacheDirectory -File).Count -eq 1) 'cache retrieval never creates a second permanent archive'
+    } finally {
+        Remove-Item Function:Invoke-WebRequest
+    }
+    [IO.Directory]::CreateDirectory($assetDirectory) | Out-Null
     [IO.File]::WriteAllBytes($cached, [byte[]]@(0, 0, 0, 0))
     [IO.File]::WriteAllBytes((Join-Path $assetDirectory $asset.file), [byte[]]@(9, 9, 9, 9))
     Assert-Rejected { Get-NipatAsset $asset $cacheDirectory $assetDirectory } 'reject altered cache and offline file without execution'

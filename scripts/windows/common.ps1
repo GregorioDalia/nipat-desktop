@@ -162,6 +162,20 @@ function Get-NipatImage([string] $Image) {
     return $images[0]
 }
 
+function Get-NipatPortableLoadedImageId([string] $Output) {
+    # One verified archive, exported by ID without tags, must yield one exact receipt.
+    # The importing engine may use a different ID representation from the exporter.
+    if ($Output -cmatch '(?m)^Error\b') {
+        throw "Docker segnala un errore nel caricamento dell'immagine: $Output"
+    }
+    $receipts = @($Output -split '\r?\n' | Where-Object { $_ -cmatch '^Loaded image(?: ID)?:' })
+    if ($receipts.Count -ne 1 -or
+        $receipts[0] -cnotmatch '^Loaded image ID: (sha256:[a-f0-9]{64})$') {
+        throw "Il caricamento deve restituire un solo ID immutabile. Consultare .runtime\setup.log."
+    }
+    return $Matches[1]
+}
+
 function Install-NipatRuntime([string] $Project) {
     $archive = Join-Path $Project ".distribution\runtime.tar"
     $manifest = Join-Path $Project ".distribution\runtime.json"
@@ -178,15 +192,24 @@ function Install-NipatRuntime([string] $Project) {
         Write-Host "Verifica dell'archivio runtime..."
         $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($archiveHash -ne $metadata.archive_sha256) { throw "Checksum dell'archivio runtime non valido." }
-        $image = Get-NipatImage $metadata.image_id
-        if ($null -eq $image) {
-            Write-Host "Importazione del runtime incluso. Non serve ricompilarlo..."
-            & docker image load --input $archive
-            if ($LASTEXITCODE -ne 0) { throw "Importazione runtime fallita." }
-            $image = Get-NipatImage $metadata.image_id
+        # Reload on setup/resume to bind the locally resolved ID to this verified archive.
+        # Normal launches reuse runtime-image.txt and do not reload the archive.
+        Write-Host "Importazione del runtime incluso. Non serve ricompilarlo..."
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $loaded = & docker image load --input $archive 2>&1
+            $loadExit = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousPreference
         }
-        if ($null -eq $image -or $image.Id -ne $metadata.image_id) {
-            throw "L'immagine importata non corrisponde al manifest."
+        $loadText = ($loaded -join "`n")
+        Write-Host $loadText
+        if ($loadExit -ne 0) { throw "Importazione runtime fallita." }
+        $localImageId = Get-NipatPortableLoadedImageId $loadText
+        $image = Get-NipatImage $localImageId
+        if ($null -eq $image -or $image.Id -cne $localImageId) {
+            throw "L'immagine importata non corrisponde all'ID restituito dal caricamento."
         }
     } else {
         $candidate = "nipat-scientific-runtime:0.1.0"

@@ -1,10 +1,13 @@
 #ifndef StageDir
   #error StageDir must identify a staged, verified installer directory
 #endif
+#ifndef RuntimeAssetsDir
+  #error RuntimeAssetsDir must identify the two verified runtime archives
+#endif
 #ifndef OutputDir
   #define OutputDir "..\..\build\output"
 #endif
-#define NipatVersion "0.3.0a1"
+#define NipatVersion "0.4.0"
 
 [Setup]
 AppId={{5C0FD852-ED53-4F4B-92D2-64B784E7F9B3}
@@ -12,6 +15,7 @@ AppName=NIPAT
 AppVersion={#NipatVersion}
 AppPublisher=NIPAT contributors
 AppPublisherURL=https://github.com/GregorioDalia/nipat-desktop
+LicenseFile={#StageDir}\app\LICENSE
 DefaultDirName={localappdata}\Programs\NIPAT
 DisableDirPage=yes
 DefaultGroupName=NIPAT
@@ -24,6 +28,7 @@ OutputDir={#OutputDir}
 OutputBaseFilename=NIPAT-Setup
 Compression=lzma2
 SolidCompression=yes
+DiskSpanning=no
 WizardStyle=modern
 UninstallDisplayName=NIPAT {#NipatVersion}
 CloseApplications=yes
@@ -31,6 +36,8 @@ RestartApplications=no
 
 [Files]
 Source: "{#StageDir}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The archives are embedded and written once, directly into the verified resume cache.
+#include StageDir + "\runtime-assets.iss"
 
 [Dirs]
 ; Shortcuts have a valid working directory even before WSL setup/reboot completes.
@@ -38,11 +45,11 @@ Name: "{localappdata}\NIPAT\data"; Flags: uninsneveruninstall
 Name: "{localappdata}\NIPAT\runs"; Flags: uninsneveruninstall
 
 [Tasks]
-Name: "desktopicon"; Description: "Crea un collegamento NIPAT sul desktop"; Flags: unchecked
+Name: "desktopicon"; Description: "Crea un collegamento NIPAT sul desktop"
 
 [Icons]
-Name: "{autodesktop}\NIPAT"; Filename: "{app}\2_AVVIA.cmd"; WorkingDir: "{localappdata}\NIPAT\data"; Tasks: desktopicon
-Name: "{group}\NIPAT"; Filename: "{app}\2_AVVIA.cmd"; WorkingDir: "{localappdata}\NIPAT\data"
+Name: "{autodesktop}\NIPAT"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\NIPAT\data"; Tasks: desktopicon
+Name: "{group}\NIPAT"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\NIPAT\data"
 Name: "{group}\NIPAT - completa preparazione"; Filename: "{app}\1_SETUP.cmd"; WorkingDir: "{app}"
 Name: "{group}\Guida NIPAT"; Filename: "{app}\docs\GUIDA_UTILIZZO.md"
 Name: "{group}\Disinstalla NIPAT"; Filename: "{uninstallexe}"
@@ -92,11 +99,10 @@ var
 begin
   if CurStep = ssPostInstall then begin
     AssetDir := ExpandConstant('{param:ASSETDIR|}');
-    if AssetDir = '' then
-      AssetDir := ExtractFilePath(ExpandConstant('{srcexe}')) + 'assets';
     Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
-      QuoteNipatArgument(ExpandConstant('{app}\installer\windows\bootstrap.ps1')) +
-      ' -AssetDirectory ' + QuoteNipatArgument(AssetDir);
+      QuoteNipatArgument(ExpandConstant('{app}\installer\windows\bootstrap.ps1'));
+    if AssetDir <> '' then
+      Parameters := Parameters + ' -AssetDirectory ' + QuoteNipatArgument(AssetDir);
     Started := ExecAsOriginalUser(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, BootstrapResult);
     if not Started then BootstrapResult := 1;

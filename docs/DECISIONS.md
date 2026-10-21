@@ -1,5 +1,86 @@
 # Consolidated decisions
 
+## Domain-testing pre-release 0.4.0
+
+- Consolidate the guided CLI and both Windows distributions as `v0.4.0`, marked
+  as a GitHub pre-release for domain testing, not completed scientific validation.
+- The maintainer authorizes this handoff assuming working WSL2. Record this as
+  the accepted testing scope, not a new independent Windows installation test
+  or a successful Docker Desktop test.
+- Provide versioned download links for the single `NIPAT-Setup.exe` and
+  `NIPAT-DockerDesktop-0.4.0-windows-x64.zip`. Keep prior release notes and
+  evidence historical; do not transfer their outcomes to new packages.
+- Document Docker Desktop setup and a real DNPcall-to-Contamination trial,
+  with expected/observed results and setup/run logs, before extending coverage.
+
+## Common Windows launcher and dual delivery (0.3.0a2 candidate)
+
+- The external validation handoff must use the latest interface reviewed by the
+  maintainer. Keep published `v0.3.0a1` unchanged; publish the new candidate only
+  after reviewing the actual versioned packages, rather than sharing a moving
+  development branch or an older installer.
+- Ship a common `NIPAT.exe` in both the WSL installer and Docker Desktop ZIP.
+  Double-click opens the guided CLI; explicit analysis confirmation executes the
+  same R scripts and workflow tools as the direct CLI. PowerShell may be used
+  internally by the launcher, but users do not need to open it manually.
+- Preserve `nipat.cmd` and `2_AVVIA.cmd`, caller-relative input paths, and all
+  direct CLI arguments. The EXE uses the configuration of its own application
+  directory; it does not automatically switch to another installed copy.
+- Build both packages from one source commit and reuse the same SHA-256-verified
+  scientific archive. Resolve the imported image's local ID from its verified
+  load receipt in either backend; do not assume equality across engine stores.
+- Keep Docker Desktop as the prerequisite for the Docker ZIP. The WSL installer
+  manages its dedicated engine. Setup and self-tests precede domain analyses.
+- Make the primary installer a single `NIPAT-Setup.exe` download containing
+  the verified runtime archives as well as the application and portable Python.
+  Users double-click setup and then the NIPAT icon; they do not arrange asset
+  directories or download runtime files separately. Preserve embedded assets
+  automatically for resumed setup. Initial Windows WSL activation may still
+  require Internet, administrator consent and a restart.
+- Explain runtime updates as preparation of NIPAT's internal Linux environment,
+  not manual Windows or WSL maintenance. Keep technical diagnostics separate
+  from the normal installation and analysis steps.
+- Apply GPL-3.0-or-later to original NIPAT code and preserve the licenses and
+  attribution of vendored components. Do not imply a broader grant for upstream
+  code than its own license provides.
+- Plan interface localization through separate message catalogs, with English
+  as the reference language and an Italian option. This is future work; current
+  guided messages remain Italian and scientific file schemas remain unchanged.
+- Upgrade WSL by preparing a side-by-side distribution when the full rootfs
+  digest changes. Qualify new distribution names with the rootfs hash and keep
+  per-target ownership records. Preserve the legacy distribution and its
+  ownership; reuse it only for the same verified rootfs and validated ownership.
+- Snapshot the prior setup state and backend once per target source commit and
+  full rootfs digest.
+  Preserve valid configured data and results roots. Run `doctor` and scientific
+  self-tests against the candidate before publishing its backend configuration;
+  write the ready state last. Repeating setup resumes its owned target.
+- Do not unregister old distributions or delete data automatically. A failed
+  preparation leaves the updated application blocked until setup succeeds.
+  Preserving the prior runtime is not full application rollback: Inno Setup has
+  already replaced application files. Record final-package fresh-install and
+  upgrade checks on Windows separately from automated implementation tests.
+
+## Guided terminal experience (0.3.0a2 candidate)
+
+- Add a versioned NIPAT banner and a vertical menu. Arrow/Enter interaction is
+  limited to supported interactive terminals; numbered and plain-text input
+  remains available. Do not require new Python packages in embedded Python.
+- Validate files during input collection, preserve values while editing, offer
+  `:indietro` and `:annulla`, and require an explicit launch from the editable
+  input/parameter summary. Preserve all four workflows and their input modes.
+- Expose result/run folders, execution metadata and logs through the final
+  screen. Main-menu option 6 recalls only the current session's latest run;
+  option 5 still changes the results root for the current session only.
+- Offer help and an on-demand environment check through option 7. Never infer
+  runtime readiness merely from opening the menu or reading backend settings.
+- Keep execution status separate from scientific interpretation. A dry-run is
+  planned, not completed analysis; file availability is not scientific validity.
+- Keep direct CLI arguments and scientific defaults available. Persistent
+  preferences, cross-session history and workflow chaining remain later work.
+- Preserve the published `v0.3.0a1` installer. Record the new candidate's tests
+  separately; manual Windows terminal verification remains to be recorded.
+
 ## Managed Windows installer (0.3.0a1 candidate)
 
 - Distribute a per-user `NIPAT-Setup.exe` through GitHub Releases, targeting

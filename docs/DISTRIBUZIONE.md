@@ -1,13 +1,58 @@
 # Distribuzione tramite GitHub
 
-La release pubblicata `v0.2.0a2` identifica il commit
-`70e944b5dcbf84954492798dc387e8d61134343c`. Si utilizza tramite archivio
-sorgente, `1_SETUP.cmd` e `2_AVVIA.cmd`, con Docker Desktop già attivo.
-I tag `v0.2.0a1` e `v0.2.0a2` restano invariati.
+## Pre-release 0.4.0: due pacchetti per le prove di dominio
 
-## Nuovo installatore: candidato 0.3.0a1
+[NIPAT 0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0) identifica la versione da
+condividere per il testing di dominio, con l'interfaccia guidata e il launcher
+Windows. È una pre-release, non una dichiarazione di validazione scientifica
+completa. Le [note della versione](RELEASE_0.4.0.md) ne precisano il perimetro.
 
-Il nuovo percorso prepara **NIPAT-Setup.exe** attraverso GitHub Actions.
+La release offre due modalità di distribuzione:
+
+| Asset | Contenuto e prerequisiti | Avvio |
+| --- | --- | --- |
+| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe) | Un solo file con applicazione, Python portabile, ambiente Linux interno e runtime scientifico incorporati. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Doppio clic per installare; poi icona **NIPAT** che avvia `NIPAT.exe`. |
+| [NIPAT-DockerDesktop-0.4.0-windows-x64.zip](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip) | Applicazione, `NIPAT.exe`, Python portabile e runtime scientifico incluso. Richiede Docker Desktop installato e avviato con container Linux. | Estrarre tutto; aprire `1_SETUP.cmd` una volta e poi `NIPAT.exe`. |
+
+`NIPAT.exe` apre la CLI guidata senza richiedere un terminale già aperto.
+L'installatore è il percorso principale: l'utilizzatore scarica soltanto
+`NIPAT-Setup.exe` e non deve spostare archivi o preparare cartelle `assets`.
+Il setup conserva automaticamente i componenti necessari alla ripresa.
+L'installatore e il pacchetto Docker usano lo stesso launcher e i sorgenti dello
+stesso commit. Il pacchetto Docker riutilizza esattamente l'archivio scientifico
+esportato per WSL, identificato da dimensione e SHA-256; non lo ricostruisce sul
+PC dell'utilizzatore. L'identificativo locale dell'immagine viene risolto dopo
+l'importazione, perché motori diversi possono identificare oggetti differenti.
+
+Gli artefatti di revisione restano separati dalla pubblicazione. La procedura
+in [.github/RELEASE.md](../.github/RELEASE.md) verifica commit, manifest,
+contenuto dei pacchetti e checksum prima di pubblicare una pre-release.
+Una build di pull request serve alla revisione; il commit scelto deve essere
+integrato e costruito con la procedura ammessa per la pubblicazione.
+Non sostituire gli asset di una release già distribuita.
+
+Per ciascuna installazione, registrare la prova del pacchetto su Windows:
+completamento del setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
+un'esecuzione reale. La validazione di dominio utilizza la
+[scheda dedicata](VALIDAZIONE.md), con risultati attesi e osservati.
+L'aggiornamento riguarda l'ambiente Linux interno usato da NIPAT per le analisi:
+non richiede una manutenzione manuale di Windows o WSL. Il setup prepara
+un ambiente separato quando cambia il rootfs. Conserva quello precedente e
+le cartelle dati/risultati, verifica il nuovo ambiente con `doctor` e `self-test`, quindi
+attiva la nuova configurazione. La ripetizione del setup riprende lo stesso
+target; non occorre eliminare distribuzioni o sovrascrivere la configurazione.
+Se il setup non termina, la nuova applicazione resta bloccata: i vecchi file
+applicativi non vengono ripristinati automaticamente. Le prove reali di prima
+installazione e aggiornamento su Windows devono ancora essere registrate per
+il pacchetto finale, oltre ai controlli automatici dell'implementazione.
+
+Il codice originale NIPAT è distribuito con licenza GPL-3.0-or-later; le licenze
+e le attribuzioni dei componenti inclusi sono conservate in
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) e nei rispettivi percorsi.
+
+## Versione precedente: installatore 0.3.0a1
+
+Il percorso pubblicato prepara **NIPAT-Setup.exe** attraverso GitHub Actions.
 L’installatore contiene l’applicazione e un manifest con gli hash dei due
 asset della stessa versione: ambiente WSL dedicato e immagine scientifica.
 Li scarica dalla release GitHub e li verifica prima di importarli.
@@ -39,11 +84,12 @@ distribuito. Sono evidenze distinte, dettagliate in
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md); non attestano la prima
 installazione del nuovo EXE su un altro PC né una validazione di dominio completa.
 
-Il bundle ZIP di `scripts/build_validation_bundle.py` rimane un’utilità per
-la distribuzione da sorgenti con Docker già disponibile. Non è l’installatore
-WSL e non sostituisce l’asset `.exe`.
-
 ## Evidenze della release precedente
+
+La release `v0.2.0a2` identifica il commit
+`70e944b5dcbf84954492798dc387e8d61134343c`. Si utilizza tramite archivio
+sorgente, `1_SETUP.cmd` e `2_AVVIA.cmd`, con Docker Desktop già attivo.
+I tag `v0.2.0a1` e `v0.2.0a2` restano invariati.
 
 ### Verifiche osservate il 20 ottobre 2026
 

@@ -5,36 +5,60 @@ riga di comando. Gli input e i risultati rimangono sul computer.
 Gli autotest inclusi verificano casi noti; la validazione con altri input e
 riferimenti scientifici indipendenti resta necessaria.
 
-## Installazione guidata Windows
+Questa guida accompagna **NIPAT 0.4.0**, pre-release destinata alle prove di
+dominio su Windows 11 x64. La disponibilità per il testing non equivale a
+validazione scientifica completata. I due pacchetti contengono la stessa
+interfaccia e gli stessi workflow.
 
-La pre-release `0.3.0a1` è destinata alle prove della CLI su **Windows 11 x64
-con WSL2 già funzionante**. L'attivazione iniziale di WSL e la ripresa dopo
-riavvio Windows non rientrano nella verifica completata. Il pacchetto è distinto
-dal precedente archivio sorgente `0.2.0a2`.
+## Installazione e avvio di NIPAT 0.4.0
 
-1. Aprire la [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
-   e scaricare l'asset **NIPAT-Setup.exe**. Gli archivi runtime vengono scaricati
-   dalla configurazione; non occorre estrarre i file “Source code”.
-2. Avviare il file con doppio clic dal proprio account Windows, senza scegliere
-   “Esegui come amministratore”. La configurazione chiede l’autorizzazione
-   amministrativa soltanto se serve attivare WSL.
-3. Attendere download, preparazione dell'ambiente e autotest. Il primo avvio
-   può richiedere diversi minuti. La configurazione deve terminare con
-   **`NIPAT: ready`**; un messaggio di errore non equivale a setup completato.
-4. Aprire **NIPAT** dal menu Start o dal collegamento sul desktop.
-   Il programma avvia automaticamente il proprio motore quando necessario.
+Il percorso principale richiede un solo file, **`NIPAT-Setup.exe`**:
 
-La prima versione dell’installatore è destinata a Windows 11 x64, con
-virtualizzazione disponibile. Non richiede installazioni manuali separate di
-Python, R, samtools o Docker Desktop. Richiede Internet per i download iniziali
-ed eventuale intervento IT quando le impostazioni del computer impediscono WSL.
-Per dettagli tecnici e prove dell'installatore, consultare
-[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md). Se la configurazione richiede
-di attivare WSL o di riavviare Windows, registrare il caso separatamente dalle
-prove scientifiche: non è il percorso già verificato per questa consegna.
-Un'installazione sperimentale NIPAT già presente può usare un ambiente diverso;
-il candidato non ne effettua la migrazione automatica. Non eliminarlo per
-forzare il setup: conservare il log e richiedere una verifica.
+1. Scaricare [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-Setup.exe)
+   dalla [pre-release v0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.0).
+2. Fare doppio clic dal proprio account Windows e attendere il completamento
+   della configurazione e degli autotest: **`NIPAT: ready`**.
+3. Aprire l'icona **NIPAT** sul desktop o nel menu Start.
+
+L'installatore contiene l'applicazione e i componenti per le analisi; li prepara
+automaticamente. Non occorre aprire PowerShell, installare Python, R, samtools
+oppure Docker Desktop, né scaricare o spostare archivi separati.
+L'icona avvia **`NIPAT.exe`**, che apre il menu testuale descritto sotto.
+
+Il perimetro iniziale resta **Windows 11 x64 con WSL2 funzionante**. WSL permette
+a Windows di eseguire l'ambiente Linux interno di NIPAT. Se va attivato,
+possono servire Internet, autorizzazione amministrativa e riavvio; questo
+percorso resta da verificare separatamente e può essere limitato dalle policy
+del computer.
+
+Per chi dispone già di **Docker Desktop** con container Linux, l'alternativa è
+[NIPAT-DockerDesktop-0.4.0-windows-x64.zip](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip):
+estrarre tutto il pacchetto, aprire `1_SETUP.cmd` una volta con doppio clic e poi `NIPAT.exe`. Il launcher deve
+restare nella cartella estratta, insieme ai file del pacchetto. Le due modalità
+usano lo stesso codice e lo stesso runtime scientifico verificato. Per la
+prima prova seguire la [procedura Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop).
+
+Quando si installa una nuova versione, NIPAT prepara anche il proprio ambiente
+Linux se necessario. Questa preparazione riguarda NIPAT, non una procedura
+manuale di aggiornamento di Windows o WSL. Conserva l'ambiente precedente e
+le cartelle dati e risultati, e attiva il nuovo ambiente dopo gli autotest.
+
+Se la preparazione fallisce, conservare il log e aprire **NIPAT - completa
+preparazione** dal menu Start. I componenti necessari alla ripresa vengono
+conservati automaticamente. La nuova applicazione resta bloccata finché la
+preparazione non termina. Le prove reali del pacchetto finale, sia di prima
+installazione sia di aggiornamento, restano da registrare; i dettagli sono
+nella [procedura di verifica](INSTALLATORE_WINDOWS.md#prova-prima-della-pubblicazione).
+
+## Versione già pubblicata: 0.3.0a1
+
+La [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
+contiene la precedente interfaccia. Il suo setup scarica automaticamente gli
+archivi runtime e non include la nuova procedura di aggiornamento; non è il
+pacchetto da usare per verificare l'interfaccia della versione `0.4.0`.
+Le [note di quella versione](RELEASE_0.3.0a1.md) ne descrivono il perimetro.
+Non eliminare ambienti già installati per forzare il setup di una versione
+precedente.
 
 ## Installazione da sorgenti con Docker già disponibile
 
@@ -48,6 +72,83 @@ Questo è anche il percorso della release `0.2.0a2`:
 Il setup da sorgenti prepara Python locale e il runtime scientifico ed esegue
 gli autotest. Non servono Git, PyCharm o installazioni separate di Python, R
 e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
+
+Per sviluppatori che utilizzano il checkout dei sorgenti, dopo il setup è
+possibile compilare `NIPAT.exe` nella radice del progetto con il compilatore
+.NET Framework presente in Windows:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\installer\windows\build-launcher.ps1 -OutputPath .\NIPAT.exe
+```
+
+La compilazione è un passaggio per chi usa i sorgenti; il launcher è già incluso
+nei pacchetti Windows costruiti per la distribuzione. `2_AVVIA.cmd` e `nipat.cmd`
+restano disponibili.
+
+## Menu guidato
+
+All'apertura, il banner NIPAT riporta la versione. Il menu presenta i quattro
+workflow con una breve descrizione. Nei terminali interattivi supportati si
+usano **frecce e Invio** oppure i numeri; negli altri terminali resta la scelta
+numerica in testo semplice. Ogni workflow mostra indicazioni contestuali anche
+dopo la selezione della modalità e durante l'inserimento dei dati: formato
+richiesto, esempi e significato di Invio. Le indicazioni sono grigie nei terminali
+che supportano i colori e restano disponibili in testo semplice negli altri.
+
+| Scelta | Funzione |
+| --- | --- |
+| 1–4 | DNPcall, SNPcall, Contamination e CPI, con le modalità di input descritte sotto. |
+| 5 | Cambiare la cartella risultati per le analisi successive della sessione. |
+| 6 | Riaprire la schermata dell'ultima esecuzione della sessione. |
+| 7 | Aprire **Guida all'uso**. |
+| 0 | Uscire dal programma. |
+
+**Guida all'uso** distingue **1 — Come usare NIPAT** da
+**2 — Verifica strumenti di analisi**; **0** torna al menu principale.
+La seconda voce controlla gli strumenti solo su richiesta: aprire la guida
+non esegue il controllo. In `--dry-run` il controllo non viene eseguito.
+
+Durante la compilazione, NIPAT controlla i percorsi e segnala gli errori nel
+campo interessato. Per un file si può inserire, per esempio,
+`..\data\campione.bam` o un percorso completo, anche tra virgolette.
+**`:indietro`** permette di tornare all'input precedente; **`:annulla`** torna
+al menu principale. Nei campi di testo e nei percorsi, **`0` non è un comando
+di annullamento**. I valori già inseriti vengono conservati durante la
+correzione. Nei menu che lo prevedono, Esc torna indietro.
+
+Nelle liste di file, il primo elemento è richiesto: premere Invio senza
+inserirlo ripropone le istruzioni e lascia aperto il campo. Dopo il primo file,
+si può aggiungerne un altro oppure premere Invio per terminare l'elenco e
+controllarlo prima di proseguire. Nei campi con un valore predefinito, Invio
+mantiene il valore mostrato tra parentesi; **`:vuoto`** cancella un valore
+facoltativo, per esempio il nome del run o un prefisso CPI. Il completamento
+dei percorsi con Tab non è incluso in questa revisione.
+
+Al termine della compilazione viene mostrato un riepilogo di file, parametri
+e destinazione. Controllarlo, modificare i campi necessari e scegliere
+**Avvia analisi**. Questa conferma esegue gli script R e gli altri strumenti
+previsti dal workflow, come samtools quando occorre preparare il pileup da BAM.
+Il calcolo scientifico è reale. Il workflow è lo stesso della CLI diretta e
+non modifica automaticamente parametri scientifici o input.
+Se l'avvio segnala un errore, correggere i valori conservati prima di riprovare.
+
+La schermata finale permette di aprire la cartella dei risultati, l'intero
+run o il log e di visualizzare un riepilogo dell'esecuzione. Il riepilogo
+descrive metadati e file disponibili: non interpreta i risultati scientifici.
+Un `dry-run` viene presentato come **Esecuzione pianificata**, senza attribuirgli
+risultati di un'analisi eseguita.
+
+La simulazione si richiede esplicitamente, per esempio con
+`NIPAT.exe --dry-run wizard`. Per l'analisi reale si usa `NIPAT.exe` senza
+argomenti, oppure `nipat.cmd wizard`: si rimuove solo `--dry-run`, mantenendo
+`wizard` se si usa il comando diretto.
+
+Il richiamo dell'ultima esecuzione e la scelta della cartella risultati valgono
+solo per la sessione corrente. Questa revisione non introduce preferenze
+persistenti, cronologia tra sessioni o concatenamento automatico dei workflow.
+Se un workflow fallisce, il codice di uscita della sessione rimane 2 anche
+dopo una successiva esecuzione riuscita; la correzione di un campo prima
+dell'avvio non viene conteggiata come fallimento del workflow.
 
 ## Dove tenere input e risultati
 
@@ -193,7 +294,10 @@ di siti informativi. Una cartella di output parziale non prova il completamento.
 
 ## Risultati intermedi e analisi in sequenza
 
-Al termine viene mostrato il percorso del run. Aprirlo in Esplora file:
+Al termine viene mostrato il percorso del run. In `0.4.0`,
+la schermata finale permette anche di aprire direttamente le cartelle e il log;
+con **6 — Ultima esecuzione** si può richiamare la stessa schermata durante la
+sessione. Per le esecuzioni precedenti, aprire il percorso in Esplora file:
 
 | Contenuto | Utilizzo |
 | --- | --- |

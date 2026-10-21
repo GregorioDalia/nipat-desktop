@@ -52,7 +52,7 @@ try {
     }
     $manifest = [pscustomobject]@{
         runtime_image = $sourceId; source_commit = ('c' * 40); release_tag = 'v0.3.0a1'
-        assets = [pscustomobject]@{ scientific_image = $asset }
+        assets = [pscustomobject]@{ scientific_image = $asset; rootfs = [pscustomobject]@{ sha256 = ('d' * 64) } }
     }
     $failLoad = $false
     foreach ($receiptId in @($sourceId, $localId)) {
@@ -91,24 +91,34 @@ try {
 
     $state = [pscustomobject]@{
         runtime_image = $sourceId; resolved_runtime_image = $localId; runtime_archive_sha256 = $asset.sha256
+        wsl_distro = 'NIPAT-Test'; rootfs_sha256 = $manifest.assets.rootfs.sha256
     }
     $configuration = [pscustomobject]@{
         runtime_image = $localId; source_runtime_image = $sourceId; runtime_archive_sha256 = $asset.sha256
         source_commit = $manifest.source_commit; release_tag = $manifest.release_tag
+        wsl_distro = 'NIPAT-Test'; rootfs_sha256 = $manifest.assets.rootfs.sha256
     }
     Assert-NipatRuntimeBinding $manifest $state $configuration
     Assert-Test $true 'accept verified mapping between different build and local image IDs'
-    foreach ($property in @('runtime_image', 'source_runtime_image', 'runtime_archive_sha256', 'source_commit', 'release_tag')) {
+    foreach ($property in @('runtime_image', 'source_runtime_image', 'runtime_archive_sha256', 'source_commit', 'release_tag', 'wsl_distro', 'rootfs_sha256')) {
         $before = $configuration.$property
         $configuration.$property = 'wrong'
         Assert-Rejected { Assert-NipatRuntimeBinding $manifest $state $configuration } "reject changed $property"
         $configuration.$property = $before
     }
-    foreach ($property in @('runtime_image', 'resolved_runtime_image', 'runtime_archive_sha256')) {
+    foreach ($property in @('runtime_image', 'resolved_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256')) {
         $before = $state.$property
         $state.$property = 'wrong'
         Assert-Rejected { Assert-NipatRuntimeBinding $manifest $state $configuration } "reject inconsistent state $property"
         $state.$property = $before
+    }
+    foreach ($property in @('wsl_distro', 'rootfs_sha256')) {
+        $legacyState = $state | ConvertTo-Json | ConvertFrom-Json
+        $legacyState.PSObject.Properties.Remove($property)
+        Assert-Rejected { Assert-NipatRuntimeBinding $manifest $legacyState $configuration } "require setup for legacy state without $property"
+        $legacyConfiguration = $configuration | ConvertTo-Json | ConvertFrom-Json
+        $legacyConfiguration.PSObject.Properties.Remove($property)
+        Assert-Rejected { Assert-NipatRuntimeBinding $manifest $state $legacyConfiguration } "require setup for legacy configuration without $property"
     }
     $state.PSObject.Properties.Remove('resolved_runtime_image')
     Assert-Rejected { Assert-NipatRuntimeBinding $manifest $state $configuration } 'require setup for an old state without a verified mapping'

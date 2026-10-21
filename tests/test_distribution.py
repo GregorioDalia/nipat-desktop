@@ -1,5 +1,7 @@
 import importlib.util
+import gzip
 import json
+import struct
 import subprocess
 import tempfile
 import unittest
@@ -15,6 +17,41 @@ SPEC.loader.exec_module(bundle)
 
 
 class DistributionTests(unittest.TestCase):
+    def launcher(self, root):
+        path = root / "launcher.exe"
+        header = bytearray(154)
+        header[:2] = b"MZ"
+        struct.pack_into("<I", header, 60, 128)
+        header[128:132] = b"PE\0\0"
+        struct.pack_into("<H", header, 132, 0x8664)
+        struct.pack_into("<H", header, 152, 0x20B)
+        path.write_bytes(header)
+        return path
+
+    def installer_runtime(self, project, root):
+        # source_files() resolves aliases, including Windows RUNNER~1 paths.
+        project = project.resolve()
+        archive = root / "nipat-scientific-runtime-0.2.0a1-amd64.tar.gz"
+        archive.write_bytes(gzip.compress(b"scientific runtime fixture", mtime=0))
+        tag = "v0.2.0a1"
+        asset = {
+            "file": archive.name, "sha256": bundle.sha256_file(archive),
+            "size": archive.stat().st_size,
+            "url": f"https://github.com/GregorioDalia/nipat-desktop/releases/download/{tag}/{archive.name}",
+        }
+        rootfs = {**asset, "file": "rootfs.tar.gz",
+                  "url": f"https://github.com/GregorioDalia/nipat-desktop/releases/download/{tag}/rootfs.tar.gz"}
+        manifest = {
+            "schema_version": 1, "version": "0.2.0a1", "release_tag": tag,
+            "source_commit": "c" * 40, "runtime_image": "sha256:" + "a" * 64,
+            "assets": {"scientific_image": asset, "rootfs": rootfs},
+            "source_sha256": {path.relative_to(project).as_posix(): bundle.sha256_file(path)
+                              for path in bundle.source_files(project)},
+        }
+        manifest_path = root / "installer-manifest.json"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        return archive, manifest_path, manifest
+
     def make_project(self, root):
         project = root / "project"
         project.mkdir()
@@ -119,6 +156,84 @@ class DistributionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "amd64"):
                     bundle.export_runtime(root, "runtime", root)
             self.assertEqual(run.call_count, 1)
+
+    def test_verified_installer_asset_and_launcher_are_packaged_without_reexport(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = self.make_project(root)
+            source_archive, manifest_path, manifest = self.installer_runtime(project, root)
+            launcher = self.launcher(root)
+            portable = root / "python.zip"
+            portable.write_bytes(b"python fixture")
+            output = root / "package.zip"
+            with patch.object(bundle, "git_source", return_value={
+                "available": True, "commit": manifest["source_commit"], "dirty": False,
+            }), patch.object(bundle.subprocess, "run", side_effect=AssertionError("Docker must not run")):
+                archive, metadata = bundle.verified_installer_runtime(project, source_archive, manifest_path)
+                release = bundle.package_sources(project, output, portable, archive, metadata, launcher)
+            self.assertEqual(metadata["archive_sha256"], manifest["assets"]["scientific_image"]["sha256"])
+            self.assertEqual(metadata["installer_manifest_sha256"], bundle.sha256_file(manifest_path))
+            self.assertEqual(release["launcher"], {
+                "file": "NIPAT.exe", "sha256": bundle.sha256_file(launcher), "size": launcher.stat().st_size,
+            })
+            with zipfile.ZipFile(output) as packaged:
+                self.assertEqual(packaged.read("nipat-desktop/NIPAT.exe"), launcher.read_bytes())
+                self.assertEqual(packaged.read("nipat-desktop/.distribution/runtime.tar"), source_archive.read_bytes())
+                self.assertEqual(packaged.getinfo("nipat-desktop/.distribution/runtime.tar").compress_type,
+                                 zipfile.ZIP_STORED)
+                self.assertEqual(json.loads(packaged.read("nipat-desktop/.distribution/runtime.json")), metadata)
+
+    def test_verified_installer_asset_rejects_changed_sources_and_archive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = self.make_project(root)
+            archive, manifest_path, _ = self.installer_runtime(project, root)
+            with patch.object(bundle, "git_source", return_value={"available": False}):
+                source = project / "src" / "nipat" / "cli.py"
+                original = source.read_bytes()
+                source.write_text("changed source", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, r"modificato: 'src/nipat/cli\.py'"):
+                    bundle.verified_installer_runtime(project, archive, manifest_path)
+                source.write_bytes(original)
+                contents = archive.read_bytes()
+                archive.write_bytes(contents[:-1] + bytes([contents[-1] ^ 1]))
+                with self.assertRaisesRegex(ValueError, "Archivio scientifico"):
+                    bundle.verified_installer_runtime(project, archive, manifest_path)
+
+    def test_verified_installer_asset_requires_matching_clean_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = self.make_project(root)
+            archive, manifest_path, manifest = self.installer_runtime(project, root)
+            for commit, dirty in (("d" * 40, False), (manifest["source_commit"], True)):
+                with self.subTest(commit=commit, dirty=dirty), patch.object(bundle, "git_source", return_value={
+                    "available": True, "commit": commit, "dirty": dirty,
+                }):
+                    with self.assertRaisesRegex(ValueError, "checkout Git"):
+                        bundle.verified_installer_runtime(project, archive, manifest_path)
+
+    def test_launcher_rejects_non_executable_and_wrong_architecture(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = self.launcher(root)
+            self.assertEqual(bundle.require_launcher(path), path)
+            valid = path.read_bytes()
+            for contents in (b"not an executable", b"MZ" + bytes(62),
+                             valid[:132] + b"\x4c\x01" + valid[134:],
+                             valid[:152] + b"\x0b\x01"):
+                with self.subTest(contents=contents[:2]):
+                    path.write_bytes(contents)
+                    with self.assertRaises(ValueError):
+                        bundle.require_launcher(path)
+
+    def test_manifest_and_export_modes_cannot_be_mixed_or_partial(self):
+        with patch.object(bundle, "python_archive", side_effect=AssertionError("must reject before download")):
+            for extra in (("--runtime-archive", "scientific.tar.gz"),
+                          ("--runtime-manifest", "installer-manifest.json"),
+                          ("--runtime-archive", "scientific.tar.gz", "--runtime-manifest", "installer-manifest.json",
+                           "--include-runtime")):
+                with self.subTest(extra=extra):
+                    self.assertEqual(bundle.main(["--output", "unused-output.zip", *extra]), 1)
 
     def test_listed_source_symlinks_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

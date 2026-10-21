@@ -27,7 +27,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Controllo ambiente fallito." }
     & $python -m nipat self-test
     if ($LASTEXITCODE -ne 0) { throw "Test di riferimento falliti. Consultare i risultati in $env:NIPAT_RUNS_DIR e .runtime\setup.log." }
-    Write-Host "Preparazione completata. Aprire 2_AVVIA.cmd per scegliere un'analisi."
+    $launcher = if (Test-Path -LiteralPath (Join-Path $project "NIPAT.exe") -PathType Leaf) {
+        "NIPAT.exe"
+    } else {
+        "2_AVVIA.cmd"
+    }
+    Write-Host "Preparazione completata. Aprire $launcher per scegliere un'analisi."
     $result = 0
 } catch {
     Write-Host ("ERRORE: " + $_.Exception.Message) -ForegroundColor Red

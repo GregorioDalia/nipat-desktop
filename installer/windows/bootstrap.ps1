@@ -4,6 +4,7 @@ param(
 )
 
 . (Join-Path $PSScriptRoot 'bootstrap-common.ps1')
+. (Join-Path $PSScriptRoot 'bootstrap-migration.ps1')
 $project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $project 'scripts\windows\common.ps1')
 $transcriptStarted = $false
@@ -13,7 +14,7 @@ $result = 1
 $state = $null
 $statePath = Join-Path $project '.runtime\installer\state.json'
 $script:NipatWsl = Join-Path $env:WINDIR 'System32\wsl.exe'
-$distro = 'NIPAT-Runtime'
+$distro = $null
 
 function Save-NipatPhase([string] $Phase) {
     $script:state.phase = $Phase
@@ -43,26 +44,28 @@ try {
     Start-Transcript -Path (Join-Path $project '.runtime\installer\setup.log') -Append | Out-Null
     $transcriptStarted = $true
     $manifest = Read-NipatInstallerManifest (Join-Path $project '.distribution\installer-manifest.json')
+    $recoveryPath = Save-NipatRecoverySnapshot $project $manifest
+    $base = Join-Path $env:LOCALAPPDATA 'NIPAT'
+    $dataRoots = Get-NipatPreviousDataRoots $project $base
     $previous = $null
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
         $previous = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($previous.schema_version -ne 1) { throw 'Stato installer non riconosciuto. Conservare il log e contattare il supporto.' }
-        if (-not $AssetDirectory -and $previous.PSObject.Properties['asset_directory']) { $AssetDirectory = $previous.asset_directory }
+        # A new self-contained setup uses its embedded cache, never a stale path from an older installer.
+        if ($Resume -and -not $AssetDirectory -and $previous.PSObject.Properties['asset_directory']) { $AssetDirectory = $previous.asset_directory }
     }
     if ($AssetDirectory) { $AssetDirectory = Resolve-NipatDirectory $AssetDirectory }
     $state = [ordered]@{
         schema_version = 1; version = $manifest.version; release_tag = $manifest.release_tag
         source_commit = $manifest.source_commit; runtime_image = $manifest.runtime_image
         resolved_runtime_image = $null; runtime_archive_sha256 = $null
+        wsl_distro = $null; rootfs_sha256 = $manifest.assets.rootfs.sha256; recovery_snapshot = $recoveryPath
         phase = 'starting'; updated_utc = [DateTime]::UtcNow.ToString('o')
         asset_directory = $AssetDirectory; last_error = $null
     }
     Save-NipatPhase 'checking_windows'
-    $base = Join-Path $env:LOCALAPPDATA 'NIPAT'
     $cache = Join-Path $base 'cache'
     $wslDirectory = Join-Path $base 'wsl'
-    $distroDirectory = Join-Path $wslDirectory $distro
-    $ownershipPath = Join-Path $wslDirectory 'ownership.json'
     Initialize-NipatWritableDirectory $cache 'della cache installer'
     Initialize-NipatWritableDirectory $wslDirectory 'della distribuzione Linux'
     $ready = $false
@@ -101,49 +104,11 @@ try {
     }
     if ($ready) {
         Save-NipatPhase 'preparing_runtime'
-        $names = @(Get-NipatWslNames)
-        $registered = $names -contains $distro
-        $ownership = $null
-        if (Test-Path -LiteralPath $ownershipPath -PathType Leaf) {
-            $ownership = Get-Content -LiteralPath $ownershipPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($ownership.schema_version -ne 1 -or $ownership.distro -ne $distro -or
-                $ownership.owner_id -cnotmatch '^[a-f0-9]{32}$' -or
-                $ownership.rootfs_sha256 -cne $manifest.assets.rootfs.sha256 -or
-                $ownership.status -notin @('importing', 'owned')) {
-                throw 'La distribuzione NIPAT esistente usa un rootfs o uno stato differente. Nessuna sostituzione automatica viene eseguita: contattare il supporto per la migrazione.'
-            }
-        }
-        if ($registered -and $null -eq $ownership) {
-            throw 'Esiste gia NIPAT-Runtime senza il marcatore di proprieta di questa installazione. NIPAT non modifica distribuzioni preesistenti; contattare il supporto.'
-        }
-        if (-not $registered) {
-            if ((Test-Path -LiteralPath $distroDirectory) -and @(Get-ChildItem -LiteralPath $distroDirectory -Force).Count -gt 0) {
-                throw "La cartella $distroDirectory contiene gia file ma la distribuzione non risulta registrata. Nessun file viene sovrascritto: contattare il supporto."
-            }
-            $rootfs = Get-NipatAsset $manifest.assets.rootfs $cache $AssetDirectory
-            $ownership = [pscustomobject]@{
-                schema_version = 1; distro = $distro; owner_id = [Guid]::NewGuid().ToString('N')
-                rootfs_sha256 = $manifest.assets.rootfs.sha256; status = 'importing'
-            }
-            Write-NipatJsonAtomic $ownershipPath $ownership
-            Save-NipatPhase 'importing_distribution'
-            Invoke-NipatWsl @('--import', $distro, $distroDirectory, $rootfs, '--version', '2') | Out-Null
-        }
-        Assert-NipatDistroLocation $distro $distroDirectory
-        $product = Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', '/usr/bin/cat', '/etc/nipat-runtime-id')
-        if ($product.Text -cne 'nipat-runtime-v1') { throw 'Il contenuto della distribuzione non e un runtime NIPAT riconosciuto.' }
-        $owner = Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', '/usr/bin/cat', '/var/lib/nipat/owner-id') -AllowFailure
-        if ($owner.ExitCode -ne 0 -and $ownership.status -eq 'importing') {
-            Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', '/usr/bin/install', '-d', '-m', '0700', '/var/lib/nipat') | Out-Null
-            $ownership.owner_id | & $script:NipatWsl --distribution $distro --user root --exec /usr/bin/tee /var/lib/nipat/owner-id | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw 'Impossibile registrare la proprieta della distribuzione.' }
-            $owner = Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', '/usr/bin/cat', '/var/lib/nipat/owner-id')
-        }
-        if ($owner.ExitCode -ne 0 -or $owner.Text -cne $ownership.owner_id) {
-            throw 'Il marcatore di proprieta della distribuzione non corrisponde. Nessuna modifica viene applicata: contattare il supporto.'
-        }
-        $ownership.status = 'owned'
-        Write-NipatJsonAtomic $ownershipPath $ownership
+        $target = Get-NipatRuntimeTarget $wslDirectory $manifest.assets.rootfs.sha256 @(Get-NipatWslNames)
+        $distro = $target.Distro
+        $state.wsl_distro = $distro
+        if (-not $target.Registered) { Save-NipatPhase 'importing_distribution' }
+        Initialize-NipatRuntimeTarget $target $manifest.assets.rootfs $cache $AssetDirectory
         Save-NipatPhase 'loading_scientific_image'
         Invoke-NipatWsl @('--distribution', $distro, '--user', 'root', '--exec', '/usr/local/bin/nipat-engine', 'ensure') -TimeoutSeconds 240 | Out-Null
         $runtimeImage = Install-NipatScientificImage $manifest $cache $AssetDirectory $distro
@@ -151,29 +116,28 @@ try {
         $state.runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
         $configuration = [ordered]@{
             schema_version = 1; backend = 'wsl'; wsl_distro = $distro
+            rootfs_sha256 = $manifest.assets.rootfs.sha256
             runtime_image = $runtimeImage; source_runtime_image = $manifest.runtime_image
             runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
-            data_dir = (Join-Path $base 'data'); runs_dir = (Join-Path $base 'runs')
+            data_dir = $dataRoots.data_dir; runs_dir = $dataRoots.runs_dir
             release_tag = $manifest.release_tag; source_commit = $manifest.source_commit
         }
-        Write-NipatJsonAtomic (Join-Path $project '.runtime\backend.json') $configuration
-        $runtimeImage | Set-Content -LiteralPath (Join-Path $project '.runtime\runtime-image.txt') -Encoding ASCII
-        Set-NipatEnvironment $project
-        if (-not (Test-Path -LiteralPath $env:NIPAT_DATA_DIR -PathType Container)) {
-            [IO.Directory]::CreateDirectory($env:NIPAT_DATA_DIR) | Out-Null
+        if (-not (Test-Path -LiteralPath $configuration.data_dir -PathType Container)) {
+            [IO.Directory]::CreateDirectory($configuration.data_dir) | Out-Null
         }
-        Initialize-NipatWritableDirectory $env:NIPAT_RUNS_DIR 'dei risultati'
+        Initialize-NipatWritableDirectory $configuration.runs_dir 'dei risultati'
         $python = Install-NipatPython $project
         Save-NipatPhase 'verifying_installation'
-        & $python -m nipat doctor --runtime
-        if ($LASTEXITCODE -ne 0) { throw 'Controllo runtime non superato. Consultare setup.log e riprovare dal menu Start.' }
-        & $python -m nipat self-test
-        if ($LASTEXITCODE -ne 0) { throw "Autotest non superati. Consultare setup.log e i risultati in $env:NIPAT_RUNS_DIR; riaprire il setup dopo la correzione." }
-        Save-NipatPhase 'ready'
+        Complete-NipatRuntimeActivation $project $statePath $state $configuration {
+            & $python -m nipat doctor --runtime
+            if ($LASTEXITCODE -ne 0) { throw 'Controllo runtime non superato. Consultare setup.log e riprovare dal menu Start.' }
+            & $python -m nipat self-test
+            if ($LASTEXITCODE -ne 0) { throw "Autotest non superati. Consultare setup.log e i risultati in $env:NIPAT_RUNS_DIR; riaprire il setup dopo la correzione." }
+        }
         Unregister-NipatResume
         Write-Host 'NIPAT e pronto. Apri NIPAT dal menu Start per scegliere un analisi.'
-        Write-Host "Dati: $env:NIPAT_DATA_DIR"
-        Write-Host "Risultati: $env:NIPAT_RUNS_DIR"
+        Write-Host "Dati: $($configuration.data_dir)"
+        Write-Host "Risultati: $($configuration.runs_dir)"
         $result = 0
     }
 } catch {
