@@ -143,13 +143,27 @@ def find_release(tag):
     return next((release for page in pages for release in page if release["tag_name"] == tag), None)
 
 
+def create_draft(tag, version, commit, notes, payload_path):
+    payload_path.write_text(json.dumps({
+        "tag_name": tag, "target_commitish": commit,
+        "name": f"NIPAT CLI {version} — Windows con WSL2", "body": notes,
+        "draft": True, "prerelease": True, "make_latest": "false",
+    }), encoding="utf-8")
+    # The list endpoint may lag behind a successful creation. Retain the exact
+    # resource returned by POST rather than rediscovering it through that list.
+    return json.loads(command("gh", "api", f"repos/{REPO}/releases", "--method", "POST",
+                              "--input", str(payload_path)))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--draft-release-id", default="")
     args = parser.parse_args()
     require(re.fullmatch(r"[1-9][0-9]*", args.run_id), "Invalid run ID")
     require(re.fullmatch(r"[0-9a-f]{40}", args.source_commit), "Full source SHA is required")
+    require(not args.draft_release_id or re.fullmatch(r"[1-9][0-9]*", args.draft_release_id), "Invalid draft ID")
     commit = args.source_commit
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], check=True)
     run = api(f"actions/runs/{args.run_id}")
@@ -173,16 +187,11 @@ def main():
                   f"[Build verificata]({run['html_url']}): test Linux e Windows, regressioni scientifiche, "
                   "caricamento/esecuzione/ricaricamento nel motore distribuito e compilazione EXE superati.\n")
         notes = notes.strip()
-        notes_file = root / "release-notes.md"
-        notes_file.write_text(notes, encoding="utf-8")
         files = {path.name: path for path in output.iterdir()}
         check_tag(tag, commit)
-        release = find_release(tag)
+        release = api(f"releases/{args.draft_release_id}") if args.draft_release_id else find_release(tag)
         if release is None:
-            command("gh", "release", "create", tag, "--repo", REPO, "--target", commit,
-                    "--draft", "--prerelease", "--latest=false", "--title",
-                    f"NIPAT CLI {manifest['version']} — Windows con WSL2", "--notes-file", str(notes_file))
-            release = find_release(tag)
+            release = create_draft(tag, manifest["version"], commit, notes, root / "create-release.json")
         require(release is not None, "Draft release not found")
         present = verify_uploaded(release, files, commit, tag, notes)
         missing = [str(files[name]) for name in sorted(set(files) - present)]

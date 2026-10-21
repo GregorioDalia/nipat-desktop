@@ -12,6 +12,8 @@ combinato. Pubblica come pre-release solo dopo aver verificato dimensioni e
 digest degli asset caricati. Non modifica release già pubblicate né tag di
 altri commit; una bozza parziale può essere ripresa solo con gli stessi
 contenuti verificati. Un errore lascia la bozza non pubblicata.
+Per riprendere una bozza già creata si può indicare il suo ID nel campo
+facoltativo `draft_release_id`; commit, note e asset vengono comunque verificati.
 
 Le note provengono da `docs/RELEASE_<versione>.md` del commit compilato.
 I file di questa procedura sono strumenti del manutentore: non fanno parte

@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("publisher", Path(__file__).with_name("publish_windows_release.py"))
 publisher = importlib.util.module_from_spec(SPEC)
@@ -116,6 +117,20 @@ class ReleaseGuards(unittest.TestCase):
         release["draft"] = False
         with self.assertRaisesRegex(ValueError, "not a draft"):
             publisher.verify_uploaded(release, files, COMMIT, "v0.3.0a1", "notes")
+
+    def test_create_retains_response_id_without_waiting_for_release_list(self):
+        payload = self.root / "create.json"
+        response = {"id": 12345, "draft": True, "target_commitish": COMMIT}
+        with patch.object(publisher, "command", return_value=json.dumps(response)) as call, \
+                patch.object(publisher, "find_release", side_effect=AssertionError("list may be stale")):
+            result = publisher.create_draft("v0.3.0a1", "0.3.0a1", COMMIT, "line one\nline two", payload)
+        self.assertEqual(result["id"], 12345)
+        sent = json.loads(payload.read_text())
+        self.assertEqual(sent["target_commitish"], COMMIT)
+        self.assertEqual(sent["body"], "line one\nline two")
+        self.assertTrue(sent["draft"])
+        self.assertTrue(sent["prerelease"])
+        self.assertEqual(call.call_count, 1)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,10 @@ on:
         description: Exact 40-character commit SHA of that build
         required: true
         type: string
+      draft_release_id:
+        description: Existing draft release ID to resume (optional)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -44,6 +48,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN_ID: ${{ inputs.run_id }}
           BUILD_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          DRAFT_RELEASE_ID: ${{ inputs.draft_release_id }}
         run: |
           python .github/scripts/publish_windows_release.py \
-            --run-id "$BUILD_RUN_ID" --source-commit "$BUILD_SOURCE_COMMIT"
+            --run-id "$BUILD_RUN_ID" --source-commit "$BUILD_SOURCE_COMMIT" \
+            --draft-release-id "$DRAFT_RELEASE_ID"
