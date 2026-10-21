@@ -290,7 +290,9 @@ function Get-NipatImage([string] $Image) {
     Assert-Test ($result.ExitCode -ne 0) 'failed reference test returns failure through the actual launcher'
     Assert-Test (-not (Test-Path -LiteralPath $readyPath) -and -not (Test-Path -LiteralPath $script:CapturePath)) 'failed setup does not claim ready or open the menu'
     Assert-Test ($result.Output -match 'Test di riferimento falliti' -and $result.Output -match 'setup.log') 'failed preparation provides diagnostic guidance'
-    Assert-Test (Test-Path -LiteralPath (Join-Path $app '.runtime\setup.log')) 'setup diagnostics remain after failure'
+    $setupLog = Join-Path $app '.runtime\setup.log'
+    Assert-Test ((Test-Path -LiteralPath $setupLog) -and
+        (Get-Content -LiteralPath $setupLog -Raw) -match 'Test di riferimento falliti') 'setup diagnostics contain the failure at the literal application path'
     Remove-Item -LiteralPath $fail
     $result = Invoke-TestLauncher -Executable $executable -Environment $environment
     Assert-Test ($result.ExitCode -eq 0 -and (Test-Path -LiteralPath $readyPath)) ('same executable retries a failed preparation: ' + $result.Output)
