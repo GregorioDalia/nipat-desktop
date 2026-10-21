@@ -29,6 +29,8 @@ class DistributionTests(unittest.TestCase):
         return path
 
     def installer_runtime(self, project, root):
+        # source_files() resolves aliases, including Windows RUNNER~1 paths.
+        project = project.resolve()
         archive = root / "nipat-scientific-runtime-0.2.0a1-amd64.tar.gz"
         archive.write_bytes(gzip.compress(b"scientific runtime fixture", mtime=0))
         tag = "v0.2.0a1"

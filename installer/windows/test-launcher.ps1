@@ -8,6 +8,45 @@ function Assert-Test([bool] $Condition, [string] $Message) {
     $script:checks++
 }
 
+# An executable or PowerShell may expand an inherited 8.3 TEMP path. Compare
+# existing paths by their long spelling rather than treating that as a cwd change.
+if (-not ('NipatLauncherTestPaths' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class NipatLauncherTestPaths
+{
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetLongPathName(string path, StringBuilder buffer, uint size);
+
+    public static string Normalize(string path)
+    {
+        path = Path.GetFullPath(path);
+        var buffer = new StringBuilder(1024);
+        uint length = GetLongPathName(path, buffer, (uint)buffer.Capacity);
+        if (length >= buffer.Capacity) {
+            buffer.Capacity = checked((int)length);
+            length = GetLongPathName(path, buffer, (uint)buffer.Capacity);
+        }
+        if (length == 0 || length >= buffer.Capacity) {
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+        }
+        return buffer.ToString();
+    }
+}
+'@
+}
+
+function Test-SamePath([string] $Actual, [string] $Expected) {
+    return [string]::Equals(
+        [NipatLauncherTestPaths]::Normalize($Actual),
+        [NipatLauncherTestPaths]::Normalize($Expected),
+        [StringComparison]::OrdinalIgnoreCase)
+}
+
 function ConvertTo-WindowsArgument([AllowEmptyString()][string] $Value) {
     $result = New-Object Text.StringBuilder
     [void]$result.Append('"')
@@ -96,8 +135,8 @@ exit ([int]$env:NIPAT_LAUNCH_TEST_EXIT)
     Assert-Test ($result.ExitCode -eq 0) ('default launch exit code: ' + $result.Output)
     $record = Get-Content -LiteralPath $script:CapturePath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-Test ($record.arguments.Count -eq 1 -and $record.arguments[0] -ceq 'wizard') 'double-click defaults to wizard'
-    Assert-Test ($record.working_directory -ceq $script:CallerDirectory) 'caller working directory preserved'
-    Assert-Test ($record.script_path -ceq $runner) 'runner is relative to the executable, not the current directory'
+    Assert-Test (Test-SamePath $record.working_directory $script:CallerDirectory) 'caller working directory preserved'
+    Assert-Test (Test-SamePath $record.script_path $runner) 'runner is relative to the executable, not the current directory'
     Assert-Test ($record.bridge_arguments_removed -and $record.bridge_count_removed) 'temporary launch data removed before running NIPAT'
 
     $argumentList = @(
@@ -113,7 +152,7 @@ exit ([int]$env:NIPAT_LAUNCH_TEST_EXIT)
     for ($index = 0; $index -lt $argumentList.Count; $index++) {
         Assert-Test ($record.arguments[$index] -ceq $argumentList[$index]) "argument $index is literal data"
     }
-    Assert-Test ($record.working_directory -ceq $script:CallerDirectory) 'explicit CLI arguments preserve caller directory'
+    Assert-Test (Test-SamePath $record.working_directory $script:CallerDirectory) 'explicit CLI arguments preserve caller directory'
 
     $result = Invoke-TestLauncher -Executable $executable -Arguments @('')
     Assert-Test ($result.ExitCode -eq 0) ('empty sole argument exit code: ' + $result.Output)
