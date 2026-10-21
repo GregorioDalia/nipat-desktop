@@ -6,6 +6,15 @@ del manutentore. Si avvia manualmente da Actions sul branch `main`, indicando
 l'ID della build **Windows installer (review build)** e il suo commit completo.
 Il commit deve essere già integrato in `main`.
 
+La [CI del ramo di sviluppo](../docs/CI_CD.md) esegue i controlli sulle pull
+request e su `main`, con esito aggregato `required`. Il suo successo non
+produce installatori pubblicabili. **Windows installer (review build)** resta
+separato: si avvia manualmente oppure sulle pull request che modificano i
+percorsi di installazione, runtime o packaging definiti nel workflow.
+**Publish verified Windows pre-release** resta esclusivamente manuale.
+Questa organizzazione e i nuovi vincoli delle dipendenze riguardano le build
+successive; non modificano versione, tag o asset già pubblicati di `0.4.1`.
+
 La versione `0.4.1` usa il tag `v0.4.1`, ma viene pubblicata con lo stato
 GitHub **Pre-release** per la validazione di dominio. Il suffisso della
 versione non determina questo stato: la procedura imposta e verifica sempre
@@ -27,7 +36,10 @@ Dalla versione `0.4.1`, anche Docker Desktop dispone di un singolo
 installatore, **`NIPAT-DockerDesktop-Setup.exe`**. Include Python,
 l'applicazione, il launcher e l'archivio scientifico; richiede Docker Desktop
 già installato e avviato in modalità Linux. Al termine si apre il collegamento
-**NIPAT (Docker Desktop)**. Lo ZIP usato dalla build rimane un'evidenza interna
+**NIPAT (Docker Desktop)**. Non richiede immagini preesistenti: la preparazione
+verifica e importa automaticamente l'archivio incluso, anche con Docker
+Desktop vuoto, senza pull o build manuali né download separati del runtime.
+Lo ZIP usato dalla build rimane un'evidenza interna
 e non viene caricato fra i download della release.
 
 La procedura verifica build, manifest, sorgenti, archivi e checksum, crea una

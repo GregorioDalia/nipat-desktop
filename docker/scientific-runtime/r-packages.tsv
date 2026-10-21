@@ -1,0 +1,14 @@
+Package	Version
+argparse	2.2.5
+ComplexUpset	1.3.3
+dplyr	1.1.4
+ggplot2	3.5.1
+openxlsx	4.2.8
+optparse	1.7.5
+patchwork	1.3.0
+purrr	1.0.4
+readr	2.1.5
+readxl	1.4.3
+stringr	1.5.1
+tidyr	1.3.1
+tidyverse	2.0.0

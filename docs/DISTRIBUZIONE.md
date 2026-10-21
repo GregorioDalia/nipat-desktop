@@ -19,6 +19,11 @@ Entrambi i percorsi richiedono un solo EXE: l'utilizzatore non deve estrarre
 ZIP, spostare archivi o preparare cartelle `assets`. Nel percorso Docker
 Desktop non occorre eseguire `1_SETUP.cmd`: l'applicazione prepara l'ambiente
 e gli autotest prima del menu e riprende dalla stessa icona dopo un errore.
+**Docker Desktop può inizialmente essere vuoto, senza immagini né container.**
+L'EXE `0.4.1` incorpora l'archivio scientifico: la preparazione ne verifica
+l'hash e lo importa automaticamente. Non servono `docker pull`, build manuali
+o ulteriori download dei componenti NIPAT. Docker Desktop installato e avviato
+in modalità Linux rimane il prerequisito di questa modalità.
 Il setup conserva automaticamente i componenti necessari alla ripresa.
 I due installatori usano lo stesso launcher e i sorgenti dello
 stesso commit. Il pacchetto Docker riutilizza esattamente l'archivio scientifico
@@ -51,6 +56,21 @@ il pacchetto finale, oltre ai controlli automatici dell'implementazione.
 Il codice originale NIPAT è distribuito con licenza GPL-3.0-or-later; le licenze
 e le attribuzioni dei componenti inclusi sono conservate in
 [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) e nei rispettivi percorsi.
+
+## Controlli per le build successive
+
+Il ramo di sviluppo aggiunge una [procedura CI/CD](CI_CD.md) con controlli
+rapidi su Linux e Windows per ogni pull request e push su `main`, regressioni
+scientifiche selezionate in base ai file modificati e un esito aggregato
+`required`. La compilazione completa degli installatori resta una procedura
+separata; la pubblicazione continua a richiedere l'avvio manuale e la verifica
+degli artefatti dello stesso commit.
+
+Le nuove build fissano le immagini di base, lo snapshot dei pacchetti R,
+le versioni attese dei pacchetti R utilizzati e i principali componenti del
+motore interno. I limiti e gli inventari sono descritti nella stessa procedura.
+Questi controlli riguardano le build successive: la versione e gli asset
+pubblicati di `0.4.1` rimangono invariati.
 
 ## Versione precedente: 0.4.0
 

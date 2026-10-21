@@ -14,7 +14,10 @@ compose.yaml
 config/defaults.toml
 distribution-files.txt
 docker/scientific-runtime/Dockerfile
+docker/scientific-runtime/r-packages.tsv
+docker/scientific-runtime/verify-packages.R
 docs/ARCHITECTURE.md
+docs/CI_CD.md
 docs/DECISIONS.md
 docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md

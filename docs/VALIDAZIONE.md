@@ -17,6 +17,7 @@ Prima delle analisi registrare una sola volta:
 | Versione Windows; versione WSL o Docker Desktop, secondo il pacchetto scelto | |
 | Versione NIPAT, pacchetto e pagina della release | |
 | Prima installazione o aggiornamento di una copia esistente | |
+| Per Docker Desktop: runtime NIPAT già presente oppure assente prima della prova | |
 | Configurazione e autotest completati senza errori | |
 | Apertura del menu NIPAT e cartella risultati scelta | |
 
@@ -31,11 +32,18 @@ dopo riavvio Windows sono prove separate, ancora aperte.
 
 ## Prima prova con Docker Desktop
 
+**Non è necessario che Docker Desktop contenga già immagini o container.**
+L'EXE `0.4.1` include l'archivio scientifico e NIPAT lo importa automaticamente
+durante la preparazione. Non occorrono `docker pull`, build o download separati
+del runtime. Registrare lo stato iniziale; non eliminare immagini o container
+di altri progetti per effettuare questa prova.
+
 1. Avviare Docker Desktop in modalità **container Linux**. Scaricare
    [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe)
    ed eseguirlo con doppio clic. La copia WSL già installata può restare presente.
 2. Aprire **NIPAT (Docker Desktop)** dal desktop o dal menu Start. Attendere la
-   preparazione automatica e gli autotest, dopo i quali compare il menu. Non
+   verifica e importazione del runtime incluso, la preparazione automatica e
+   gli autotest, dopo i quali compare il menu. Non
    occorre eseguire script separati. In caso di errore conservare
    `setup.log` e `setup-checks.log`,
    verificare Docker Desktop e riaprire la stessa icona per riprovare.
@@ -56,6 +64,11 @@ run con `output`, `work`, `run.json` ed `execution.log`; si possono aprire dalla
 schermata finale. Annotare separatamente il successo tecnico e la concordanza
 scientifica. Per SNPcall e CPI proseguire con casi appropriati secondo la
 [guida per l'utilizzo](GUIDA_UTILIZZO.md#input-dei-quattro-workflow).
+
+Se il runtime era assente, annotare esplicitamente che l'importazione e gli
+autotest sono terminati senza comandi Docker manuali. La prova reale su Windows
+va registrata separatamente dai controlli automatici di importazione in ambiente isolato;
+la [CI](CI_CD.md) non sostituisce questa verifica del pacchetto installato.
 
 ## Registrazione delle analisi
 
