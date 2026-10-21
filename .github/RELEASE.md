@@ -6,6 +6,12 @@ del manutentore. Si avvia manualmente da Actions sul branch `main`, indicando
 l'ID della build **Windows installer (review build)** e il suo commit completo.
 Il commit deve essere già integrato in `main`.
 
+La build esegue prima i controlli rapidi `windows-checks`, comprese le prove
+di ripresa dell'aggiornamento WSL e del launcher compilato. Solo dopo il loro
+successo costruisce ed esporta il runtime Linux. Il job finale scarica lo stesso
+`NIPAT.exe` già verificato dall'artifact intermedio `nipat-tested-launcher` e lo
+include in entrambi i pacchetti.
+
 La procedura verifica build, manifest, sorgenti, archivi e checksum, crea una
 bozza sul commit compilato e carica l'installatore WSL, i due archivi runtime,
 il manifest, il pacchetto Docker Desktop e `SHA256SUMS` combinato.

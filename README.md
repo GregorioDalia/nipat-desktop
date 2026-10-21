@@ -37,6 +37,15 @@ Docker Desktop with Linux containers must already be installed and running.
 Extract the entire ZIP, double-click `1_SETUP.cmd` once, then open `NIPAT.exe`.
 This ZIP and `NIPAT-Setup.exe` are two delivery modes of the same version.
 
+For WSL updates, the candidate prepares a separate owned distribution when the
+root filesystem changes, keeps the previous environment and data locations,
+and activates the new backend only after `doctor` and scientific self-tests.
+An interrupted setup can be resumed. This preserves the previous runtime, not
+a complete application rollback: the installer replaces application files
+before preparation, and the updated app remains blocked until setup succeeds.
+The final-package fresh-install and upgrade checks on Windows remain distinct
+from automated tests; see the [review procedure](docs/INSTALLATORE_WINDOWS.md).
+
 Python handles input validation, mechanical format adaptation and execution;
 the scientific calculations remain in the DNPcall and NEWPAT R scripts.
 The desktop GUI will use the same application layer after CLI validation.

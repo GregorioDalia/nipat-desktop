@@ -24,9 +24,20 @@
 - Plan interface localization through separate message catalogs, with English
   as the reference language and an Italian option. This is future work; current
   guided messages remain Italian and scientific file schemas remain unchanged.
-- Safe migration of an existing WSL installation remains pending. Do not
-  automatically unregister a distribution or delete data to make an upgrade
-  proceed. Record final-package checks separately from historical source tests.
+- Upgrade WSL by preparing a side-by-side distribution when the full rootfs
+  digest changes. Qualify new distribution names with the rootfs hash and keep
+  per-target ownership records. Preserve the legacy distribution and its
+  ownership; reuse it only for the same verified rootfs and validated ownership.
+- Snapshot the prior setup state and backend once per target source commit and
+  full rootfs digest.
+  Preserve valid configured data and results roots. Run `doctor` and scientific
+  self-tests against the candidate before publishing its backend configuration;
+  write the ready state last. Repeating setup resumes its owned target.
+- Do not unregister old distributions or delete data automatically. A failed
+  preparation leaves the updated application blocked until setup succeeds.
+  Preserving the prior runtime is not full application rollback: Inno Setup has
+  already replaced application files. Record final-package fresh-install and
+  upgrade checks on Windows separately from automated implementation tests.
 
 ## Guided terminal experience (0.3.0a2 candidate)
 

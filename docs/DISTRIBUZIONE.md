@@ -33,9 +33,15 @@ Prima della consegna, provare il pacchetto finale su Windows: completamento del
 setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
 un'esecuzione reale. La validazione di dominio utilizza la
 [scheda dedicata](VALIDAZIONE.md), con risultati attesi e osservati.
-Gli aggiornamenti delle installazioni WSL esistenti richiedono ancora una
-procedura di migrazione: un rootfs diverso può essere rifiutato dal setup e
-la disinstallazione non equivale alla sua sostituzione sicura.
+Il candidato gestisce gli aggiornamenti WSL preparando un ambiente separato
+quando cambia il rootfs. Conserva la distribuzione precedente e le cartelle
+dati/risultati, verifica il nuovo ambiente con `doctor` e `self-test`, quindi
+attiva la nuova configurazione. La ripetizione del setup riprende lo stesso
+target; non occorre eliminare distribuzioni o sovrascrivere la configurazione.
+Se il setup non termina, la nuova applicazione resta bloccata: i vecchi file
+applicativi non vengono ripristinati automaticamente. Le prove reali di prima
+installazione e aggiornamento su Windows devono ancora essere registrate per
+il pacchetto finale, oltre ai controlli automatici dell'implementazione.
 
 Il codice originale NIPAT è distribuito con licenza GPL-3.0-or-later; le licenze
 e le attribuzioni dei componenti inclusi sono conservate in

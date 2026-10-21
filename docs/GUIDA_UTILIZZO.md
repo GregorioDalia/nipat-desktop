@@ -31,11 +31,21 @@ i file del pacchetto. Le due modalità utilizzano lo stesso archivio scientifico
 la scelta riguarda l'ambiente che lo esegue. L'EXE usa la configurazione della
 propria copia di NIPAT e non sceglie automaticamente altre installazioni sul PC.
 
-L'aggiornamento di una distribuzione WSL NIPAT esistente non è ancora automatico:
-se il setup segnala un ambiente diverso, conservare i dati e il log e richiedere
-la procedura di migrazione. La nuova installazione e l'aggiornamento sono prove
-distinte. I controlli della build non sostituiscono la prova manuale del pacchetto
-finale su Windows.
+Se NIPAT è già installato con WSL, il candidato prepara un ambiente separato
+quando il rootfs cambia e conserva quello precedente. Le cartelle dati e
+risultati configurate vengono mantenute; il nuovo ambiente viene attivato
+solo dopo la verifica degli strumenti e gli autotest scientifici.
+
+Se la preparazione si interrompe o fallisce, conservare `setup.log` e riprendere
+con **NIPAT - completa preparazione** dal menu Start oppure `1_SETUP.cmd`
+nella cartella installata. Il setup riconosce il proprio ambiente già preparato
+per quella versione e non richiede di eliminare la distribuzione precedente.
+La nuova applicazione resta bloccata fino al completamento della configurazione:
+l'installatore ha già aggiornato i file applicativi, quindi la conservazione
+del vecchio ambiente non costituisce un ripristino completo dell'applicazione.
+La [procedura di verifica](INSTALLATORE_WINDOWS.md#prova-prima-della-pubblicazione)
+distingue le prove automatiche dalla prima installazione e dall'aggiornamento
+reali su Windows, ancora da registrare per il pacchetto finale.
 
 ## Installazione guidata Windows pubblicata: 0.3.0a1
 
@@ -64,9 +74,10 @@ Per dettagli tecnici e prove dell'installatore, consultare
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md). Se la configurazione richiede
 di attivare WSL o di riavviare Windows, registrare il caso separatamente dalle
 prove scientifiche: non è il percorso già verificato per questa consegna.
-Un'installazione sperimentale NIPAT già presente può usare un ambiente diverso;
-il candidato non ne effettua la migrazione automatica. Non eliminarlo per
-forzare il setup: conservare il log e richiedere una verifica.
+L'installatore pubblicato `0.3.0a1` non migra automaticamente un ambiente
+sperimentale differente già presente. Il nuovo percorso di aggiornamento
+appartiene al candidato `0.3.0a2` descritto sopra; non eliminare distribuzioni
+per forzare il setup di una versione precedente.
 
 ## Installazione da sorgenti con Docker già disponibile
 

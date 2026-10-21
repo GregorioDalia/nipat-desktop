@@ -76,8 +76,13 @@ Per il candidato `0.3.0a2`, il collegamento dell'installazione WSL avvia
 aprire `1_SETUP.cmd` una volta con Docker Desktop attivo e poi `NIPAT.exe`.
 Il menu non richiede di aprire PowerShell. Confermare **Avvia analisi** esegue
 realmente gli script R e gli altri strumenti previsti dal workflow.
-L'aggiornamento di un ambiente WSL NIPAT già presente richiede ancora una
-procedura di migrazione; non è automatico.
+Per aggiornare WSL, il candidato prepara un ambiente separato quando cambia
+il rootfs, conserva quello precedente e le cartelle dati/risultati, e attiva
+il nuovo ambiente solo dopo i controlli. Se la preparazione fallisce, si può
+riprenderla; la nuova applicazione resta bloccata fino al completamento.
+La conservazione del vecchio runtime non equivale al ripristino automatico
+dei file applicativi. Prima installazione e aggiornamento del pacchetto finale
+restano da verificare su Windows.
 
 Gli input possono restare nelle loro cartelle originali, anche su un'altra
 unità locale accessibile al runtime. Il nuovo backend WSL non supporta

@@ -14,7 +14,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-checks:
+    # Run the quick Windows checks before exporting the large Linux runtime assets.
+    if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: windows-2022
+    timeout-minutes: 15
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Preserve source bytes for manifest verification
+        shell: powershell
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      - name: Checkout exact source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Windows Python unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Parse scripts with Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
+            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
+          }
+      - name: Test bootstrap guards with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
+      - name: Test scientific image identity with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
+      - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
+      - name: Test resumable WSL migration with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
+      - name: Compile the shared NIPAT executable
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/launcher/NIPAT.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
+      - name: Test the shared executable with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
+      - name: Retain the tested shared launcher
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-tested-launcher
+          path: build/launcher/NIPAT.exe
+          retention-days: 14
+          if-no-files-found: error
+
   linux-runtime:
+    needs: windows-checks
     # A push already builds this branch; do not repeat the same expensive PR build.
     if: github.event_name != 'pull_request' || github.head_ref != 'feature/windows-installer-wsl' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-24.04
@@ -104,7 +168,7 @@ jobs:
           if-no-files-found: ignore
 
   windows-installer:
-    needs: linux-runtime
+    needs: [linux-runtime, windows-checks]
     runs-on: windows-2022
     timeout-minutes: 30
     env:
@@ -133,37 +197,11 @@ jobs:
         with:
           name: nipat-runtime-assets
           path: build/assets
-      - name: Windows Python unit tests
-        run: python -m unittest discover -s tests -v
-      - name: Parse scripts with Windows PowerShell 5.1
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
-          }
-      - name: Test bootstrap guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
-      - name: Test scientific image identity with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
-      - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
-      - name: Compile the shared NIPAT executable
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/windows-installer/app/NIPAT.exe')
-          if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
-      - name: Test the shared executable with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/windows-installer/app/NIPAT.exe
+      - name: Download the tested shared launcher into the installer stage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-tested-launcher
+          path: build/windows-installer/app
       - name: Package Docker Desktop with the same launcher and scientific archive
         shell: powershell
         run: |

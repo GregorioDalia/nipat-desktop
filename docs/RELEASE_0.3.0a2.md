@@ -17,6 +17,9 @@ il pacchetto finale con l'interfaccia più recente verificata dal manutentore.
 - Identità dell'immagine importata risolta dal caricamento dell'archivio
   verificato anche nel setup Docker Desktop, senza presumere che coincida
   con l'identificativo del motore usato per esportarla.
+- Aggiornamento WSL con ambiente separato quando cambia il rootfs, conservando
+  distribuzione precedente e cartelle dati/risultati. Verifica degli strumenti
+  e autotest precedono l'attivazione; il setup può essere ripreso dopo un errore.
 - Licenza GPL-3.0-or-later per il codice originale NIPAT e documentazione
   delle licenze e attribuzioni dei componenti inclusi.
 - Banner NIPAT con versione e menu verticale, con frecce/Invio nei terminali
@@ -44,7 +47,8 @@ e concatenamento automatico dei workflow non sono inclusi.
 
 ## Verifiche del candidato
 
-Controlli locali della revisione con launcher e doppio pacchetto:
+Controlli locali della revisione con launcher e doppio pacchetto, precedenti
+all'aggiornamento della migrazione WSL:
 
 - 178 test Python superati con Python 3.12.14.
 - 17 test della procedura di pubblicazione superati, incluso il passaggio di
@@ -96,9 +100,12 @@ Prima della distribuzione del nuovo installatore occorre provare su Windows:
 5. Modifica di un campo dal riepilogo e avvio soltanto dopo conferma.
 6. Apertura della cartella risultati e del log dopo un'analisi.
 
-La migrazione automatica di una distribuzione WSL esistente e la scelta della
-lingua restano da implementare. Il setup non deve sostituire automaticamente
-un ambiente esistente diverso da quello previsto.
+Le prove automatiche della logica di aggiornamento non sostituiscono una
+prima installazione o un aggiornamento reali del pacchetto finale su Windows.
+Verificare anche la ripresa del setup e la conservazione di cartelle e ambiente
+precedenti. La nuova applicazione resta bloccata se la preparazione fallisce;
+non è previsto il ripristino automatico dei file applicativi già aggiornati.
+La scelta della lingua resta da implementare.
 
 La validazione scientifica su casi indipendenti rimane distinta. Gli esiti
 delle versioni precedenti non costituiscono verifica delle nuove interazioni.

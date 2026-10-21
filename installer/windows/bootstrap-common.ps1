@@ -218,17 +218,21 @@ function Install-NipatScientificImage($Manifest, [string] $CacheDirectory, [stri
 }
 
 function Assert-NipatRuntimeBinding($Manifest, $State, $Configuration) {
-    foreach ($name in @('resolved_runtime_image', 'runtime_archive_sha256')) {
+    foreach ($name in @('resolved_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256')) {
         if ($null -eq $State.PSObject.Properties[$name]) {
-            throw 'Verifica dell immagine da aggiornare: riaprire 1_SETUP.cmd.'
+            throw 'Verifica del runtime da aggiornare: riaprire 1_SETUP.cmd.'
         }
     }
-    foreach ($name in @('source_runtime_image', 'runtime_archive_sha256')) {
+    foreach ($name in @('source_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256')) {
         if ($null -eq $Configuration.PSObject.Properties[$name]) {
-            throw 'Configurazione dell immagine da aggiornare: riaprire 1_SETUP.cmd.'
+            throw 'Configurazione del runtime da aggiornare: riaprire 1_SETUP.cmd.'
         }
     }
-    if ($Configuration.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
+    if ($Configuration.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
+        $State.wsl_distro -cne $Configuration.wsl_distro -or
+        $State.rootfs_sha256 -cne $Manifest.assets.rootfs.sha256 -or
+        $Configuration.rootfs_sha256 -cne $Manifest.assets.rootfs.sha256 -or
+        $Configuration.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
         $State.resolved_runtime_image -cne $Configuration.runtime_image -or
         $Configuration.source_runtime_image -cne $Manifest.runtime_image -or
         $State.runtime_image -cne $Manifest.runtime_image -or
@@ -236,7 +240,7 @@ function Assert-NipatRuntimeBinding($Manifest, $State, $Configuration) {
         $Configuration.release_tag -cne $Manifest.release_tag -or
         $State.runtime_archive_sha256 -cne $Manifest.assets.scientific_image.sha256 -or
         $Configuration.runtime_archive_sha256 -cne $Manifest.assets.scientific_image.sha256) {
-        throw 'L immagine configurata non corrisponde alla verifica di questa release: riaprire 1_SETUP.cmd.'
+        throw 'Il runtime configurato non corrisponde alla verifica di questa release: riaprire 1_SETUP.cmd.'
     }
 }
 
