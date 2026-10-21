@@ -32,15 +32,20 @@ The desktop GUI will use the same application layer after CLI validation.
 The source candidate adds a NIPAT banner with version, a vertical menu and
 arrow/Enter navigation in supported interactive terminals. Numbered choices
 remain available; redirected output and simple terminals use plain text.
-Inputs are checked as they are entered. Use `:indietro` to revisit an input
+Contextual instructions accompany mode selection and input fields in all four
+workflows, with format examples and an explanation of Enter. In a file list,
+Enter repeats the instructions until the first file is added; it then ends the
+list. Inputs are checked as they are entered. Use `:indietro` to revisit an input
 or `:annulla` to return to the main menu; entered values are retained while
 editing. Review the selected input files, parameters and results destination,
-then explicitly choose **Avvia analisi**.
+then explicitly choose **Avvia analisi**. In text and path fields, `0` does not
+cancel the operation; use `:annulla`.
 
 The final screen offers the results folder, run folder, log and an execution
 summary. **6 — Ultima esecuzione** reopens the most recent result screen in the
-current session. **7 — Guida e ambiente** provides usage help and an on-demand
-environment check; opening the menu alone does not verify the runtime.
+current session. **7 — Guida all'uso** separates **1 — Come usare NIPAT** from
+**2 — Verifica strumenti di analisi**. The check runs only when requested and
+is not executed in `--dry-run`; opening the help menu does not verify the runtime.
 **5 — Cartella risultati** still applies only to the current session.
 Persistent preferences, a cross-session history and automatic workflow chaining
 are not part of this revision. The direct CLI and scientific input modes remain

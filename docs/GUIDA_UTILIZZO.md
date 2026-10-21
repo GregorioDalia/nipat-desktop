@@ -60,23 +60,37 @@ e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
 All'apertura, il banner NIPAT riporta la versione. Il menu presenta i quattro
 workflow con una breve descrizione. Nei terminali interattivi supportati si
 usano **frecce e Invio** oppure i numeri; negli altri terminali resta la scelta
-numerica in testo semplice. La presenza del menu non indica che l'ambiente
-scientifico sia stato verificato.
+numerica in testo semplice. Ogni workflow mostra indicazioni contestuali anche
+dopo la selezione della modalità e durante l'inserimento dei dati: formato
+richiesto, esempi e significato di Invio. Le indicazioni sono grigie nei terminali
+che supportano i colori e restano disponibili in testo semplice negli altri.
 
 | Scelta | Funzione |
 | --- | --- |
 | 1–4 | DNPcall, SNPcall, Contamination e CPI, con le modalità di input descritte sotto. |
 | 5 | Cambiare la cartella risultati per le analisi successive della sessione. |
 | 6 | Riaprire la schermata dell'ultima esecuzione della sessione. |
-| 7 | Consultare la guida essenziale o richiedere il controllo dell'ambiente. |
+| 7 | Aprire **Guida all'uso**. |
 | 0 | Uscire dal programma. |
 
+**Guida all'uso** distingue **1 — Come usare NIPAT** da
+**2 — Verifica strumenti di analisi**; **0** torna al menu principale.
+La seconda voce controlla gli strumenti solo su richiesta: aprire la guida
+non esegue il controllo. In `--dry-run` il controllo non viene eseguito.
+
 Durante la compilazione, NIPAT controlla i percorsi e segnala gli errori nel
-campo interessato. **`:indietro`** permette di tornare all'input precedente;
-**`:annulla`** torna al menu principale. I valori già inseriti vengono
-conservati durante la correzione. Nei menu che lo prevedono, Esc torna indietro.
-La modalità con più file permette di controllare l'elenco prima di proseguire.
-Invio mantiene il valore mostrato tra parentesi; **`:vuoto`** cancella un valore
+campo interessato. Per un file si può inserire, per esempio,
+`..\data\campione.bam` o un percorso completo, anche tra virgolette.
+**`:indietro`** permette di tornare all'input precedente; **`:annulla`** torna
+al menu principale. Nei campi di testo e nei percorsi, **`0` non è un comando
+di annullamento**. I valori già inseriti vengono conservati durante la
+correzione. Nei menu che lo prevedono, Esc torna indietro.
+
+Nelle liste di file, il primo elemento è richiesto: premere Invio senza
+inserirlo ripropone le istruzioni e lascia aperto il campo. Dopo il primo file,
+si può aggiungerne un altro oppure premere Invio per terminare l'elenco e
+controllarlo prima di proseguire. Nei campi con un valore predefinito, Invio
+mantiene il valore mostrato tra parentesi; **`:vuoto`** cancella un valore
 facoltativo, per esempio il nome del run o un prefisso CPI. Il completamento
 dei percorsi con Tab non è incluso in questa revisione.
 

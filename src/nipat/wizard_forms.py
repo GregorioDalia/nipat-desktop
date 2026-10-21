@@ -162,16 +162,92 @@ class WorkflowForm:
             result.append(Field("err_const", "Costante di errore", "number", str(self.err_const)))
         return result + [Field("run_name", "Nome nuova esecuzione (vuoto = automatico)", "run", required=False)]
 
+    def _guide(self, field: Field, default: str = "") -> None:
+        """Keep instructions beside the input they describe, including retries."""
+        guides = {
+            "bams": "Selezionare uno o piu' file BAM: incollare un percorso per volta e premere Invio.",
+            "bam": "Incollare il percorso di un singolo file BAM. NIPAT preparera' il pileup per SNPcall.",
+            "bamlist": "Scegliere un file di testo con un percorso BAM per riga, senza intestazione. I percorsi nella lista sono relativi alla cartella della lista stessa, oppure completi.",
+            "reference": "Usare il FASTA della stessa assembly del BAM e del pannello. Accanto al FASTA deve essere presente il suo indice .fai; per FASTA BGZF serve anche .gzi.",
+            "pileup": "Scegliere un pileup separato da tabulazioni, senza intestazione, con i nomi delle letture (QNAME) nella settima colonna; e' il formato samtools --output-QNAME.",
+            "inputs": "Scegliere le tabelle dei campioni, una per volta. Colonne richieste: chr, pos1, pos2, N_REF, N_ALT, N_Other; separatore: tabulazione. La colonna ratio e' facoltativa.",
+            "pairs": "Indicare gli identificativi madre:padre, separando le coppie con una virgola. Esempio: A1:A1,A2:A2. Con i prefissi predefiniti, A1:A1 usa MotherA1.txt e FatherA1.txt.",
+            "mother_prefix": "Il nome del file e' prefisso + identificativo materno + .txt. Esempio: Mother + A1 diventa MotherA1.txt. :vuoto elimina il prefisso.",
+            "father_prefix": "Il nome del file e' prefisso + identificativo paterno + .txt. Esempio: Father + A1 diventa FatherA1.txt. :vuoto elimina il prefisso.",
+            "popfreq": "Scegliere la tabella delle frequenze di popolazione, separata da tabulazioni, con intestazione chr, pos1, pos2, Ref_f.pop, Alt_f.pop.",
+            "cutoffs": "Per ciascun gruppo di siti inserire prima un'etichetta, poi il percorso del file di coordinate. Esempio di etichetta: pannello_A. Non usare virgole o '=' nell'etichetta.",
+            "cutoff_file": "Scegliere il file di coordinate per l'etichetta appena inserita: colonne chr, pos1, pos2, oppure un pannello DNP a cinque colonne.",
+            "cutoff_map": "Inserire etichetta=percorso, separando i gruppi con una virgola. Esempio: pannello_A=panels/a.txt,pannello_B=panels/b.txt. I file devono contenere le coordinate DNP.",
+            "err_const": "Parametro del modello CPI: mantenere il valore proposto, salvo una scelta motivata per l'analisi. Per modificarlo usare un numero maggiore o uguale a zero, con il punto decimale.",
+            "run_name": "Il nome identifica una nuova cartella di esecuzione. Le cartelle gia' esistenti non vengono sovrascritte.",
+            "parallel": "Seriale elabora un campione alla volta; parallela elabora piu' campioni contemporaneamente e puo' richiedere piu' memoria.",
+            "cutoff_mode": "Scegliere se usare tutti i siti disponibili o limitare l'analisi a uno o piu' gruppi di coordinate. Ogni modalita' richiedera' solo i propri input.",
+        }
+        if field.key == "mode":
+            text = {
+                "1": "Scegliere come fornire i BAM: inserire i percorsi uno per volta oppure usare un file che li elenca. In seguito saranno richiesti FASTA e pannello DNP.",
+                "2": "Scegliere BAM e riferimento per preparare il pileup, oppure un pileup gia' disponibile. In entrambe le modalita' serve una lista SNP.",
+                "3": "Scegliere singole tabelle dei campioni oppure una cartella da esaminare. In seguito sara' richiesto il pannello DNP.",
+            }[self.choice]
+        elif field.key == "input_dir":
+            text = ("Scegliere la cartella delle tabelle dei campioni: saranno cercati file TXT e TSV anche nelle sottocartelle. Sono richieste le colonne chr, pos1, pos2, N_REF, N_ALT, N_Other; ratio e' facoltativa."
+                    if self.choice == "3" else
+                    "Scegliere la cartella delle tabelle cfDNA materno e presunto padre. I file devono chiamarsi prefisso + identificativo + .txt, per esempio MotherA1.txt e FatherA1.txt. Coppie e prefissi saranno richiesti nei passaggi successivi.")
+        elif field.key == "panel":
+            text = ("Scegliere un pannello DNP senza intestazione: cinque colonne chr, pos1, pos2, REF, ALT. Le due posizioni devono essere adiacenti e gli alleli di due basi."
+                    if self.choice == "1" else
+                    "Scegliere una tabella separata da tabulazioni con intestazione pos, ref, alt. Esempio di riga: chr1:1770788, C, G (con tabulazioni tra i valori)."
+                    if self.choice == "2" else
+                    "Scegliere le coordinate DNP: colonne chr, pos1, pos2, con o senza intestazione. E' accettato anche il pannello DNP a cinque colonne.")
+        else:
+            text = guides[field.key]
+        self.ui.message(text, kind="muted")
+        if field.kind in {"file", "files", "directory"}:
+            self.ui.message("Incollare un percorso completo o relativo alla cartella corrente, anche tra virgolette. In Esplora file si puo' usare 'Copia come percorso'.", kind="muted")
+        if field.kind == "choice":
+            self.ui.message("Selezionare una voce del menu; Invio conferma la selezione proposta.", kind="muted")
+        elif field.kind not in {"files", "cutoffs"}:
+            if default:
+                self.ui.message("Invio mantiene il valore tra parentesi quadre; per cambiarlo, scrivere il nuovo valore.", kind="muted")
+            elif not field.required:
+                self.ui.message("Invio senza testo assegna un nome automatico." if field.kind == "run" else "Invio lascia il campo vuoto.", kind="muted")
+            else:
+                self.ui.message("Inserire il valore richiesto e premere Invio. Il campo non puo' essere lasciato vuoto.", kind="muted")
+        self.ui.message(":indietro torna al campo precedente; :annulla torna al menu. Nei campi di testo, 0 non annulla.", kind="muted")
+
+    def _selected(self, field: Field, answer: str) -> None:
+        label = next(label for key, label, _ in field.options if key == answer)
+        if field.key == "mode":
+            detail = {
+                ("1", "1"): "La lista richiede almeno un BAM; dopo averlo aggiunto si puo' continuare con Invio o aggiungerne altri.",
+                ("1", "2"): "L'input e' il percorso del file bamlist che elenca i BAM da analizzare.",
+                ("2", "1"): "Sono richiesti BAM, FASTA indicizzato e lista SNP.",
+                ("2", "2"): "Sono richiesti pileup con QNAME e lista SNP. Il FASTA non viene richiesto.",
+                ("3", "1"): "La lista richiede almeno una tabella; dopo averla aggiunta si puo' continuare con Invio o aggiungerne altre.",
+                ("3", "2"): "L'input e' il percorso della cartella che contiene le tabelle dei campioni.",
+            }[(self.choice, answer)]
+        elif field.key == "cutoff_mode":
+            detail = {
+                "0": "Non occorre fornire un file di coordinate aggiuntivo.",
+                "1": "E' richiesto il percorso di un pannello di coordinate DNP.",
+                "2": "Ogni etichetta identifica un file di coordinate.",
+                "3": "Le associazioni etichetta=percorso sono separate da virgole.",
+            }[answer]
+        else:
+            detail = "La modalita' scelta sara' riportata nel riepilogo prima dell'avvio."
+        self.ui.message(f"Selezione: {label}. {detail}", kind="muted")
+
     def _text(self, field: Field, default: str) -> str:
-        answer = navigation(self.ui.prompt(field.label, default=default,
-                                           path=field.kind in {"file", "directory"}))
-        if answer.casefold() == ":vuoto":
-            answer = ""
-        elif not answer:
-            answer = default
-        if not answer and field.required:
-            raise ValidationError("Il valore e' obbligatorio.")
-        return answer
+        while True:
+            answer = navigation(self.ui.prompt(field.label, default=default,
+                                               path=field.kind in {"file", "directory"}))
+            if answer.casefold() == ":vuoto":
+                answer = ""
+            elif not answer:
+                answer = default
+            if answer or not field.required:
+                return answer
+            self.ui.message("Nessun valore inserito. Compilare questo campo per proseguire, oppure usare :indietro o :annulla.", kind="muted")
 
     def _file(self, field: Field, value: str) -> Path:
         path = require_file(Path(unquote(value)), field.label)
@@ -181,6 +257,7 @@ class WorkflowForm:
 
     def _collection(self, field: Field) -> list:
         current = list(self.values.get(field.key, []))
+        self._guide(field)
         if current:
             self.ui.message(self.format_value(current))
             while True:
@@ -196,25 +273,32 @@ class WorkflowForm:
                     current = [] if action == "2" else current
                     break
                 self.ui.message("Scegliere una delle opzioni indicate.", kind="error")
-        self.ui.message("Un elemento per volta; Invio termina la lista. :indietro conserva l'elenco.")
         while True:
             try:
+                if current:
+                    self.ui.message(f"Elementi inseriti: {len(current)}. Aggiungerne un altro oppure premere Invio senza testo per continuare.", kind="muted")
+                else:
+                    self.ui.message("Inserire il primo elemento per iniziare la lista. Invio senza testo mantiene aperto questo passaggio.", kind="muted")
                 if field.kind == "cutoffs":
-                    label = navigation(self.ui.prompt("Etichetta cutoff (Invio termina)"))
-                    if not label and current:
-                        return current
-                    if not label or any(c in label for c in ",=") or any(ord(c) < 32 for c in label):
+                    label = navigation(self.ui.prompt("Altra etichetta cutoff (Invio per continuare)" if current else "Prima etichetta cutoff"))
+                    if not label:
+                        if current:
+                            return current
+                        continue
+                    if any(c in label for c in ",=") or any(ord(c) < 32 for c in label):
                         raise ValidationError("Etichetta cutoff non valida: evitare virgole e '='.")
                     if label in {item[0] for item in current}:
                         raise ValidationError("Etichetta cutoff duplicata.")
                     source = self._read(Field("cutoff_file", "File cutoff", "file", check=read_position_panel))
                     item = (label, source)
                 else:
-                    raw = navigation(self.ui.prompt(field.label + " (Invio termina)", path=True))
-                    if not raw and current:
-                        return current
+                    prompt = ("Altro file (Invio per continuare)" if current else
+                              "Percorso del primo BAM" if field.key == "bams" else "Percorso della prima tabella")
+                    raw = navigation(self.ui.prompt(prompt, path=True))
                     if not raw:
-                        raise ValidationError("Inserire almeno un file.")
+                        if current:
+                            return current
+                        continue
                     item = self._file(field, raw)
                     if item in current:
                         raise ValidationError("Il file e' gia' presente nella lista.")
@@ -223,6 +307,7 @@ class WorkflowForm:
                 self.ui.message(f"Aggiunto ({len(current)}): {self.format_value(item)}", kind="success")
             except (ValidationError, OSError, ValueError, csv.Error) as exc:
                 self.ui.message(str(exc), kind="error")
+                self._guide(field)
 
     def _read(self, field: Field) -> Any:
         if field.kind in {"files", "cutoffs"}:
@@ -230,11 +315,13 @@ class WorkflowForm:
         existing = self.values.get(field.key, field.default)
         default = "" if existing is None else str(existing)
         while True:
+            self._guide(field, default)
             try:
                 if field.kind == "choice":
                     answer = navigation(self.ui.menu(field.label, list(field.options), default=default))
                     if answer not in {item[0] for item in field.options}:
                         raise ValidationError("Scegliere una delle opzioni indicate.")
+                    self._selected(field, answer)
                     return answer
                 answer = self._text(field, default)
                 if field.kind == "file":
@@ -318,6 +405,9 @@ class WorkflowForm:
                 self.ui.message(f"{field.label}: {rendered}")
             destination = self.layout.runs_dir / (self.values.get("run_name") or "<nome automatico>")
             self.ui.message(f"Destinazione: {destination}")
+            self.ui.message("Controllare gli input. 'Modifica un campo' permette di correggerli conservando gli altri valori.", kind="muted")
+            self.ui.message("La conferma preparera' file e comandi, senza eseguire il calcolo scientifico." if dry_run else
+                            "Il calcolo scientifico iniziera' solo confermando 'Avvia analisi'.", kind="muted")
             choice = self.ui.menu("Come procedere?", [
                 ("1", "Prepara dry-run" if dry_run else "Avvia analisi", "Con i valori mostrati"),
                 ("2", "Modifica un campo", "Gli altri valori vengono conservati"),

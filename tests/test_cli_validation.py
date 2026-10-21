@@ -221,11 +221,45 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(self.workflows.snp_call.call_args.kwargs['run_name'], 'new-run')
 
     def test_runtime_is_checked_only_on_explicit_request(self):
-        result, messages = self.invoke(['7', '0', '7', '1', '0'])
+        result, messages = self.invoke(['7', '1', '0', '7', '2', '0', '0'])
         self.assertEqual(result, 0)
         self.workflows.runner.doctor.assert_called_once_with(True)
-        self.assertIn('da verificare', messages)
-        self.assertIn('Ambiente verificato', messages)
+        self.assertNotIn('da verificare', messages)
+        self.assertIn('Controllo completato: ambiente di analisi, R e samtools disponibili.', messages)
+
+    def test_help_instructions_do_not_start_runtime_or_analyses(self):
+        result, messages = self.invoke(['7', '1', '0', '0'])
+        self.assertEqual(result, 0)
+        self.workflows.runner.doctor.assert_not_called()
+        for name in ('dnp_call', 'snp_call', 'contamination', 'cpi'):
+            getattr(self.workflows, name).assert_not_called()
+        self.assertIn('dopo almeno un file, Invio conclude la lista', messages)
+        self.assertIn('campo obbligatorio senza valore iniziale richiede una risposta', messages)
+        self.assertIn('work i file intermedi', messages)
+        self.assertIn('senza eseguire l\'analisi o produrre risultati scientifici', messages)
+        self.assertNotIn('Controllo completato:', messages)
+
+    def test_help_dry_run_explains_verification_without_running_it(self):
+        result, messages = self.invoke(['7', '2', '0', '0'], dry_run=True)
+        self.assertEqual(result, 0)
+        self.workflows.runner.doctor.assert_not_called()
+        self.assertIn('la verifica degli strumenti non viene eseguita', messages)
+        self.assertIn('avviare NIPAT senza --dry-run', messages)
+        self.assertNotIn('Controllo completato:', messages)
+
+    def test_help_unknown_choice_and_navigation_stay_local(self):
+        result, messages = self.invoke(['7', 'invalid', '1', ':indietro', '0'])
+        self.assertEqual(result, 0)
+        self.workflows.runner.doctor.assert_not_called()
+        self.assertIn('Scegliere 1 per le istruzioni', messages)
+        self.assertIn('Come usare NIPAT', messages)
+
+    def test_failed_tool_verification_never_claims_availability(self):
+        self.workflows.runner.doctor.side_effect = RuntimeExecutionError('Strumenti non disponibili')
+        result, messages = self.invoke(['7', '2', '0'])
+        self.assertEqual(result, 2)
+        self.assertIn('Strumenti non disponibili', messages)
+        self.assertNotIn('Controllo completato:', messages)
 
     def test_portable_python_can_import_ui_without_site_packages(self):
         project = Path(__file__).resolve().parents[1]

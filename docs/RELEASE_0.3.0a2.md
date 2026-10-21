@@ -9,11 +9,18 @@ pubblicato resta `v0.3.0a1`; queste note descrivono il nuovo candidato da sorgen
   supportati e scelta numerica disponibile anche in testo semplice.
 - Controllo degli input durante la compilazione, ritorno al campo precedente
   con `:indietro` e conservazione dei valori durante le correzioni.
+- Indicazioni contestuali nei quattro workflow, anche dopo la scelta della
+  modalità e dentro i campi, con esempi e spiegazione dei comandi disponibili.
+  Nelle liste, Invio prima del primo file ripropone le istruzioni; termina
+  l'elenco soltanto dopo l'inserimento di almeno un file. Nei campi si annulla
+  con `:annulla`, non con `0`.
 - Riepilogo modificabile di input, parametri e destinazione prima di
   **Avvia analisi**.
 - Schermata finale per aprire risultati, cartella del run e log e consultare
   i metadati dell'esecuzione; richiamo dell'ultima esecuzione nella sessione.
-- Guida essenziale e controllo dell'ambiente su richiesta dal menu.
+- **7 — Guida all'uso**, con **1 — Come usare NIPAT** e
+  **2 — Verifica strumenti di analisi**. Il controllo viene richiesto
+  separatamente e non viene eseguito in `--dry-run`.
 
 I quattro workflow e le loro modalità di input restano disponibili. La
 revisione non cambia gli algoritmi R né i valori predefiniti scientifici e
@@ -23,7 +30,18 @@ e concatenamento automatico dei workflow non sono inclusi.
 
 ## Verifiche del candidato
 
-Controlli locali completati con Python 3.12.14:
+Revisione delle indicazioni contestuali e del menu Guida, con Python 3.12.14:
+
+- 173 test automatici superati. I nuovi casi verificano Invio nei campi
+  obbligatori e nelle liste, mantenimento degli elementi, annullamento,
+  correzione dei percorsi errati e verifica degli strumenti su richiesta.
+- Riprodotta in una console POSIX la sequenza DNPcall con Invio ripetuto prima
+  del primo BAM: istruzioni neutre, campo ancora aperto e annullamento riuscito.
+- SNPcall in `--dry-run` attraverso menu e servizi reali: stato `planned`,
+  nessun risultato scientifico e uscita senza errori.
+
+Controlli locali completati sulla base `cf16710`, con Python 3.12.14,
+prima della revisione delle indicazioni contestuali e del menu Guida:
 
 - 164 test automatici superati, inclusi i quattro workflow, la correzione dei
   campi, la conferma prima dell'avvio e la gestione dei risultati.
@@ -41,10 +59,13 @@ Controlli locali completati con Python 3.12.14:
 Questi controlli non sostituiscono la verifica manuale della console Windows.
 Prima della distribuzione del nuovo installatore occorre provare su Windows:
 
-1. Menu con frecce, Invio e selezione numerica.
-2. Percorso errato seguito da correzione, `:indietro` e `:annulla`.
-3. Modifica di un campo dal riepilogo e avvio soltanto dopo conferma.
-4. Apertura della cartella risultati e del log dopo un'analisi.
+1. Menu con frecce, Invio e selezione numerica; indicazioni contestuali nelle
+   modalità di tutti e quattro i workflow.
+2. Invio prima del primo file e dopo almeno un file nelle liste, percorso
+   errato seguito da correzione, `:indietro` e `:annulla`.
+3. Distinzione tra guida e verifica degli strumenti, compreso `--dry-run`.
+4. Modifica di un campo dal riepilogo e avvio soltanto dopo conferma.
+5. Apertura della cartella risultati e del log dopo un'analisi.
 
 La validazione scientifica su casi indipendenti rimane distinta. Gli esiti
 delle versioni precedenti non costituiscono verifica delle nuove interazioni.

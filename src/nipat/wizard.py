@@ -24,13 +24,18 @@ MAIN_MENU = [
     ("4", "CPI", "Frazione fetale e indice di paternita'"),
     ("5", "Cartella risultati", "Destinazione per questa sessione"),
     ("6", "Ultima esecuzione", "Risultati e log della sessione"),
-    ("7", "Guida e ambiente", "Uso del menu e verifica del runtime"),
+    ("7", "Guida all'uso", "Istruzioni e verifica degli strumenti"),
     ("0", "Esci", ""),
 ]
 
 
 def _results_directory(ui: Terminal, layout: ProjectLayout, workflows: Workflows) -> ProjectLayout:
+    ui.heading("Cartella risultati / Destinazione delle prossime analisi")
     while True:
+        ui.message("Inserire il percorso della cartella oppure premere Invio per mantenere quella indicata.", kind="muted")
+        ui.message("Sono accettati percorsi completi o relativi alla cartella corrente, anche tra virgolette.", kind="muted")
+        ui.message("La scelta vale per questa sessione; i risultati precedenti restano nella loro cartella.", kind="muted")
+        ui.message(":indietro o :annulla torna al menu senza cambiare destinazione.", kind="muted")
         answer = navigation(ui.prompt("Cartella risultati", default=str(layout.runs_dir), path=True))
         try:
             path = Path(unquote(answer or str(layout.runs_dir))).expanduser().resolve()
@@ -47,25 +52,51 @@ def _results_directory(ui: Terminal, layout: ProjectLayout, workflows: Workflows
 
 
 def _help(ui: Terminal, workflows: Workflows, layout: ProjectLayout, dry_run: bool) -> None:
-    ui.heading("Guida per l'utilizzo")
-    ui.message("Selezionare un workflow, compilare gli input e confermare il riepilogo.")
-    ui.message("Invio mantiene il valore tra parentesi. :indietro torna al campo precedente.")
-    ui.message(":annulla torna al menu. :vuoto svuota un campo facoltativo, anche un prefisso CPI.")
-    ui.message("I percorsi relativi partono dalla cartella corrente; quelli nelle bamlist dalla lista.")
-    ui.message("Gli elenchi di file terminano con Invio. I risultati esistenti non vengono sovrascritti.")
-    ui.message("I comandi diretti restano disponibili: nipat.cmd --help")
-    ui.message(f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}")
-    action = ui.menu("Verifica dell'ambiente", [
-        ("1", "Controlla runtime", "Avvia l'ambiente e controlla R e samtools"),
-        ("0", "Torna al menu", ""),
-    ], default="0")
-    if action == "1":
-        if dry_run:
-            ui.message("Il controllo reale del runtime non e' disponibile in modalita' dry-run.")
+    while True:
+        ui.message("Consultare le istruzioni oppure verificare gli strumenti necessari alle analisi.", kind="muted")
+        ui.message("In modalita' simulazione la verifica degli strumenti non viene eseguita. 0 torna al menu principale." if dry_run else
+                   "La verifica avvia l'ambiente di analisi senza elaborare campioni. 0 torna al menu principale.", kind="muted")
+        action = ui.menu("Guida all'uso", [
+            ("1", "Come usare NIPAT", "Input, comandi di navigazione e risultati"),
+            ("2", "Verifica strumenti di analisi", "Controlla l'ambiente, R e samtools"),
+            ("0", "Torna al menu", ""),
+        ], default="0").strip().casefold()
+        if action in {"0", ":indietro", ":annulla"}:
             return
-        ui.message("Verifica dell'ambiente in corso...")
-        workflows.runner.doctor(True)
-        ui.message("Ambiente verificato in questo momento.", kind="success")
+        if action == "1":
+            ui.heading("Come usare NIPAT")
+            for instruction in (
+                "Selezionare un'analisi dal menu e seguire le indicazioni mostrate prima di ogni campo.",
+                "Per un file, incollare il percorso completo oppure un percorso relativo alla cartella corrente.",
+                "In Windows si puo' usare 'Copia come percorso': le virgolette vengono accettate.",
+                "Nelle liste di file inserire un percorso alla volta; dopo almeno un file, Invio conclude la lista.",
+                "Negli altri campi Invio mantiene il valore tra parentesi oppure lascia vuoto un campo facoltativo.",
+                "Un campo obbligatorio senza valore iniziale richiede una risposta prima di proseguire.",
+                ":indietro torna al campo precedente; :annulla torna al menu; :vuoto svuota un campo facoltativo.",
+                "I percorsi relativi contenuti in una bamlist partono dalla cartella della bamlist.",
+                "Il riepilogo permette di correggere gli input. L'analisi parte solo dopo la conferma di avvio.",
+                "Con --dry-run vengono preparati i comandi, senza eseguire l'analisi o produrre risultati scientifici.",
+                "Ogni esecuzione ha una cartella distinta: output contiene i risultati, work i file intermedi.",
+                "run.json registra gli input e lo stato; execution.log conserva i dettagli del processo.",
+                "Il punto 6 del menu riapre l'ultima esecuzione della sessione. I risultati precedenti restano su disco.",
+                "Per concatenare analisi, utilizzare i file prodotti come input del workflow successivo.",
+                "I comandi diretti sono disponibili con nipat.cmd --help.",
+                f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}",
+            ):
+                ui.message(instruction, kind="muted")
+        elif action == "2":
+            if dry_run:
+                ui.message("Modalita' simulazione (--dry-run): la verifica degli strumenti non viene eseguita.", kind="muted")
+                ui.message("Per controllarli, avviare NIPAT senza --dry-run e scegliere di nuovo questa voce.", kind="muted")
+                continue
+            ui.heading("Verifica strumenti di analisi")
+            ui.message("Il controllo avvia l'ambiente e verifica gli strumenti; non esegue analisi sui dati.", kind="muted")
+            ui.message("Verifica in corso...")
+            workflows.runner.doctor(True)
+            ui.message("Controllo completato: ambiente di analisi, R e samtools disponibili.", kind="success")
+            ui.message("Il controllo riguarda gli strumenti. Gli input saranno verificati quando si prepara un'analisi.", kind="muted")
+        else:
+            ui.message("Scegliere 1 per le istruzioni, 2 per la verifica oppure 0 per tornare al menu.", kind="muted")
 
 
 def run_wizard(
@@ -89,8 +120,7 @@ def run_wizard(
             ui.message("Input su dischi locali; le unita' di rete non sono supportate.", kind="muted")
         else:
             ui.message("Input in cartelle accessibili a Docker.", kind="muted")
-        ui.message("Ambiente: da verificare all'avvio dell'analisi o dal menu Guida.", kind="muted")
-        ui.message(":indietro corregge il campo precedente; :annulla torna al menu.")
+        ui.message(":indietro corregge il campo precedente; :annulla torna al menu.", kind="muted")
         while True:
             choice = ui.menu("Menu principale", MAIN_MENU)
             if choice in {"0", ":annulla", ":indietro"}:
