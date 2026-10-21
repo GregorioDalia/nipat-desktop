@@ -192,7 +192,7 @@ class DistributionTests(unittest.TestCase):
                 source = project / "src" / "nipat" / "cli.py"
                 original = source.read_bytes()
                 source.write_text("changed source", encoding="utf-8")
-                with self.assertRaisesRegex(ValueError, "sorgenti"):
+                with self.assertRaisesRegex(ValueError, r"modificato: 'src/nipat/cli\.py'"):
                     bundle.verified_installer_runtime(project, archive, manifest_path)
                 source.write_bytes(original)
                 contents = archive.read_bytes()

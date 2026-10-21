@@ -192,8 +192,19 @@ def verified_installer_runtime(project: Path, archive: Path, manifest_path: Path
         raise ValueError("Versione dei sorgenti diversa dal manifest runtime.")
     hashes = {path.relative_to(project.resolve()).as_posix(): sha256_file(path)
               for path in source_files(project)}
-    if hashes != manifest.get("source_sha256"):
-        raise ValueError("I sorgenti non corrispondono al manifest compilato in CI.")
+    expected_hashes = manifest.get("source_sha256")
+    if hashes != expected_hashes:
+        if isinstance(expected_hashes, dict):
+            differences = [f"mancante: {name!r}" for name in sorted(set(expected_hashes) - set(hashes), key=str)]
+            differences += [f"aggiunto: {name!r}" for name in sorted(set(hashes) - set(expected_hashes))]
+            differences += [f"modificato: {name!r}" for name in sorted(set(hashes) & set(expected_hashes))
+                            if hashes[name] != expected_hashes[name]]
+            detail = "; ".join(differences[:8])
+            if len(differences) > 8:
+                detail += f"; altri {len(differences) - 8} file"
+        else:
+            detail = "mappa source_sha256 assente o non valida"
+        raise ValueError(f"I sorgenti non corrispondono al manifest compilato in CI: {detail}.")
     source = git_source(project)
     if source["available"] and (source["commit"] != manifest["source_commit"] or source["dirty"] is not False):
         raise ValueError("Il checkout Git deve essere pulito e corrispondere al commit del manifest.")
