@@ -7,12 +7,15 @@ import io
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from nipat import __version__
 
 
 SPEC = importlib.util.spec_from_file_location(
@@ -34,6 +37,21 @@ ROOTFS = "sha256:" + "c" * 64
 
 
 class InstallerAssetTests(unittest.TestCase):
+    def test_repository_release_versions_agree(self):
+        # Packaging spans Python, PowerShell and Inno Setup. Catch a version
+        # bump that the installer would reject before exporting large assets.
+        project = Path(__file__).resolve().parents[1]
+        version = assets.checked_version(project)
+        self.assertEqual(__version__, version)
+        bootstrap = (project / "installer/windows/bootstrap-common.ps1").read_text(encoding="utf-8")
+        guard = re.search(r"\$manifest\.version -ne '([^']+)'", bootstrap)
+        self.assertIsNotNone(guard, "Expected an explicit supported installer version")
+        self.assertEqual(guard.group(1), version)
+        setup = (project / "installer/windows/NIPAT.iss").read_text(encoding="utf-8")
+        definition = re.search(r'#define NipatVersion "([^"]+)"', setup)
+        self.assertIsNotNone(definition, "Expected the installer display version")
+        self.assertEqual(definition.group(1), version)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

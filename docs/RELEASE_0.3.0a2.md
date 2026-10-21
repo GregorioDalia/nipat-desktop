@@ -25,7 +25,7 @@ e concatenamento automatico dei workflow non sono inclusi.
 
 Controlli locali completati con Python 3.12.14:
 
-- 163 test automatici superati, inclusi i quattro workflow, la correzione dei
+- 164 test automatici superati, inclusi i quattro workflow, la correzione dei
   campi, la conferma prima dell'avvio e la gestione dei risultati.
 - Importazione dei nuovi moduli con Python isolato, senza `site-packages`.
 - Navigazione con frecce, Invio ed Esc in un terminale POSIX reale, oltre
@@ -33,6 +33,10 @@ Controlli locali completati con Python 3.12.14:
 - SNPcall in `--dry-run` attraverso il menu e i servizi reali: metadati con
   stato `planned`, nessun risultato scientifico e nessun falso messaggio di
   analisi completata.
+- Versione del pacchetto, controllo del manifest e versione visualizzata
+  dall'installatore allineati a `0.3.0a2`, con un test per rilevare divergenze.
+  Manifest generato da Python accettato dal controllo PowerShell; 64 asserzioni
+  dei controlli installer superate con PowerShell 7 su Linux.
 
 Questi controlli non sostituiscono la verifica manuale della console Windows.
 Prima della distribuzione del nuovo installatore occorre provare su Windows:
