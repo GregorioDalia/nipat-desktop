@@ -18,6 +18,7 @@ docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
 docs/INSTALLATORE_WINDOWS.md
+docs/RELEASE_0.3.0a1.md
 docs/VALIDAZIONE.md
 installer/runtime/Dockerfile
 installer/runtime/nipat-engine

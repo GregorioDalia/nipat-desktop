@@ -16,8 +16,20 @@
   Linux amd64, and persist both IDs plus the archive hash. Never choose an image
   from a daemon-wide listing. Check the persisted release binding at launch.
 - Add an actual exported-archive load/run/reload gate in the shipped engine.
-  Prepare this correction locally first; do not trigger another GitHub build
-  until the Windows installation trial has been reviewed.
+  The local correction and Windows trial were reviewed on 2026-10-21; build
+  39581854492 at 0595c47 subsequently passed this gate and compiled the EXE.
+- The first domain-testing handoff assumes working WSL2 on Windows 11 x64.
+  Clean-machine WSL activation and restart/resume remain separate, unverified
+  installation cases; they do not block this scoped pre-release. Each tester
+  must still complete setup and self-tests before starting domain analyses.
+- The physical-PC evidence uses candidate 19507bb with three locally corrected
+  scripts. It includes engine restart after WSL termination and one real-BAM
+  DNPcall comparison (11 sites, 11 selected count/genotype columns). Do not
+  present this as a full installation test of the later rebuilt EXE, a complete
+  17-column WSL comparison, or independent scientific validation.
+- Publish EXE, runtime archives and manifest from one successful build at the
+  exact tagged source commit. Include the updated usage guide in that build;
+  never mix an older executable or manifest with revised source documents.
 - Elevate only Windows prerequisite activation. Register the distro under the
   invoking user; never automatically replace an existing distro.
 - Complete self-tests before reporting setup success. CI success does not

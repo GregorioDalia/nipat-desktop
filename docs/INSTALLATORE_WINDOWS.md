@@ -5,6 +5,12 @@ La revisione `0.3.0a1` introduce un candidato `NIPAT-Setup.exe` per
 Docker Desktop. Questo documento distingue la costruzione dell’installatore
 dalla verifica dell’installazione completa e dalla validazione scientifica.
 
+**Perimetro della prima consegna per le prove di dominio (21 ottobre 2026):**
+Windows 11 x64 con WSL2 già funzionante. Il percorso di attivazione iniziale
+di WSL, UAC e ripresa dopo riavvio resta da verificare separatamente e non
+blocca questa consegna. Su ogni PC il setup deve comunque completare gli
+autotest e riportare `NIPAT: ready` prima delle analisi.
+
 ## Flusso previsto per l’utilizzo
 
 1. Scaricare `NIPAT-Setup.exe` dalla release GitHub.
@@ -85,7 +91,7 @@ un runtime diverso fra verifica e distribuzione.
 
 ## Prova prima della pubblicazione
 
-Gli asset non sono ancora disponibili all’URL della futura release. Scaricare
+Finché gli asset non sono pubblicati, scaricare
 da GitHub Actions gli artefatti della stessa esecuzione del workflow: installer
 e archivi runtime. Estrarli localmente e avviare l’EXE indicando la cartella
 che contiene gli archivi, per esempio:
@@ -99,7 +105,9 @@ gli hash del manifest incorporato. Non occorre applicare patch al progetto di
 sviluppo né copiare i propri BAM/FASTA nell’installazione.
 
 Registrare versione di Windows, versione WSL, commit, ID del workflow e ID
-immagine insieme agli esiti. Per questa nuova modalità servono prove reali di:
+immagine insieme agli esiti. La matrice completa di verifica dell'installatore
+comprende i casi seguenti; i casi senza WSL funzionante rimangono fuori dal
+perimetro della prima consegna per le prove di dominio:
 
 | Caso | Esito da osservare |
 | --- | --- |
@@ -145,16 +153,17 @@ Il log fornito dall'utilizzatore documenta:
   `nipat.cmd doctor --runtime` ha riavviato il motore dedicato, verificato
   l'immagine locale e le dipendenze; `2_AVVIA.cmd` ha aperto il menu CLI
   e si e' chiuso regolarmente con l'opzione 0.
+- DNPcall da BAM reale nel run `ionxpress_008_wsl_20261021-121741-605`:
+  11 siti corrispondenti al precedente run Docker Desktop. Il confronto ha
+  incluso `chr`, `pos1`, `pos2`, `REF`, `ALT`, `N_REF`, `N_ALT`, `N_Other`,
+  `GT`, `total_count` e `reads_discarded_for_indels` (11 colonne).
 
 Questa evidenza riguarda il candidato con tre script corretti localmente,
-non ancora un nuovo EXE compilato dalla revisione corretta. Restano da
-verificare l'installazione completa su Windows 11 x64 pulito (inclusi
-abilitazione WSL e riavvio Windows) e DNPcall da BAM nel backend WSL. I test sui dati
-di esempio non costituiscono validazione scientifica su campioni reali.
-
-La prova di caricamento nel motore distribuito e' stata aggiunta al workflow.
-Al momento della prova locale non era ancora stata eseguita su GitHub;
-l'esito della compilazione va verificato per lo specifico commit utilizzato.
+non l'installazione completa di un nuovo EXE compilato dalla revisione corretta.
+Il confronto BAM riguarda un solo campione e un risultato precedente dello
+stesso programma: non è un riferimento scientifico indipendente. Restano da
+verificare la prima installazione del nuovo EXE su un altro PC e il percorso
+su Windows pulito, inclusi abilitazione WSL e riavvio Windows.
 
 La prima esecuzione di questo nuovo controllo (`39580501326`) ha rilevato
 un errore di estrazione dei whiteout nel container Linux del test. Il motore
@@ -165,11 +174,23 @@ Questo adeguamento riguarda l'ambiente CI; il setup WSL continua a usare
 il disco della propria distribuzione. Il controllo sugli errori di caricamento
 rimane attivo, cosi' come l'esecuzione e il secondo caricamento dell'immagine.
 
+La successiva [compilazione 39581854492](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39581854492),
+dal commit `0595c47179f93cf4426f66162875ae1e1035f5c8`, è terminata con successo:
+suite Python su Linux e Windows (129 test ciascuna), 63 controlli PowerShell
+su Windows PowerShell 5.1, regressioni scientifiche, caricamento/esecuzione/
+ricaricamento dell'archivio nel motore Docker 29.9.2 con containerd distribuito
+e compilazione dell'EXE. È evidenza di build e integrazione del runtime,
+distinta dalle prove sul PC descritte sopra. Una modifica dei sorgenti inclusi,
+anche della documentazione, richiede una nuova build coerente di EXE e asset.
+
 ## Pubblicazione della versione verificata
 
 Dopo le prove, creare un nuovo tag sul commit esatto compilato e una
 **pre-release** corrispondente alla versione del manifest. Allegare l’EXE,
-i due archivi e il manifest/checksum prodotti dalla stessa esecuzione.
+i due archivi e il manifest prodotti dalla stessa esecuzione. Gli artefatti
+del setup e del runtime contengono entrambi un file `SHA256SUMS`, con elenchi
+diversi: verificare i rispettivi file e combinarli in un solo `SHA256SUMS`
+per la release, senza perdere l'hash dell'EXE o quelli degli archivi.
 Le etichette e i nomi degli asset devono corrispondere agli URL incorporati
 nell’installer. Verificare la firma del codice se disponibile; il candidato
 compilato senza certificato è privo di firma e Windows può mostrare l’avviso

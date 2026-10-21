@@ -1,6 +1,6 @@
 # NIPAT: stato del progetto e funzionamento
 
-**CLI per la validazione di dominio; installatore Windows 0.3.0a1 in sviluppo.**
+**CLI 0.3.0a1 per le prove di dominio su Windows 11 x64 con WSL2 funzionante.**
 NIPAT riunisce quattro analisi locali: Python gestisce file ed esecuzioni,
 mentre gli script R di DNPcall e NEWPAT eseguono i calcoli con samtools in
 Docker. La GUI verrà dopo la validazione della CLI.
@@ -33,15 +33,25 @@ validazione di dominio e dall'installazione su un altro PC, ancora da svolgere.
 La release pubblicata `v0.2.0a2` resta invariata. La revisione `0.3.0a1`
 aggiunge un installatore che prepara WSL2 e Docker Engine in un ambiente
 dedicato. Mantiene i quattro workflow e gli script scientifici esistenti.
-L’installazione completa su Windows è ancora da verificare.
+Il 21 ottobre il candidato WSL corretto localmente ha completato setup e
+autotest, riavviato il proprio motore dopo l'arresto di WSL e riprodotto
+11 siti e le 11 colonne confrontate di conteggi/genotipi del BAM reale.
+La successiva compilazione GitHub ha superato anche caricamento, esecuzione e
+ricaricamento dell'immagine nel motore distribuito. Queste prove sono distinte
+dalla prima installazione del nuovo EXE su un altro PC. Per la consegna attuale
+si assume WSL2 già funzionante; attivazione iniziale e ripresa dopo riavvio
+Windows restano da verificare. La validazione scientifica su altri casi è aperta.
 
 ## Come si usa
 
-Il canale di distribuzione è GitHub. L’installatore in preparazione consente di
-scaricare `NIPAT-Setup.exe`, avviarlo e ottenere il collegamento **NIPAT**:
-la configurazione gestisce Python, WSL2, Docker Engine e il runtime scientifico,
-poi esegue gli autotest. Può richiedere autorizzazione amministrativa e riavvio
-per attivare WSL2. Il primo download richiede Internet; le analisi sono locali.
+Il canale di distribuzione è la pre-release GitHub `v0.3.0a1`. Scaricare
+`NIPAT-Setup.exe` e avviarlo con doppio clic dal proprio account Windows.
+La configurazione prepara Python, l'ambiente WSL dedicato, Docker Engine e
+il runtime scientifico, poi esegue gli autotest. Attendere **`NIPAT: ready`**,
+quindi aprire **NIPAT** dal menu Start. Non occorre installare Docker Desktop,
+Python, R o samtools separatamente. Il primo download richiede Internet;
+le analisi sono locali. Il caso senza WSL funzionante è fuori dal perimetro
+di questa prima consegna per le prove di dominio.
 Per la release già pubblicata `0.2.0a2` resta il percorso con archivio sorgente,
 `1_SETUP.cmd`, `2_AVVIA.cmd` e Docker Desktop avviato.
 
@@ -53,6 +63,11 @@ cartella dei risultati: ogni analisi crea un nuovo run, conserva i nomi
 degli output scientifici e registra input, corrispondenze dei percorsi,
 parametri ed esito in `run.json` e `execution.log`. I run esistenti non vengono
 sovrascritti e i dati delle analisi restano sul computer.
+
+I risultati si consultano nel file system: `output` contiene i risultati,
+`work` gli intermedi. Per concatenare analisi, selezionare gli output compatibili
+del run precedente come input del successivo, ad esempio le tabelle individuali
+DNPcall per Contamination. La CLI non concatena automaticamente i workflow.
 
 Per cominciare: [guida per l’utilizzo](docs/GUIDA_UTILIZZO.md).
 Per riportare le prove: [scheda di validazione](docs/VALIDAZIONE.md).

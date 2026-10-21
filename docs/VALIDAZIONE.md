@@ -4,6 +4,23 @@ Il successo degli autotest verifica la riproduzione dei casi inclusi. Questa
 scheda serve a valutare il comportamento con altri input e a distinguere
 problemi di utilizzo, problemi tecnici e discrepanze scientifiche.
 
+Per la pre-release `0.3.0a1` il perimetro iniziale è Windows 11 x64 con
+WSL2 già funzionante. Prima delle analisi registrare una sola volta:
+
+| Ambiente e preparazione | Da compilare |
+| --- | --- |
+| Versione Windows e risultato di `wsl --version` | |
+| Versione, `release_tag` e `source_commit` da `state.json` | |
+| Prima installazione o installazione NIPAT sperimentale già presente | |
+| Setup terminato con `NIPAT: ready` e autotest superati | |
+| Apertura del menu NIPAT e cartella risultati scelta | |
+
+Lo stato del setup si trova in
+`%LOCALAPPDATA%\Programs\NIPAT\.runtime\installer\state.json`, insieme a
+`setup.log`. In caso di errore di configurazione conservare questi file e
+registrare l'impedimento prima di passare ai test scientifici. L'abilitazione
+iniziale di WSL e la ripresa dopo riavvio Windows sono prove separate, ancora aperte.
+
 Per ciascuna prova registrare:
 
 | Campo | Da compilare |
@@ -27,7 +44,7 @@ senza siti informativi e input con intestazioni o percorsi non validi.
 Per CPI servono coppie e frequenze appropriate; per DNPcall/SNPcall un confronto
 indipendente dei conteggi consente di andare oltre la verifica dell'esecuzione.
 
-Per `0.2.0a2`, verificare anche l'utilizzo di input nelle loro cartelle originali,
+Verificare anche l'utilizzo di input nelle loro cartelle originali,
 percorsi con spazi e una destinazione dei risultati diversa da quella predefinita.
 Per DNPcall controllare la corrispondenza fra gli alias e i BAM originali nelle
 prove con più campioni. Quando possibile, confrontare modalità equivalenti:
@@ -38,8 +55,9 @@ risultati distinti per le etichette selezionate.
 
 Le verifiche Windows di `0.2.0a2`, incluso `scripts/verify_input_modes.py` e
 un confronto DNPcall da BAM reale con un run precedente, sono descritte in
-[DISTRIBUZIONE.md](DISTRIBUZIONE.md). Coprono i casi riportati sul PC di sviluppo;
-le prove di dominio devono estendere la copertura e valutare i risultati
+[DISTRIBUZIONE.md](DISTRIBUZIONE.md). Coprono i casi riportati sul PC di sviluppo.
+Le ulteriori prove sul candidato WSL del 21 ottobre sono riportate in
+[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md). Le prove di dominio devono estendere la copertura e valutare i risultati
 scientifici su riferimenti indipendenti quando disponibili.
 
 Annotare separatamente un errore del programma e un risultato scientifico

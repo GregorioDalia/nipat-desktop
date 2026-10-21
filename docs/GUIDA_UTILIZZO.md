@@ -7,24 +7,34 @@ riferimenti scientifici indipendenti resta necessaria.
 
 ## Installazione guidata Windows
 
-L’installatore `0.3.0a1` è un candidato in verifica, distinto dalla release
-pubblicata `0.2.0a2`. Quando disponibile nella release indicata per le prove:
+La pre-release `0.3.0a1` è destinata alle prove della CLI su **Windows 11 x64
+con WSL2 già funzionante**. L'attivazione iniziale di WSL e la ripresa dopo
+riavvio Windows non rientrano nella verifica completata. Il pacchetto è distinto
+dal precedente archivio sorgente `0.2.0a2`.
 
-1. Scaricare l’asset **NIPAT-Setup.exe** dalla release GitHub.
+1. Aprire la [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
+   e scaricare l'asset **NIPAT-Setup.exe**. Gli archivi runtime vengono scaricati
+   dalla configurazione; non occorre estrarre i file “Source code”.
 2. Avviare il file con doppio clic dal proprio account Windows, senza scegliere
    “Esegui come amministratore”. La configurazione chiede l’autorizzazione
    amministrativa soltanto se serve attivare WSL.
-3. Completare la configurazione. Se viene richiesto un riavvio, salvare il
-   lavoro e riavviare; la procedura riprende al successivo accesso allo stesso account.
-4. Attendere il completamento degli autotest, quindi aprire **NIPAT** dal
-   menu Start o dal collegamento sul desktop.
+3. Attendere download, preparazione dell'ambiente e autotest. Il primo avvio
+   può richiedere diversi minuti. La configurazione deve terminare con
+   **`NIPAT: ready`**; un messaggio di errore non equivale a setup completato.
+4. Aprire **NIPAT** dal menu Start o dal collegamento sul desktop.
+   Il programma avvia automaticamente il proprio motore quando necessario.
 
 La prima versione dell’installatore è destinata a Windows 11 x64, con
 virtualizzazione disponibile. Non richiede installazioni manuali separate di
 Python, R, samtools o Docker Desktop. Richiede Internet per i download iniziali
 ed eventuale intervento IT quando le impostazioni del computer impediscono WSL.
-Per le prove prima della pubblicazione degli asset, seguire
-[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
+Per dettagli tecnici e prove dell'installatore, consultare
+[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md). Se la configurazione richiede
+di attivare WSL o di riavviare Windows, registrare il caso separatamente dalle
+prove scientifiche: non è il percorso già verificato per questa consegna.
+Un'installazione sperimentale NIPAT già presente può usare un ambiente diverso;
+il candidato non ne effettua la migrazione automatica. Non eliminarlo per
+forzare il setup: conservare il log e richiedere una verifica.
 
 ## Installazione da sorgenti con Docker già disponibile
 
@@ -62,7 +72,9 @@ di ambiente. La scelta fatta nel menu non viene salvata per l'avvio successivo.
 Nei comandi CLI le opzioni globali vanno **prima del workflow**. I percorsi
 relativi partono dalla cartella corrente del terminale; quelli dentro una
 lista BAM partono dalla cartella della lista stessa. Nell'esempio seguente,
-eseguito dalla cartella del progetto, sostituire le cartelle con le proprie:
+eseguito dalla cartella contenente `nipat.cmd`, sostituire le cartelle con le
+proprie. Per l'applicazione installata, la cartella è
+`%LOCALAPPDATA%\Programs\NIPAT`; per i sorgenti è la cartella del progetto:
 
 ```powershell
 .\nipat.cmd --data-dir "..\miei-dati" --runs-dir "..\miei-risultati" wizard
@@ -136,7 +148,14 @@ il valore predefinito rimane `0.0000892303778101497`.
 di input e parametri. L'opzione 5 consente di cambiare la destinazione prima
 della prossima analisi. È possibile incollare percorsi completi tra virgolette.
 Scegliere un nome nuovo per il run oppure lasciare quello automatico.
-Per i comandi diretti, aprire PowerShell nella cartella di `nipat.cmd`:
+Per i comandi diretti, aprire PowerShell nella cartella di `nipat.cmd`.
+Per raggiungere la cartella dell'applicazione installata:
+
+```powershell
+Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT")
+```
+
+Quindi, ad esempio:
 
 ```powershell
 .\nipat.cmd --help
@@ -172,11 +191,42 @@ originali a quelli usati nel container. L'esito positivo indica che i comandi
 sono terminati correttamente; `NA` può essere un risultato atteso in assenza
 di siti informativi. Una cartella di output parziale non prova il completamento.
 
+## Risultati intermedi e analisi in sequenza
+
+Al termine viene mostrato il percorso del run. Aprirlo in Esplora file:
+
+| Contenuto | Utilizzo |
+| --- | --- |
+| `output` | Tabelle e grafici prodotti dall'analisi. |
+| `work` | File preparati e intermedi conservati dal workflow. |
+| `run.json` | Input, parametri, corrispondenza dei campioni e stato finale. |
+| `execution.log` | Comandi eseguiti, messaggi e dettagli degli errori. |
+
+La CLI esegue un workflow per volta. Per una sequenza **DNPcall → Contamination**:
+
+1. Completare DNPcall e verificare lo stato `succeeded`.
+2. Tornare al menu e scegliere **3 — Contamination**.
+3. Selezionare le tabelle desiderate in `output\individual_outputs` del run
+   DNPcall, oppure quella sola sottocartella come input. Non selezionare la
+   radice del run, che contiene anche file non compatibili.
+4. Indicare il pannello coerente con l'analisi e creare un nuovo run.
+
+Il secondo run conserva il riferimento ai file del primo. Conservare entrambi;
+per preparare input modificati usare copie separate. CPI richiede inoltre le
+tabelle dei campioni appropriati, le coppie e le frequenze di popolazione:
+la sola presenza di un output DNPcall non definisce il ruolo biologico del campione.
+
 ## Problemi e feedback
 
-- Se Docker non risponde, avviarlo e attendere che il motore Linux sia pronto.
-- Se un file esterno non è accessibile al container, verificare la disponibilità
-  dell'unità e i permessi di accesso in Docker Desktop.
+- **Installatore WSL:** se il setup non termina con `NIPAT: ready`, conservare
+  `%LOCALAPPDATA%\Programs\NIPAT\.runtime\installer\setup.log` e `state.json`.
+  Dopo aver risolto l'errore, usare **NIPAT - completa preparazione** nel menu
+  Start. Docker Desktop non è necessario; il launcher avvia il motore dedicato.
+- **Installazione da sorgenti con Docker Desktop:** avviare Docker Desktop
+  e attendere che il motore Linux sia pronto.
+- Se un file non è accessibile, controllare percorso, disponibilità dell'unità
+  e permessi Windows. Il backend WSL richiede un disco locale fisso; per il
+  percorso da sorgenti controllare anche l'accesso ai file in Docker Desktop.
 - Se manca l'indice FASTA, fornire quello corrispondente al riferimento scelto.
 - Se il nome del run esiste già, sceglierne uno nuovo.
 - Per una prova fallita, conservare il run e compilare la

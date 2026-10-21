@@ -26,6 +26,19 @@ una release. I passaggi di compilazione, prova su Windows e pubblicazione
 sono descritti in [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
 La [guida per l’utilizzo](GUIDA_UTILIZZO.md) descrive l’avvio e gli input.
 
+La prima consegna `0.3.0a1` è una **pre-release per prove di dominio su Windows
+11 x64 con WSL2 già funzionante**. L'utilizzatore scarica soltanto l'EXE dalla
+release e attende `NIPAT: ready`; Git e PyCharm non servono. L'attivazione
+iniziale di WSL e la ripresa dopo riavvio Windows restano da verificare.
+Le [note della pre-release](RELEASE_0.3.0a1.md) descrivono il perimetro e i limiti.
+
+Il candidato corretto localmente ha completato setup, autotest, riavvio del
+motore dopo arresto WSL e confronto DNPcall su un BAM reale. La build GitHub
+`39581854492` ha poi superato i controlli anche nel motore effettivamente
+distribuito. Sono evidenze distinte, dettagliate in
+[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md); non attestano la prima
+installazione del nuovo EXE su un altro PC né una validazione di dominio completa.
+
 Il bundle ZIP di `scripts/build_validation_bundle.py` rimane un’utilità per
 la distribuzione da sorgenti con Docker già disponibile. Non è l’installatore
 WSL e non sostituisce l’asset `.exe`.

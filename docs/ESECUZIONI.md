@@ -2,7 +2,8 @@
 
 Ogni nuova analisi conserva `run.json` ed `execution.log` nella propria
 cartella sotto la radice dei risultati scelta dall'utente, accanto a `work`
-e `output`. La radice predefinita è `runs` accanto al progetto; si può cambiarla
+e `output`. La radice predefinita dell'applicazione installata è
+`%LOCALAPPDATA%\NIPAT\runs`; da sorgenti è `runs` accanto al progetto. Si può cambiarla
 con `--runs-dir`, `NIPAT_RUNS_DIR` o l'opzione **5 — Cartella risultati** del
 menu. La scelta nel menu vale per i run successivi nella sessione corrente.
 I nomi degli output scientifici

@@ -1,6 +1,6 @@
 # NIPAT Desktop
 
-**CLI 0.3.0a1 — Windows installer candidate, pending installation validation.**
+**CLI 0.3.0a1 — Windows pre-release for domain testing with working WSL2.**
 Start with the Italian [project overview](SUNTO.md) and
 [usage guide](docs/GUIDA_UTILIZZO.md).
 
@@ -11,8 +11,11 @@ installation mode. Initial WSL activation can require administrator consent
 and a restart; setup resumes under the original Windows account.
 The initial installer target is **Windows 11 x64**.
 
-This is a development candidate, not evidence of successful installation on a
-clean PC. See the [installer validation procedure](docs/INSTALLATORE_WINDOWS.md).
+The current testing scope assumes **WSL2 is already working**. Download
+`NIPAT-Setup.exe` from the versioned GitHub release and wait for `NIPAT: ready`
+before starting analyses. Initial WSL activation and Windows restart/resume
+on a clean PC remain unverified. See the
+[installer evidence and remaining checks](docs/INSTALLATORE_WINDOWS.md).
 The published `v0.2.0a2` remains unchanged and uses the source archive plus
 Docker Desktop. The source setup (`1_SETUP.cmd`, then `2_AVVIA.cmd`) remains
 available. See [distribution and prior evidence](docs/DISTRIBUZIONE.md).
@@ -45,8 +48,10 @@ never overwritten. See [execution records](docs/ESECUZIONI.md).
 
 ## Workflow examples
 
-Run these commands from the extracted project directory. Replace the example
-paths with your files; all input modes are also available in `2_AVVIA.cmd`.
+Run these commands from the directory containing `nipat.cmd`: the extracted
+project, or `%LOCALAPPDATA%\Programs\NIPAT` for the installed application.
+Replace the example paths with your files; all input modes are also available
+in `2_AVVIA.cmd` or the **NIPAT** Start-menu shortcut.
 
 ```powershell
 $samples = "..\campioni"
@@ -103,11 +108,19 @@ The self-test runs four check groups: the SNP reference example, synthetic
 CPI and Contamination regressions, and the new external-input checks. The last
 group exercises direct SNP pileup, recursive Contamination input and CPI with
 two labeled cutoffs or all sites; the standalone script repeats that group.
-These checks require Docker and do not add numerical DNPcall-from-BAM coverage.
+These checks use the configured scientific runtime: the installer starts its
+own WSL engine automatically; source installations use the available Docker
+engine. They do not add numerical DNPcall-from-BAM coverage.
 All four groups passed on Windows with Docker Desktop in `0.2.0a2`. A separate DNPcall run from a real BAM,
 using external inputs and a different results root, reproduced all 11 rows
 and 17 columns of its previous individual output. These checks support the
-validation handoff; domain testing and installation on another PC remain.
+validation handoff. On 21 October 2026, the locally corrected WSL candidate
+also completed setup and self-tests, restarted its engine after WSL termination,
+and reproduced 11 sites and the 11 compared count/genotype columns from the
+same real BAM. The rebuilt installer passed CI, including image load/run/reload
+in its shipped engine. These are separate checks: a complete installation of
+that rebuilt EXE on another PC and independent domain validation remain.
+See the [recorded evidence](docs/INSTALLATORE_WINDOWS.md).
 
 For development, use Python 3.12 from a project virtual environment, install
 with `python -m pip install -e ".[dev]"`, then run `nipat build-runtime` and
