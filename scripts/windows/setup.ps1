@@ -21,7 +21,7 @@ try {
         # Invalidate a previous success before changing any preparation component.
         $readyPath = Join-Path $project '.runtime\portable-setup.json'
         if (Test-Path -LiteralPath $readyPath -PathType Leaf) { Remove-Item -LiteralPath $readyPath -Force }
-        Start-Transcript -Path (Join-Path $project ".runtime\setup.log") -Append | Out-Null
+        Start-Transcript -LiteralPath (Join-Path $project ".runtime\setup.log") -Append | Out-Null
         $transcriptStarted = $true
         Write-Host "NIPAT CLI - preparazione per la validazione"
         # Existing input collections may be read-only; no fixed subfolders are required.
