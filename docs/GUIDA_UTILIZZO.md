@@ -5,6 +5,12 @@ riga di comando. Gli input e i risultati rimangono sul computer.
 Gli autotest inclusi verificano casi noti; la validazione con altri input e
 riferimenti scientifici indipendenti resta necessaria.
 
+L'installatore pubblicato è **`0.3.0a1`**. Il candidato da sorgenti
+**`0.3.0a2`** introduce il menu e le schermate descritti nella sezione
+[Menu guidato del candidato 0.3.0a2](#menu-guidato-del-candidato-030a2).
+Queste nuove interazioni richiedono ancora la verifica manuale su Windows;
+la disponibilità dei sorgenti non equivale alla pubblicazione di un nuovo EXE.
+
 ## Installazione guidata Windows
 
 La pre-release `0.3.0a1` è destinata alle prove della CLI su **Windows 11 x64
@@ -48,6 +54,50 @@ Questo è anche il percorso della release `0.2.0a2`:
 Il setup da sorgenti prepara Python locale e il runtime scientifico ed esegue
 gli autotest. Non servono Git, PyCharm o installazioni separate di Python, R
 e samtools. Questo percorso richiede Docker già disponibile e non attiva WSL.
+
+## Menu guidato del candidato 0.3.0a2
+
+All'apertura, il banner NIPAT riporta la versione. Il menu presenta i quattro
+workflow con una breve descrizione. Nei terminali interattivi supportati si
+usano **frecce e Invio** oppure i numeri; negli altri terminali resta la scelta
+numerica in testo semplice. La presenza del menu non indica che l'ambiente
+scientifico sia stato verificato.
+
+| Scelta | Funzione |
+| --- | --- |
+| 1–4 | DNPcall, SNPcall, Contamination e CPI, con le modalità di input descritte sotto. |
+| 5 | Cambiare la cartella risultati per le analisi successive della sessione. |
+| 6 | Riaprire la schermata dell'ultima esecuzione della sessione. |
+| 7 | Consultare la guida essenziale o richiedere il controllo dell'ambiente. |
+| 0 | Uscire dal programma. |
+
+Durante la compilazione, NIPAT controlla i percorsi e segnala gli errori nel
+campo interessato. **`:indietro`** permette di tornare all'input precedente;
+**`:annulla`** torna al menu principale. I valori già inseriti vengono
+conservati durante la correzione. Nei menu che lo prevedono, Esc torna indietro.
+La modalità con più file permette di controllare l'elenco prima di proseguire.
+Invio mantiene il valore mostrato tra parentesi; **`:vuoto`** cancella un valore
+facoltativo, per esempio il nome del run o un prefisso CPI. Il completamento
+dei percorsi con Tab non è incluso in questa revisione.
+
+Al termine della compilazione viene mostrato un riepilogo di file, parametri
+e destinazione. Controllarlo, modificare i campi necessari e scegliere
+**Avvia analisi**. Questa conferma avvia lo stesso workflow disponibile nella
+CLI diretta; non modifica automaticamente parametri scientifici o input.
+Se l'avvio segnala un errore, correggere i valori conservati prima di riprovare.
+
+La schermata finale permette di aprire la cartella dei risultati, l'intero
+run o il log e di visualizzare un riepilogo dell'esecuzione. Il riepilogo
+descrive metadati e file disponibili: non interpreta i risultati scientifici.
+Un `dry-run` viene presentato come **Esecuzione pianificata**, senza attribuirgli
+risultati di un'analisi eseguita.
+
+Il richiamo dell'ultima esecuzione e la scelta della cartella risultati valgono
+solo per la sessione corrente. Questa revisione non introduce preferenze
+persistenti, cronologia tra sessioni o concatenamento automatico dei workflow.
+Se un workflow fallisce, il codice di uscita della sessione rimane 2 anche
+dopo una successiva esecuzione riuscita; la correzione di un campo prima
+dell'avvio non viene conteggiata come fallimento del workflow.
 
 ## Dove tenere input e risultati
 
@@ -193,7 +243,10 @@ di siti informativi. Una cartella di output parziale non prova il completamento.
 
 ## Risultati intermedi e analisi in sequenza
 
-Al termine viene mostrato il percorso del run. Aprirlo in Esplora file:
+Al termine viene mostrato il percorso del run. Nel candidato `0.3.0a2`,
+la schermata finale permette anche di aprire direttamente le cartelle e il log;
+con **6 — Ultima esecuzione** si può richiamare la stessa schermata durante la
+sessione. Per le esecuzioni precedenti, aprire il percorso in Esplora file:
 
 | Contenuto | Utilizzo |
 | --- | --- |

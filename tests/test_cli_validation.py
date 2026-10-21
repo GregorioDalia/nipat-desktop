@@ -19,212 +19,220 @@ from nipat.wizard import run_wizard
 
 class WizardTests(unittest.TestCase):
     def setUp(self):
-        self.root = Path('/workspace')
-        self.layout = ProjectLayout(
-            self.root / 'repo', self.root, self.root / 'data',
-            self.root / 'runs', self.root / 'repo' / 'compose.yaml',
-        )
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.project = self.root / 'repo'
+        self.project.mkdir()
+        self.layout = ProjectLayout(self.project, self.root, self.root / 'data',
+                                    self.root / 'runs', self.project / 'compose.yaml')
+        self.bam = self.file('sample one.bam', '')
+        self.other_bam = self.file('sample two.bam', '')
+        self.reference = self.file('ref.fa', '>chr1\nACGT\n')
+        self.file('ref.fa.fai', 'chr1\t4\t6\t4\t5\n')
+        self.panel = self.file('DNP.txt', 'chr1\t1\t2\tAC\tGT\n')
+        self.snp_panel = self.file('SNP.txt', 'pos\tref\talt\nchr1:2\tC\tG\n')
+        self.pileup = self.file('pileup.txt', 'chr1\t2\tC\t1\t.\tI\tread1\n')
+        self.table = self.file('counts.tsv', 'chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\nchr1\t1\t2\t5\t0\t0\n')
+        self.samples = self.root / 'samples'
+        self.samples.mkdir()
+        self.popfreq = self.file('pop.tsv', 'chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t1\t2\t0.5\t0.5\n')
+        self.run = self.layout.runs_dir / 'test'
+        (self.run / 'output').mkdir(parents=True)
         self.workflows = Mock()
         for name in ('dnp_call', 'snp_call', 'contamination', 'cpi'):
-            getattr(self.workflows, name).return_value = self.root / 'runs' / 'test'
+            getattr(self.workflows, name).return_value = self.run
+
+    def file(self, name, content):
+        path = self.root / name
+        path.write_text(content, encoding='utf-8')
+        return path
 
     def invoke(self, answers, **kwargs):
         messages = []
-        result = run_wizard(
-            self.workflows, self.layout, err_const=DEFAULT_ERR_CONST,
-            read=Mock(side_effect=answers), write=messages.append, **kwargs,
-        )
+        reader = Mock(side_effect=[str(answer) if isinstance(answer, Path) else answer for answer in answers])
+        result = run_wizard(self.workflows, self.layout, err_const=DEFAULT_ERR_CONST,
+                            read=reader, write=messages.append, **kwargs)
         return result, '\n'.join(messages)
 
-    def test_dnp_uses_paths_with_spaces_and_runs_serially(self):
-        result, messages = self.invoke([
-            '1', '1', '"/external/sample one.bam"', '', '/external/ref.fa',
-            '/external/DNP.txt', '1', 'my-run', '0',
-        ])
+    def snp_answers(self, name=''):
+        return ['2', '1', self.bam, self.reference, self.snp_panel, name]
+
+    def cpi_answers(self):
+        return ['4', self.samples, 'A:B', '', '', self.popfreq]
+
+    def test_dnp_uses_paths_with_spaces_and_explicit_confirmation(self):
+        result, messages = self.invoke(['1', '1', f'"{self.bam}"', '', self.reference,
+                                        self.panel, '1', 'my-run', '1', '0', '0'])
         self.assertEqual(result, 0)
         self.workflows.dnp_call.assert_called_once_with(
-            bams=[Path('/external/sample one.bam')], bamlist=None,
-            reference=Path('/external/ref.fa'), panel=Path('/external/DNP.txt'),
-            parallel=False, run_name='my-run',
-        )
+            bams=[self.bam], bamlist=None, reference=self.reference, panel=self.panel,
+            parallel=False, run_name='my-run')
+        self.assertIn('Riepilogo prima', messages)
         self.assertIn('Esecuzione completata', messages)
 
-    def test_snp_preserves_separate_panel_and_automatic_name(self):
-        result, _ = self.invoke([
-            '2', '1', '/workspace/data/input.bam', '/workspace/data/ref.fa',
-            '/workspace/data/SNP.txt', '', '0',
-        ])
+    def test_review_cancel_never_invokes_workflow(self):
+        result, messages = self.invoke(self.snp_answers() + ['0', '0'])
         self.assertEqual(result, 0)
-        self.workflows.snp_call.assert_called_once_with(
-            bam=Path('/workspace/data/input.bam'), pileup=None,
-            reference=Path('/workspace/data/ref.fa'),
-            panel=Path('/workspace/data/SNP.txt'), run_name=None,
-        )
-
-    def test_contamination_collects_multiple_inputs(self):
-        result, _ = self.invoke([
-            '3', '1', '/workspace/data/A.txt', '/workspace/data/B.tsv', '',
-            '/workspace/data/DNP.txt', 'contam', '0',
-        ])
-        self.assertEqual(result, 0)
-        self.workflows.contamination.assert_called_once_with(
-            inputs=[Path('/workspace/data/A.txt'), Path('/workspace/data/B.tsv')],
-            input_dir=None, panel=Path('/workspace/data/DNP.txt'), run_name='contam',
-        )
-
-    def test_cpi_maps_pairs_prefixes_and_optional_panel(self):
-        result, _ = self.invoke([
-            '4', '/workspace/data/cpi', 'M1:F1', 'Plasma_', 'Father_',
-            '/workspace/data/pop.tsv', '0', '', '', '0',
-        ])
-        self.assertEqual(result, 0)
-        self.workflows.cpi.assert_called_once_with(
-            input_dir=Path('/workspace/data/cpi'), pairs='M1:F1',
-            mother_prefix='Plasma_', father_prefix='Father_',
-            popfreq=Path('/workspace/data/pop.tsv'), panel=None,
-            cutoffs=None, cutoff_map=None, err_const=DEFAULT_ERR_CONST, run_name=None,
-        )
-
-    def test_cancel_returns_to_menu_without_workflow(self):
-        result, messages = self.invoke(['1', ':annulla', '0'])
-        self.assertEqual(result, 0)
-        self.assertEqual(self.workflows.mock_calls, [])
+        self.workflows.snp_call.assert_not_called()
         self.assertIn('annullata prima', messages)
 
-    def test_eof_and_interrupt_exit_without_traceback(self):
-        for exception in (EOFError(), KeyboardInterrupt()):
-            with self.subTest(exception=type(exception).__name__):
-                result, messages = self.invoke([exception])
-                self.assertEqual(result, 130)
-                self.assertIn('Sessione interrotta', messages)
+    def test_back_retains_prior_field_and_allows_replacement(self):
+        self.invoke(['2', '1', self.bam, ':indietro', self.other_bam,
+                     self.reference, self.snp_panel, '', '1', '0', '0'])
+        self.assertEqual(self.workflows.snp_call.call_args.kwargs['bam'], self.other_bam)
 
-    def test_failure_is_reported_and_menu_stays_available(self):
-        self.workflows.snp_call.side_effect = ValidationError('Pannello non valido')
-        result, messages = self.invoke(['2', '1', 'a', 'b', 'c', '', '0'])
-        self.assertEqual(result, 2)
+    def test_invalid_file_is_corrected_without_restarting_form(self):
+        result, messages = self.invoke(['2', '1', self.root / 'missing.bam', self.bam,
+                                        self.reference, self.snp_panel, '', '1', '0', '0'])
+        self.assertEqual(result, 0)
+        self.assertIn('BAM non trovato', messages)
+        self.assertEqual(self.workflows.snp_call.call_count, 1)
+
+    def test_malformed_tsv_can_be_replaced_without_traceback(self):
+        oversized = self.file('oversized.tsv', 'pos\tref\talt\nchr1:2\t' + 'A' * 140000 + '\tG\n')
+        result, messages = self.invoke(['2', '2', self.pileup, oversized, self.snp_panel,
+                                        '', '1', '0', '0'])
+        self.assertEqual(result, 0)
+        self.assertIn('field larger', messages)
+        self.assertEqual(self.workflows.snp_call.call_args.kwargs['panel'], self.snp_panel)
+
+    def test_edit_mode_discards_hidden_arguments_and_collects_new_input(self):
+        self.invoke(self.snp_answers('edit') + ['2', '1', '2', self.pileup, '1', '0', '0'])
+        self.workflows.snp_call.assert_called_once_with(
+            bam=None, pileup=self.pileup, reference=None, panel=self.snp_panel, run_name='edit')
+
+    def test_edit_run_name_preserves_remaining_values(self):
+        self.invoke(self.snp_answers('before') + ['2', '5', 'after', '1', '0', '0'])
+        self.assertEqual(self.workflows.snp_call.call_args.kwargs['run_name'], 'after')
+        self.assertEqual(self.workflows.snp_call.call_args.kwargs['bam'], self.bam)
+
+    def test_invalid_field_number_returns_to_review_without_execution(self):
+        result, messages = self.invoke(self.snp_answers() + ['2', '\u00b2', '0', '0'])
+        self.assertEqual(result, 0)
+        self.assertIn('Campo non valido', messages)
+        self.workflows.snp_call.assert_not_called()
+
+    def test_snp_pileup_mode_does_not_ask_for_reference(self):
+        result, _ = self.invoke(['2', '2', self.pileup, self.snp_panel, '', '1', '0', '0'])
+        self.assertEqual(result, 0)
+        self.workflows.snp_call.assert_called_once_with(
+            bam=None, pileup=self.pileup, reference=None, panel=self.snp_panel, run_name=None)
+
+    def test_contamination_collects_multiple_inputs(self):
+        second = self.file('second.txt', self.table.read_text())
+        self.invoke(['3', '1', self.table, second, '', self.panel, 'contam', '1', '0', '0'])
+        self.workflows.contamination.assert_called_once_with(
+            inputs=[self.table, second], input_dir=None, panel=self.panel, run_name='contam')
+
+    def test_contamination_directory_mode(self):
+        self.invoke(['3', '2', self.samples, self.panel, '', '1', '0', '0'])
+        self.workflows.contamination.assert_called_once_with(
+            inputs=None, input_dir=self.samples, panel=self.panel, run_name=None)
+
+    def test_cpi_all_sites_preserves_editable_prefixes(self):
+        self.invoke(['4', self.samples, 'M1:F1', 'Plasma_', ':vuoto', self.popfreq,
+                     '0', '', '', '1', '0', '0'])
+        self.workflows.cpi.assert_called_once_with(
+            input_dir=self.samples, pairs='M1:F1', mother_prefix='Plasma_', father_prefix='',
+            popfreq=self.popfreq, panel=None, cutoffs=None, cutoff_map=None,
+            err_const=DEFAULT_ERR_CONST, run_name=None)
+
+    def test_cpi_repeated_cutoffs_and_numeric_validation(self):
+        result, messages = self.invoke(self.cpi_answers() + [
+            '2', '0.3', self.panel, '0.5', self.panel, '',
+            'bad', 'nan', 'inf', '-1', '0', '', '1', '0', '0'])
+        self.assertEqual(result, 0)
+        args = self.workflows.cpi.call_args.kwargs
+        self.assertEqual(args['cutoffs'], [('0.3', self.panel), ('0.5', self.panel)])
+        self.assertEqual(args['err_const'], 0.0)
+        self.assertIsNone(args['panel'])
+        self.assertEqual(messages.count('numero finito maggiore o uguale a zero'), 4)
+
+    def test_cpi_native_map_and_single_panel_modes(self):
+        native = f'0.3={self.panel}'
+        for answers, expected in ((['3', native], {'cutoff_map': native, 'panel': None}),
+                                  (['1', self.panel], {'cutoff_map': None, 'panel': self.panel})):
+            with self.subTest(answers=answers):
+                self.invoke(self.cpi_answers() + answers + ['', '', '1', '0', '0'])
+                for key, value in expected.items():
+                    self.assertEqual(self.workflows.cpi.call_args.kwargs[key], value)
+
+    def test_dnp_bamlist_relative_entries_and_parallel(self):
+        bamlist = self.file('bams.txt', '"sample one.bam"\nsample two.bam\n')
+        self.invoke(['1', '2', bamlist, self.reference, self.panel, '2', '', '1', '0', '0'])
+        self.workflows.dnp_call.assert_called_once_with(
+            bams=None, bamlist=bamlist, reference=self.reference, panel=self.panel,
+            parallel=True, run_name=None)
+
+    def test_dnp_multiple_bams_and_duplicate_retry(self):
+        result, messages = self.invoke(['1', '1', self.bam, self.bam, self.other_bam, '',
+                                        self.reference, self.panel, '1', '', '1', '0', '0'])
+        self.assertEqual(result, 0)
+        self.assertEqual(self.workflows.dnp_call.call_args.kwargs['bams'], [self.bam, self.other_bam])
+        self.assertIn("gia' presente nella lista", messages)
+
+    def test_cancel_and_eof_do_not_execute(self):
+        for answers, expected in ((['1', ':annulla', '0'], 0), ([EOFError()], 130),
+                                  ([KeyboardInterrupt()], 130)):
+            result, _ = self.invoke(answers)
+            self.assertEqual(result, expected)
+        self.workflows.dnp_call.assert_not_called()
+
+    def test_workflow_failure_retains_form_for_corrected_retry(self):
+        self.workflows.snp_call.side_effect = [ValidationError('Pannello non valido'), self.run]
+        result, messages = self.invoke(self.snp_answers('first') + [
+            '1', '2', '5', 'retry', '1', '0', '0'])
+        self.assertEqual(result, 2)  # Existing session-level failure exit semantics.
+        self.assertEqual(self.workflows.snp_call.call_count, 2)
+        self.assertEqual(self.workflows.snp_call.call_args.kwargs['run_name'], 'retry')
         self.assertIn('Operazione non riuscita: Pannello non valido', messages)
-        self.assertNotIn('Esecuzione completata', messages)
+        self.assertIn('Esecuzione completata', messages)
 
     def test_dry_run_does_not_claim_execution(self):
-        result, messages = self.invoke(['2', '1', 'a', 'b', 'c', '', '0'], dry_run=True)
+        result, messages = self.invoke(self.snp_answers() + ['1', '0', '0'], dry_run=True)
         self.assertEqual(result, 0)
         self.assertIn('Esecuzione pianificata', messages)
         self.assertNotIn('Esecuzione completata', messages)
 
-    def test_multiple_analyses_are_available_in_one_session(self):
-        self.invoke(['2', '1', 'a', 'b', 'c', 'one', '2', '1', 'd', 'e', 'f', 'two', '0'])
+    def test_multiple_analyses_and_last_result_in_one_session(self):
+        self.invoke(self.snp_answers('one') + ['1', '0'] + self.snp_answers('two') +
+                    ['1', '0', '6', '0', '0'])
         self.assertEqual(self.workflows.snp_call.call_count, 2)
 
-    def test_dnp_bamlist_and_parallel_mode(self):
-        result, _ = self.invoke(['1', '2', '../bams.txt', 'ref.fa', 'panel.txt', '2', '', '0'])
+    def test_output_directory_choice_updates_both_layouts(self):
+        target = self.root / 'separate results'
+        with chdir(self.root):
+            result, _ = self.invoke(['5', '"separate results"', '0'])
         self.assertEqual(result, 0)
-        self.workflows.dnp_call.assert_called_once_with(
-            bams=None, bamlist=Path('../bams.txt'), reference=Path('ref.fa'),
-            panel=Path('panel.txt'), parallel=True, run_name=None,
-        )
+        self.assertTrue(target.is_dir())
+        self.assertEqual(self.workflows.layout.runs_dir, target)
+        self.assertIs(self.workflows.layout, self.workflows.runner.layout)
+        self.assertEqual(self.layout.runs_dir, self.root / 'runs')
 
-    def test_dnp_multiple_bams(self):
-        result, _ = self.invoke([
-            '1', '1', 'mother.bam', 'father.bam', '', 'ref.fa', 'panel.txt', '1', '', '0',
-        ])
+    def test_invalid_output_directory_can_be_corrected_or_cancelled(self):
+        result, messages = self.invoke(['5', str(self.layout.data_dir / 'results'), ':annulla', '0'])
         self.assertEqual(result, 0)
-        self.assertEqual(self.workflows.dnp_call.call_args.kwargs['bams'],
-                         [Path('mother.bam'), Path('father.bam')])
+        self.assertFalse((self.layout.data_dir / 'results').exists())
+        self.assertIn('senza sovrapporsi', messages)
 
-    def test_snp_pileup_mode_does_not_ask_for_reference(self):
-        result, _ = self.invoke(['2', '2', '/external/pileup.txt', 'snps.txt', '', '0'])
+    def test_existing_run_name_is_rejected_before_workflow(self):
+        self.invoke(self.snp_answers('test') + ['new-run', '1', '0', '0'])
+        self.assertEqual(self.workflows.snp_call.call_args.kwargs['run_name'], 'new-run')
+
+    def test_runtime_is_checked_only_on_explicit_request(self):
+        result, messages = self.invoke(['7', '0', '7', '1', '0'])
         self.assertEqual(result, 0)
-        self.workflows.snp_call.assert_called_once_with(
-            bam=None, pileup=Path('/external/pileup.txt'), reference=None,
-            panel=Path('snps.txt'), run_name=None,
-        )
+        self.workflows.runner.doctor.assert_called_once_with(True)
+        self.assertIn('da verificare', messages)
+        self.assertIn('Ambiente verificato', messages)
 
-    def test_contamination_directory_mode(self):
-        result, _ = self.invoke(['3', '2', '/external/samples', 'panel.txt', '', '0'])
-        self.assertEqual(result, 0)
-        self.workflows.contamination.assert_called_once_with(
-            inputs=None, input_dir=Path('/external/samples'),
-            panel=Path('panel.txt'), run_name=None,
-        )
-
-    def test_cpi_repeated_cutoffs_and_editable_error_constant(self):
-        result, messages = self.invoke([
-            '4', 'samples', 'A:B', '', '', 'pop.tsv', '2',
-            '0.3', 'one.tsv', '0.5', '../two.txt', '',
-            'not-a-number', 'nan', 'inf', '-1', '0.0001', '', '0',
-        ])
-        self.assertEqual(result, 0)
-        kwargs = self.workflows.cpi.call_args.kwargs
-        self.assertEqual(kwargs['cutoffs'], [('0.3', Path('one.tsv')),
-                                            ('0.5', Path('../two.txt'))])
-        self.assertEqual(kwargs['err_const'], 0.0001)
-        self.assertIsNone(kwargs['panel'])
-        self.assertIsNone(kwargs['cutoff_map'])
-        self.assertEqual(messages.count('numero finito maggiore o uguale a zero'), 4)
-
-    def test_cpi_accepts_zero_error_constant(self):
-        result, _ = self.invoke([
-            '4', 'samples', 'A:B', '', '', 'pop.tsv', '0', '0', '', '0',
-        ])
-        self.assertEqual(result, 0)
-        self.assertEqual(self.workflows.cpi.call_args.kwargs['err_const'], 0.0)
-
-    def test_cpi_native_map_mode(self):
-        result, _ = self.invoke([
-            '4', 'samples', 'A:B', '', '', 'pop.tsv', '3',
-            '0.3=D:\\panels\\one.tsv,0.5=two.txt', '', '', '0',
-        ])
-        self.assertEqual(result, 0)
-        self.assertEqual(self.workflows.cpi.call_args.kwargs['cutoff_map'],
-                         '0.3=D:\\panels\\one.tsv,0.5=two.txt')
-
-    def test_output_directory_choice_updates_workflow_and_runner(self):
-        for relative in (False, True):
-            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
-                root = Path(directory).resolve()
-                layout = ProjectLayout(root / 'repo', root, root / 'data',
-                                       root / 'runs', root / 'repo' / 'compose.yaml')
-                runner = Mock()
-                runner.layout = layout
-                workflows = Workflows(layout, runner)
-                target = root / 'separate results'
-                selected = target.relative_to(root) if relative else target
-                messages = []
-                # Temp and checkout may be on different Windows drives. Exercise
-                # relative input from its own directory; keep the caller's cwd
-                # unchanged for absolute input, which also supports other drives.
-                with chdir(root) if relative else nullcontext():
-                    result = run_wizard(
-                        workflows, layout, err_const=DEFAULT_ERR_CONST,
-                        read=Mock(side_effect=['5', f'"{selected}"', '5', '', '0']),
-                        write=messages.append,
-                    )
-                self.assertEqual(result, 0)
-                self.assertTrue(target.is_dir())
-                self.assertEqual(workflows.layout.runs_dir, target.resolve())
-                self.assertIs(workflows.layout, runner.layout)
-                self.assertEqual(layout.runs_dir, root / 'runs')
-                self.assertEqual(sum(str(target.resolve()) in line for line in messages), 2)
-
-    def test_invalid_output_directory_does_not_replace_current_layout(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            layout = ProjectLayout(root / 'repo', root, root / 'data',
-                                   root / 'runs', root / 'repo' / 'compose.yaml')
-            runner = Mock()
-            runner.layout = layout
-            workflows = Workflows(layout, runner)
-            messages = []
-            result = run_wizard(
-                workflows, layout, err_const=DEFAULT_ERR_CONST,
-                read=Mock(side_effect=['5', str(layout.data_dir / 'results'), '0']),
-                write=messages.append,
-            )
-            self.assertEqual(result, 2)
-            self.assertIs(workflows.layout, layout)
-            self.assertIs(runner.layout, layout)
-            self.assertFalse((layout.data_dir / 'results').exists())
-            self.assertIn('Operazione non riuscita:', '\n'.join(messages))
+    def test_portable_python_can_import_ui_without_site_packages(self):
+        project = Path(__file__).resolve().parents[1]
+        script = 'import sys; sys.path.insert(0, sys.argv[1]); import nipat.wizard; import nipat.terminal; import nipat.results'
+        result = subprocess.run([sys.executable, '-I', '-S', '-c', script, str(project / 'src')],
+                                capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class CliRoutingTests(unittest.TestCase):

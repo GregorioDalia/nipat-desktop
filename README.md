@@ -1,6 +1,9 @@
 # NIPAT Desktop
 
-**CLI 0.3.0a1 — Windows pre-release for domain testing with working WSL2.**
+**Development candidate: CLI 0.3.0a2 — guided terminal experience.**
+The published Windows installer remains **v0.3.0a1**, for domain testing with
+working WSL2. The new interface is described in the
+[0.3.0a2 candidate notes](docs/RELEASE_0.3.0a2.md).
 Start with the Italian [project overview](SUNTO.md) and
 [usage guide](docs/GUIDA_UTILIZZO.md).
 
@@ -23,6 +26,28 @@ available. See [distribution and prior evidence](docs/DISTRIBUZIONE.md).
 Python handles input validation, mechanical format adaptation and execution;
 the scientific calculations remain in the DNPcall and NEWPAT R scripts.
 The desktop GUI will use the same application layer after CLI validation.
+
+## Guided CLI candidate (0.3.0a2)
+
+The source candidate adds a NIPAT banner with version, a vertical menu and
+arrow/Enter navigation in supported interactive terminals. Numbered choices
+remain available; redirected output and simple terminals use plain text.
+Inputs are checked as they are entered. Use `:indietro` to revisit an input
+or `:annulla` to return to the main menu; entered values are retained while
+editing. Review the selected input files, parameters and results destination,
+then explicitly choose **Avvia analisi**.
+
+The final screen offers the results folder, run folder, log and an execution
+summary. **6 — Ultima esecuzione** reopens the most recent result screen in the
+current session. **7 — Guida e ambiente** provides usage help and an on-demand
+environment check; opening the menu alone does not verify the runtime.
+**5 — Cartella risultati** still applies only to the current session.
+Persistent preferences, a cross-session history and automatic workflow chaining
+are not part of this revision. The direct CLI and scientific input modes remain
+available, and the interface adds no external Python dependencies.
+
+The new terminal interactions require manual Windows verification; record those
+results separately from the existing installer and scientific evidence below.
 
 ## Input locations and results
 

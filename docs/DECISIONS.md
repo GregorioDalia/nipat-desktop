@@ -1,5 +1,25 @@
 # Consolidated decisions
 
+## Guided terminal experience (0.3.0a2 candidate)
+
+- Add a versioned NIPAT banner and a vertical menu. Arrow/Enter interaction is
+  limited to supported interactive terminals; numbered and plain-text input
+  remains available. Do not require new Python packages in embedded Python.
+- Validate files during input collection, preserve values while editing, offer
+  `:indietro` and `:annulla`, and require an explicit launch from the editable
+  input/parameter summary. Preserve all four workflows and their input modes.
+- Expose result/run folders, execution metadata and logs through the final
+  screen. Main-menu option 6 recalls only the current session's latest run;
+  option 5 still changes the results root for the current session only.
+- Offer help and an on-demand environment check through option 7. Never infer
+  runtime readiness merely from opening the menu or reading backend settings.
+- Keep execution status separate from scientific interpretation. A dry-run is
+  planned, not completed analysis; file availability is not scientific validity.
+- Keep direct CLI arguments and scientific defaults available. Persistent
+  preferences, cross-session history and workflow chaining remain later work.
+- Preserve the published `v0.3.0a1` installer. Record the new candidate's tests
+  separately; manual Windows terminal verification remains to be recorded.
+
 ## Managed Windows installer (0.3.0a1 candidate)
 
 - Distribute a per-user `NIPAT-Setup.exe` through GitHub Releases, targeting

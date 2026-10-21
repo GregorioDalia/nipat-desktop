@@ -1,6 +1,8 @@
 # NIPAT: stato del progetto e funzionamento
 
-**CLI 0.3.0a1 per le prove di dominio su Windows 11 x64 con WSL2 funzionante.**
+**Installatore pubblicato: CLI 0.3.0a1. Candidato da sorgenti: CLI 0.3.0a2.**
+L'installatore è destinato alle prove di dominio su Windows 11 x64 con WSL2
+funzionante; il nuovo candidato introduce la revisione dell'interfaccia testuale.
 NIPAT riunisce quattro analisi locali: Python gestisce file ed esecuzioni,
 mentre gli script R di DNPcall e NEWPAT eseguono i calcoli con samtools in
 Docker. La GUI verrà dopo la validazione della CLI.
@@ -42,6 +44,14 @@ dalla prima installazione del nuovo EXE su un altro PC. Per la consegna attuale
 si assume WSL2 già funzionante; attivazione iniziale e ripresa dopo riavvio
 Windows restano da verificare. La validazione scientifica su altri casi è aperta.
 
+Il candidato `0.3.0a2` introduce il banner NIPAT, il menu verticale, la
+correzione degli input senza ricominciare la compilazione e un riepilogo da
+confermare prima dell'avvio. La schermata finale permette di aprire risultati
+e log e di consultare i metadati dell'esecuzione. Le nuove interazioni del
+terminale sono da verificare manualmente su Windows; le prove delle versioni
+precedenti non attestano questa revisione. Algoritmi, modalità di input e
+parametri scientifici predefiniti restano quelli esistenti.
+
 ## Come si usa
 
 Il canale di distribuzione è la pre-release GitHub `v0.3.0a1`. Scaricare
@@ -65,9 +75,14 @@ parametri ed esito in `run.json` e `execution.log`. I run esistenti non vengono
 sovrascritti e i dati delle analisi restano sul computer.
 
 I risultati si consultano nel file system: `output` contiene i risultati,
-`work` gli intermedi. Per concatenare analisi, selezionare gli output compatibili
+`work` gli intermedi. Nel candidato `0.3.0a2` si possono aprire queste cartelle
+dalla schermata finale; **6 — Ultima esecuzione** richiama l'ultima analisi della
+sessione corrente. Per concatenare analisi, selezionare gli output compatibili
 del run precedente come input del successivo, ad esempio le tabelle individuali
 DNPcall per Contamination. La CLI non concatena automaticamente i workflow.
+La scelta della cartella risultati e il richiamo dell'ultima esecuzione valgono
+per la sessione corrente; preferenze persistenti e cronologia completa sono
+interventi successivi.
 
 Per cominciare: [guida per l’utilizzo](docs/GUIDA_UTILIZZO.md).
 Per riportare le prove: [scheda di validazione](docs/VALIDAZIONE.md).
