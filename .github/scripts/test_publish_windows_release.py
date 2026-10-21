@@ -107,6 +107,22 @@ class ReleaseGuards(unittest.TestCase):
             "launcher_sha256": publisher.sha256(self.setup / "NIPAT.exe"),
         }
         (self.desktop / "package-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+        self.write_installer_evidence()
+
+    def write_installer_evidence(self):
+        installer = self.setup / "NIPAT-Setup.exe"
+        evidence = {
+            "schema_version": 1, "distribution": "self-contained-wsl",
+            "version": self.manifest["version"], "source_commit": COMMIT,
+            "file": "NIPAT-Setup.exe", "sha256": publisher.sha256(installer), "size": installer.stat().st_size,
+            "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
+            "launcher_sha256": publisher.sha256(self.setup / "NIPAT.exe"),
+            "embedded_assets": {
+                key: {field: self.manifest["assets"][key][field] for field in ("file", "sha256", "size")}
+                for key in ("rootfs", "scientific_image")
+            },
+        }
+        (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     def test_combines_both_checksum_lists_without_losing_exe(self):
         self.prepare()
@@ -159,6 +175,48 @@ class ReleaseGuards(unittest.TestCase):
         self.assertNotIn("NIPAT.exe", result)  # It is included in each package, not a standalone release asset.
         self.assertEqual((self.root / "release" / self.package_name).read_bytes(),
                          (self.desktop / self.package_name).read_bytes())
+
+    def test_new_release_requires_self_contained_installer_build_evidence(self):
+        self.make_dual_package()
+        (self.setup / "installer-build.json").unlink()
+        with self.assertRaisesRegex(ValueError, "Missing self-contained installer build evidence"):
+            self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_rejects_installer_bound_to_different_embedded_assets(self):
+        self.make_dual_package()
+        path = self.setup / "installer-build.json"
+        evidence = json.loads(path.read_text())
+        evidence["embedded_assets"]["rootfs"]["sha256"] = "0" * 64
+        path.write_text(json.dumps(evidence))
+        with self.assertRaisesRegex(ValueError, "installer build evidence mismatch"):
+            self.prepare(desktop=self.desktop)
+
+    def test_rejects_installer_companion_data_slices(self):
+        self.make_dual_package()
+        (self.setup / "NIPAT-Setup-1.BIN").write_bytes(b"external payload")
+        with self.assertRaisesRegex(ValueError, "companion data slices"):
+            self.prepare(desktop=self.desktop)
+
+    def test_rejects_installer_evidence_from_another_build(self):
+        self.make_dual_package()
+        path = self.setup / "installer-build.json"
+        original = json.loads(path.read_text())
+        for key, value in (("sha256", "0" * 64), ("source_commit", "e" * 40),
+                           ("installer_manifest_sha256", "f" * 64), ("distribution", "download-only")):
+            with self.subTest(key=key):
+                evidence = copy.deepcopy(original)
+                evidence[key] = value
+                path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(ValueError, "installer build evidence mismatch"):
+                    self.prepare(desktop=self.desktop)
+
+    def test_installer_size_limit_is_checked_before_hashing(self):
+        limit = (self.setup / "NIPAT-Setup.exe").stat().st_size
+        with patch.object(publisher, "MAX_ASSET_BYTES", limit), \
+                self.assertRaisesRegex(ValueError, ">= 2 GiB file: NIPAT-Setup.exe"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
 
     def test_rejects_docker_zip_corruption_against_build_evidence(self):
         self.make_dual_package()
@@ -254,6 +312,7 @@ class ReleaseGuards(unittest.TestCase):
             "launcher_sha256": publisher.sha256(launcher),
         }
         (self.desktop / "package-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+        self.write_installer_evidence()
         self.prepare(desktop=self.desktop)
         self.assertEqual(publisher.checksums(self.root / "release/SHA256SUMS")[self.package_name],
                          publisher.sha256(package))

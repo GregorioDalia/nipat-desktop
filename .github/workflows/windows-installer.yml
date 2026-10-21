@@ -192,7 +192,7 @@ jobs:
         with:
           name: nipat-installer-inputs
           path: build/windows-installer
-      - name: Download the exact scientific archive for the Docker Desktop package
+      - name: Download exact runtime archives for both distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nipat-runtime-assets
@@ -248,21 +248,49 @@ jobs:
           $process = Start-Process -FilePath $download -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$inno`"")
           if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
           "NIPAT_ISCC=$inno\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Compile installer with embedded trusted manifest
+      - name: Compile the self-contained installer with verified embedded runtimes
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $stage = (Resolve-Path 'build/windows-installer').Path
+          $assets = (Resolve-Path 'build/assets').Path
           $script = (Resolve-Path 'installer/windows/NIPAT.iss').Path
           $output = Join-Path $PWD 'build/output'
           New-Item -ItemType Directory -Path $output -Force | Out-Null
-          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" $script
+          python scripts/build_windows_installer_assets.py verify-embedded `
+            --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs do not match the trusted manifest.' }
+          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DRuntimeAssetsDir=$assets" "/DOutputDir=$output" $script
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
+          python scripts/build_windows_installer_assets.py verify-embedded `
+            --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
+          if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs changed during compilation.' }
+          if (@(Get-ChildItem -LiteralPath $output -Filter '*.bin' -File).Count -ne 0) {
+            throw 'The installer must be a single EXE without companion data files.'
+          }
           Copy-Item "$stage/app/.distribution/installer-manifest.json" $output
           # Retained as build evidence to bind both packages to the same launcher.
           Copy-Item "$stage/app/NIPAT.exe" $output
           $exe = Join-Path $output 'NIPAT-Setup.exe'
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $size = (Get-Item -LiteralPath $exe).Length
+          if ($size -le 0 -or $size -ge 2GB) { throw 'The single-file installer must be smaller than 2 GiB.' }
+          $manifestPath = Join-Path $output 'installer-manifest.json'
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+          $embedded = [ordered]@{}
+          foreach ($key in @('rootfs', 'scientific_image')) {
+            $asset = $manifest.assets.$key
+            $embedded[$key] = [ordered]@{ file = $asset.file; sha256 = $asset.sha256; size = $asset.size }
+          }
+          $record = [ordered]@{
+            schema_version = 1; distribution = 'self-contained-wsl'
+            version = $manifest.version; source_commit = $manifest.source_commit
+            file = 'NIPAT-Setup.exe'; sha256 = $hash; size = $size
+            installer_manifest_sha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            launcher_sha256 = (Get-FileHash -LiteralPath "$stage/app/NIPAT.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
+            embedded_assets = $embedded
+          }
+          [IO.File]::WriteAllText((Join-Path $output 'installer-build.json'), ($record | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
           "$hash  NIPAT-Setup.exe" | Set-Content -LiteralPath "$output/SHA256SUMS" -Encoding ascii
       - name: Verify both final packages without publishing
         shell: powershell
@@ -286,6 +314,7 @@ jobs:
         with:
           name: nipat-windows-setup
           path: build/output/
+          compression-level: 0
           retention-days: 14
           if-no-files-found: error
       - name: Retain Docker Desktop package for review (no release publication)

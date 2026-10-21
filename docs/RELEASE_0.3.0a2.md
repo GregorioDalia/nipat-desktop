@@ -7,6 +7,9 @@ il pacchetto finale con l'interfaccia più recente verificata dal manutentore.
 
 ## Novità
 
+- Installazione principale da un unico `NIPAT-Setup.exe`, con ambiente Linux
+  interno e runtime scientifico incorporati: doppio clic per installare, poi
+  icona **NIPAT**. Non occorre preparare cartelle o archivi separati.
 - Avvio con doppio clic su `NIPAT.exe` nell'installazione WSL e nel pacchetto
   Docker Desktop. Il launcher apre la CLI e conserva i comandi diretti;
   non occorre aprire PowerShell manualmente.
@@ -17,7 +20,8 @@ il pacchetto finale con l'interfaccia più recente verificata dal manutentore.
 - Identità dell'immagine importata risolta dal caricamento dell'archivio
   verificato anche nel setup Docker Desktop, senza presumere che coincida
   con l'identificativo del motore usato per esportarla.
-- Aggiornamento WSL con ambiente separato quando cambia il rootfs, conservando
+- Aggiornamento automatico dell'ambiente Linux interno di NIPAT con un ambiente
+  separato quando cambia il rootfs, conservando
   distribuzione precedente e cartelle dati/risultati. Verifica degli strumenti
   e autotest precedono l'attivazione; il setup può essere ripreso dopo un errore.
 - Licenza GPL-3.0-or-later per il codice originale NIPAT e documentazione

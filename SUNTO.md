@@ -60,29 +60,30 @@ verificata dal manutentore; l'installatore `0.3.0a1` non la contiene.
 
 ## Come si usa
 
-Il canale di distribuzione è la pre-release GitHub `v0.3.0a1`. Scaricare
-`NIPAT-Setup.exe` e avviarlo con doppio clic dal proprio account Windows.
-La configurazione prepara Python, l'ambiente WSL dedicato, Docker Engine e
-il runtime scientifico, poi esegue gli autotest. Attendere **`NIPAT: ready`**,
-quindi aprire **NIPAT** dal menu Start. Non occorre installare Docker Desktop,
-Python, R o samtools separatamente. Il primo download richiede Internet;
-le analisi sono locali. Il caso senza WSL funzionante è fuori dal perimetro
-di questa prima consegna per le prove di dominio.
-Per la release già pubblicata `0.2.0a2` resta il percorso con archivio sorgente,
-`1_SETUP.cmd`, `2_AVVIA.cmd` e Docker Desktop avviato.
+Il percorso principale del candidato `0.3.0a2` è un unico **`NIPAT-Setup.exe`**:
+scaricarlo da GitHub quando la versione sarà pubblicata, fare doppio clic e
+attendere **`NIPAT: ready`**. Poi aprire l'icona **NIPAT** dal menu Start o dal
+desktop. L'installatore contiene l'applicazione e i componenti per le analisi e
+li prepara automaticamente. Non occorre spostare archivi, aprire PowerShell o
+installare separatamente Python, R, samtools o Docker Desktop.
+La release pubblicata `0.3.0a1` conserva la precedente interfaccia.
 
-Per il candidato `0.3.0a2`, il collegamento dell'installazione WSL avvia
-`NIPAT.exe`. Il pacchetto Docker richiede invece di estrarre tutto lo ZIP,
-aprire `1_SETUP.cmd` una volta con Docker Desktop attivo e poi `NIPAT.exe`.
-Il menu non richiede di aprire PowerShell. Confermare **Avvia analisi** esegue
-realmente gli script R e gli altri strumenti previsti dal workflow.
-Per aggiornare WSL, il candidato prepara un ambiente separato quando cambia
-il rootfs, conserva quello precedente e le cartelle dati/risultati, e attiva
-il nuovo ambiente solo dopo i controlli. Se la preparazione fallisce, si può
-riprenderla; la nuova applicazione resta bloccata fino al completamento.
-La conservazione del vecchio runtime non equivale al ripristino automatico
+L'ambiente Linux interno di NIPAT viene eseguito da Windows tramite WSL2.
+Il perimetro iniziale assume WSL2 funzionante; la sua attivazione su Windows
+può richiedere Internet, autorizzazioni e riavvio e resta da verificare
+separatamente. Anche l'aggiornamento dell'ambiente interno viene gestito dal
+setup NIPAT: non è una richiesta di manutenzione manuale di Windows o WSL.
+Il setup conserva l'ambiente precedente e le cartelle dati/risultati, e attiva
+il nuovo ambiente dopo i controlli. Se fallisce, la preparazione può essere
+ripresa dal menu Start; la nuova applicazione resta bloccata fino al termine.
+La conservazione del vecchio ambiente non equivale al ripristino automatico
 dei file applicativi. Prima installazione e aggiornamento del pacchetto finale
 restano da verificare su Windows.
+
+Il pacchetto alternativo Docker Desktop richiede di estrarre tutto lo ZIP,
+aprire `1_SETUP.cmd` una volta con Docker Desktop attivo e poi `NIPAT.exe`.
+Confermare **Avvia analisi** esegue realmente gli script R e gli altri strumenti
+previsti dal workflow. Per `0.2.0a2` resta il precedente percorso da sorgenti.
 
 Gli input possono restare nelle loro cartelle originali, anche su un'altra
 unità locale accessibile al runtime. Il nuovo backend WSL non supporta

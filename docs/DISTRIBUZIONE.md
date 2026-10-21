@@ -12,10 +12,13 @@ La build del candidato prepara due modalità di distribuzione:
 
 | Asset | Contenuto e prerequisiti | Avvio |
 | --- | --- | --- |
-| `NIPAT-Setup.exe` | Applicazione, Python portabile e manifest per scaricare e verificare il runtime scientifico e l'ambiente WSL dedicato. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Setup guidato; poi collegamento **NIPAT** che avvia `NIPAT.exe`. |
+| `NIPAT-Setup.exe` | Un solo file con applicazione, Python portabile, ambiente Linux interno e runtime scientifico incorporati. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Doppio clic per installare; poi icona **NIPAT** che avvia `NIPAT.exe`. |
 | `NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip` | Applicazione, `NIPAT.exe`, Python portabile e runtime scientifico incluso. Richiede Docker Desktop installato e avviato con container Linux. | Estrarre tutto; aprire `1_SETUP.cmd` una volta e poi `NIPAT.exe`. |
 
 `NIPAT.exe` apre la CLI guidata senza richiedere un terminale già aperto.
+L'installatore è il percorso principale: l'utilizzatore scarica soltanto
+`NIPAT-Setup.exe` e non deve spostare archivi o preparare cartelle `assets`.
+Il setup conserva automaticamente i componenti necessari alla ripresa.
 L'installatore e il pacchetto Docker usano lo stesso launcher e i sorgenti dello
 stesso commit. Il pacchetto Docker riutilizza esattamente l'archivio scientifico
 esportato per WSL, identificato da dimensione e SHA-256; non lo ricostruisce sul
@@ -33,8 +36,9 @@ Prima della consegna, provare il pacchetto finale su Windows: completamento del
 setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
 un'esecuzione reale. La validazione di dominio utilizza la
 [scheda dedicata](VALIDAZIONE.md), con risultati attesi e osservati.
-Il candidato gestisce gli aggiornamenti WSL preparando un ambiente separato
-quando cambia il rootfs. Conserva la distribuzione precedente e le cartelle
+L'aggiornamento riguarda l'ambiente Linux interno usato da NIPAT per le analisi:
+non richiede una manutenzione manuale di Windows o WSL. Il candidato prepara
+un ambiente separato quando cambia il rootfs. Conserva quello precedente e le cartelle
 dati/risultati, verifica il nuovo ambiente con `doctor` e `self-test`, quindi
 attiva la nuova configurazione. La ripetizione del setup riprende lo stesso
 target; non occorre eliminare distribuzioni o sovrascrivere la configurazione.

@@ -11,73 +11,54 @@ i pacchetti Windows. Il nuovo candidato non è ancora una release pubblicata:
 la consegna per i test esterni dovrà identificare esattamente la versione
 dell'interfaccia verificata, insieme alla relativa guida.
 
-## Avvio del candidato 0.3.0a2
+## Installazione e avvio del candidato 0.3.0a2
 
-Il doppio clic su **`NIPAT.exe`** apre direttamente la CLI guidata. Non occorre
-aprire PowerShell né scrivere un comando per raggiungere il menu. L'interfaccia
-resta testuale e usa lo stesso motore di esecuzione dei comandi diretti.
-`NIPAT-Setup.exe` è invece il programma di installazione della modalità WSL.
+Il percorso principale richiede un solo file: **`NIPAT-Setup.exe`**. Alla
+pubblicazione della nuova pre-release:
 
-Alla pubblicazione della nuova pre-release, scegliere uno dei due pacchetti:
+1. Scaricare `NIPAT-Setup.exe` dalla relativa pagina GitHub.
+2. Fare doppio clic dal proprio account Windows e attendere il completamento
+   della configurazione e degli autotest: **`NIPAT: ready`**.
+3. Aprire l'icona **NIPAT** sul desktop o nel menu Start.
 
-| Pacchetto | Preparazione | Avvio successivo |
-| --- | --- | --- |
-| `NIPAT-Setup.exe` | Doppio clic; completare configurazione e autotest dell'ambiente WSL dedicato. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Collegamento **NIPAT** nel menu Start o sul desktop, che apre `NIPAT.exe`. |
-| `NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip` | Docker Desktop installato e avviato con container Linux; estrarre tutto lo ZIP e aprire `1_SETUP.cmd` con doppio clic. | Doppio clic su `NIPAT.exe` nella cartella estratta. |
+L'installatore contiene l'applicazione e i componenti per le analisi; li prepara
+automaticamente. Non occorre aprire PowerShell, installare Python, R, samtools
+oppure Docker Desktop, né scaricare o spostare archivi separati.
+L'icona avvia **`NIPAT.exe`**, che apre il menu testuale descritto sotto.
 
-Il pacchetto Docker include Python portabile e l'archivio scientifico già
-verificato. Non spostare il solo `NIPAT.exe`: deve restare con le cartelle e
-i file del pacchetto. Le due modalità utilizzano lo stesso archivio scientifico;
-la scelta riguarda l'ambiente che lo esegue. L'EXE usa la configurazione della
-propria copia di NIPAT e non sceglie automaticamente altre installazioni sul PC.
+Il perimetro iniziale resta **Windows 11 x64 con WSL2 funzionante**. WSL permette
+a Windows di eseguire l'ambiente Linux interno di NIPAT. Se va attivato,
+possono servire Internet, autorizzazione amministrativa e riavvio; questo
+percorso resta da verificare separatamente e può essere limitato dalle policy
+del computer.
 
-Se NIPAT è già installato con WSL, il candidato prepara un ambiente separato
-quando il rootfs cambia e conserva quello precedente. Le cartelle dati e
-risultati configurate vengono mantenute; il nuovo ambiente viene attivato
-solo dopo la verifica degli strumenti e gli autotest scientifici.
+Per chi dispone già di **Docker Desktop** con container Linux, l'alternativa è
+`NIPAT-DockerDesktop-0.3.0a2-windows-x64.zip`: estrarre tutto il pacchetto, aprire
+`1_SETUP.cmd` una volta con doppio clic e poi `NIPAT.exe`. Il launcher deve
+restare nella cartella estratta, insieme ai file del pacchetto. Le due modalità
+usano lo stesso codice e lo stesso runtime scientifico verificato.
 
-Se la preparazione si interrompe o fallisce, conservare `setup.log` e riprendere
-con **NIPAT - completa preparazione** dal menu Start oppure `1_SETUP.cmd`
-nella cartella installata. Il setup riconosce il proprio ambiente già preparato
-per quella versione e non richiede di eliminare la distribuzione precedente.
-La nuova applicazione resta bloccata fino al completamento della configurazione:
-l'installatore ha già aggiornato i file applicativi, quindi la conservazione
-del vecchio ambiente non costituisce un ripristino completo dell'applicazione.
-La [procedura di verifica](INSTALLATORE_WINDOWS.md#prova-prima-della-pubblicazione)
-distingue le prove automatiche dalla prima installazione e dall'aggiornamento
-reali su Windows, ancora da registrare per il pacchetto finale.
+Quando si installa una nuova versione, NIPAT prepara anche il proprio ambiente
+Linux se necessario. Questa preparazione riguarda NIPAT, non una procedura
+manuale di aggiornamento di Windows o WSL. Conserva l'ambiente precedente e
+le cartelle dati e risultati, e attiva il nuovo ambiente dopo gli autotest.
 
-## Installazione guidata Windows pubblicata: 0.3.0a1
+Se la preparazione fallisce, conservare il log e aprire **NIPAT - completa
+preparazione** dal menu Start. I componenti necessari alla ripresa vengono
+conservati automaticamente. La nuova applicazione resta bloccata finché la
+preparazione non termina. Le prove reali del pacchetto finale, sia di prima
+installazione sia di aggiornamento, restano da registrare; i dettagli sono
+nella [procedura di verifica](INSTALLATORE_WINDOWS.md#prova-prima-della-pubblicazione).
 
-La pre-release `0.3.0a1` è destinata alle prove della CLI su **Windows 11 x64
-con WSL2 già funzionante**. L'attivazione iniziale di WSL e la ripresa dopo
-riavvio Windows non rientrano nella verifica completata. Il pacchetto è distinto
-dal precedente archivio sorgente `0.2.0a2`.
+## Versione già pubblicata: 0.3.0a1
 
-1. Aprire la [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
-   e scaricare l'asset **NIPAT-Setup.exe**. Gli archivi runtime vengono scaricati
-   dalla configurazione; non occorre estrarre i file “Source code”.
-2. Avviare il file con doppio clic dal proprio account Windows, senza scegliere
-   “Esegui come amministratore”. La configurazione chiede l’autorizzazione
-   amministrativa soltanto se serve attivare WSL.
-3. Attendere download, preparazione dell'ambiente e autotest. Il primo avvio
-   può richiedere diversi minuti. La configurazione deve terminare con
-   **`NIPAT: ready`**; un messaggio di errore non equivale a setup completato.
-4. Aprire **NIPAT** dal menu Start o dal collegamento sul desktop.
-   Il programma avvia automaticamente il proprio motore quando necessario.
-
-La prima versione dell’installatore è destinata a Windows 11 x64, con
-virtualizzazione disponibile. Non richiede installazioni manuali separate di
-Python, R, samtools o Docker Desktop. Richiede Internet per i download iniziali
-ed eventuale intervento IT quando le impostazioni del computer impediscono WSL.
-Per dettagli tecnici e prove dell'installatore, consultare
-[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md). Se la configurazione richiede
-di attivare WSL o di riavviare Windows, registrare il caso separatamente dalle
-prove scientifiche: non è il percorso già verificato per questa consegna.
-L'installatore pubblicato `0.3.0a1` non migra automaticamente un ambiente
-sperimentale differente già presente. Il nuovo percorso di aggiornamento
-appartiene al candidato `0.3.0a2` descritto sopra; non eliminare distribuzioni
-per forzare il setup di una versione precedente.
+La [pre-release v0.3.0a1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.3.0a1)
+contiene la precedente interfaccia. Il suo setup scarica automaticamente gli
+archivi runtime e non include la nuova procedura di aggiornamento; non è il
+pacchetto da usare per verificare l'interfaccia del candidato `0.3.0a2`.
+Le [note di quella versione](RELEASE_0.3.0a1.md) ne descrivono il perimetro.
+Non eliminare ambienti già installati per forzare il setup di una versione
+precedente.
 
 ## Installazione da sorgenti con Docker già disponibile
 

@@ -51,7 +51,8 @@ try {
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
         $previous = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($previous.schema_version -ne 1) { throw 'Stato installer non riconosciuto. Conservare il log e contattare il supporto.' }
-        if (-not $AssetDirectory -and $previous.PSObject.Properties['asset_directory']) { $AssetDirectory = $previous.asset_directory }
+        # A new self-contained setup uses its embedded cache, never a stale path from an older installer.
+        if ($Resume -and -not $AssetDirectory -and $previous.PSObject.Properties['asset_directory']) { $AssetDirectory = $previous.asset_directory }
     }
     if ($AssetDirectory) { $AssetDirectory = Resolve-NipatDirectory $AssetDirectory }
     $state = [ordered]@{

@@ -85,6 +85,20 @@ try {
     [IO.File]::WriteAllBytes((Join-Path $assetDirectory $asset.file), [byte[]]@(1, 2, 3, 4))
     $cached = Get-NipatAsset $asset $cacheDirectory $assetDirectory
     Assert-Test (Test-NipatAsset $cached $asset) 'offline asset copied and reverified in cache'
+    # Inno installs directly to this same hash-addressed cache before bootstrap starts.
+    # No original extraction medium, URL or download is needed after installation/reboot.
+    Remove-Item -LiteralPath $assetDirectory -Recurse -Force
+    function Invoke-WebRequest { throw 'Unexpected download while embedded cache is valid.' }
+    try {
+        $cacheOnly = Get-NipatAsset $asset $cacheDirectory ''
+        Assert-Test ($cacheOnly -ceq $cached) 'embedded cache works with no asset directory or download'
+        $afterRemoval = Get-NipatAsset $asset $cacheDirectory $assetDirectory
+        Assert-Test ($afterRemoval -ceq $cached) 'cached archive remains usable after installer media is removed'
+        Assert-Test (@(Get-ChildItem -LiteralPath $cacheDirectory -File).Count -eq 1) 'cache retrieval never creates a second permanent archive'
+    } finally {
+        Remove-Item Function:Invoke-WebRequest
+    }
+    [IO.Directory]::CreateDirectory($assetDirectory) | Out-Null
     [IO.File]::WriteAllBytes($cached, [byte[]]@(0, 0, 0, 0))
     [IO.File]::WriteAllBytes((Join-Path $assetDirectory $asset.file), [byte[]]@(9, 9, 9, 9))
     Assert-Rejected { Get-NipatAsset $asset $cacheDirectory $assetDirectory } 'reject altered cache and offline file without execution'

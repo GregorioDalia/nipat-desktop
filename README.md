@@ -14,11 +14,14 @@ the workflow. Users do not need to open PowerShell manually. The candidate
 packages must be reviewed before publication; share the versioned release of
 the tested interface, not an older installer or a moving development branch.
 
-The new distribution builds `NIPAT-Setup.exe` on GitHub. It prepares portable
-Python and a dedicated WSL2 environment with Docker Engine, imports a prebuilt
-scientific image, and runs self-tests. Docker Desktop is not required for this
-installation mode. Initial WSL activation can require administrator consent
-and a restart; setup resumes under the original Windows account.
+The candidate's main distribution is a single **`NIPAT-Setup.exe`** download.
+Double-click it to install, then open the **NIPAT** icon. The EXE includes
+portable Python, the dedicated Linux environment and the scientific runtime;
+setup verifies and prepares them automatically, then runs self-tests. Users
+do not need to arrange runtime archives or install Docker Desktop separately.
+Windows runs the internal Linux environment through WSL2. Initial WSL
+activation may require Internet, administrator consent and a restart; setup
+resumes under the original Windows account.
 The initial installer target is **Windows 11 x64**.
 
 The current testing scope assumes **WSL2 is already working**. Download
@@ -37,9 +40,11 @@ Docker Desktop with Linux containers must already be installed and running.
 Extract the entire ZIP, double-click `1_SETUP.cmd` once, then open `NIPAT.exe`.
 This ZIP and `NIPAT-Setup.exe` are two delivery modes of the same version.
 
-For WSL updates, the candidate prepares a separate owned distribution when the
-root filesystem changes, keeps the previous environment and data locations,
-and activates the new backend only after `doctor` and scientific self-tests.
+When updating NIPAT, setup also manages its internal Linux environment. This
+is part of installing NIPAT, not a manual Windows or WSL maintenance task.
+The candidate prepares a separate owned distribution when its root filesystem
+changes, keeps the previous environment and data locations, and activates the
+new backend only after `doctor` and scientific self-tests.
 An interrupted setup can be resumed. This preserves the previous runtime, not
 a complete application rollback: the installer replaces application files
 before preparation, and the updated app remains blocked until setup succeeds.

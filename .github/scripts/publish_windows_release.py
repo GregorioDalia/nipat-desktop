@@ -15,6 +15,7 @@ import zipfile
 
 REPO = "GregorioDalia/nipat-desktop"
 MANIFEST = "installer-manifest.json"
+MAX_ASSET_BYTES = 2 * 1024**3
 PYTHON_NAME = "python-3.12.10-embed-amd64.zip"
 PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
 
@@ -69,13 +70,39 @@ def requires_desktop_bundle(version):
     return version != "0.3.0a1"
 
 
+def verify_installer_build(setup, manifest, manifest_bytes, commit):
+    """Bind the self-contained EXE to the inputs checked by the successful build."""
+    require(not any(path.suffix.casefold() == ".bin" for path in setup.rglob("*")),
+            "Self-contained installer cannot have companion data slices")
+    evidence_path = setup / "installer-build.json"
+    require(evidence_path.is_file() and not evidence_path.is_symlink(),
+            "Missing self-contained installer build evidence")
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
+    installer = setup / "NIPAT-Setup.exe"
+    launcher = setup / "NIPAT.exe"
+    require(launcher.is_file() and not launcher.is_symlink() and launcher.stat().st_size > 0,
+            "Missing WSL build launcher evidence")
+    expected = {
+        "schema_version": 1, "distribution": "self-contained-wsl",
+        "version": manifest["version"], "source_commit": commit,
+        "file": "NIPAT-Setup.exe", "sha256": sha256(installer), "size": installer.stat().st_size,
+        "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "launcher_sha256": sha256(launcher),
+        "embedded_assets": {
+            key: {field: manifest["assets"][key][field] for field in ("file", "sha256", "size")}
+            for key in ("rootfs", "scientific_image")
+        },
+    }
+    require(evidence == expected, "Self-contained installer build evidence mismatch")
+
+
 def verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit):
     """Verify the portable ZIP without extracting or executing its contents."""
     require(desktop is not None, "Docker Desktop package is required for this release")
     version = manifest["version"]
     name = f"NIPAT-DockerDesktop-{version}-windows-x64.zip"
     path = desktop / name
-    require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < 2 * 1024**3,
+    require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
             "Missing or invalid Docker Desktop package")
     evidence_path = desktop / "package-build.json"
     require(evidence_path.is_file() and not evidence_path.is_symlink(), "Missing Docker package build evidence")
@@ -164,19 +191,21 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
         require(asset["file"] == name and asset["url"] ==
                 f"https://github.com/{REPO}/releases/download/{tag}/{name}", "Asset name/URL mismatch")
         path = runtime / name
-        require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < 2 * 1024**3,
+        require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
                 f"Invalid runtime asset: {name}")
         require(path.stat().st_size == asset["size"] and sha256(path) == asset["sha256"],
                 f"Runtime asset hash/size mismatch: {name}")
         files[name] = path
     for path in files.values():
-        require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
-                f"Missing or invalid file: {path.name}")
+        require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
+                f"Missing, invalid or >= 2 GiB file: {path.name}")
     digests = {name: sha256(path) for name, path in files.items()}
     require(checksums(setup / "SHA256SUMS") == {"NIPAT-Setup.exe": digests["NIPAT-Setup.exe"]},
             "Installer checksum mismatch")
     require(checksums(runtime / "SHA256SUMS") == {n: h for n, h in digests.items() if n != "NIPAT-Setup.exe"},
             "Runtime/manifest checksum mismatch")
+    if requires_desktop_bundle(version):
+        verify_installer_build(setup, manifest, manifest_bytes, commit)
     if requires_desktop_bundle(version) or desktop is not None:
         portable = verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit)
         files[portable.name] = portable
@@ -273,6 +302,13 @@ def main():
         notes += (f"\n\n## Build distribuita\n\nCommit: `{commit}`.\n\n"
                   f"[Build verificata]({run['html_url']}): test Linux e Windows, regressioni scientifiche, "
                   "caricamento/esecuzione/ricaricamento nel motore distribuito e compilazione EXE superati.\n")
+        if requires_desktop_bundle(manifest["version"]):
+            notes += ("\nPer l'installazione WSL scaricare soltanto **NIPAT-Setup.exe**: include "
+                      "i componenti NIPAT e i due archivi runtime. Dopo l'installazione, avviare NIPAT "
+                      "dal collegamento creato. Non occorre scaricare o disporre manualmente gli archivi "
+                      "in una cartella assets. Windows puo' richiedere Internet o un riavvio per WSL.\n\n"
+                      "Lo ZIP Docker Desktop e' una distribuzione alternativa per chi dispone gia' di Docker Desktop. "
+                      "Gli archivi runtime separati sono conservati come asset di recupero e verifica.\n")
         notes = notes.strip()
         files = {path.name: path for path in output.iterdir()}
         check_tag(tag, commit)

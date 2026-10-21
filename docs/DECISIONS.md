@@ -18,6 +18,15 @@
   load receipt in either backend; do not assume equality across engine stores.
 - Keep Docker Desktop as the prerequisite for the Docker ZIP. The WSL installer
   manages its dedicated engine. Setup and self-tests precede domain analyses.
+- Make the primary installer a single `NIPAT-Setup.exe` download containing
+  the verified runtime archives as well as the application and portable Python.
+  Users double-click setup and then the NIPAT icon; they do not arrange asset
+  directories or download runtime files separately. Preserve embedded assets
+  automatically for resumed setup. Initial Windows WSL activation may still
+  require Internet, administrator consent and a restart.
+- Explain runtime updates as preparation of NIPAT's internal Linux environment,
+  not manual Windows or WSL maintenance. Keep technical diagnostics separate
+  from the normal installation and analysis steps.
 - Apply GPL-3.0-or-later to original NIPAT code and preserve the licenses and
   attribution of vendored components. Do not imply a broader grant for upstream
   code than its own license provides.

@@ -23,6 +23,7 @@ _SPEC.loader.exec_module(bundle)
 RELEASE_REPOSITORY = "GregorioDalia/nipat-desktop"
 MAX_ASSET_BYTES = 2 * 1024**3  # GitHub release files must be smaller than 2 GiB.
 MANIFEST_NAME = "installer-manifest.json"
+RUNTIME_INCLUDE_NAME = "runtime-assets.iss"
 
 
 def checked_version(project: Path) -> str:
@@ -189,6 +190,8 @@ def validate_manifest(manifest: dict) -> None:
     assets = manifest.get("assets", {})
     if set(assets) != {"rootfs", "scientific_image"}:
         raise ValueError("Il manifest deve contenere esattamente i due asset runtime.")
+    if str(assets["rootfs"].get("file", "")).casefold() == str(assets["scientific_image"].get("file", "")).casefold():
+        raise ValueError("I due asset runtime devono avere nomi distinti.")
     for entry in assets.values():
         name = entry.get("file", "")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz", name):
@@ -203,6 +206,44 @@ def validate_manifest(manifest: dict) -> None:
             raise ValueError("Dimensione asset non valida o >= 2 GiB.")
 
 
+def verify_runtime_assets(manifest: dict, asset_directory: Path) -> None:
+    """Check the exact archive bytes used by the compiler, not only their names."""
+    validate_manifest(manifest)
+    for entry in manifest["assets"].values():
+        actual = asset_metadata(asset_directory / entry["file"], manifest["release_tag"])
+        if actual != entry:
+            raise ValueError(f"Asset incorporato diverso dal manifest: {entry['file']}")
+
+
+def runtime_assets_include(manifest: dict) -> str:
+    """Emit portable Inno inputs; each embedded archive becomes its persistent cache file."""
+    validate_manifest(manifest)
+    lines = ["; Generated from the verified installer manifest. Do not edit."]
+    for key in ("rootfs", "scientific_image"):
+        entry = manifest["assets"][key]
+        lines.append(
+            f'Source: "{{#RuntimeAssetsDir}}\\{entry["file"]}"; '
+            'DestDir: "{localappdata}\\NIPAT\\cache"; '
+            f'DestName: "{entry["sha256"]}-{entry["file"]}"; '
+            f'Hash: "{entry["sha256"]}"; '
+            'Flags: ignoreversion uninsneveruninstall nocompression solidbreak'
+        )
+    return "\n".join(lines) + "\n"
+
+
+def verify_embedded_inputs(manifest_path: Path, stage: Path, asset_directory: Path) -> Path:
+    """Recheck downloaded CI artifacts immediately before Windows compilation."""
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    verify_runtime_assets(manifest, asset_directory)
+    embedded_manifest = stage / "app" / ".distribution" / MANIFEST_NAME
+    if embedded_manifest.read_bytes() != manifest_path.read_bytes():
+        raise ValueError("Il manifest incorporato e diverso dal manifest degli asset.")
+    include = stage / RUNTIME_INCLUDE_NAME
+    if include.read_text(encoding="utf-8") != runtime_assets_include(manifest):
+        raise ValueError("Le istruzioni di incorporamento degli asset non corrispondono al manifest.")
+    return include
+
+
 def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path) -> Path:
     project = project.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -213,8 +254,10 @@ def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path)
     hashes = {path.relative_to(project).as_posix(): bundle.sha256_file(path) for path in files}
     if hashes != manifest.get("source_sha256"):
         raise ValueError("I sorgenti non corrispondono al manifest compilato in CI.")
+    verify_runtime_assets(manifest, manifest_path.parent)
     bundle.require_python_archive(python_zip)
     stage.mkdir(parents=True, exist_ok=False)
+    (stage / RUNTIME_INCLUDE_NAME).write_text(runtime_assets_include(manifest), encoding="utf-8")
     app = stage / "app"
     for source in files:
         target = app / source.relative_to(project)
@@ -249,10 +292,14 @@ def main() -> int:
     export.add_argument("--source-commit", required=True)
     export.add_argument("--scientific-image", required=True)
     export.add_argument("--rootfs-image", required=True)
-    stage = subparsers.add_parser("stage", help="prepara i soli sorgenti approvati per Inno Setup")
+    stage = subparsers.add_parser("stage", help="prepara sorgenti approvati e incorporamento runtime per Inno Setup")
     stage.add_argument("--manifest", type=Path, required=True)
     stage.add_argument("--stage-dir", type=Path, required=True)
     stage.add_argument("--python-archive", type=Path)
+    verify = subparsers.add_parser("verify-embedded", help="verifica gli asset e le istruzioni prima di compilare l installer unico")
+    verify.add_argument("--manifest", type=Path, required=True)
+    verify.add_argument("--stage-dir", type=Path, required=True)
+    verify.add_argument("--assets-dir", type=Path, required=True)
     args = parser.parse_args()
     try:
         project = args.project.resolve()
@@ -261,6 +308,8 @@ def main() -> int:
                 project, args.output_dir.resolve(), source_commit=args.source_commit,
                 scientific_reference=args.scientific_image, rootfs_reference=args.rootfs_image,
             )
+        elif args.command == "verify-embedded":
+            result = verify_embedded_inputs(args.manifest, args.stage_dir, args.assets_dir)
         else:
             with tempfile.TemporaryDirectory() as temporary:
                 archive = bundle.python_archive(project, args.python_archive, Path(temporary))
