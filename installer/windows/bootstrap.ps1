@@ -41,7 +41,7 @@ try {
     try { $lockHeld = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $lockHeld = $true }
     if (-not $lockHeld) { throw 'Un altra preparazione NIPAT e gia in corso. Attendere che termini.' }
     Initialize-NipatWritableDirectory (Split-Path -Parent $statePath) 'dello stato installer'
-    Start-Transcript -Path (Join-Path $project '.runtime\installer\setup.log') -Append | Out-Null
+    Start-Transcript -LiteralPath (Join-Path $project '.runtime\installer\setup.log') -Append | Out-Null
     $transcriptStarted = $true
     $manifest = Read-NipatInstallerManifest (Join-Path $project '.distribution\installer-manifest.json')
     $recoveryPath = Save-NipatRecoverySnapshot $project $manifest

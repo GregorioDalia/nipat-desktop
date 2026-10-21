@@ -7,7 +7,7 @@
 #ifndef OutputDir
   #define OutputDir "..\..\build\output"
 #endif
-#define NipatVersion "0.4.0"
+#define NipatVersion "0.4.1"
 
 [Setup]
 AppId={{5C0FD852-ED53-4F4B-92D2-64B784E7F9B3}

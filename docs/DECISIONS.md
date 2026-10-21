@@ -1,5 +1,22 @@
 # Consolidated decisions
 
+## Single-action Docker Desktop delivery (0.4.1)
+
+- Deliver Docker Desktop support through one `NIPAT-DockerDesktop-Setup.exe`,
+  alongside the existing single-file WSL installer. The Docker ZIP remains a
+  build and verification artifact, not the normal user installation procedure.
+- Users install the EXE and open the NIPAT (Docker Desktop) icon. The application
+  prepares portable Python and the scientific runtime when required, runs doctor
+  and self-tests, then opens the menu. Later launches reuse completed preparation;
+  failed preparation can be retried through the same icon without a setup script.
+- Docker Desktop must already be installed and running with Linux containers.
+  Keep the Docker Desktop application, data and results separate from the WSL
+  installation so that both copies can coexist.
+- Keep this release a pre-release for domain testing. No new scientific behavior
+  or unrecorded Windows acceptance result is claimed. PowerShell remains an
+  internal launcher dependency; this change does not add a code-signing certificate
+  or establish antivirus/SmartScreen acceptance.
+
 ## Domain-testing pre-release 0.4.0
 
 - Consolidate the guided CLI and both Windows distributions as `v0.4.0`, marked

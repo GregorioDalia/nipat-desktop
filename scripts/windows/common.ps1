@@ -11,11 +11,24 @@ function Resolve-NipatDirectory([string] $Directory) {
     return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Directory)
 }
 
-function Set-NipatEnvironment([string] $Project) {
+function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
     # These variables affect this child process only; the system is unchanged.
     $env:NIPAT_PROJECT_DIR = $Project
     $installed = $null
+    $dockerInstaller = $false
+    $dockerInstallerPath = Join-Path $Project '.distribution\docker-desktop.json'
     $backendFile = Join-Path $Project ".runtime\backend.json"
+    if (Test-Path -LiteralPath $dockerInstallerPath -PathType Leaf) {
+        $desktop = Get-Content -LiteralPath $dockerInstallerPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($desktop.schema_version -ne 1 -or $desktop.distribution -cne 'docker-desktop-installer' -or
+            (Test-Path -LiteralPath $backendFile) -or
+            (Test-Path -LiteralPath (Join-Path $Project '.distribution\installer-manifest.json'))) {
+            throw 'Configurazione Docker Desktop non valida. Ripristinare la relativa installazione NIPAT.'
+        }
+        $dockerInstaller = $true
+        $env:NIPAT_BACKEND = 'native'
+        Remove-Item Env:NIPAT_WSL_DISTRO -ErrorAction SilentlyContinue
+    }
     if (Test-Path -LiteralPath $backendFile -PathType Leaf) {
         $installed = Get-Content -LiteralPath $backendFile -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($installed.schema_version -ne 1 -or $installed.backend -ne 'wsl' -or
@@ -32,6 +45,9 @@ function Set-NipatEnvironment([string] $Project) {
     if ([string]::IsNullOrWhiteSpace($env:NIPAT_WORKSPACE_DIR)) {
         if ($null -ne $installed) {
             $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $installed.data_dir
+        } elseif ($dockerInstaller) {
+            if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'Cartella dati utente Windows non disponibile.' }
+            $env:NIPAT_WORKSPACE_DIR = Join-Path $env:LOCALAPPDATA 'NIPAT-DockerDesktop'
         } else {
             $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $Project
         }
@@ -48,10 +64,10 @@ function Set-NipatEnvironment([string] $Project) {
     }
     $env:NIPAT_RUNS_DIR = Resolve-NipatDirectory $env:NIPAT_RUNS_DIR
     $imageFile = Join-Path $Project ".runtime\runtime-image.txt"
-    if ($null -eq $installed -and (Test-Path -LiteralPath $imageFile -PathType Leaf)) {
+    if (-not $Preparing -and $null -eq $installed -and (Test-Path -LiteralPath $imageFile -PathType Leaf)) {
         $imageId = (Get-Content -LiteralPath $imageFile -Raw).Trim()
         if ($imageId -notmatch '^sha256:[a-f0-9]{64}$') {
-            throw "Identificativo runtime non valido. Eseguire nuovamente 1_SETUP.cmd."
+            throw "Identificativo runtime non valido. Riaprire NIPAT.exe per ripetere la preparazione (1_SETUP.cmd per il progetto sorgente)."
         }
         $env:NIPAT_RUNTIME_IMAGE = $imageId
     }
@@ -92,9 +108,13 @@ function Install-NipatPython([string] $Project) {
     $python = Get-NipatPython $Project
     $ready = Join-Path $pythonDirectory "nipat-python.ready"
     New-Item -ItemType Directory -Path $runtime -Force | Out-Null
-    if (-not (Test-Path -LiteralPath $python -PathType Leaf) -or -not (Test-Path -LiteralPath $ready -PathType Leaf)) {
-        $archiveName = "python-3.12.10-embed-amd64.zip"
-        $archive = Join-Path $Project ".distribution\$archiveName"
+    $archiveName = "python-3.12.10-embed-amd64.zip"
+    $archive = Join-Path $Project ".distribution\$archiveName"
+    # Packaged setup/resume restores Python from its verified embedded archive.
+    # Ordinary ready launches never call this function.
+    if ((Test-Path -LiteralPath $archive -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $python -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $ready -PathType Leaf)) {
         if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
             $archive = Join-Path $runtime $archiveName
             if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
@@ -133,7 +153,7 @@ function Install-NipatPython([string] $Project) {
 
 function Assert-NipatDocker {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        throw "Docker non trovato. Installare Docker Desktop, avviarlo e riaprire 1_SETUP.cmd."
+        throw "Docker Desktop non trovato. Installarlo, avviarlo in modalita Linux e riaprire NIPAT.exe (1_SETUP.cmd per il progetto sorgente)."
     }
     & docker compose version
     if ($LASTEXITCODE -ne 0) { throw "Docker Compose non disponibile in Docker Desktop." }

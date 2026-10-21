@@ -59,7 +59,7 @@ class InstallerAssetTests(unittest.TestCase):
         self.project = self.root / "project"
         self.project.mkdir()
         (self.project / "pyproject.toml").write_text(
-            '[project]\nversion = "0.4.0"\n', encoding="utf-8",
+            '[project]\nversion = "0.4.1"\n', encoding="utf-8",
         )
         (self.project / "README.md").write_text("Approved source\n", encoding="utf-8")
         (self.project / "distribution-files.txt").write_text(
@@ -97,7 +97,7 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(entry["size"], path.stat().st_size)
             self.assertEqual(entry["url"],
                              "https://github.com/GregorioDalia/nipat-desktop/releases/"
-                             f"download/v0.4.0/{path.name}")
+                             f"download/v0.4.1/{path.name}")
 
     def test_manifest_and_stage_accept_noncanonical_project_root(self):
         prior_directory = Path.cwd()
@@ -156,10 +156,10 @@ class InstallerAssetTests(unittest.TestCase):
         for content in (b"", b"not gzip"):
             path.write_bytes(content)
             with self.subTest(content=content), self.assertRaises(ValueError):
-                assets.asset_metadata(path, "v0.4.0")
+                assets.asset_metadata(path, "v0.4.1")
         with patch.object(assets, "MAX_ASSET_BYTES", self.rootfs.stat().st_size):
             with self.assertRaisesRegex(ValueError, "2 GiB"):
-                assets.asset_metadata(self.rootfs, "v0.4.0")
+                assets.asset_metadata(self.rootfs, "v0.4.1")
 
     def test_manifest_rejects_untrusted_or_invalid_download_metadata(self):
         mutations = [

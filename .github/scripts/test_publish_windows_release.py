@@ -52,19 +52,19 @@ class ReleaseGuards(unittest.TestCase):
         return publisher.prepare_assets(self.setup, self.runtime, self.root / "release", COMMIT,
                                         read_source=lambda commit, name: self.sources[name], desktop=desktop)
 
-    def make_dual_package(self):
-        self.manifest["version"] = "0.4.0"
-        self.manifest["release_tag"] = "v0.4.0"
+    def make_dual_package(self, version="0.4.0"):
+        self.manifest["version"] = version
+        self.manifest["release_tag"] = f"v{version}"
         self.manifest["runtime_image"] = "sha256:" + "b" * 64
         for entry in self.manifest["assets"].values():
             old = entry["file"]
-            entry["file"] = old.replace("0.3.0a1", "0.4.0")
-            entry["url"] = entry["url"].replace("0.3.0a1", "0.4.0")
+            entry["file"] = old.replace("0.3.0a1", version)
+            entry["url"] = entry["url"].replace("0.3.0a1", version)
             (self.runtime / old).rename(self.runtime / entry["file"])
         self.write_manifests()
         self.desktop = self.root / "desktop"
         self.desktop.mkdir()
-        self.package_name = "NIPAT-DockerDesktop-0.4.0-windows-x64.zip"
+        self.package_name = f"NIPAT-DockerDesktop-{version}-windows-x64.zip"
         launcher = b"MZ launcher fixture"
         (self.setup / "NIPAT.exe").write_bytes(launcher)
         python_archive = b"portable Python fixture"
@@ -75,12 +75,12 @@ class ReleaseGuards(unittest.TestCase):
         scientific = self.manifest["assets"]["scientific_image"]
         runtime = {
             "schema_version": 1, "image_id": self.manifest["runtime_image"],
-            "source_reference": "v0.4.0", "os": "linux", "architecture": "amd64",
+            "source_reference": f"v{version}", "os": "linux", "architecture": "amd64",
             "archive_sha256": scientific["sha256"], "archive_bytes": scientific["size"],
             "source_commit": COMMIT, "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
         }
         release = {
-            "schema_version": 1, "package_version": "0.4.0",
+            "schema_version": 1, "package_version": version,
             "source_git": {"commit": COMMIT, "dirty": False, "available": True},
             "source_sha256": self.manifest["source_sha256"], "runtime": runtime,
             "launcher": {"file": "NIPAT.exe", "sha256": hashlib.sha256(launcher).hexdigest(), "size": len(launcher)},
@@ -102,7 +102,7 @@ class ReleaseGuards(unittest.TestCase):
             for name, contents in self.package_entries.items():
                 archive.writestr(name, contents)
         evidence = {
-            "schema_version": 1, "version": "0.4.0", "source_commit": COMMIT,
+            "schema_version": 1, "version": self.manifest["version"], "source_commit": COMMIT,
             "file": self.package_name, "sha256": publisher.sha256(path), "size": path.stat().st_size,
             "launcher_sha256": publisher.sha256(self.setup / "NIPAT.exe"),
         }
@@ -123,6 +123,32 @@ class ReleaseGuards(unittest.TestCase):
             },
         }
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    def make_docker_installer(self):
+        self.make_dual_package("0.4.1")
+        (self.desktop / "NIPAT-DockerDesktop-Setup.exe").write_bytes(b"Docker installer fixture")
+        self.write_docker_installer_evidence()
+
+    def write_docker_installer_evidence(self):
+        installer = self.desktop / "NIPAT-DockerDesktop-Setup.exe"
+        package = self.desktop / self.package_name
+        scientific = self.manifest["assets"]["scientific_image"]
+        staged_hashes = {name.removeprefix("nipat-desktop/"): hashlib.sha256(contents).hexdigest()
+                         for name, contents in self.package_entries.items()}
+        staged_hashes[".distribution/docker-desktop.json"] = hashlib.sha256(
+            b'{"schema_version":1,"distribution":"docker-desktop-installer"}\n').hexdigest()
+        evidence = {
+            "schema_version": 1, "distribution": "self-contained-docker-desktop",
+            "version": self.manifest["version"], "source_commit": COMMIT,
+            "file": installer.name, "sha256": publisher.sha256(installer), "size": installer.stat().st_size,
+            "package_file": package.name, "package_sha256": publisher.sha256(package),
+            "package_bytes": package.stat().st_size,
+            "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
+            "launcher_sha256": publisher.sha256(self.setup / "NIPAT.exe"),
+            "runtime_archive_sha256": scientific["sha256"], "runtime_archive_bytes": scientific["size"],
+            "staged_files_sha256": staged_hashes,
+        }
+        (self.desktop / "docker-installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     def test_combines_both_checksum_lists_without_losing_exe(self):
         self.prepare()
@@ -175,6 +201,79 @@ class ReleaseGuards(unittest.TestCase):
         self.assertNotIn("NIPAT.exe", result)  # It is included in each package, not a standalone release asset.
         self.assertEqual((self.root / "release" / self.package_name).read_bytes(),
                          (self.desktop / self.package_name).read_bytes())
+
+    def test_041_publishes_both_installers_without_internal_zip(self):
+        self.make_docker_installer()
+        self.prepare(desktop=self.desktop)
+        result = publisher.checksums(self.root / "release/SHA256SUMS")
+        self.assertEqual(len(result), 5)
+        self.assertIn("NIPAT-Setup.exe", result)
+        self.assertIn("NIPAT-DockerDesktop-Setup.exe", result)
+        self.assertNotIn(self.package_name, result)
+        self.assertFalse((self.root / "release" / self.package_name).exists())
+        self.assertFalse((self.root / "release/docker-installer-build.json").exists())
+
+    def test_041_requires_docker_installer_and_bound_evidence(self):
+        self.make_dual_package("0.4.1")
+        with self.assertRaisesRegex(ValueError, "Docker installer"):
+            self.prepare(desktop=self.desktop)
+        (self.desktop / "NIPAT-DockerDesktop-Setup.exe").write_bytes(b"Docker installer fixture")
+        with self.assertRaisesRegex(ValueError, "Missing Docker installer build evidence"):
+            self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_041_rejects_mixed_docker_installer_build_inputs(self):
+        self.make_docker_installer()
+        path = self.desktop / "docker-installer-build.json"
+        original = json.loads(path.read_text())
+        for key in original:
+            with self.subTest(field=key):
+                evidence = copy.deepcopy(original)
+                evidence[key] = {} if key == "staged_files_sha256" else "different build"
+                path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(ValueError, "Docker installer build evidence mismatch"):
+                    self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_041_rejects_staged_extra_changed_and_missing_files(self):
+        self.make_docker_installer()
+        path = self.desktop / "docker-installer-build.json"
+        original = json.loads(path.read_text())
+        for mutation in ("missing", "changed", "extra"):
+            with self.subTest(mutation=mutation):
+                evidence = copy.deepcopy(original)
+                staged = evidence["staged_files_sha256"]
+                if mutation == "missing":
+                    del staged["README.md"]
+                elif mutation == "changed":
+                    staged[".distribution/docker-desktop.json"] = "0" * 64
+                else:
+                    staged["private-results.txt"] = "0" * 64
+                path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(ValueError, "Docker installer build evidence mismatch"):
+                    self.prepare(desktop=self.desktop)
+
+    def test_041_rejects_docker_exe_corruption_and_companion_slices(self):
+        self.make_docker_installer()
+        installer = self.desktop / "NIPAT-DockerDesktop-Setup.exe"
+        original = installer.read_bytes()
+        installer.write_bytes(b"wrong executable")
+        with self.assertRaisesRegex(ValueError, "Docker installer build evidence mismatch"):
+            self.prepare(desktop=self.desktop)
+        installer.write_bytes(original)
+        (self.desktop / "NIPAT-DockerDesktop-Setup-1.BIN").write_bytes(b"slice")
+        with self.assertRaisesRegex(ValueError, "Docker installer cannot have companion"):
+            self.prepare(desktop=self.desktop)
+
+    def test_041_checks_docker_installer_limit_before_hashing(self):
+        self.make_docker_installer()
+        installer = self.desktop / "NIPAT-DockerDesktop-Setup.exe"
+        package = self.desktop / self.package_name
+        with patch.object(publisher, "MAX_ASSET_BYTES", installer.stat().st_size), \
+                patch.object(publisher, "sha256", side_effect=AssertionError("Must reject size before hashing")):
+            with self.assertRaisesRegex(ValueError, ">= 2 GiB Docker installer"):
+                publisher.verify_desktop_installer(self.desktop, self.setup, package, {}, self.manifest,
+                                                  (self.setup / publisher.MANIFEST).read_bytes(), COMMIT)
 
     def test_new_release_requires_self_contained_installer_build_evidence(self):
         self.make_dual_package()
@@ -269,15 +368,15 @@ class ReleaseGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.prepare(desktop=self.desktop)
 
-    def test_real_bundle_builder_matches_publication_protocol(self):
-        self.make_dual_package()
+    def build_real_bundle(self, version="0.4.0"):
+        self.make_dual_package(version)
         script = Path(__file__).resolve().parents[2] / "scripts/build_validation_bundle.py"
         spec = importlib.util.spec_from_file_location("release_bundle_integration", script)
         bundle = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(bundle)
         self.sources.update({name: b"fixture\n" for name in
                              ("1_SETUP.cmd", "2_AVVIA.cmd", "nipat.cmd", "compose.yaml")})
-        self.sources["pyproject.toml"] = b'[project]\nversion = "0.4.0"\n'
+        self.sources["pyproject.toml"] = f'[project]\nversion = "{version}"\n'.encode()
         self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
         project = self.root / "project"
         project.mkdir()
@@ -307,15 +406,39 @@ class ReleaseGuards(unittest.TestCase):
             runtime, metadata = bundle.verified_installer_runtime(project, scientific_path, self.setup / publisher.MANIFEST)
             bundle.package_sources(project, package, python_zip, runtime, metadata, launcher)
         evidence = {
-            "schema_version": 1, "version": "0.4.0", "source_commit": COMMIT,
+            "schema_version": 1, "version": version, "source_commit": COMMIT,
             "file": self.package_name, "sha256": publisher.sha256(package), "size": package.stat().st_size,
             "launcher_sha256": publisher.sha256(launcher),
         }
         (self.desktop / "package-build.json").write_text(json.dumps(evidence), encoding="utf-8")
         self.write_installer_evidence()
+        return package
+
+    def test_real_bundle_builder_matches_publication_protocol(self):
+        package = self.build_real_bundle()
         self.prepare(desktop=self.desktop)
         self.assertEqual(publisher.checksums(self.root / "release/SHA256SUMS")[self.package_name],
                          publisher.sha256(package))
+
+    def test_real_docker_installer_builder_matches_publication_protocol(self):
+        package = self.build_real_bundle("0.4.1")
+        script = Path(__file__).resolve().parents[2] / "scripts/build_docker_installer.py"
+        spec = importlib.util.spec_from_file_location("docker_installer_integration", script)
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        manifest = self.setup / publisher.MANIFEST
+        launcher = self.setup / "NIPAT.exe"
+        stage = self.root / "docker-stage"
+        installer = self.desktop / "NIPAT-DockerDesktop-Setup.exe"
+        installer.write_bytes(b"MZ compiled executable fixture")
+        with patch.object(builder.bundle, "PYTHON_SHA256", publisher.PYTHON_SHA256):
+            builder.stage_package(package, manifest, launcher, stage)
+            builder.verify_stage(package, manifest, launcher, stage)
+            builder.record_installer(package, manifest, launcher, stage, self.desktop)
+        self.prepare(desktop=self.desktop)
+        self.assertEqual(publisher.checksums(self.root / "release/SHA256SUMS")[installer.name],
+                         publisher.sha256(installer))
+        self.assertFalse((self.root / "release" / package.name).exists())
 
     def test_build_must_be_successful_same_source_and_not_from_a_fork(self):
         run = {"id": 123, "head_sha": COMMIT, "status": "completed", "conclusion": "success", "event": "push",

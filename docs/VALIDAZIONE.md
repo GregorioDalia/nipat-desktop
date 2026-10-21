@@ -4,8 +4,8 @@ Il successo degli autotest verifica la riproduzione dei casi inclusi. Questa
 scheda serve a valutare il comportamento con altri input e a distinguere
 problemi di utilizzo, problemi tecnici e discrepanze scientifiche.
 
-La pre-release **0.4.0** è destinata alle prove di dominio su Windows 11 x64.
-Il percorso con installatore assume WSL2 già funzionante; l'alternativa ZIP
+La pre-release **0.4.1** è destinata alle prove di dominio su Windows 11 x64.
+Il percorso WSL assume WSL2 già funzionante; l’installatore alternativo
 richiede Docker Desktop installato e avviato con container Linux.
 Registrare separatamente installazione e analisi per ciascun pacchetto,
 riportando il comportamento osservato.
@@ -22,24 +22,26 @@ Prima delle analisi registrare una sola volta:
 
 Per il setup WSL, lo stato e il log si trovano in
 `%LOCALAPPDATA%\Programs\NIPAT\.runtime\installer` (`state.json` e `setup.log`).
-Per il pacchetto Docker Desktop, il log è `.runtime\setup.log` nella cartella
-estratta. In caso di errore conservare il log e registrare l'impedimento prima
+Per Docker Desktop, conservare `setup.log` (riepilogo della preparazione) e
+`setup-checks.log` (dettagli di `doctor` e autotest) nella cartella
+`%LOCALAPPDATA%\Programs\NIPAT-DockerDesktop\.runtime`.
+In caso di errore conservare entrambi e registrare l'impedimento prima
 di passare ai test scientifici. L'abilitazione iniziale di WSL e la ripresa
 dopo riavvio Windows sono prove separate, ancora aperte.
 
 ## Prima prova con Docker Desktop
 
-1. Avviare Docker Desktop in modalità **container Linux**. Scaricare lo
-   [ZIP v0.4.0](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/NIPAT-DockerDesktop-0.4.0-windows-x64.zip)
-   ed estrarlo interamente in una nuova cartella locale scrivibile, mantenendo
-   tutti i file insieme. La copia WSL già installata può restare presente.
-2. Fare doppio clic su **`1_SETUP.cmd`** nella cartella estratta. Attendere
-   **Preparazione completata**, dopo il controllo degli strumenti e gli
-   autotest. In caso di errore conservare `.runtime\setup.log` e interrompere
-   la prova; l'apertura del menu da sola non attesta la preparazione.
-3. Aprire **`NIPAT.exe` dalla stessa cartella**, senza `--dry-run`. Verificare
-   versione `0.4.0` e menu; con **5 — Cartella risultati** scegliere una
-   destinazione per questa prova.
+1. Avviare Docker Desktop in modalità **container Linux**. Scaricare
+   [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe)
+   ed eseguirlo con doppio clic. La copia WSL già installata può restare presente.
+2. Aprire **NIPAT (Docker Desktop)** dal desktop o dal menu Start. Attendere la
+   preparazione automatica e gli autotest, dopo i quali compare il menu. Non
+   occorre eseguire script separati. In caso di errore conservare
+   `setup.log` e `setup-checks.log`,
+   verificare Docker Desktop e riaprire la stessa icona per riprovare.
+3. Verificare versione `0.4.1` e menu; con **5 — Cartella risultati** scegliere
+   una destinazione per questa prova. Usare l'icona Docker Desktop, non quella
+   dell'installazione WSL; l'avvio normale esegue analisi reali, senza `--dry-run`.
 4. Scegliere **1 — DNPcall** e inserire un BAM di un caso noto, il FASTA con
    indice `.fai` e il pannello DNP appropriati. Controllare il riepilogo e
    confermare **Avvia analisi**. Attendere il completamento, aprire i risultati

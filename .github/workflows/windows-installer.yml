@@ -57,6 +57,9 @@ jobs:
       - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
+      - name: Test single-click Docker preparation with Windows PowerShell 5.1
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-bootstrap.ps1
       - name: Test resumable WSL migration with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
@@ -170,7 +173,8 @@ jobs:
   windows-installer:
     needs: [linux-runtime, windows-checks]
     runs-on: windows-2022
-    timeout-minutes: 30
+    # Both self-contained EXEs embed the same scientific archive; allow for both builds/uploads.
+    timeout-minutes: 45
     env:
       PYTHONPATH: src
     steps:
@@ -292,6 +296,26 @@ jobs:
           }
           [IO.File]::WriteAllText((Join-Path $output 'installer-build.json'), ($record | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
           "$hash  NIPAT-Setup.exe" | Set-Content -LiteralPath "$output/SHA256SUMS" -Encoding ascii
+      - name: Compile the single-file Docker Desktop installer from the verified bundle
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = Get-Content -LiteralPath 'build/assets/installer-manifest.json' -Raw -Encoding UTF8 | ConvertFrom-Json
+          $output = (Resolve-Path 'build/docker-desktop').Path
+          $package = Join-Path $output "NIPAT-DockerDesktop-$($manifest.version)-windows-x64.zip"
+          $launcher = (Resolve-Path 'build/windows-installer/app/NIPAT.exe').Path
+          $stage = Join-Path $PWD 'build/docker-installer-stage'
+          $inputs = @('--package', $package, '--manifest', 'build/assets/installer-manifest.json',
+                      '--launcher', $launcher, '--stage-dir', $stage)
+          python scripts/build_docker_installer.py stage @inputs
+          if ($LASTEXITCODE -ne 0) { throw 'Docker installer staging failed verification.' }
+          # Compile the exact recipe whose source hash was verified in the bundle.
+          $script = Join-Path $stage 'app/installer/windows/NIPAT-DockerDesktop.iss'
+          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" $script
+          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop Inno Setup compilation failed.' }
+          # Recheck all source/archive bytes and produce the final EXE binding.
+          python scripts/build_docker_installer.py record @inputs --output-dir $output
+          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop installer identity verification failed.' }
       - name: Verify both final packages without publishing
         shell: powershell
         run: |
@@ -317,7 +341,7 @@ jobs:
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Retain Docker Desktop package for review (no release publication)
+      - name: Retain Docker Desktop installer and internal package evidence (no release publication)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nipat-docker-desktop

@@ -18,6 +18,7 @@ MANIFEST = "installer-manifest.json"
 MAX_ASSET_BYTES = 2 * 1024**3
 PYTHON_NAME = "python-3.12.10-embed-amd64.zip"
 PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
+DOCKER_INSTALLER_MARKER = b'{"schema_version":1,"distribution":"docker-desktop-installer"}\n'
 
 
 def require(condition, message):
@@ -68,6 +69,11 @@ def checksums(path):
 def requires_desktop_bundle(version):
     # The first published WSL candidate predates the dual distribution protocol.
     return version != "0.3.0a1"
+
+
+def requires_desktop_installer(version):
+    components = re.match(r"([0-9]+)\.([0-9]+)\.([0-9]+)", version)
+    return components is not None and tuple(map(int, components.groups())) >= (0, 4, 1)
 
 
 def verify_installer_build(setup, manifest, manifest_bytes, commit):
@@ -139,13 +145,15 @@ def verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit):
                 and set(names) == expected_names, "Docker ZIP contains missing, duplicate or unexpected files")
         require(all(not entry.is_dir() and not stat.S_ISLNK(entry.external_attr >> 16)
                     and not entry.flag_bits & 1 for entry in entries), "Docker ZIP contains unsupported entries")
-        release = json.loads(archive.read(prefix + "release.json"))
+        release_bytes = archive.read(prefix + "release.json")
+        runtime_bytes = archive.read(prefix + ".distribution/runtime.json")
+        release = json.loads(release_bytes)
         require(release.get("schema_version") == 1 and release.get("package_version") == version
                 and release.get("source_git") == {"commit": commit, "dirty": False, "available": True}
                 and release.get("source_sha256") == manifest["source_sha256"],
                 "Docker package source/version mismatch")
         require(release.get("runtime") == expected_runtime
-                and json.loads(archive.read(prefix + ".distribution/runtime.json")) == expected_runtime,
+                and json.loads(runtime_bytes) == expected_runtime,
                 "Docker package runtime differs from WSL runtime")
         require(release.get("launcher") == expected_launcher, "Docker launcher metadata mismatch")
         require(release.get("python") == expected_python, "Docker Python metadata mismatch")
@@ -160,7 +168,40 @@ def verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit):
             with archive.open(prefix + item) as stream:
                 digest = hashlib.file_digest(stream, "sha256").hexdigest()
             require(digest == expected, f"Docker ZIP content hash mismatch: {item}")
-    return path
+    staged_hashes = dict(hashes)
+    staged_hashes.update({
+        "release.json": hashlib.sha256(release_bytes).hexdigest(),
+        ".distribution/runtime.json": hashlib.sha256(runtime_bytes).hexdigest(),
+        ".distribution/docker-desktop.json": hashlib.sha256(DOCKER_INSTALLER_MARKER).hexdigest(),
+    })
+    return path, staged_hashes
+
+
+def verify_desktop_installer(desktop, setup, package, staged_hashes, manifest, manifest_bytes, commit):
+    """Bind the Docker EXE to the verified package and compiler-checked stage."""
+    require(not any(path.suffix.casefold() == ".bin" for path in desktop.rglob("*")),
+            "Docker installer cannot have companion data slices")
+    installer = desktop / "NIPAT-DockerDesktop-Setup.exe"
+    require(installer.is_file() and not installer.is_symlink()
+            and 0 < installer.stat().st_size < MAX_ASSET_BYTES,
+            "Missing, invalid or >= 2 GiB Docker installer")
+    evidence_path = desktop / "docker-installer-build.json"
+    require(evidence_path.is_file() and not evidence_path.is_symlink(),
+            "Missing Docker installer build evidence")
+    evidence = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
+    scientific = manifest["assets"]["scientific_image"]
+    expected = {
+        "schema_version": 1, "distribution": "self-contained-docker-desktop",
+        "version": manifest["version"], "source_commit": commit,
+        "file": installer.name, "sha256": sha256(installer), "size": installer.stat().st_size,
+        "package_file": package.name, "package_sha256": sha256(package), "package_bytes": package.stat().st_size,
+        "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "launcher_sha256": sha256(setup / "NIPAT.exe"),
+        "runtime_archive_sha256": scientific["sha256"], "runtime_archive_bytes": scientific["size"],
+        "staged_files_sha256": staged_hashes,
+    }
+    require(evidence == expected, "Docker installer build evidence mismatch")
+    return installer
 
 
 def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, desktop=None):
@@ -207,9 +248,11 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     if requires_desktop_bundle(version):
         verify_installer_build(setup, manifest, manifest_bytes, commit)
     if requires_desktop_bundle(version) or desktop is not None:
-        portable = verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit)
-        files[portable.name] = portable
-        digests[portable.name] = sha256(portable)
+        portable, staged_hashes = verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit)
+        delivery = (verify_desktop_installer(desktop, setup, portable, staged_hashes, manifest, manifest_bytes, commit)
+                    if requires_desktop_installer(version) else portable)
+        files[delivery.name] = delivery
+        digests[delivery.name] = sha256(delivery)
     output.mkdir()
     for name, path in files.items():
         shutil.copyfile(path, output / name)
@@ -306,9 +349,15 @@ def main():
             notes += ("\nPer l'installazione WSL scaricare soltanto **NIPAT-Setup.exe**: include "
                       "i componenti NIPAT e i due archivi runtime. Dopo l'installazione, avviare NIPAT "
                       "dal collegamento creato. Non occorre scaricare o disporre manualmente gli archivi "
-                      "in una cartella assets. Windows puo' richiedere Internet o un riavvio per WSL.\n\n"
-                      "Lo ZIP Docker Desktop e' una distribuzione alternativa per chi dispone gia' di Docker Desktop. "
-                      "Gli archivi runtime separati sono conservati come asset di recupero e verifica.\n")
+                      "in una cartella assets. Windows puo' richiedere Internet o un riavvio per WSL.\n\n")
+            if requires_desktop_installer(manifest["version"]):
+                notes += ("Per Docker Desktop scaricare soltanto **NIPAT-DockerDesktop-Setup.exe**, "
+                          "con Docker Desktop gia' installato e avviato in modalita' Linux. Dopo il setup "
+                          "aprire il collegamento **NIPAT (Docker Desktop)**. Il pacchetto include Python, "
+                          "l'applicazione e il runtime scientifico; non richiede di estrarre ZIP. ")
+            else:
+                notes += "Lo ZIP Docker Desktop e' una distribuzione alternativa per chi dispone gia' di Docker Desktop. "
+            notes += "Gli archivi runtime separati sono conservati come asset di recupero e verifica.\n"
         notes = notes.strip()
         files = {path.name: path for path in output.iterdir()}
         check_tag(tag, commit)

@@ -16,14 +16,14 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
 function New-TestManifest {
     $assets = [ordered]@{}
     foreach ($name in @('rootfs', 'scientific_image')) {
-        $file = $name + '-0.4.0.tar.gz'
+        $file = $name + '-0.4.1.tar.gz'
         $assets[$name] = [ordered]@{
             file = $file; sha256 = ('b' * 64); size = 123
-            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/' + $file)
+            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/' + $file)
         }
     }
     return [ordered]@{
-        schema_version = 1; version = '0.4.0'; release_tag = 'v0.4.0'
+        schema_version = 1; version = '0.4.1'; release_tag = 'v0.4.1'
         source_commit = ('a' * 40); runtime_image = ('sha256:' + ('c' * 64)); assets = $assets
     }
 }
@@ -32,19 +32,19 @@ try {
     $manifest = New-TestManifest
     Write-NipatJsonAtomic $manifestPath $manifest
     $parsed = Read-NipatInstallerManifest $manifestPath
-    Assert-Test ($parsed.release_tag -eq 'v0.4.0') 'accept valid release manifest'
+    Assert-Test ($parsed.release_tag -eq 'v0.4.1') 'accept valid release manifest'
     $manifest = New-TestManifest
     $manifest.version = '0.3.0a1'
     $manifest.release_tag = 'v0.3.0a1'
     foreach ($name in @('rootfs', 'scientific_image')) {
-        $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.4.0', '0.3.0a1')
-        $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.4.0', '0.3.0a1')
+        $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.4.1', '0.3.0a1')
+        $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.4.1', '0.3.0a1')
     }
     Write-NipatJsonAtomic $manifestPath $manifest
     Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject unsupported version even with consistent tag and asset URLs'
     foreach ($url in @('https://example.org/rootfs.tar.gz',
-        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.0/rootfs-0.4.0.tar.gz?redirect=1',
-        'https://github.com/other/repo/releases/download/v0.4.0/rootfs-0.4.0.tar.gz')) {
+        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/rootfs-0.4.1.tar.gz?redirect=1',
+        'https://github.com/other/repo/releases/download/v0.4.1/rootfs-0.4.1.tar.gz')) {
         $manifest = New-TestManifest
         $manifest.assets.rootfs.url = $url
         Write-NipatJsonAtomic $manifestPath $manifest
