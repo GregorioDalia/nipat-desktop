@@ -1,0 +1,249 @@
+"""Execution boundaries for the image-owned Contamination workflow."""
+
+import io
+import json
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path, PureWindowsPath
+from unittest.mock import MagicMock, patch
+
+from nipat.errors import RuntimeExecutionError
+from nipat.execution.mounts import InputMounts
+from nipat.execution.runner import DockerComposeRunner
+from nipat.execution.transport import WslDockerTransport, _windows_path
+from nipat.paths import ProjectLayout
+
+
+IMAGE_ID = "sha256:" + "a" * 64
+
+
+def engine_metadata():
+    return {
+        "schema_version": 1, "interface": "native-r-v1",
+        "manifest": {"path": "scientific/SHA256SUMS", "sha256": "b" * 64},
+        "workflows": {
+            name: {"script": f"scientific/vendor/{name}/main.R", "sha256": "c" * 64}
+            for name in ("dnp-call", "snp-call", "contamination", "cpi")
+        },
+        "workflow_interfaces": {"contamination": "contamination-v1"},
+        "preparation": {
+            "interface": "contamination-v1",
+            "file_sha256": {name: "d" * 64 for name in (
+                "engine/main.py", "lib/nipat_scientific/__init__.py",
+                "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
+                "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
+            )},
+        },
+    }
+
+
+class BundledRunnerTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="nipat bundled ")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.project = self.root / "client"
+        self.project.mkdir()
+        # A bundled workflow does not need any scientific file on the client.
+        (self.project / "compose.yaml").write_text(
+            "services:\n  scientific:\n    image: configured:custom\n", encoding="utf-8",
+        )
+        self.layout = ProjectLayout(self.project, self.root, self.root / "data",
+                                    self.root / "runs", self.project / "compose.yaml")
+        self.source = self.root / "source $VALUE, è.TSV"
+        self.source.write_text("original input\n", encoding="utf-8")
+        self.mounts = InputMounts(self.layout)
+        self.mounts.bind_file(self.source, target="/workspace/inputs/sample_001.tsv")
+        self.runner = DockerComposeRunner(self.layout)
+        self.stdout = io.StringIO()
+
+    def captured(self, description=None):
+        return [
+            "linux", '{"services":{"scientific":{"image":"configured:custom"}}}',
+            json.dumps({"id": IMAGE_ID, "os": "linux", "architecture": "amd64"}),
+            "R version fixture\nsamtools fixture",
+            json.dumps(engine_metadata() if description is None else description),
+        ]
+
+    def process(self, code=0):
+        process = MagicMock()
+        process.stdout = io.StringIO("scientific output\n")
+        process.wait.return_value = code
+        process.poll.return_value = code
+        return process
+
+    def begin(self, name="bundled"):
+        run = self.layout.new_run_dir("contamination", name)
+        context = self.runner.record_run(
+            run, workflow="contamination", inputs=[self.source], parameters={},
+            mounts=self.mounts, bundled_workflow="contamination",
+        )
+        return run, context
+
+    def test_isolated_service_has_only_selected_files_and_this_run(self):
+        original = self.source.read_bytes()
+        run, context = self.begin()
+        with redirect_stdout(self.stdout), patch.object(
+            self.runner, "_capture", side_effect=self.captured(),
+        ) as capture, patch(
+            "nipat.execution.runner.subprocess.Popen", return_value=self.process(),
+        ) as popen:
+            with context:
+                self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute",
+                                 "contamination", "--request", "/workspace/request.json"])
+        document = json.loads((run / "work/engine-compose.json").read_text(encoding="utf-8"))
+        service = document["services"]["scientific"]
+        self.assertEqual(service["image"], IMAGE_ID)
+        self.assertTrue(service["read_only"])
+        self.assertEqual(service["network_mode"], "none")
+        self.assertIn("/tmp:rw,nosuid,nodev,size=128m", service["tmpfs"])
+        self.assertEqual(service["environment"]["TMPDIR"], "/tmp")
+        volumes = service["volumes"]
+        self.assertEqual(len(volumes), 2)
+        self.assertEqual({v["target"] for v in volumes}, {
+            "/workspace/inputs/sample_001.tsv", str(self.layout.container_path(run)),
+        })
+        self.assertEqual([v["read_only"] for v in volumes], [True, False])
+        self.assertTrue(all(v["bind"]["create_host_path"] is False for v in volumes))
+        self.assertNotIn(str(self.project), {v["source"] for v in volumes})
+        argv = popen.call_args.args[0]
+        self.assertEqual([argv[i + 1] for i, arg in enumerate(argv) if arg == "-f"],
+                         [str(run / "work/engine-compose.json")])
+        self.assertIn("NIPAT_RUNTIME_IMAGE", popen.call_args.kwargs["env"])
+        self.assertEqual(popen.call_args.kwargs["env"]["NIPAT_RUNTIME_IMAGE"], IMAGE_ID)
+        self.assertEqual(capture.call_args_list[1].args[0][:4],
+                         ["docker", "compose", "-f", str(self.layout.compose_file)])
+        self.assertIn("configured:custom", capture.call_args_list[2].args[0])
+        for check in capture.call_args_list[-2:]:
+            probe = check.args[0]
+            self.assertIn(IMAGE_ID, probe)
+            self.assertIn("--read-only", probe)
+            self.assertEqual(probe[probe.index("--network") + 1], "none")
+            self.assertNotIn("--mount", probe)
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "succeeded")
+        self.assertEqual(record["runtime"]["engine"], engine_metadata())
+        self.assertEqual(record["source"]["role"], "client")
+        self.assertEqual(record["engine_verification"], "verified")
+        self.assertEqual(self.source.read_bytes(), original)
+        self.assertIsNone(self.runner._engine_compose_file)
+        self.assertIsNone(self.runner._bundled_workflow)
+        self.assertIsNone(self.runner._image_id)
+
+    def test_missing_or_invalid_contract_fails_before_analysis_and_is_recorded(self):
+        variants = []
+        for key in ("workflow_interfaces", "preparation", "manifest", "workflows"):
+            value = engine_metadata()
+            del value[key]
+            variants.append(value)
+        value = engine_metadata()
+        value["workflow_interfaces"]["contamination"] = "contamination-v2"
+        variants.append(value)
+        value = engine_metadata()
+        value["preparation"]["file_sha256"]["engine/main.py"] = "invalid"
+        variants.append(value)
+        value = engine_metadata()
+        value["preparation"]["file_sha256"]["lib/nipat_scientific/../escape.py"] = "e" * 64
+        variants.append(value)
+        value = engine_metadata()
+        del value["workflows"]["cpi"]
+        variants.append(value)
+        variants.extend([None, [], "not an object"])
+        for index, description in enumerate(variants):
+            with self.subTest(index=index):
+                answers = self.captured()
+                answers[-1] = json.dumps(description)
+                run, context = self.begin(f"invalid-{index}")
+                with redirect_stdout(self.stdout), patch.object(
+                    self.runner, "_capture", side_effect=answers,
+                ), patch("nipat.execution.runner.subprocess.Popen") as popen:
+                    with self.assertRaisesRegex(RuntimeExecutionError, "contratto Contamination"):
+                        with context:
+                            self.fail("An incompatible image must not enter the workflow.")
+                popen.assert_not_called()
+                record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+                self.assertEqual(record["status"], "failed")
+                self.assertEqual(record["commands"], [])
+                self.assertIsNone(self.runner._bundled_workflow)
+
+    def test_failed_engine_probe_is_actionable_and_tracked(self):
+        answers = self.captured()
+        answers[-1] = RuntimeExecutionError("python3: missing bundled entry point")
+        run, context = self.begin("old-image")
+        with redirect_stdout(self.stdout), patch.object(self.runner, "_capture", side_effect=answers):
+            with self.assertRaisesRegex(RuntimeExecutionError, "motore scientifico incorporato"):
+                with context:
+                    self.fail("Old image must not reach the workflow.")
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "failed")
+        self.assertEqual(record["runtime"]["image_id"], IMAGE_ID)
+
+    def test_failed_workflow_exit_code_is_propagated(self):
+        run, context = self.begin("failure")
+        with redirect_stdout(self.stdout), patch.object(
+            self.runner, "_capture", side_effect=self.captured(),
+        ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process(7)):
+            with self.assertRaisesRegex(RuntimeExecutionError, "codice 7"):
+                with context:
+                    self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute"])
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "failed")
+        self.assertEqual(record["commands"][0]["returncode"], 7)
+
+    def test_interrupt_keeps_existing_named_container_cleanup(self):
+        process = MagicMock()
+        process.stdout.__iter__.side_effect = KeyboardInterrupt()
+        process.poll.return_value = 130
+        run, context = self.begin("cancelled")
+        with redirect_stdout(self.stdout), patch.object(
+            self.runner, "_capture", side_effect=self.captured(),
+        ), patch("nipat.execution.runner.subprocess.Popen", return_value=process), patch.object(
+            self.runner, "_stop_container", return_value={"status": "removed"},
+        ) as stop:
+            with self.assertRaises(KeyboardInterrupt):
+                with context:
+                    self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute"])
+        stop.assert_called_once()
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "interrupted")
+        self.assertEqual(record["commands"][0]["container_cleanup"]["status"], "removed")
+
+    def test_wsl_dry_run_translates_and_escapes_mounts_without_launching_processes(self):
+        self.runner.dry_run = True
+        self.runner._transport = WslDockerTransport("NIPAT-Test", dry_run=True)
+
+        def windows_path(path):
+            value = Path(path)
+            if value.is_relative_to(self.root):
+                return PureWindowsPath(r"D:\NIPAT test $ENV, è").joinpath(*value.relative_to(self.root).parts)
+            return _windows_path(path)
+
+        run, context = self.begin("planned")
+        with redirect_stdout(self.stdout), patch(
+            "nipat.execution.transport._windows_path", side_effect=windows_path,
+        ), patch("nipat.execution.transport._drive_type", return_value=3), patch(
+            "nipat.execution.runner.subprocess.run",
+        ) as execute, patch("nipat.execution.runner.subprocess.Popen") as popen:
+            with context:
+                self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute"])
+        execute.assert_not_called()
+        popen.assert_not_called()
+        document = json.loads((run / "work/engine-compose.json").read_text(encoding="utf-8"))
+        service = document["services"]["scientific"]
+        self.assertEqual(service["image"], "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.1.0}")
+        for volume in service["volumes"]:
+            self.assertTrue(volume["source"].startswith("/mnt/d/NIPAT test $$ENV, è/"))
+        self.assertIn("$$VALUE", service["volumes"][0]["source"])
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "planned")
+        self.assertEqual(record["engine_verification"], "not_run_dry_run")
+        self.assertNotIn("engine", record["runtime"])
+        argv = record["commands"][0]["argv"]
+        self.assertEqual(argv[0], "wsl.exe")
+        self.assertEqual([argv[i + 1] for i, arg in enumerate(argv) if arg == "-f"],
+                         ["/mnt/d/NIPAT test $ENV, è/runs/planned/work/engine-compose.json"])
+
+
+if __name__ == "__main__":
+    unittest.main()

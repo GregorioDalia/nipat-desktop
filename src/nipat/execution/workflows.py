@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import json
 import math
-import shutil
 from pathlib import Path, PurePosixPath
 
 from nipat.adapters.panels import (
@@ -63,6 +63,12 @@ def _name_component(value: str, label: str, *, empty: bool = False) -> str:
     ):
         raise ValidationError(f"{label} deve essere un nome, senza separatori di cartella: {value!r}")
     return value
+
+
+def _write_engine_request(destination: Path, request: dict) -> None:
+    with destination.open("x", encoding="utf-8", newline="\n") as handle:
+        json.dump(request, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
 
 
 class Workflows:
@@ -203,7 +209,7 @@ class Workflows:
         if (inputs is None) == (input_dir is None):
             raise ValidationError("Indicare --input oppure --input-dir per Contamination.")
         panel = require_file(panel, "Pannello DNP")
-        records = read_position_panel(panel)
+        read_position_panel(panel)
         if input_dir is not None:
             input_dir = require_directory(input_dir, "Directory input Contamination")
             selected = sorted(
@@ -226,24 +232,35 @@ class Workflows:
                 raise ValidationError(f"Nome file duplicato nello staging: {checked.stem}.txt")
             names.add(name)
             checked_inputs.append(checked)
+        mounts = InputMounts(self.layout)
+        panel_path = mounts.bind_file(panel, target=INPUT_ROOT / "contamination-panel.txt")
+        samples = [
+            {
+                "path": str(mounts.bind_file(
+                    source, target=INPUT_ROOT / "contamination" / f"sample_{number:04d}.txt",
+                )),
+                "name": f"{source.stem}.txt",
+            }
+            for number, source in enumerate(checked_inputs, 1)
+        ]
         run_dir = self.layout.new_run_dir("contamination", run_name)
         with self.runner.record_run(
             run_dir, workflow="contamination", inputs=[panel, *checked_inputs],
+            mounts=mounts, bundled_workflow="contamination",
             parameters={"panel": str(panel), "inputs": [str(path) for path in checked_inputs],
                         "input_dir": str(input_dir) if input_dir else None},
         ):
-            staged_dir = run_dir / "work" / "inputs"
-            staged_dir.mkdir()
-            for input_path in checked_inputs:
-                # Small tables are copied byte-for-byte with the extension R expects.
-                shutil.copy2(input_path, staged_dir / f"{input_path.stem}.txt")
-            position_panel = run_dir / "work" / "DNPpanel.txt"
-            write_position_panel(records, position_panel)
+            request = {
+                "schema_version": 1, "workflow": "contamination", "panel": str(panel_path),
+                "samples": samples,
+                "work_dir": str(self.layout.container_path(run_dir / "work")),
+                "out_dir": str(self.layout.container_path(run_dir / "output")),
+            }
+            request_file = run_dir / "work" / "engine-request.json"
+            _write_engine_request(request_file, request)
             self.runner.run(
-                ["Rscript",
-                 self._script("scientific/vendor/NEWPAT/contamination/detect_contamination.R"),
-                 self.layout.container_path(position_panel), self.layout.container_path(staged_dir),
-                 self.layout.container_path(run_dir / "output")],
+                ["python3", "/opt/nipat/engine/main.py", "execute", "contamination",
+                 "--request", self.layout.container_path(request_file)],
                 working_dir=self.layout.container_path(run_dir / "work"),
             )
         return run_dir

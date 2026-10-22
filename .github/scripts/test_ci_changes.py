@@ -67,6 +67,7 @@ class ScientificSelection(unittest.TestCase):
 
     def test_engine_package_and_its_checks_require_integration(self):
         for name in ("engine/main.py", "engine/contract.json", "tests/test_engine_package.py",
+                     "tests/test_contamination_engine.py", "tests/test_bundled_runner.py",
                      "scripts/verify_engine_package.py"):
             with self.subTest(path=name):
                 self.write(name, "changed\n")

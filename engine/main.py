@@ -1,7 +1,7 @@
 """Execute the bundled R scripts without importing the desktop application.
 
-This first engine interface accepts the scripts' native arguments. Preparation
-performed by the desktop Workflows service is not part of this interface yet.
+Native script invocation remains available. Contamination also accepts a
+versioned request and prepares its inputs with the bundled shared adapters.
 """
 
 from __future__ import annotations
@@ -22,10 +22,47 @@ SCRIPT_PATHS = {
     "contamination": "vendor/NEWPAT/contamination/detect_contamination.R",
     "cpi": "vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
 }
+PREPARATION_FILES = (
+    "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py",
+)
 
 
 class BundleError(Exception):
     """The installed scientific bundle cannot be verified or executed."""
+
+
+def preparation_root(bundle_root: Path) -> Path:
+    """Select explicit in-image code, or the repository's shared source tree.
+
+    A deployed bundle never searches PYTHONPATH for missing components. The
+    source-tree mode is for development and requires the checkout marker.
+    """
+    if (bundle_root / "lib").exists():
+        return bundle_root / "lib"
+    if (bundle_root / "pyproject.toml").is_file():
+        return bundle_root / "src"
+    return bundle_root / "lib"
+
+
+def describe_preparation(bundle_root: Path) -> dict:
+    root = bundle_root.resolve()
+    library = preparation_root(root)
+    paths = [root / "engine" / "main.py", *(
+        library / "nipat_scientific" / name for name in PREPARATION_FILES
+    )]
+    hashes = {}
+    for path in paths:
+        resolved = path.resolve()
+        if not resolved.is_relative_to(root):
+            raise BundleError(f"Preparation module escapes its bundle: {path.name}")
+        try:
+            with resolved.open("rb") as source:
+                hashes[path.relative_to(root).as_posix()] = hashlib.file_digest(
+                    source, "sha256"
+                ).hexdigest()
+        except OSError as exc:
+            raise BundleError(f"Cannot read preparation module: {path.name}") from exc
+    return {"interface": "contamination-v1", "file_sha256": hashes}
 
 
 def verify_bundle(bundle_root: Path) -> dict:
@@ -84,6 +121,8 @@ def verify_bundle(bundle_root: Path) -> dict:
             "sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         },
         "workflows": workflows,
+        "workflow_interfaces": {"contamination": "contamination-v1"},
+        "preparation": describe_preparation(bundle_root),
     }
 
 
@@ -102,6 +141,9 @@ def build_parser() -> argparse.ArgumentParser:
         "script_arguments", nargs=argparse.REMAINDER,
         help="Native R arguments, normally preceded by --; no desktop input adaptation.",
     )
+    execute = commands.add_parser("execute", help="Prepare and run a bundled workflow request.")
+    execute.add_argument("workflow", choices=("contamination",))
+    execute.add_argument("--request", type=Path, required=True, help="JSON request with container paths.")
     return parser
 
 
@@ -122,9 +164,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Scientific bundle verified ({len(SCRIPT_PATHS)} workflows).")
             return 0
 
-        native_arguments = arguments.script_arguments
-        if native_arguments[:1] == ["--"]:
-            native_arguments = native_arguments[1:]
+        if arguments.command == "execute":
+            library = preparation_root(BUNDLE_ROOT).resolve()
+            sys.path.insert(0, str(library))
+            # All required module paths were checked above. This exact bundled
+            # library precedes PYTHONPATH; the desktop package is never imported.
+            from nipat_scientific.contamination import prepare_contamination
+            from nipat_scientific.errors import ValidationError
+
+            try:
+                request = json.loads(arguments.request.read_text(encoding="utf-8"))
+                native_arguments = prepare_contamination(request)
+            except (ValidationError, ValueError) as exc:
+                raise BundleError(str(exc)) from exc
+        else:
+            native_arguments = arguments.script_arguments
+            if native_arguments[:1] == ["--"]:
+                native_arguments = native_arguments[1:]
         script = BUNDLE_ROOT / description["workflows"][arguments.workflow]["script"]
         # Replace this process so R receives the container's signals and its exit
         # code is reported directly, without an extra shell or Python supervisor.

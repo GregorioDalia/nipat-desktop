@@ -1,9 +1,8 @@
-class NipatError(Exception):
-    """Base exception for errors that should be shown directly to the user."""
+"""Client errors and compatibility imports for shared scientific validation."""
 
+from nipat_scientific.errors import NipatError, ValidationError
 
-class ValidationError(NipatError):
-    """Raised when an input is missing or incompatible with a workflow."""
+__all__ = ["NipatError", "ValidationError", "RuntimeExecutionError"]
 
 
 class RuntimeExecutionError(NipatError):

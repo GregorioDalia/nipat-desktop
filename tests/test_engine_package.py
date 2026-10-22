@@ -30,6 +30,9 @@ class EnginePackageTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / "engine").mkdir()
         shutil.copyfile(MODULE_PATH, self.root / "engine" / "main.py")
+        shutil.copytree(PROJECT_ROOT / "src" / "nipat_scientific",
+                        self.root / "lib" / "nipat_scientific",
+                        ignore=shutil.ignore_patterns("__pycache__"))
         scientific = self.root / "scientific"
         scientific.mkdir()
         lines = []
@@ -57,6 +60,13 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(metadata["manifest"]["sha256"],
                          hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
+        self.assertEqual(metadata["workflow_interfaces"], {"contamination": "contamination-v1"})
+        hashes = metadata["preparation"]["file_sha256"]
+        self.assertEqual(len(hashes), 6)
+        self.assertIn("engine/main.py", hashes)
+        self.assertIn("lib/nipat_scientific/contamination.py", hashes)
+        for relative, digest in hashes.items():
+            self.assertEqual(hashlib.sha256((self.root / relative).read_bytes()).hexdigest(), digest)
         for workflow, relative in engine.SCRIPT_PATHS.items():
             actual = metadata["workflows"][workflow]
             self.assertEqual(actual["script"], f"scientific/{relative}")
@@ -150,6 +160,60 @@ class EnginePackageTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["interface"], "native-r-v1")
+
+    def test_missing_bundled_preparation_module_does_not_fall_back_to_host(self):
+        (self.root / "lib" / "nipat_scientific" / "contamination.py").unlink()
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        result = subprocess.run(
+            [sys.executable, str(self.root / "engine" / "main.py"), "describe", "--json"],
+            cwd=self.root, env=environment, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("Cannot read preparation module: contamination.py", result.stderr)
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture exercises the in-image preparation entry point.")
+    def test_relocated_execute_prepares_inputs_and_preserves_r_exit_code(self):
+        inputs = self.root / "selected"
+        inputs.mkdir()
+        panel = inputs / "panel.txt"
+        panel.write_text("pos2\tchr\tpos1\n101\tchr1\t100\n", encoding="utf-8")
+        sample = inputs / "sample.tsv"
+        sample.write_text("chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\n"
+                          "chr1\t100\t101\t95\t5\t0\n", encoding="utf-8")
+        results = self.root / "results"
+        (results / "work").mkdir(parents=True)
+        (results / "output").mkdir()
+        request = results / "work" / "request.json"
+        request.write_text(json.dumps({
+            "schema_version": 1, "workflow": "contamination", "panel": str(panel),
+            "samples": [{"path": str(sample), "name": "sample with spaces.txt"}],
+            "work_dir": str(results / "work"), "out_dir": str(results / "output"),
+        }), encoding="utf-8")
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        fake_rscript = fake_bin / "Rscript"
+        fake_rscript.write_text(
+            "#!/bin/sh\n"
+            '[ "$#" -eq 4 ] || exit 99\n'
+            '[ -f "$2" ] || exit 98\n'
+            '[ -f "$3/sample with spaces.txt" ] || exit 97\n'
+            '[ -d "$4" ] || exit 96\n'
+            "exit 37\n", encoding="utf-8",
+        )
+        fake_rscript.chmod(0o755)
+        environment = os.environ.copy()
+        environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+        environment["PYTHONPATH"] = str(self.root / "absent application")
+        result = subprocess.run(
+            [sys.executable, str(self.root / "engine" / "main.py"), "execute",
+             "contamination", "--request", str(request)], cwd=inputs, env=environment,
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 37, result.stderr)
+        self.assertEqual((results / "work/inputs/sample with spaces.txt").read_bytes(),
+                         sample.read_bytes())
+        self.assertIn("DNP001\tchr1\t100\t101", (results / "work/DNPpanel.txt").read_text())
 
     @unittest.skipIf(os.name == "nt", "POSIX executable fixture exercises container process replacement.")
     def test_process_replacement_preserves_rscript_exit_status_and_arguments(self):

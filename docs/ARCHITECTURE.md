@@ -16,7 +16,7 @@ service for subsequent runs in that session; it does not persist an application 
 
 Each workflow registers the files it needs as selective read-only bind mounts.
 This includes required sidecars and avoids copying large BAM/FASTA inputs.
-Selecting an external input does not mount its parent directory. The base
+Selecting an external input does not mount its parent directory. The legacy base
 Compose configuration also mounts the project and configured `data` directory
 read-only. Mechanical adapters can create small
 working tables inside the run. DNPcall receives safe numbered sample aliases
@@ -35,6 +35,35 @@ root. Existing runs are never overwritten by the application.
 On Linux and macOS the container uses the invoking user's UID/GID. Docker
 Desktop uses its normal default mapping on Windows. The future GUI must call
 the same `Workflows` service, rather than invoke R or Docker directly.
+
+## Incremental 0.5 engine migration
+
+Contamination now uses a separate execution path. The client selects files,
+performs early validation with the shared `nipat_scientific` library, maps the
+original paths and writes a `contamination-v1` request. The bundled library
+validates the request again, normalizes the panel and stages the tables before
+executing the unchanged R script. There is one implementation of the panel and
+table validators, included in both client and image; no host Python source is
+mounted into the container.
+
+The runner uses `work/engine-compose.json` as its only Compose file for this
+workflow. It mounts individual selected inputs read-only and the current run
+read-write; the application, default data folder and other runs are not mounted.
+The image filesystem is read-only and the network is disabled. Staging remains
+visible under `work/inputs` and `work/DNPpanel.txt`, with the original sample names.
+
+The runner negotiates the image's workflow interface before analysis and records
+the verified R manifest plus the actual engine/preparation Python hashes under
+`runtime.engine`. The `source` evidence describes the client and is marked with
+`role: client`. An older image without the requested interface fails explicitly;
+there is no silent fallback to host R scripts. Dry-run records a request and the
+planned command without claiming the image has been verified.
+
+SNPcall, DNPcall and CPI still use the legacy client preparation and mounts during
+this increment. Their R scripts are already bundled, but their complete workflow
+migration is pending. Version 0.5 retains the guided CLI without a GUI. Installer
+identity isolation and removal of the Windows Docker Desktop edition are later
+increments; current review artifacts must not replace a 0.4.1 installation.
 
 ## Managed Windows runtime
 

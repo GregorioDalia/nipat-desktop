@@ -52,6 +52,19 @@ a mostrarlo nel terminale. I file JSON vengono sostituiti atomicamente dopo
 ogni aggiornamento. Il manifest scientifico viene verificato prima di
 eseguire i comandi dei workflow.
 
+Nel percorso di sviluppo 0.5, Contamination usa già il motore incorporato.
+`work/engine-request.json` descrive la richiesta; `work/engine-compose.json`
+è l'unica configurazione Compose usata per l'analisi. Espone soltanto gli input
+selezionati in sola lettura e la cartella del run corrente in scrittura.
+Il motore genera `work/DNPpanel.txt` e `work/inputs`, conservando i nomi dei campioni.
+
+Per questo workflow, `source.role` vale `client`: gli hash locali descrivono
+l'applicazione, mentre `runtime.engine` identifica gli script R e i moduli Python
+di preparazione effettivamente presenti nell'immagine. Il controllo di integrità
+scientifica riguarda quindi il manifest incorporato, non una copia R sul PC.
+`engine_verification` vale `verified` dopo il controllo del motore; in dry-run
+vale `not_run_dry_run` e non vengono creati gli intermedi scientifici.
+
 Ctrl+C tenta di fermare anche il container della fase corrente. In caso
 di chiusura forzata del processo o spegnimento del PC, il record può restare
 `preparing` o `running`: non va interpretato come successo né come prova

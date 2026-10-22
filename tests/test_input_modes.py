@@ -1,3 +1,4 @@
+import json
 import shutil
 import tempfile
 import unittest
@@ -105,10 +106,12 @@ class InputModeTests(unittest.TestCase):
         (folder / "ignored.csv").write_text("not a table", encoding="utf-8")
         before = {path: path.read_bytes() for path in folder.rglob("*") if path.is_file()}
         run = self.workflows.contamination(input_dir=folder, panel=panel)
-        staged = run / "work" / "inputs"
-        self.assertEqual({path.name for path in staged.iterdir()},
+        request = json.loads((run / "work" / "engine-request.json").read_text(encoding="utf-8"))
+        self.assertEqual({sample["name"] for sample in request["samples"]},
                          {"NoRatio.txt", "WithRatio.txt", "NoSites.txt"})
-        self.assertIn("DNP001\tchr1\t100\t101", (run / "work" / "DNPpanel.txt").read_text())
+        self.assertEqual(self.runner.records[0]["bundled_workflow"], "contamination")
+        self.assertEqual(len(self.runner.records[0]["mounts"].mappings), 4)
+        self.assertFalse((run / "work" / "DNPpanel.txt").exists())
         self.assertTrue(all(path.read_bytes() == data for path, data in before.items()))
 
     def test_coordinate_panels_accept_native_order_and_nonadjacent_positions(self):

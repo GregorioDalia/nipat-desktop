@@ -10,6 +10,8 @@ on:
       - 'engine/**'
       - 'scientific/**'
       - 'tests/test_engine_package.py'
+      - 'tests/test_contamination_engine.py'
+      - 'tests/test_bundled_runner.py'
       - 'scripts/windows/**'
       - 'scripts/build_*'
       - 'scripts/verify_engine_package.py'

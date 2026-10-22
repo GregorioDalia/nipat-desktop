@@ -155,13 +155,13 @@ class RunTrackingTests(unittest.TestCase):
         prepare.assert_not_called()
         self.assertEqual(self.record("changed-source")["status"], "failed")
 
-    def test_staging_failure_is_recorded(self):
+    def test_engine_request_write_failure_is_recorded(self):
         panel = self.layout.data_dir / "panel.txt"
         panel.write_text("chr1\t100\t101\tAA\tCC\n")
         self.input.write_text("chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\nchr1\t100\t101\t95\t5\t0\n")
         with redirect_stdout(self.output), patch(
-            "nipat.execution.workflows.shutil.copy2", side_effect=OSError("disk full")
-        ):
+            "nipat.execution.workflows._write_engine_request", side_effect=OSError("disk full")
+        ), patch.object(self.runner, "_describe_bundled_engine"):
             with self.assertRaisesRegex(OSError, "disk full"):
                 Workflows(self.layout, self.runner).contamination(
                     inputs=[self.input], panel=panel, run_name="copy-failed"

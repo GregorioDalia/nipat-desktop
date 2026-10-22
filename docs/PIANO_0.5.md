@@ -1,6 +1,6 @@
 # Percorso incrementale verso NIPAT 0.5
 
-Stato: primo incremento tecnico in sviluppo, 22 ottobre 2026. Questo documento
+Stato: secondo incremento tecnico in sviluppo, 22 ottobre 2026. Questo documento
 registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 
 ## Baseline e separazione dalla validazione in corso
@@ -61,12 +61,39 @@ filesystem dell'immagine in sola lettura. Verifica gli stessi valori numerici
 attesi delle regressioni esistenti. L'esito reale dell'immagine va consultato
 nella relativa esecuzione GitHub Actions: i test Python da soli non lo provano.
 
-La preparazione degli input e il client non usano ancora questo nuovo ingresso.
+Il primo incremento è stato verificato nella
+[CI 39806767798](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39806767798)
+e nella [build di revisione 39806767596](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39806767596),
+entrambe concluse con successo sul commit `22e0677`.
 DNPcall è incorporato e verificato tramite hash; manca ancora la regressione
 BAM attraverso il nuovo ingresso. Gli artifact dell'installer generati durante
 questo incremento sono soltanto build di revisione della struttura attuale:
 **non sono candidati 0.5 installabili accanto alla 0.4.1**. La separazione delle
 identità di installazione e i due nuovi installer appartengono ai passi seguenti.
+
+## Secondo incremento: workflow Contamination completo
+
+La CLI ora invia al motore una richiesta `contamination-v1` con il pannello
+originale, i file selezionati, i nomi dei campioni e le destinazioni del run.
+Selezione di file espliciti e ricerca ricorsiva in una cartella rimangono disponibili.
+Il motore convalida gli input, normalizza il pannello, prepara le tabelle `.txt`
+ed esegue lo script R invariato. I moduli condivisi `nipat_scientific` conservano
+un'unica implementazione dei validatori usati dal client e dal motore.
+
+L'esecuzione usa un documento Compose autonomo: soli input selezionati in lettura
+e singolo run in scrittura, senza mount dell'applicazione o dei dati globali,
+con rete disabilitata e filesystem dell'immagine in sola lettura.
+`runtime.engine` registra gli hash effettivi degli script e del codice Python di
+preparazione; gli hash locali del client sono distinti. Un'immagine precedente,
+priva del contratto richiesto, viene rifiutata prima dell'analisi.
+
+Le nuove prove coprono preparazione, nomi e byte dei campioni, richieste non valide,
+tracciamento e interruzione. Il controllo reale dell'immagine include anche un run
+CLI da una cartella applicativa che contiene soltanto `compose.yaml`, senza
+sorgenti scientifici. SNPcall, DNPcall e CPI mantengono ancora il percorso precedente.
+La suite locale comprende 224 test Python e 37 controlli CI/publisher superati;
+la prova dell'immagine e il confezionamento sono verifiche distinte in GitHub Actions.
+Questo incremento non modifica gli installer pubblicati né completa la release 0.5.
 
 ## Passaggi e criteri di completamento
 

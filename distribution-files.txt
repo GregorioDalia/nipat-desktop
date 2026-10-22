@@ -112,6 +112,11 @@ src/nipat/validation/integrity.py
 src/nipat/validation/self_test.py
 src/nipat/wizard.py
 src/nipat/wizard_forms.py
+src/nipat_scientific/__init__.py
+src/nipat_scientific/contamination.py
+src/nipat_scientific/errors.py
+src/nipat_scientific/files.py
+src/nipat_scientific/panels.py
 tests/fixtures/contamination/DNP_list.txt
 tests/fixtures/contamination/README.md
 tests/fixtures/contamination/samples/NoRatio.tsv
@@ -126,6 +131,8 @@ tests/fixtures/cpi/samples/MotherInformative.txt
 tests/fixtures/cpi/samples/MotherNoSites.txt
 tests/test_cli_validation.py
 tests/test_contamination_workflow.py
+tests/test_contamination_engine.py
+tests/test_bundled_runner.py
 tests/test_distribution.py
 tests/test_docker_installer.py
 tests/test_dnp_workflow.py

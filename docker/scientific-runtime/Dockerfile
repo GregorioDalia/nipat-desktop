@@ -75,6 +75,7 @@ COPY scientific/vendor/NEWPAT/SNPcall/SNPcall.R /opt/nipat/scientific/vendor/NEW
 COPY scientific/vendor/NEWPAT/contamination/detect_contamination.R /opt/nipat/scientific/vendor/NEWPAT/contamination/detect_contamination.R
 COPY scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R /opt/nipat/scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R
 COPY engine/main.py /opt/nipat/engine/main.py
+COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py /opt/nipat/lib/nipat_scientific/
 RUN python3 /opt/nipat/engine/main.py verify
 
 # Keep the existing client operational during the incremental migration. The
