@@ -65,6 +65,14 @@ class ScientificSelection(unittest.TestCase):
             with self.subTest(base=base):
                 self.assertTrue(changes.scientific_decision(base, head, repository=self.root)[0])
 
+    def test_engine_package_and_its_checks_require_integration(self):
+        for name in ("engine/main.py", "engine/contract.json", "tests/test_engine_package.py",
+                     "scripts/verify_engine_package.py"):
+            with self.subTest(path=name):
+                self.write(name, "changed\n")
+                self.assertTrue(self.selected())
+                self.base = self.git("rev-parse", "HEAD")
+
     def test_manual_request_runs_scientific_checks_without_changes(self):
         self.assertTrue(changes.scientific_decision(self.base, self.base, force=True, repository=self.root)[0])
 

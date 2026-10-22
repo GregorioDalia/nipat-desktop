@@ -23,11 +23,14 @@ docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
 docs/INSTALLATORE_WINDOWS.md
+docs/PIANO_0.5.md
 docs/RELEASE_0.3.0a1.md
 docs/RELEASE_0.3.0a2.md
 docs/RELEASE_0.4.0.md
 docs/RELEASE_0.4.1.md
 docs/VALIDAZIONE.md
+engine/README.md
+engine/main.py
 installer/runtime/Dockerfile
 installer/runtime/nipat-engine
 installer/runtime/write-provenance.py
@@ -79,6 +82,7 @@ scripts/build_docker_installer.py
 scripts/build_windows_installer_assets.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
+scripts/verify_engine_package.py
 scripts/verify_input_modes.py
 scripts/verify_snp_example.py
 scripts/windows/common.ps1
@@ -125,6 +129,7 @@ tests/test_contamination_workflow.py
 tests/test_distribution.py
 tests/test_docker_installer.py
 tests/test_dnp_workflow.py
+tests/test_engine_package.py
 tests/test_input_modes.py
 tests/test_input_mounts.py
 tests/test_installer_assets.py

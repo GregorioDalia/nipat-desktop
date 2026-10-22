@@ -7,8 +7,12 @@ on:
     paths:
       - 'installer/**'
       - 'docker/**'
+      - 'engine/**'
+      - 'scientific/**'
+      - 'tests/test_engine_package.py'
       - 'scripts/windows/**'
       - 'scripts/build_*'
+      - 'scripts/verify_engine_package.py'
       - 'distribution-files.txt'
       - 'compose.yaml'
       - 'pyproject.toml'
@@ -127,6 +131,8 @@ jobs:
           provenance: false
           cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
           cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
+      - name: Verify bundled scientific scripts without host sources
+        run: python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE"
       - name: Scientific regression and input-mode checks
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data

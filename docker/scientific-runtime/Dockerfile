@@ -65,4 +65,18 @@ RUN Rscript /usr/local/lib/nipat/verify-packages.R \
     && samtools --version | head -n 1 \
     && R --version | head -n 1
 
+# Bundle only reviewed code and notices. Do not copy arbitrary local files or
+# mount the host project over this path in production.
+COPY LICENSE THIRD_PARTY_NOTICES.md /opt/nipat/
+COPY scientific/SHA256SUMS /opt/nipat/scientific/SHA256SUMS
+COPY scientific/vendor/DNPcall/DNPcall.R scientific/vendor/DNPcall/LICENSE /opt/nipat/scientific/vendor/DNPcall/
+COPY scientific/vendor/NEWPAT/LICENSE /opt/nipat/scientific/vendor/NEWPAT/LICENSE
+COPY scientific/vendor/NEWPAT/SNPcall/SNPcall.R /opt/nipat/scientific/vendor/NEWPAT/SNPcall/SNPcall.R
+COPY scientific/vendor/NEWPAT/contamination/detect_contamination.R /opt/nipat/scientific/vendor/NEWPAT/contamination/detect_contamination.R
+COPY scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R /opt/nipat/scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R
+COPY engine/main.py /opt/nipat/engine/main.py
+RUN python3 /opt/nipat/engine/main.py verify
+
+# Keep the existing client operational during the incremental migration. The
+# bundled interface is invoked explicitly and does not override runtime probes.
 WORKDIR /workspace/nipat-desktop

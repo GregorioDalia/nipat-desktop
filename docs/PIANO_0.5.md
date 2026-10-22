@@ -1,7 +1,7 @@
 # Percorso incrementale verso NIPAT 0.5
 
-Stato: preparazione del lavoro, 22 ottobre 2026. Questo documento registra
-le decisioni e i controlli necessari; non descrive funzionalità già implementate.
+Stato: primo incremento tecnico in sviluppo, 22 ottobre 2026. Questo documento
+registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 
 ## Baseline e separazione dalla validazione in corso
 
@@ -39,14 +39,34 @@ le decisioni e i controlli necessari; non descrive funzionalità già implementa
 7. Docker Engine nativo rimane necessario per l'edizione Linux. La rimozione
    di Docker Desktop non implica la rimozione del trasporto Docker per Linux.
 
-## Perimetro da definire prima del packaging
+## Perimetro confermato
 
-- Sistema Linux iniziale: proposta Ubuntu 24.04 LTS x86_64. Il formato
-  dell'installer e la preparazione delle dipendenze vanno scelti per il sistema
-  effettivamente approvato; non viene dichiarato supporto a tutte le distribuzioni.
-- Interfaccia della release 0.5: chiarire se mantenere la CLI guidata durante
-  il consolidamento o includere anche la prima GUI. In entrambi i casi
-  l'interfaccia utilizzerà il medesimo contratto di esecuzione del motore.
+- Sistema Linux iniziale: **Ubuntu 24.04 LTS x86_64**. Il formato dell'installer
+  e la preparazione delle dipendenze saranno scelti per questo sistema;
+  non viene dichiarato supporto a tutte le distribuzioni.
+- Interfaccia della release 0.5: **CLI guidata, senza GUI**. La futura GUI resta
+  esterna al motore e utilizzerà il medesimo contratto di esecuzione.
+
+## Primo incremento: confezionamento del codice R
+
+Il Dockerfile include i quattro script R invariati, le licenze e il manifest
+in `/opt/nipat`. L'ingresso `engine/main.py` verifica gli hash e offre i comandi
+`describe`, `verify` e `run`, con argomenti nativi degli script.
+
+Le verifiche locali comprendono 204 test Python e 37 test della selezione CI
+e del publisher. Il controllo `scripts/verify_engine_package.py`, aggiunto
+alla CI e alla build di revisione dell'installer, esegue SNPcall, Contamination
+e CPI senza mount dell'applicazione o del checkout, con rete disabilitata e
+filesystem dell'immagine in sola lettura. Verifica gli stessi valori numerici
+attesi delle regressioni esistenti. L'esito reale dell'immagine va consultato
+nella relativa esecuzione GitHub Actions: i test Python da soli non lo provano.
+
+La preparazione degli input e il client non usano ancora questo nuovo ingresso.
+DNPcall è incorporato e verificato tramite hash; manca ancora la regressione
+BAM attraverso il nuovo ingresso. Gli artifact dell'installer generati durante
+questo incremento sono soltanto build di revisione della struttura attuale:
+**non sono candidati 0.5 installabili accanto alla 0.4.1**. La separazione delle
+identità di installazione e i due nuovi installer appartengono ai passi seguenti.
 
 ## Passaggi e criteri di completamento
 
