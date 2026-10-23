@@ -150,8 +150,12 @@ class DnpEngineTests(unittest.TestCase):
             request["samples"][0]["sample_id"] = sample_id
             with self.subTest(sample_id=sample_id):
                 self.assert_rejected_without_writes(request)
-        for filename in ("original.bam", "sample_0001.BAM", "sample_0002.bam"):
-            path = self.inputs / filename
+        for number, filename in enumerate(("original.bam", "sample_0001.BAM", "sample_0002.bam")):
+            # Windows resolves case-only aliases to the spelling of an existing
+            # file. Isolate each fixture so .BAM cannot overwrite sample_0001.bam.
+            directory = self.inputs / f"invalid_basename_{number}"
+            directory.mkdir()
+            path = directory / filename
             path.write_bytes(b"unaliasable sample")
             request = deepcopy(self.request)
             request["samples"][0]["path"] = str(path)
