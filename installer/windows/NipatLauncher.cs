@@ -1,4 +1,4 @@
-// Console entry point shared by the WSL installation and Docker Desktop bundle.
+// Console entry point for the Windows WSL installation.
 // User arguments are data in the child environment, never PowerShell source.
 using System;
 using System.Diagnostics;
@@ -49,7 +49,7 @@ internal static class NipatLauncher
         string runner = Path.Combine(project, "scripts", "windows", "run.ps1");
         if (!File.Exists(bridge) || !File.Exists(runner)) {
             throw new FileNotFoundException(
-                "Pacchetto NIPAT incompleto. Estrarre l'intero archivio o ripristinare l'installazione; NIPAT.exe deve restare nella cartella del programma.");
+                "Pacchetto NIPAT incompleto. Ripristinare l'installazione con NIPAT-Setup.exe; NIPAT.exe deve restare nella cartella del programma.");
         }
         string powershell = Path.Combine(Environment.SystemDirectory,
             "WindowsPowerShell", "v1.0", "powershell.exe");

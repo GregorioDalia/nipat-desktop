@@ -1,3 +1,5 @@
+> Documento storico di sviluppo, conservato per tracciabilità. Non costituisce una guida della versione corrente. Per i contratti attuali consultare [Architettura](../ARCHITECTURE.md) e [CI/CD](../CI_CD.md).
+
 # Percorso incrementale verso NIPAT 0.5
 
 Stato: sesto incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento

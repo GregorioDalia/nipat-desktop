@@ -427,6 +427,20 @@ def check_contamination_client_without_host_scripts(identifier: str, root: Path)
           "with isolated mounts and recorded engine identity.", flush=True)
 
 
+def check_doctor_without_host_scripts(identifier: str, root: Path) -> None:
+    project = root / "diagnostics without scientific sources"
+    project.mkdir()
+    shutil.copyfile(PROJECT / "compose.yaml", project / "compose.yaml")
+    layout = ProjectLayout(project, root, root / "doctor data", root / "doctor results",
+                           project / "compose.yaml")
+    with patch.dict(os.environ, {"NIPAT_RUNTIME_IMAGE": identifier, "NIPAT_BACKEND": "native"}):
+        DockerComposeRunner(layout).doctor(True)
+    if {path.name for path in project.iterdir()} != {"compose.yaml"}:
+        raise ValueError("Runtime diagnostics unexpectedly populated the application directory.")
+    print("PASS: runtime diagnostics verify all four bundled interfaces without host scientific sources.",
+          flush=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True, help="already-built local Docker image")
@@ -437,6 +451,7 @@ def main() -> int:
         check_metadata(identifier)
         print(f"PASS: bundled code integrity, image {identifier}", flush=True)
         root = Path(tempfile.mkdtemp(prefix="nipat engine package ")).resolve()
+        check_doctor_without_host_scripts(identifier, root)
         check_snp(identifier, root)
         snp_inputs, snp_expected = check_snp_workflow(identifier, root)
         check_snp_client_without_host_scripts(identifier, root, snp_inputs, snp_expected)

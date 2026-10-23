@@ -1,7 +1,14 @@
-# Approved source files for the Windows validation distribution.
+# Explicit source allowlist for the NIPAT Windows installer.
 # Update explicitly when adding a deliverable; local data and outputs never belong here.
 .dockerignore
 .gitattributes
+.github/RELEASE.md
+.github/scripts/ci_changes.py
+.github/scripts/publish_windows_release.py
+.github/scripts/test_ci_changes.py
+.github/scripts/test_publish_windows_release.py
+.github/workflows/ci.yml
+.github/workflows/publish-windows-release.yml
 .github/workflows/windows-installer.yml
 .gitignore
 1_SETUP.cmd
@@ -18,16 +25,10 @@ docker/scientific-runtime/r-packages.tsv
 docker/scientific-runtime/verify-packages.R
 docs/ARCHITECTURE.md
 docs/CI_CD.md
-docs/DECISIONS.md
 docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
 docs/INSTALLATORE_WINDOWS.md
-docs/PIANO_0.5.md
-docs/RELEASE_0.3.0a1.md
-docs/RELEASE_0.3.0a2.md
-docs/RELEASE_0.4.0.md
-docs/RELEASE_0.4.1.md
 docs/VALIDAZIONE.md
 engine/README.md
 engine/main.py
@@ -38,7 +39,6 @@ installer/runtime/wsl.conf
 installer/windows/EnableWsl.cs
 installer/windows/EnableWsl.manifest
 installer/windows/NIPAT.iss
-installer/windows/NIPAT-DockerDesktop.iss
 installer/windows/NipatLauncher.cs
 installer/windows/NipatLauncher.manifest
 installer/windows/bootstrap-common.ps1
@@ -79,9 +79,8 @@ scientific/vendor/NEWPAT/contamination/detect_contamination.R
 scientific/vendor/NEWPAT/contamination/examples/inputs/DNPpanel.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample1.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample2.txt
-scripts/build_validation_bundle.py
-scripts/build_docker_installer.py
 scripts/build_windows_installer_assets.py
+scripts/distribution_support.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
 scripts/verify_cpi_engine.py
@@ -90,11 +89,8 @@ scripts/verify_engine_package.py
 scripts/verify_input_modes.py
 scripts/verify_snp_example.py
 scripts/windows/common.ps1
-scripts/windows/portable-bootstrap.ps1
 scripts/windows/run.ps1
 scripts/windows/setup.ps1
-scripts/windows/test-portable-runtime.ps1
-scripts/windows/test-portable-bootstrap.ps1
 src/nipat/__init__.py
 src/nipat/__main__.py
 src/nipat/adapters/__init__.py
@@ -158,7 +154,6 @@ tests/test_contamination_engine.py
 tests/test_cpi_engine.py
 tests/test_bundled_runner.py
 tests/test_distribution.py
-tests/test_docker_installer.py
 tests/test_dnp_workflow.py
 tests/test_dnp_engine.py
 tests/test_engine_package.py

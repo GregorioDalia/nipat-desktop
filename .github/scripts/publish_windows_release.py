@@ -10,6 +10,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import tomllib
 from urllib.parse import urljoin
 import zipfile
 
@@ -57,6 +58,16 @@ def source_bytes(commit, path):
     return subprocess.check_output(["git", "show", f"{commit}:{path}"])
 
 
+def committed_version(commit, read_source=source_bytes):
+    """Read release policy from the reviewed source, never downloaded metadata."""
+    project = tomllib.loads(read_source(commit, "pyproject.toml").decode("utf-8"))["project"]
+    version = project.get("version")
+    require(isinstance(version, str) and re.fullmatch(
+        r"[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+        "Committed project version is invalid")
+    return version
+
+
 def validate_run(run, commit, run_id):
     require(run.get("id") == run_id, "Unexpected build run ID")
     require(run.get("head_sha") == commit, "Build commit differs from requested commit")
@@ -80,14 +91,19 @@ def checksums(path):
     return result
 
 
-def requires_desktop_bundle(version):
-    # The first published WSL candidate predates the dual distribution protocol.
+def requires_wsl_installer_evidence(version):
+    # Archived 0.3.0a1 is the only build without self-contained installer evidence.
     return version != "0.3.0a1"
+
+
+def requires_desktop_bundle(version):
+    """The archived dual-distribution protocol applies only before 0.5."""
+    return requires_wsl_installer_evidence(version) and not requires_installation_profile(version)
 
 
 def requires_desktop_installer(version):
     components = re.match(r"([0-9]+)\.([0-9]+)\.([0-9]+)", version)
-    return components is not None and tuple(map(int, components.groups())) >= (0, 4, 1)
+    return components is not None and (0, 4, 1) <= tuple(map(int, components.groups())) < (0, 5, 0)
 
 
 def requires_installation_profile(version):
@@ -110,8 +126,8 @@ def verify_installation_profile(manifest, commit, read_source):
 
 
 def require_publication_supported(version):
-    # The review pipeline intentionally still verifies transitional Windows packages.
-    # Publication will be enabled only after the Windows/Linux 0.5 delivery is ready.
+    # The 0.5 release requires matching Windows and Linux installers. This
+    # Windows-only publisher cannot authorize an incomplete release.
     require(not requires_installation_profile(version),
             "0.5 preview publication is disabled: Windows/Linux distribution is not ready")
 
@@ -253,6 +269,8 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     version = manifest["version"]
     require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
             "Version must be numeric major.minor.patch with an optional a/b/rc suffix")
+    require(version == committed_version(commit, read_source),
+            "Manifest version differs from the built commit")
     tag = f"v{version}"
     require(manifest["schema_version"] == 1 and manifest["release_tag"] == tag
             and manifest["source_commit"] == commit, "Manifest release/source mismatch")
@@ -288,8 +306,15 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
             "Installer checksum mismatch")
     require(checksums(runtime / "SHA256SUMS") == {n: h for n, h in digests.items() if n != "NIPAT-Setup.exe"},
             "Runtime/manifest checksum mismatch")
-    if requires_desktop_bundle(version):
+    if requires_wsl_installer_evidence(version):
         verify_installer_build(setup, manifest, manifest_bytes, commit)
+    if requires_installation_profile(version):
+        require(desktop is None, "Docker Desktop deliverables are not supported in 0.5")
+        for folder in (setup, runtime):
+            require(not any(path.name.casefold().startswith("nipat-dockerdesktop-")
+                            or path.name.casefold() in ("package-build.json", "docker-installer-build.json")
+                            for path in folder.rglob("*")),
+                    "Docker Desktop deliverables are not supported in 0.5")
     if requires_desktop_bundle(version) or desktop is not None:
         portable, staged_hashes = verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit)
         delivery = (verify_desktop_installer(desktop, setup, portable, staged_hashes, manifest, manifest_bytes, commit)
@@ -362,6 +387,8 @@ def main():
     require(not args.draft_release_id or re.fullmatch(r"[1-9][0-9]*", args.draft_release_id), "Invalid draft ID")
     commit = args.source_commit
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], check=True)
+    version = committed_version(commit)
+    require_publication_supported(version)
     run = api(f"actions/runs/{args.run_id}")
     validate_run(run, commit, int(args.run_id))
     jobs = api(f"actions/runs/{args.run_id}/jobs?per_page=100")["jobs"]
@@ -373,7 +400,7 @@ def main():
         command("gh", "run", "download", args.run_id, "--repo", REPO,
                 "--name", "nipat-windows-setup", "--name", "nipat-runtime-assets", "--dir", str(root / "artifacts"))
         build_manifest = json.loads((root / "artifacts/nipat-runtime-assets" / MANIFEST).read_text(encoding="utf-8"))
-        require_publication_supported(build_manifest["version"])
+        require(build_manifest["version"] == version, "Manifest version differs from the built commit")
         desktop = None
         if requires_desktop_bundle(build_manifest["version"]):
             desktop = root / "artifacts/nipat-docker-desktop"

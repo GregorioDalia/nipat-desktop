@@ -1,117 +1,102 @@
-# Pubblicazione dei pacchetti verificati
+# Verifica e pubblicazione dei pacchetti
 
-Il workflow **Publish verified Windows pre-release** trasferisce gli asset da
-una build riuscita a GitHub Releases senza ricompilarli o scaricarli sul PC
-del manutentore. Si avvia manualmente da Actions sul branch `main`, indicando
-l'ID della build **Windows installer (review build)** e il suo commit completo.
-Il commit deve essere già integrato in `main`.
+NIPAT distribuisce artefatti costruiti e verificati da GitHub Actions. La
+pubblicazione non ricompila applicazione o runtime e non richiede al manutentore
+di trasferire manualmente gli archivi dal proprio computer.
 
-La [CI del ramo di sviluppo](../docs/CI_CD.md) esegue i controlli sulle pull
-request e su `main`, con esito aggregato `required`. Il suo successo non
-produce installatori pubblicabili. **Windows installer (review build)** resta
-separato: si avvia manualmente oppure sulle pull request che modificano i
-percorsi di installazione, runtime o packaging definiti nel workflow.
-**Publish verified Windows pre-release** resta esclusivamente manuale.
-Questa organizzazione e i nuovi vincoli delle dipendenze riguardano le build
-successive; non modificano versione, tag o asset già pubblicati di `0.4.1`.
+**La pubblicazione 0.5 è bloccata.** Il contratto di questa versione richiede
+installatori Windows e Linux coerenti con lo stesso commit e archivio scientifico.
+Il workflow produce il pacchetto Windows per revisione; l'installer Linux e
+la verifica congiunta dei due pacchetti non sono disponibili. Il publisher
+rifiuta le versioni 0.5 prima di creare o modificare una release.
 
-La versione `0.4.1` usa il tag `v0.4.1`, ma viene pubblicata con lo stato
-GitHub **Pre-release** per la validazione di dominio. Il suffisso della
-versione non determina questo stato: la procedura imposta e verifica sempre
-`prerelease: true` e non contrassegna la pubblicazione come `Latest`.
+Questo documento descrive le evidenze di build e le protezioni della procedura.
+La riuscita dei controlli automatici non autorizza da sola una distribuzione:
+le prove del pacchetto reale e la validazione di dominio sono registrate
+separatamente nella [scheda di validazione](../docs/VALIDAZIONE.md).
 
-La build esegue prima i controlli rapidi `windows-checks`, comprese le prove
-di ripresa dell'aggiornamento WSL e del launcher compilato. Solo dopo il loro
-successo costruisce ed esporta il runtime Linux. Il job finale scarica lo stesso
-`NIPAT.exe` già verificato dall'artifact intermedio `nipat-tested-launcher` e lo
-include in entrambi i pacchetti.
+## Build identificata
 
-Il download standard per WSL e' **solo `NIPAT-Setup.exe`**. L'EXE include
-Python, l'applicazione, il launcher e i due archivi runtime; l'utente non deve
-creare una cartella `assets` o disporre altri file accanto all'installatore.
-Dopo il setup avvia NIPAT dal collegamento creato. L'abilitazione di WSL resta
-una funzione di Windows e puo' richiedere Internet o un riavvio.
+Il workflow **Windows installer (review build)** compila `NIPAT.exe`, ne esegue
+le prove e conserva quello stesso file per il confezionamento. Costruisce
+l'immagine scientifica, verifica i quattro workflow, esporta l'archivio e
+costruisce il filesystem WSL. Verifica inoltre il caricamento, l'esecuzione
+e il ricaricamento dell'archivio nel motore interno distribuito.
 
-Dalla versione `0.4.1`, anche Docker Desktop dispone di un singolo
-installatore, **`NIPAT-DockerDesktop-Setup.exe`**. Include Python,
-l'applicazione, il launcher e l'archivio scientifico; richiede Docker Desktop
-già installato e avviato in modalità Linux. Al termine si apre il collegamento
-**NIPAT (Docker Desktop)**. Non richiede immagini preesistenti: la preparazione
-verifica e importa automaticamente l'archivio incluso, anche con Docker
-Desktop vuoto, senza pull o build manuali né download separati del runtime.
-Lo ZIP usato dalla build rimane un'evidenza interna
-e non viene caricato fra i download della release.
+Il builder prepara soltanto i file ammessi da `distribution-files.txt`, Python
+portabile verificato e i componenti previsti. La compilazione Inno Setup usa
+il manifest fidato, il profilo del canale e i due archivi verificati.
+Il risultato Windows è un unico **`NIPAT-Setup.exe`**, contenente tutti i
+componenti NIPAT necessari. Il solo `NIPAT.exe` non è un pacchetto autonomo.
 
-La procedura verifica build, manifest, sorgenti, archivi e checksum, crea una
-bozza sul commit compilato e carica l'installatore WSL, i due archivi runtime,
-il manifest, l'installatore Docker Desktop e `SHA256SUMS` combinato.
-Gli archivi runtime separati sono asset di recupero e verifica, non download richiesti
-per l'installazione WSL standard. Sono conservati per mantenere validi i
-collegamenti del manifest e il recupero automatico previsto dal setup.
-Pubblica come pre-release solo dopo aver verificato dimensioni e
-digest degli asset caricati. Non modifica release già pubblicate né tag di
-altri commit; una bozza parziale può essere ripresa solo con gli stessi
-contenuti verificati. Un errore lascia la bozza non pubblicata.
-Per riprendere una bozza già creata si può indicare il suo ID nel campo
-facoltativo `draft_release_id`; commit, note e asset vengono comunque verificati.
+Gli artefatti da conservare per la verifica del pacchetto Windows sono:
 
-Per i nuovi candidati la stessa build deve conservare tre artifact:
+| Artefatto | Evidenze |
+| --- | --- |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json` e launcher verificato. |
+| `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e relativi checksum. |
+| `nipat-scientific-check-logs` | Metadati e registri delle regressioni conservati dalla build. |
 
-- `nipat-windows-setup`: `NIPAT-Setup.exe`, `installer-manifest.json`,
-  `SHA256SUMS` dell'installatore, `installer-build.json` e `NIPAT.exe` come
-  evidenza del launcher compilato.
-- `nipat-runtime-assets`: i due archivi, il manifest e i relativi checksum.
-- `nipat-docker-desktop`: `NIPAT-DockerDesktop-<versione>-windows-x64.zip`
-  e `package-build.json` con schema 1, versione, commit, nome, dimensione e
-  SHA-256 dello ZIP e SHA-256 del launcher; dalla `0.4.1` include anche
-  `NIPAT-DockerDesktop-Setup.exe` e `docker-installer-build.json`.
+Il manifest identifica versione, tag previsto, commit, piattaforma, archivio
+scientifico, filesystem WSL e profilo di installazione. Il profilo deve
+corrispondere al sorgente del commit e al canale `preview-0.5`.
+La versione del manifest deve coincidere con quella del `pyproject.toml`
+committato: un manifest non può scegliere un protocollo di distribuzione diverso.
 
-Per i nuovi candidati, `installer-build.json` deve riportare schema 1,
-distribuzione `self-contained-wsl`, versione, commit, nome, dimensione e
-SHA-256 dell'EXE, SHA-256 del manifest e del launcher, e nome/dimensione/SHA-256
-di entrambi gli asset incorporati. Il publisher confronta questi dati con i
-file e il manifest verificati e rifiuta un EXE di dimensione pari o superiore
-a 2 GiB. Prima della compilazione, la build verifica gli archivi e l'include
-Inno Setup generato; le voci `Source` degli archivi specificano il loro `Hash`,
-che il compilatore controlla durante l'inclusione. I metadati collegano l'EXE
-a questa build riuscita e ai suoi input; non sono una prova separata ottenuta
-estraendo o installando l'EXE finale.
+## Verifica dell'installatore Windows
 
-`docker-installer-build.json` usa schema 1 e distribuzione
-`self-contained-docker-desktop`. Collega nome, dimensione e SHA-256 dell'EXE
-a versione, commit, manifest, launcher, nome/dimensione/SHA-256 dello ZIP
-interno e dimensione/SHA-256 dell'archivio scientifico. Il campo
-`staged_files_sha256` contiene esattamente i file dello ZIP verificato,
-con percorsi relativi all'applicazione, più il marcatore
-`.distribution/docker-desktop.json` previsto dall'installatore. Il publisher
-ricostruisce questi hash dai byte verificati: file mancanti, modificati o
-aggiuntivi impediscono la pubblicazione. Il builder controlla lo stage prima
-e dopo la compilazione e ogni voce Inno Setup specifica il proprio `Hash`.
-Anche l'EXE Docker deve essere inferiore a 2 GiB e non avere archivi `.bin`
-separati. Questi controlli vincolano l'EXE alla build riuscita e ai suoi input;
-non costituiscono un'estrazione indipendente del suo contenuto.
+`installer-build.json` usa schema 1 e distribuzione `self-contained-wsl`.
+Collega versione e commit ai seguenti elementi:
 
-Il publisher verifica anche il contenuto dello ZIP: esattamente i sorgenti
-approvati e i componenti previsti, stesso commit e versione, stesso launcher
-dell'installatore WSL, Python portabile fissato e identico archivio scientifico
-verificato. File aggiuntivi, dati locali, sorgenti modificati o pacchetti di
-build diverse impediscono la pubblicazione. Il solo `NIPAT.exe` non viene
-pubblicato come download autonomo: richiede gli altri file del pacchetto.
-La vecchia `0.3.0a1` mantiene il protocollo WSL originale senza ZIP Docker
-e senza `installer-build.json`. La `0.4.0` conserva il download ZIP Docker;
-dalla `0.4.1` il publisher richiede e pubblica l'EXE Docker, conservando lo ZIP
-soltanto nell'artifact della build. Le evidenze dell'installatore WSL
-autosufficiente rimangono obbligatorie per tutte le versioni successive
-alla `0.3.0a1`.
+- nome, dimensione e SHA-256 dell'EXE;
+- SHA-256 del manifest e del launcher;
+- nome, dimensione e SHA-256 dei due archivi incorporati;
+- profilo di installazione previsto dal canale.
 
-Le build attivate da pull request rimangono destinate alla revisione e vengono
-rifiutate dal publisher. Dopo l'integrazione in `main`, avviare manualmente
-**Windows installer (review build)** sul commit da distribuire; usare poi
-l'ID di questa build riuscita nella procedura di pubblicazione. La pubblicazione
-riutilizza gli asset verificati, senza ricostruirli.
+La verifica confronta le evidenze con i file effettivi e i sorgenti del commit.
+Prima della compilazione, il builder verifica il profilo e gli include Inno
+Setup generati; le voci degli archivi specificano l'hash che il compilatore
+controlla durante l'inclusione. L'installatore deve essere inferiore a 2 GiB
+e non richiedere archivi `.bin` separati.
 
-Le note provengono da `docs/RELEASE_<versione>.md` del commit compilato.
-I file di questa procedura sono strumenti del manutentore: non fanno parte
-dei sorgenti applicativi inclusi nell'EXE e non richiedono di ricostruire un
-runtime già verificato. Le prove su Windows e di dominio rimangono distinte
-dai controlli di pubblicazione.
+La funzione `prepare_assets` del publisher verifica anche i pacchetti Windows
+0.5 durante la build, indipendentemente dal blocco di pubblicazione. Rifiuta
+evidenze mancanti, file provenienti da build diverse, un profilo incoerente e
+artefatti Docker Desktop. Questi controlli legano l'EXE alla build e ai suoi
+input; non costituiscono una verifica ottenuta installando o estraendo
+indipendentemente l'eseguibile finale.
+
+Gli archivi runtime separati servono a recupero e verifica. La normale
+installazione Windows usa soltanto l'EXE; non richiede che l'utente disponga
+gli archivi accanto all'installatore.
+
+## Protezioni della pubblicazione
+
+Il workflow **Publish verified Windows pre-release** è esclusivamente manuale
+e opera su `main`. Richiede l'ID della build e il suo commit completo. Per il pacchetto da
+distribuire, avviare manualmente la build dell'installatore su `main`.
+Il publisher verifica l'esito riuscito, la corrispondenza del commit e la sua
+appartenenza alla storia di `main`; le build di pull request vengono rifiutate.
+Il successo del solo workflow CI non sostituisce una build dell'installatore.
+
+Per le versioni ammesse dal publisher, la procedura:
+
+1. verifica commit, versione, build e contratto dei pacchetti;
+2. prepara gli asset verificati e un elenco combinato dei checksum;
+3. usa le note `docs/RELEASE_<versione>.md` del commit compilato;
+4. crea una bozza sul commit verificato e carica gli asset;
+5. verifica dimensioni e digest restituiti da GitHub;
+6. pubblica soltanto come **Pre-release**, senza indicare **Latest**.
+
+Un errore lascia la bozza non pubblicata. Una bozza parziale può essere ripresa
+con `draft_release_id` soltanto se commit, note e contenuti coincidono con
+quelli verificati. Release già pubblicate e tag associati ad altri commit
+non vengono modificati. Non ricostruire un runtime per sostituire l'archivio
+già verificato o pubblicato.
+
+La rimozione del blocco 0.5 richiede il contratto e le verifiche dell'installer
+Linux, insieme alle evidenze Windows della medesima build. Non è sufficiente
+modificare la stringa di versione o disattivare il controllo del publisher.
+Per l'organizzazione dei workflow e i confini dei test consultare
+[CI/CD](../docs/CI_CD.md); per il pacchetto Windows consultare
+[Installatore Windows](../docs/INSTALLATORE_WINDOWS.md).

@@ -11,12 +11,10 @@ function Resolve-NipatDirectory([string] $Directory) {
     return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Directory)
 }
 
-function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
+function Set-NipatEnvironment([string] $Project) {
     # These variables affect this child process only; the system is unchanged.
     $env:NIPAT_PROJECT_DIR = $Project
     $installed = $null
-    $dockerInstaller = $false
-    $dockerInstallerPath = Join-Path $Project '.distribution\docker-desktop.json'
     $backendFile = Join-Path $Project ".runtime\backend.json"
     $installerManifestPath = Join-Path $Project '.distribution\installer-manifest.json'
     $profile = $null
@@ -30,17 +28,6 @@ function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
     } elseif (Test-Path -LiteralPath $backendFile -PathType Leaf) {
         throw 'Configurazione WSL priva del manifest della stessa installazione. Ripristinare il pacchetto Preview.'
     }
-    if (Test-Path -LiteralPath $dockerInstallerPath -PathType Leaf) {
-        $desktop = Get-Content -LiteralPath $dockerInstallerPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($desktop.schema_version -ne 1 -or $desktop.distribution -cne 'docker-desktop-installer' -or
-            (Test-Path -LiteralPath $backendFile) -or
-            (Test-Path -LiteralPath (Join-Path $Project '.distribution\installer-manifest.json'))) {
-            throw 'Configurazione Docker Desktop non valida. Ripristinare la relativa installazione NIPAT.'
-        }
-        $dockerInstaller = $true
-        $env:NIPAT_BACKEND = 'native'
-        Remove-Item Env:NIPAT_WSL_DISTRO -ErrorAction SilentlyContinue
-    }
     if (Test-Path -LiteralPath $backendFile -PathType Leaf) {
         $installed = Get-Content -LiteralPath $backendFile -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($installed.schema_version -ne 1 -or $installed.backend -ne 'wsl' -or
@@ -48,7 +35,7 @@ function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
             $installed.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
             -not [IO.Path]::IsPathRooted($installed.data_dir) -or
             -not [IO.Path]::IsPathRooted($installed.runs_dir)) {
-            throw "Configurazione dell installer non valida: riaprire 1_SETUP.cmd."
+            throw 'Configurazione dell installer non valida: riaprire NIPAT 0.5 Preview - completa preparazione dal menu Start.'
         }
         Assert-NipatInstallationChannel $installed 'configurazione di avvio'
         $expectedDistro = $profile.distro_prefix + $installerManifest.assets.rootfs.sha256.Substring(0, 40)
@@ -69,9 +56,6 @@ function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
     if ([string]::IsNullOrWhiteSpace($env:NIPAT_WORKSPACE_DIR)) {
         if ($null -ne $installed) {
             $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $installed.data_dir
-        } elseif ($dockerInstaller) {
-            if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'Cartella dati utente Windows non disponibile.' }
-            $env:NIPAT_WORKSPACE_DIR = Join-Path $env:LOCALAPPDATA 'NIPAT-DockerDesktop'
         } else {
             $env:NIPAT_WORKSPACE_DIR = Split-Path -Parent $Project
         }
@@ -87,14 +71,6 @@ function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
         else { $env:NIPAT_RUNS_DIR = Join-Path $env:NIPAT_WORKSPACE_DIR "runs" }
     }
     $env:NIPAT_RUNS_DIR = Resolve-NipatDirectory $env:NIPAT_RUNS_DIR
-    $imageFile = Join-Path $Project ".runtime\runtime-image.txt"
-    if (-not $Preparing -and $null -eq $installed -and (Test-Path -LiteralPath $imageFile -PathType Leaf)) {
-        $imageId = (Get-Content -LiteralPath $imageFile -Raw).Trim()
-        if ($imageId -notmatch '^sha256:[a-f0-9]{64}$') {
-            throw "Identificativo runtime non valido. Riaprire NIPAT.exe per ripetere la preparazione (1_SETUP.cmd per il progetto sorgente)."
-        }
-        $env:NIPAT_RUNTIME_IMAGE = $imageId
-    }
 }
 
 function Initialize-NipatWritableDirectory([string] $Directory, [string] $Label) {
@@ -175,105 +151,11 @@ function Install-NipatPython([string] $Project) {
     return $python
 }
 
-function Assert-NipatDocker {
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        throw "Docker Desktop non trovato. Installarlo, avviarlo in modalita Linux e riaprire NIPAT.exe (1_SETUP.cmd per il progetto sorgente)."
+function Assert-NipatWslDevelopmentConfiguration {
+    if ($env:NIPAT_BACKEND -cne 'wsl' -or
+        [string]::IsNullOrWhiteSpace($env:NIPAT_WSL_DISTRO) -or
+        $env:NIPAT_WSL_DISTRO -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
+        $env:NIPAT_RUNTIME_IMAGE -cnotmatch '^sha256:[a-f0-9]{64}$') {
+        throw 'Per installare NIPAT usare NIPAT-Setup.exe. La preparazione del sorgente richiede un runtime WSL configurato: NIPAT_BACKEND=wsl, NIPAT_WSL_DISTRO e NIPAT_RUNTIME_IMAGE con ID sha256 completo. Consultare docs/INSTALLATORE_WINDOWS.md.'
     }
-    & docker compose version
-    if ($LASTEXITCODE -ne 0) { throw "Docker Compose non disponibile in Docker Desktop." }
-    $osType = & docker info --format '{{.OSType}}'
-    if ($LASTEXITCODE -ne 0) {
-        throw "Docker non risponde. Avviare Docker Desktop e attendere che il motore sia pronto."
-    }
-    if (($osType -join "").Trim() -ne "linux") {
-        throw "NIPAT richiede il motore Linux di Docker Desktop (Switch to Linux containers)."
-    }
-}
-
-function Get-NipatImage([string] $Image) {
-    # A missing image is expected on first setup; its nonzero exit is handled here.
-    $previousPreference = $ErrorActionPreference
-    try {
-        $ErrorActionPreference = "Continue"
-        $json = & docker image inspect $Image 2>$null
-        $exitCode = $LASTEXITCODE
-    } finally {
-        $ErrorActionPreference = $previousPreference
-    }
-    if ($exitCode -ne 0) { return $null }
-    $images = @((($json -join "`n") | ConvertFrom-Json))
-    if ($images.Count -ne 1) { throw "Risposta inattesa da docker image inspect." }
-    return $images[0]
-}
-
-function Get-NipatPortableLoadedImageId([string] $Output) {
-    # One verified archive, exported by ID without tags, must yield one exact receipt.
-    # The importing engine may use a different ID representation from the exporter.
-    if ($Output -cmatch '(?m)^Error\b') {
-        throw "Docker segnala un errore nel caricamento dell'immagine: $Output"
-    }
-    $receipts = @($Output -split '\r?\n' | Where-Object { $_ -cmatch '^Loaded image(?: ID)?:' })
-    if ($receipts.Count -ne 1 -or
-        $receipts[0] -cnotmatch '^Loaded image ID: (sha256:[a-f0-9]{64})$') {
-        throw "Il caricamento deve restituire un solo ID immutabile. Consultare .runtime\setup.log."
-    }
-    return $Matches[1]
-}
-
-function Install-NipatRuntime([string] $Project) {
-    $archive = Join-Path $Project ".distribution\runtime.tar"
-    $manifest = Join-Path $Project ".distribution\runtime.json"
-    if ((Test-Path -LiteralPath $archive) -xor (Test-Path -LiteralPath $manifest)) {
-        throw "Pacchetto runtime incompleto: servono runtime.tar e runtime.json insieme."
-    }
-    if (Test-Path -LiteralPath $archive -PathType Leaf) {
-        $metadata = Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($metadata.schema_version -ne 1 -or $metadata.image_id -notmatch '^sha256:[a-f0-9]{64}$' -or
-            $metadata.archive_sha256 -notmatch '^[a-f0-9]{64}$' -or
-            $metadata.os -ne "linux" -or $metadata.architecture -ne "amd64") {
-            throw "Manifest del runtime non valido o non compatibile con Windows x64."
-        }
-        Write-Host "Verifica dell'archivio runtime..."
-        $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-        if ($archiveHash -ne $metadata.archive_sha256) { throw "Checksum dell'archivio runtime non valido." }
-        # Reload on setup/resume to bind the locally resolved ID to this verified archive.
-        # Normal launches reuse runtime-image.txt and do not reload the archive.
-        Write-Host "Importazione del runtime incluso. Non serve ricompilarlo..."
-        $previousPreference = $ErrorActionPreference
-        try {
-            $ErrorActionPreference = "Continue"
-            $loaded = & docker image load --input $archive 2>&1
-            $loadExit = $LASTEXITCODE
-        } finally {
-            $ErrorActionPreference = $previousPreference
-        }
-        $loadText = ($loaded -join "`n")
-        Write-Host $loadText
-        if ($loadExit -ne 0) { throw "Importazione runtime fallita." }
-        $localImageId = Get-NipatPortableLoadedImageId $loadText
-        $image = Get-NipatImage $localImageId
-        if ($null -eq $image -or $image.Id -cne $localImageId) {
-            throw "L'immagine importata non corrisponde all'ID restituito dal caricamento."
-        }
-    } else {
-        $candidate = "nipat-scientific-runtime:0.1.0"
-        if ($env:NIPAT_RUNTIME_IMAGE) { $candidate = $env:NIPAT_RUNTIME_IMAGE }
-        $image = Get-NipatImage $candidate
-        if ($null -eq $image) {
-            if ($candidate -match '^sha256:') {
-                throw "Il runtime precedentemente configurato non e' presente. Ripristinare il pacchetto runtime o rimuovere .runtime\runtime-image.txt per ricostruirlo."
-            }
-            Write-Host "Costruzione iniziale del runtime (richiede Internet e puo' durare diversi minuti)..."
-            $env:NIPAT_RUNTIME_IMAGE = $candidate
-            & docker compose -f (Join-Path $Project "compose.yaml") build scientific
-            if ($LASTEXITCODE -ne 0) { throw "Costruzione runtime fallita." }
-            $image = Get-NipatImage $candidate
-        }
-    }
-    if ($null -eq $image -or $image.Os -ne "linux" -or $image.Architecture -ne "amd64") {
-        throw "L'immagine deve essere Linux amd64."
-    }
-    $env:NIPAT_RUNTIME_IMAGE = $image.Id
-    $image.Id | Set-Content -LiteralPath (Join-Path $Project ".runtime\runtime-image.txt") -Encoding ASCII
-    Write-Host "Runtime configurato: $($image.Id)"
 }

@@ -93,12 +93,6 @@ jobs:
       - name: Test scientific image identity with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
-      - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
-      - name: Test single-click Docker preparation with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-bootstrap.ps1
       - name: Test resumable WSL migration with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1

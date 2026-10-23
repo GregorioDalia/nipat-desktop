@@ -72,6 +72,13 @@ class DockerTransport:
     def from_environment(cls, *, dry_run: bool = False) -> "DockerTransport":
         backend = os.environ.get("NIPAT_BACKEND", "native").strip().lower()
         if backend in ("", "native"):
+            if os.name == "nt":
+                raise ValidationError(
+                    "Su Windows NIPAT richiede il runtime WSL dedicato. "
+                    "Avviare NIPAT.exe dall'installazione NIPAT oppure completare "
+                    "la configurazione con NIPAT-Setup.exe. Per l'esecuzione dai sorgenti, "
+                    "configurare NIPAT_BACKEND=wsl e NIPAT_WSL_DISTRO."
+                )
             return cls(dry_run=dry_run)
         if backend == "wsl":
             distro = os.environ.get("NIPAT_WSL_DISTRO", "")
@@ -89,7 +96,10 @@ class DockerTransport:
 
     @property
     def unavailable_message(self) -> str:
-        return "Docker non è disponibile. Avvia Docker Desktop e riprova."
+        return (
+            "Docker Engine non è disponibile. Verificare che il servizio Docker "
+            "sia avviato e accessibile all'utente corrente su Linux."
+        )
 
     def host_path(self, path: Path | str) -> str:
         return str(path)

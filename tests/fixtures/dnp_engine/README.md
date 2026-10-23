@@ -17,7 +17,7 @@ reference bases on either side. There are no indels. The start positions are
 20, 110 and 200, and names are unique across loci and samples.
 
 The expected counts below are defined by the synthetic input design, not by
-running DNPcall or its new wrapper. They are committed in `expected.tsv`.
+running DNPcall or its wrapper. They are committed in `expected.tsv`.
 
 | Sample | Position | REF | ALT | Other | REF reads | ALT reads | Other reads | GT |
 | --- | ---: | --- | --- | --- | ---: | ---: | ---: | --- |

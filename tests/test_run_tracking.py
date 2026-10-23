@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
+from nipat.execution.transport import DockerTransport
 from nipat.execution.tracking import HASH_LIMIT_BYTES, file_evidence
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
@@ -31,7 +32,7 @@ class RunTrackingTests(unittest.TestCase):
         data = root / "data"
         data.mkdir()
         self.layout = ProjectLayout(project, root, data, root / "runs", project / "compose.yaml")
-        self.runner = DockerComposeRunner(self.layout)
+        self.runner = DockerComposeRunner(self.layout, transport=DockerTransport())
         self.input = data / "input.txt"
         self.input.write_text("original data\n", encoding="utf-8")
         self.output = io.StringIO()
@@ -192,7 +193,7 @@ class RunTrackingTests(unittest.TestCase):
 class RuntimeResolutionTests(unittest.TestCase):
     def test_resolves_requested_image_and_pins_compose_execution(self):
         layout = ProjectLayout(Path("."), Path("."), Path("data"), Path("runs"), Path("compose.yaml"))
-        runner = DockerComposeRunner(layout)
+        runner = DockerComposeRunner(layout, transport=DockerTransport())
         image_id = "sha256:" + "a" * 64
         answers = [
             "linux", '{"services":{"scientific":{"image":"test-runtime:tag"}}}',
@@ -208,7 +209,7 @@ class RuntimeResolutionTests(unittest.TestCase):
 
     def test_rejects_windows_container_engine(self):
         layout = ProjectLayout(Path("."), Path("."), Path("data"), Path("runs"), Path("compose.yaml"))
-        runner = DockerComposeRunner(layout)
+        runner = DockerComposeRunner(layout, transport=DockerTransport())
         with patch.object(runner, "_capture", return_value="windows") as capture:
             with self.assertRaisesRegex(RuntimeExecutionError, "container Linux"):
                 runner._prepare_runtime()

@@ -15,7 +15,7 @@ R, samtools e i pacchetti necessari. Non serve installare Docker Desktop,
 Python o R separatamente. Il primo setup richiede Internet; le analisi
 successive vengono eseguite sul computer.
 
-- [Guida per l'utilizzo](GUIDA_UTILIZZO.md): installazione, input, risultati e sequenze di analisi.
+- [Guida per l'utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/v0.3.0a1/docs/GUIDA_UTILIZZO.md): installazione, input, risultati e sequenze di analisi.
 - [Sunto del progetto](../SUNTO.md): integrazioni e funzionamento.
 - [Scheda di validazione](VALIDAZIONE.md): registrazione delle prove e degli esiti.
 
@@ -27,7 +27,7 @@ esecuzione/ricaricamento dell'immagine nel motore distribuito.
 Sul PC di sviluppo, un precedente candidato corretto localmente ha completato
 setup e autotest, riavviato il proprio motore e riprodotto 11 siti e 11 colonne
 confrontate di un BAM reale. La cronologia e il perimetro esatto sono in
-[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
+[INSTALLATORE_WINDOWS.md](https://github.com/GregorioDalia/nipat-desktop/blob/v0.3.0a1/docs/INSTALLATORE_WINDOWS.md).
 
 Restano aperte la prima installazione del nuovo EXE su un altro PC e la
 validazione scientifica su casi indipendenti. L'attivazione iniziale di WSL e

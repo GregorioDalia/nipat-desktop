@@ -10,6 +10,7 @@ from unittest.mock import patch
 from nipat.errors import ValidationError
 from nipat.execution.mounts import INPUT_ROOT, InputMounts
 from nipat.execution.runner import DockerComposeRunner
+from nipat.execution.transport import DockerTransport
 from nipat.paths import ProjectLayout
 
 
@@ -137,7 +138,7 @@ class InputMountTests(unittest.TestCase):
     def test_runner_activates_override_records_mapping_and_clears_it(self):
         mounts = InputMounts(self.layout)
         target = mounts.bind_file(self.source)
-        runner = DockerComposeRunner(self.layout, dry_run=True)
+        runner = DockerComposeRunner(self.layout, dry_run=True, transport=DockerTransport(dry_run=True))
         run = self.layout.new_run_dir("test", "mounted")
         with redirect_stdout(io.StringIO()):
             with runner.record_run(
@@ -155,7 +156,7 @@ class InputMountTests(unittest.TestCase):
     def test_runner_clears_mounts_after_failure(self):
         mounts = InputMounts(self.layout)
         mounts.bind_file(self.source)
-        runner = DockerComposeRunner(self.layout, dry_run=True)
+        runner = DockerComposeRunner(self.layout, dry_run=True, transport=DockerTransport(dry_run=True))
         run = self.layout.new_run_dir("test", "failed-mounted")
         with redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, "fixture"):
             with runner.record_run(
@@ -167,7 +168,7 @@ class InputMountTests(unittest.TestCase):
 
     def test_doctor_creates_only_required_static_mount_directories(self):
         self.layout.compose_file.write_text("services: {}\n")
-        runner = DockerComposeRunner(self.layout)
+        runner = DockerComposeRunner(self.layout, transport=DockerTransport())
         with patch("nipat.execution.runner.shutil.which", return_value="docker"), patch.object(
             runner, "_capture", return_value="Docker Compose"
         ):

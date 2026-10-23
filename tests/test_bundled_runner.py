@@ -8,10 +8,10 @@ from contextlib import redirect_stdout
 from pathlib import Path, PureWindowsPath
 from unittest.mock import MagicMock, patch
 
-from nipat.errors import RuntimeExecutionError
+from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.mounts import InputMounts
 from nipat.execution.runner import DockerComposeRunner
-from nipat.execution.transport import WslDockerTransport, _windows_path
+from nipat.execution.transport import DockerTransport, WslDockerTransport, _windows_path
 from nipat.paths import ProjectLayout
 
 
@@ -61,7 +61,7 @@ class BundledRunnerTests(unittest.TestCase):
         self.source.write_text("original input\n", encoding="utf-8")
         self.mounts = InputMounts(self.layout)
         self.mounts.bind_file(self.source, target="/workspace/inputs/sample_001.tsv")
-        self.runner = DockerComposeRunner(self.layout)
+        self.runner = DockerComposeRunner(self.layout, transport=DockerTransport())
         self.stdout = io.StringIO()
 
     def captured(self, description=None):
@@ -86,6 +86,61 @@ class BundledRunnerTests(unittest.TestCase):
             mounts=self.mounts, bundled_workflow=workflow,
         )
         return run, context
+
+    def test_doctor_verifies_the_image_without_host_scientific_sources_or_run(self):
+        self.assertFalse((self.project / "scientific").exists())
+        with redirect_stdout(self.stdout), patch(
+            "nipat.execution.runner.shutil.which", return_value="docker",
+        ), patch.object(self.runner, "_capture", side_effect=["Compose v2", *self.captured()]) as capture:
+            self.runner.doctor(check_runtime=True)
+        self.assertIsNone(self.runner._record)
+        self.assertIsNone(self.runner._image_id)
+        self.assertEqual(list(self.layout.runs_dir.iterdir()), [])
+        self.assertIn("DNPcall, SNPcall, Contamination, CPI", self.stdout.getvalue())
+        probes = [call.args[0] for call in capture.call_args_list if call.args[0][:2] == ["docker", "run"]]
+        self.assertEqual(len(probes), 2)
+        for command in probes:
+            self.assertIn(IMAGE_ID, command)
+            self.assertIn("--pull=never", command)
+            self.assertIn("--read-only", command)
+            self.assertEqual(command[command.index("--network") + 1], "none")
+            self.assertNotIn("--mount", command)
+            self.assertNotIn("--volume", command)
+            self.assertNotIn("-v", command)
+        self.assertEqual(probes[-1][-4:], ["python3", "/opt/nipat/engine/main.py", "describe", "--json"])
+
+    def test_doctor_rejects_each_missing_or_wrong_workflow_contract(self):
+        for workflow in ("dnp-call", "snp-call", "contamination", "cpi"):
+            for value in (None, "incompatible-v2"):
+                description = engine_metadata()
+                if value is None:
+                    del description["workflow_interfaces"][workflow]
+                else:
+                    description["workflow_interfaces"][workflow] = value
+                with self.subTest(workflow=workflow, value=value), redirect_stdout(self.stdout), patch(
+                    "nipat.execution.runner.shutil.which", return_value="docker",
+                ), patch.object(self.runner, "_capture", side_effect=["Compose v2", *self.captured(description)]):
+                    with self.assertRaisesRegex(RuntimeExecutionError, "quattro workflow"):
+                        self.runner.doctor(check_runtime=True)
+                self.assertIsNone(self.runner._image_id)
+
+    def test_doctor_rejects_incomplete_scientific_identity(self):
+        description = engine_metadata()
+        del description["preparation"]["file_sha256"]["lib/nipat_scientific/cpi.py"]
+        with redirect_stdout(self.stdout), patch(
+            "nipat.execution.runner.shutil.which", return_value="docker",
+        ), patch.object(self.runner, "_capture", side_effect=["Compose v2", *self.captured(description)]):
+            with self.assertRaisesRegex(RuntimeExecutionError, "metadati scientifici completi"):
+                self.runner.doctor(check_runtime=True)
+        self.assertIsNone(self.runner._image_id)
+
+    def test_dry_run_doctor_rejects_diagnostics_without_starting_processes(self):
+        self.runner.dry_run = True
+        with patch("nipat.execution.runner.subprocess.run") as execute:
+            with self.assertRaisesRegex(ValidationError, "rimuovere --dry-run"):
+                self.runner.doctor(check_runtime=True)
+        execute.assert_not_called()
+        self.assertFalse(self.layout.runs_dir.exists())
 
     def test_isolated_service_has_only_selected_files_and_this_run(self):
         original = self.source.read_bytes()
@@ -294,7 +349,7 @@ class BundledRunnerTests(unittest.TestCase):
         popen.assert_not_called()
         document = json.loads((run / "work/engine-compose.json").read_text(encoding="utf-8"))
         service = document["services"]["scientific"]
-        self.assertEqual(service["image"], "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.1.0}")
+        self.assertEqual(service["image"], "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.5.0a1}")
         for volume in service["volumes"]:
             self.assertTrue(volume["source"].startswith("/mnt/d/NIPAT test $$ENV, è/"))
         self.assertIn("$$VALUE", service["volumes"][0]["source"])

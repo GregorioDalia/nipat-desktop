@@ -1,5 +1,5 @@
-# Base and CRAN snapshot used by the verified 0.4.1 build (run 39686775980).
-# Upgrade these inputs deliberately, then run the scientific regression suite.
+# Scientific base and CRAN snapshot are pinned inputs. Changes require the
+# scientific regression suite against the resulting image.
 FROM rocker/r-ver:4.4.2@sha256:df26749182af64d5263bf64149d51a427b476ed28c4e046997143be3f97fdd7c
 
 ARG SAMTOOLS_VERSION=1.21
@@ -78,6 +78,5 @@ COPY engine/main.py /opt/nipat/engine/main.py
 COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py /opt/nipat/lib/nipat_scientific/
 RUN python3 /opt/nipat/engine/main.py verify
 
-# Keep the existing client operational during the incremental migration. The
-# bundled interface is invoked explicitly and does not override runtime probes.
+# The client explicitly selects the bundled workflow or an isolated runtime probe.
 WORKDIR /workspace/nipat-desktop

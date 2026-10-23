@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Iterator, TextIO
 
+from nipat import __version__
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.mounts import InputMounts
 from nipat.execution.tracking import RunRecord, file_evidence, project_evidence, utc_now
@@ -31,7 +32,10 @@ BUNDLED_WORKFLOW_LABELS = {
 
 
 class DockerComposeRunner:
-    def __init__(self, layout: ProjectLayout, dry_run: bool = False) -> None:
+    def __init__(
+        self, layout: ProjectLayout, dry_run: bool = False, *,
+        transport: DockerTransport | None = None,
+    ) -> None:
         self.layout = layout
         self.dry_run = dry_run
         self._record: RunRecord | None = None
@@ -40,7 +44,9 @@ class DockerComposeRunner:
         self._input_mounts_file: Path | None = None
         self._engine_compose_file: Path | None = None
         self._bundled_workflow: str | None = None
-        self._transport = DockerTransport.from_environment(dry_run=dry_run)
+        self._transport = transport if transport is not None else DockerTransport.from_environment(
+            dry_run=dry_run,
+        )
         self._backend_ready = False
 
     def _base_command(self) -> list[str]:
@@ -85,7 +91,9 @@ class DockerComposeRunner:
         self._record.save()
 
     @staticmethod
-    def _validate_engine_description(description: Any, workflow: str) -> dict[str, Any]:
+    def _validate_engine_description(
+        description: Any, workflow: str | None = None,
+    ) -> dict[str, Any]:
         """Validate the negotiated contract, recording image-owned source hashes."""
         digest = re.compile(r"[0-9a-f]{64}\Z")
         required_workflows = {"dnp-call", "snp-call", "contamination", "cpi"}
@@ -104,8 +112,11 @@ class DockerComposeRunner:
             return (isinstance(value, str) and value.startswith(prefix) and "\\" not in value
                     and all(part not in ("", ".", "..") for part in value.split("/")))
 
-        expected_interface = BUNDLED_WORKFLOW_INTERFACES.get(workflow)
-        valid = isinstance(description, dict) and expected_interface is not None
+        expected_interfaces = (
+            BUNDLED_WORKFLOW_INTERFACES if workflow is None else
+            {workflow: BUNDLED_WORKFLOW_INTERFACES.get(workflow)}
+        )
+        valid = isinstance(description, dict) and all(expected_interfaces.values())
         if valid:
             manifest = description.get("manifest")
             workflows = description.get("workflows")
@@ -116,7 +127,8 @@ class DockerComposeRunner:
                 and description.get("schema_version") == 1
                 and description.get("interface") == "native-r-v1"
                 and isinstance(interfaces, dict)
-                and interfaces.get(workflow) == expected_interface
+                and all(interfaces.get(name) == expected
+                        for name, expected in expected_interfaces.items())
                 and isinstance(manifest, dict)
                 and manifest.get("path") == "scientific/SHA256SUMS"
                 and has_digest(manifest.get("sha256"))
@@ -136,15 +148,18 @@ class DockerComposeRunner:
                     and has_digest(value) for path, value in files.items()
                 )
         if not valid:
+            label = (BUNDLED_WORKFLOW_LABELS.get(workflow, workflow)
+                     if workflow is not None else "dei quattro workflow")
+            contracts = ", ".join(str(value) for value in expected_interfaces.values())
             raise RuntimeExecutionError(
-                f"L'immagine non offre il contratto {BUNDLED_WORKFLOW_LABELS.get(workflow, workflow)} "
-                f"incorporato richiesto ({expected_interface}), con metadati scientifici completi. "
+                f"L'immagine non offre il contratto {label} "
+                f"incorporato richiesto ({contracts}), con metadati scientifici completi. "
                 "Usare un runtime costruito per questa versione di NIPAT."
             )
         return description
 
-    def _describe_bundled_engine(self) -> None:
-        if self._record is None or self._image_id is None or self._bundled_workflow is None:
+    def _describe_bundled_engine(self) -> dict[str, Any]:
+        if self._image_id is None:
             raise RuntimeExecutionError("Il runtime incorporato non è stato preparato.")
         probe_name = "nipat-probe-" + uuid.uuid4().hex
         try:
@@ -158,13 +173,16 @@ class DockerComposeRunner:
         except (RuntimeExecutionError, ValueError) as exc:
             raise RuntimeExecutionError(
                 "Verifica del motore scientifico incorporato fallita. "
-                "Usare un runtime costruito per questa versione di NIPAT; "
-                "consultare execution.log per i dettagli."
+                "Usare un runtime costruito per questa versione di NIPAT."
+                + (" Consultare execution.log per i dettagli." if self._record else "")
             ) from exc
-        self._record.data["runtime"]["engine"] = self._validate_engine_description(
+        verified = self._validate_engine_description(
             description, self._bundled_workflow,
         )
-        self._record.save()
+        if self._record:
+            self._record.data["runtime"]["engine"] = verified
+            self._record.save()
+        return verified
 
     def _environment(self) -> dict[str, str]:
         environment = os.environ.copy()
@@ -251,11 +269,8 @@ class DockerComposeRunner:
         os_type = self._capture(["docker", "info", "--format", "{{.OSType}}"])
         if os_type != "linux":
             raise RuntimeExecutionError("Il runtime NIPAT richiede Docker con container Linux.")
-        # Resolve the same configured image as the legacy client, but never use
-        # that Compose service (which exposes application/data directories) to
-        # execute a bundled workflow.
-        base = (["docker", "compose", "-f", self._transport.host_path(self.layout.compose_file)]
-                if self._bundled_workflow else self._base_command())
+        # Compose provides image selection only. Probes run without host mounts.
+        base = ["docker", "compose", "-f", self._transport.host_path(self.layout.compose_file)]
         config = json.loads(self._capture(base + ["config", "--format", "json"]))
         image_name = config["services"]["scientific"]["image"]
         inspected = json.loads(self._capture([
@@ -267,7 +282,7 @@ class DockerComposeRunner:
         )
         if image_os != "linux":
             raise RuntimeExecutionError("L'immagine scientifica deve essere Linux.")
-        if self._bundled_workflow is not None and (
+        if (
             not isinstance(image_id, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", image_id) is None
         ):
             raise RuntimeExecutionError("Identità immutabile dell'immagine non valida.")
@@ -281,10 +296,10 @@ class DockerComposeRunner:
             self._record.save()
         # Pin execution to this image ID; later changes to its tag cannot change this run.
         probe_name = "nipat-probe-" + uuid.uuid4().hex
-        isolation = ([
+        isolation = [
             "--network", "none", "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m",
             "--env", "HOME=/tmp", "--env", "TMPDIR=/tmp",
-        ] if self._bundled_workflow is not None else [])
+        ]
         versions = self._capture([
             "docker", "run", "--rm", "--pull=never", "--name", probe_name,
             *isolation, image_id, "sh", "-c",
@@ -347,7 +362,7 @@ class DockerComposeRunner:
                     if bundled_workflow is not None:
                         if self.dry_run:
                             record.data["engine_verification"] = "not_run_dry_run"
-                            image = "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.1.0}"
+                            image = f"${{NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:{__version__}}}"
                         else:
                             self._describe_bundled_engine()
                             record.data["engine_verification"] = "verified"
@@ -499,6 +514,8 @@ class DockerComposeRunner:
             raise RuntimeExecutionError(f"Build del runtime fallita con codice {exc.returncode}.") from exc
 
     def doctor(self, check_runtime: bool) -> None:
+        if self.dry_run:
+            raise ValidationError("doctor richiede controlli reali; rimuovere --dry-run.")
         self._backend_ready = False
         if shutil.which(self._transport.executable) is None:
             raise ValidationError(
@@ -507,11 +524,12 @@ class DockerComposeRunner:
             )
         if not self.layout.compose_file.is_file():
             raise ValidationError(f"compose.yaml non trovato: {self.layout.compose_file}")
-        verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")
         self.layout.ensure_storage_dirs()
         self._capture(["docker", "compose", "version"])
         if check_runtime:
             try:
                 self._prepare_runtime()
+                self._describe_bundled_engine()
+                self._write("Contratti scientifici verificati: DNPcall, SNPcall, Contamination, CPI.\n")
             finally:
                 self._image_id = None

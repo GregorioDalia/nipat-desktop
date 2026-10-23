@@ -1,50 +1,82 @@
-# Bundled scientific entry point
+# Interfaccia del motore scientifico
 
-The image installs this directory at `/opt/nipat/engine`, beside the bundled
-`scientific` directory. Shared scientific preparation modules are installed at
-`/opt/nipat/lib/nipat_scientific`. The entry point has no dependency on the
-Windows application, the working directory or the host checkout. Python uses
-only its standard library.
+L'immagine NIPAT installa il motore in `/opt/nipat/engine`, gli script R in
+`/opt/nipat/scientific` e la libreria di preparazione in
+`/opt/nipat/lib/nipat_scientific`. Il motore non dipende dalla directory
+corrente, dai sorgenti del client o dalla cartella dell'applicazione Windows.
+Python usa la sola libreria standard; R, samtools e le dipendenze sono inclusi
+nell'immagine.
+
+Questo riferimento descrive il contratto tecnico. Per l'utilizzo ordinario
+usare la [CLI o il menu guidato](../docs/GUIDA_UTILIZZO.md), che preparano
+richieste e mount e conservano i metadati dell'esecuzione.
+
+## Comandi e identificazione
 
 ```sh
 python3 /opt/nipat/engine/main.py describe --json
 python3 /opt/nipat/engine/main.py verify
-python3 /opt/nipat/engine/main.py run snp-call -- \
-  --pileup /inputs/pileup.txt --snplist /inputs/SNPlist.txt --out /outputs/output.txt
-python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
-python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute dnp-call --request /run/work/request.json
+python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
+python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute cpi --request /run/work/request.json
 ```
 
-The workflow names are `dnp-call`, `snp-call`, `contamination` and `cpi`.
-Arguments after the workflow name are passed directly to the corresponding
-bundled R script, after removing an optional initial `--`. All four scripts
-must match the bundled `scientific/SHA256SUMS` before any workflow can run.
-`describe --json` reports interface `native-r-v1`, metadata schema version 1,
-the manifest hash, and each workflow's bundled path and source hash. It also
-reports `workflow_interfaces.contamination = contamination-v1`,
-`workflow_interfaces.snp-call = snp-call-v1`,
-`workflow_interfaces.dnp-call = dnp-call-v1`,
-`workflow_interfaces.cpi = cpi-v1` and preparation metadata interface
-`workflow-preparation-v1`. `preparation.file_sha256` identifies the entry point
-and eight shared Python modules.
-Missing modules or paths escaping the bundle are rejected. These hashes record
-the Python source bytes in the selected image; the R hashes are additionally
-checked against the scientific manifest. They do not identify a published
-NIPAT release on their own.
+`execute` convalida la richiesta, prepara i file e avvia il programma R.
+Per un'invocazione tecnica con argomenti R nativi è disponibile anche `run`:
 
-Execution replaces the entry-point process with `Rscript`, preserving R's exit
-status and direct signal delivery. SNPcall BAM preparation first runs samtools;
-its nonzero exit prevents R execution, and termination signals are forwarded
-to that subprocess. Verification or launch failures return 2.
-The container runtime and R must already be available; this command performs
-no downloads or package installation.
+```sh
+python3 /opt/nipat/engine/main.py run snp-call -- \
+  --pileup /inputs/pileup.txt --snplist /inputs/SNPlist.txt --out /outputs/output.txt
+```
 
-## Contamination request
+Solo `run` passa direttamente a R gli argomenti dopo il nome del workflow,
+rimuovendo un eventuale `--` iniziale. Questa modalità non esegue la
+preparazione prevista da `execute`.
 
-The versioned preparation interface accepts this JSON object; paths identify
-files and destinations inside the container, not host Windows paths:
+Prima di eseguire un workflow, tutti e quattro i sorgenti R devono corrispondere
+al manifest scientifico incluso. `describe --json` restituisce:
+
+| Campo | Contratto |
+| --- | --- |
+| `schema_version` | `1` |
+| `interface` | `native-r-v1` |
+| `workflow_interfaces` | `dnp-call-v1`, `snp-call-v1`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
+| `preparation.interface` | `workflow-preparation-v1` |
+| Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
+| `preparation.file_sha256` | Hash dell'ingresso del motore e degli otto moduli Python condivisi |
+
+Moduli mancanti e percorsi esterni al bundle sono rifiutati. Gli hash della
+preparazione identificano i byte nell'immagine; gli hash R vengono inoltre
+confrontati con il manifest. La descrizione non identifica da sola una release:
+commit, archivio distribuito e ID immagine appartengono alle evidenze di build
+e ai metadati del run.
+
+L'avvio di R sostituisce il processo del motore con `Rscript`, preservandone
+codice di uscita e ricezione dei segnali. Gli errori di verifica o avvio
+restituiscono 2. Nella preparazione SNPcall da BAM, i segnali sono inoltrati
+anche al processo samtools; un suo errore impedisce l'avvio di R.
+Nessun comando del motore scarica o installa dipendenze.
+
+## Regole comuni delle richieste
+
+Ogni richiesta usa `schema_version: 1` e il nome del workflow. I percorsi
+identificano file e destinazioni **dentro il container**, non percorsi host
+Windows. Gli input devono essere esterni alle directory di lavoro e di output,
+che devono essere distinte. L'output deve essere vuoto e i file di staging
+previsti non devono già esistere. La validazione precede la preparazione;
+nessun file generato viene sovrascritto automaticamente.
+
+Il client monta soltanto gli input selezionati in sola lettura e il run corrente
+in scrittura. Il filesystem dell'immagine è in sola lettura, con directory
+temporanea dedicata e rete disabilitata. Non montare sorgenti o cartelle
+applicative sopra `/opt/nipat`. Il Dockerfile consente comandi espliciti per
+le sonde e per le analisi, senza imporre un `ENTRYPOINT`.
+
+I file parzialmente preparati dopo un errore di I/O rimangono nel run per la
+diagnosi. Una nuova analisi deve usare una nuova directory.
+
+## Contamination
 
 ```json
 {
@@ -59,21 +91,15 @@ files and destinations inside the container, not host Windows paths:
 }
 ```
 
-The client selects individual files or expands a directory recursively and
-maps the selected files read-only. The engine validates each table and the
-panel, rejects case-insensitive sample-name collisions, copies tables
-byte-for-byte into `work/inputs` with their original stems and `.txt` extension,
-and writes the native panel to `work/DNPpanel.txt`. It then invokes the bundled
-unchanged R script. Names can contain spaces and Unicode but cannot contain
-directory separators or control characters. All validation precedes staging.
+Il motore convalida pannello e tabelle, copia le tabelle byte per byte in
+`work/inputs` e scrive il pannello R in `work/DNPpanel.txt`. I nomi mantengono
+lo stem originale e usano l'estensione `.txt`. Sono ammessi spazi e Unicode,
+ma non separatori di directory o caratteri di controllo. Collisioni di nome,
+anche limitate alle maiuscole, vengono rifiutate prima dello staging.
+Il client può selezionare singoli file o espandere ricorsivamente una cartella;
+la richiesta contiene l'elenco finale dei soli file selezionati.
 
-Work and output directories must be distinct and must not contain the input
-files. Existing run directories are supported, but output must be empty and
-the generated panel/staging directory must not already exist. Partial staging
-after an I/O failure remains available for diagnosis and cannot be overwritten
-by rerunning the same request. Intermediate artifacts remain in the run.
-
-## SNPcall request
+## SNPcall
 
 ```json
 {
@@ -89,21 +115,19 @@ by rerunning the same request. Intermediate artifacts remain in the run.
 }
 ```
 
-In `pileup` mode, `bam` and `reference` must be null and `pileup` identifies
-the supplied file, including the seventh QNAME column. Additional columns
-remain accepted. In `bam` mode, `pileup` must be null and the reference must
-have its adjacent `.fai`; BGZF references also require `.gzi`. BAM indexes
-remain optional, because samtools uses `-l` rather than indexed region access.
-The original chromosome names and three-base window calculation are preserved.
+Con `mode: "pileup"`, `bam` e `reference` devono essere `null`; `pileup`
+identifica il file con la settima colonna QNAME. Sono ammesse ulteriori colonne.
+Questa modalità non esegue samtools e non genera i file di preparazione BAM.
 
-The engine writes `work/snp_regions.bed`, invokes samtools with the existing
-mpileup options and retains `work/pileup.txt` before running R. Existing pileup
-mode skips both preparation files and samtools. Both modes write
-`output/SNPcall_output.txt`. Inputs are read-only and must be outside the distinct
-work/output directories; existing generated artifacts and nonempty output
-directories are rejected before preparation starts.
+Con `mode: "bam"`, `pileup` deve essere `null` e il riferimento deve avere
+l'indice adiacente `.fai`; un riferimento BGZF richiede anche `.gzi`.
+L'indice BAM è facoltativo perché samtools usa `-l`, senza accesso indicizzato
+per regione. Il motore conserva i nomi dei cromosomi del pannello, genera le
+finestre BED di tre basi in `work/snp_regions.bed` ed esegue samtools,
+conservando `work/pileup.txt`. Entrambe le modalità producono
+`output/SNPcall_output.txt`.
 
-## DNPcall request
+## DNPcall
 
 ```json
 {
@@ -120,32 +144,31 @@ directories are rejected before preparation starts.
 }
 ```
 
-The client accepts individual BAMs, multiple BAMs or a BAM list. It maps BAMs
-under sequential `sample_0001.bam` aliases and retains the association with the
-original files in `run.json`. List entries are resolved relative to the list's
-directory. Large BAM and reference files are mounted read-only, not copied.
-The reference requires `.fai`, and BGZF references additionally require `.gzi`;
-BAM indexes remain optional.
+Il client accetta BAM singoli, multipli o una lista; le voci della lista sono
+relative alla directory che la contiene. I BAM ricevono alias progressivi
+`sample_0001.bam`; `run.json` conserva l'associazione con gli originali.
+BAM e riferimento sono montati in sola lettura. Il riferimento richiede `.fai`
+e, se BGZF, `.gzi`; gli indici BAM sono facoltativi.
 
-The engine validates the ordered aliases and panel, then writes
-`work/DNP_list.txt` and `work/bamlist.txt`. Work and output must be siblings named
-`work` and `output`. Execution changes directory to their parent and supplies
-relative native arguments `--bamlist=work/bamlist.txt`,
-`--DNPs=work/DNP_list.txt` and `--out=output`. This preserves the unchanged R
-script's output naming. Its internal shell calls require safe ASCII BAM/reference
-container paths; the client supplies these even for original filenames containing
-spaces or Unicode. `parallel` is a boolean and enables R's existing `--parallel`.
+Il motore convalida alias e pannello, poi scrive `work/DNP_list.txt` e
+`work/bamlist.txt`. Le directory devono essere sorelle e chiamarsi `work` e
+`output`. L'esecuzione parte dalla loro directory padre con gli argomenti
+relativi `--bamlist=work/bamlist.txt`, `--DNPs=work/DNP_list.txt` e `--out=output`.
+Gli alias ASCII interni sono necessari alle chiamate shell di DNPcall, anche
+quando i nomi originali contengono spazi o Unicode. `parallel` è booleano
+e attiva l'opzione R `--parallel`.
 
-Existing generated staging files, nonempty output, and run-root `mpileup.txt`
-or `bedfile_for_mpileup.bed` are rejected before preparation. The native script
-creates and removes those last two files itself on success. The normalized panel,
-BAM list and request remain available. DNPcall invokes samtools internally,
-suppresses its stderr and does not check its exit status. This inherited behavior
-is unchanged: the engine preserves the R exit status but cannot guarantee that
-every internal samtools failure is reported. A successful process alone does not
-validate its scientific output.
+La presenza di staging preesistente, output non vuoto o file `mpileup.txt`
+e `bedfile_for_mpileup.bed` nella radice del run impedisce la preparazione.
+Lo script R genera e rimuove questi ultimi due file al termine. Richiesta,
+pannello normalizzato e lista BAM rimangono disponibili.
 
-## CPI request
+DNPcall richiama samtools internamente, ne sopprime lo stderr e non controlla
+esplicitamente il codice di uscita. Il motore conserva lo stato restituito da R,
+ma non garantisce che ogni errore interno di samtools venga segnalato.
+Un processo riuscito non attesta la correttezza scientifica dell'output.
+
+## CPI
 
 ```json
 {
@@ -167,50 +190,37 @@ validate its scientific output.
 }
 ```
 
-The request preserves the existing native parameters. Pairs use `mother:father`
-identifiers separated by commas; surrounding identifier whitespace is normalized.
-Prefixes may be empty or customized. The selected sample names must be exactly
-the required `<prefix><identifier>.txt` names. A parent used in several pairs is
-staged once. The client maps only the requested tables, population frequencies
-and panels; the engine validates them again and copies the selected sample tables
-byte-for-byte into `work/inputs`. Unselected files are not exposed to R.
+Le coppie sono identificate da `madre:padre`, separate da virgole; gli spazi
+esterni agli identificatori sono normalizzati. I prefissi possono essere
+personalizzati o vuoti. I nomi delle tabelle selezionate devono corrispondere
+esattamente a `<prefisso><identificatore>.txt`. Un genitore usato in più coppie
+viene preparato una sola volta.
 
-Cutoff modes are explicit:
+Il client espone soltanto tabelle richieste, frequenze e pannelli. Il motore
+convalida nuovamente questi file e copia le tabelle senza cambiarne i byte
+in `work/inputs`. I file non selezionati non sono accessibili a R.
 
-- `all`: an empty cutoff list; omit native `--cutoff_map` and retain the output
-  without a `Cutoff` column.
-- `panel`: one cutoff with an empty label; write `work/DNPpanel.txt` and preserve
-  its generated container path as the CSV `Cutoff` value.
-- `named`: one or more unique nonempty labels; write `work/cutoff_001.tsv`, etc.
-  The client accepts repeated `--cutoff` options and the native `--cutoff-map`
-  syntax. A bare path in the latter is also its label, as before.
+| `cutoff_mode` | Richiesta e preparazione |
+| --- | --- |
+| `all` | Lista `cutoffs` vuota; nessun `--cutoff_map` nativo e nessuna colonna `Cutoff` nell'output. |
+| `panel` | Un pannello con etichetta vuota; genera `work/DNPpanel.txt` e usa il suo percorso interno come valore `Cutoff`. |
+| `named` | Una o più etichette univoche non vuote; genera `work/cutoff_001.tsv` e successivi. |
 
-Position panels retain the existing headered/headerless three-column and legacy
-five-column support; they are normalized to tab-separated `chr`, `pos1`, `pos2`.
-XLSX panels are not supported by this interface. Labels cannot contain commas,
-equals signs or control characters. Generated cutoff paths cannot contain commas
-or equals signs because the unchanged native parser cannot encode them; standard
-client container aliases avoid that restriction on original host paths.
+Il client offre `--cutoff` ripetuto e `--cutoff-map`. Un percorso senza
+etichetta nella mappa diventa anche la sua etichetta. I pannelli accettano
+formati testuali a tre colonne, con o senza intestazione, e il formato DNP
+a cinque colonne; vengono normalizzati a `chr`, `pos1`, `pos2`. L'interfaccia
+non accetta pannelli XLSX.
 
-`err_const` must be a finite nonnegative number; zero remains accepted. Native
-option values are passed as arguments, without a shell; empty prefixes and values
-beginning with a hyphen remain unambiguous. Output pair labels and PDF filenames
-remain `Mother<id>-Father<id>_DNPs`, independently of input prefixes. Ambiguous
-sample filenames and colliding pair output names are rejected before staging,
-including case-only collisions that would overwrite results on Windows.
+Le etichette non possono contenere virgole, segni uguale o caratteri di controllo.
+I percorsi interni dei cutoff non possono contenere virgole o segni uguale,
+perché il parser R non li può codificare; gli alias del client evitano questa
+limitazione sui percorsi host. `err_const` deve essere finito e non negativo;
+zero è ammesso. Gli argomenti sono passati senza shell, preservando prefissi
+vuoti e valori che iniziano con un trattino.
 
-Work/output directories must not overlap or contain inputs, output must be empty,
-and existing staging/panel files are never overwritten. The request, staged tables
-and normalized panels remain in `work`; the CSV and PDFs remain under `output`.
-
-The shared preparation package is the single source of the existing panel and
-table validators; client preflight imports use compatibility exports. All four
-analytical workflows now execute through the bundled engine. R algorithms are
-unchanged. Client diagnostics and installer packaging remain transitional and
-are not completed by this workflow migration alone.
-
-Input datasets and output directories are supplied separately. Production
-execution must not mount application/source directories over `/opt/nipat`.
-The Dockerfile does not force this command as `ENTRYPOINT`, so existing runtime
-checks and the current desktop client can continue to invoke their commands
-during the incremental transition.
+Le etichette delle coppie e i PDF usano `Mother<id>-Father<id>_DNPs`, indipendentemente
+dai prefissi degli input. Nomi ambigui dei campioni e collisioni degli output
+delle coppie, anche limitate alle maiuscole, sono rifiutati prima dello staging.
+Richiesta, tabelle preparate e pannelli rimangono in `work`; CSV e PDF sono
+scritti in `output`.

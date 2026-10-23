@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 _SPEC = importlib.util.spec_from_file_location(
-    "nipat_validation_bundle", Path(__file__).with_name("build_validation_bundle.py")
+    "nipat_distribution_support", Path(__file__).with_name("distribution_support.py")
 )
 bundle = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(bundle)

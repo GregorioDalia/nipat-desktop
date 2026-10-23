@@ -169,35 +169,16 @@ exit ([int]$env:NIPAT_LAUNCH_TEST_EXIT)
     Assert-Test ($result.Output -match 'Pacchetto NIPAT incompleto') 'incomplete package has an actionable error'
     Assert-Test (-not (Test-Path -LiteralPath $script:CapturePath)) 'missing runner is never invoked'
 
-    # Exercise the compiled launcher through the real bridge, runner, setup and
-    # readiness state. Only external Python installation and Docker are simulated;
-    # these tests must not download software or require a daemon on the CI host.
+    # Exercise the actual bridge, runner and installed readiness checks. Python
+    # is an offline process fixture; no WSL or scientific analysis is simulated.
     $project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-    foreach ($name in @('common.ps1', 'portable-bootstrap.ps1', 'setup.ps1', 'run.ps1')) {
+    foreach ($name in @('common.ps1', 'setup.ps1', 'run.ps1')) {
         Copy-Item -LiteralPath (Join-Path $project "scripts\windows\$name") -Destination (Join-Path $app "scripts\windows\$name")
     }
-    Copy-Item -LiteralPath (Join-Path $project 'pyproject.toml') -Destination (Join-Path $app 'pyproject.toml')
-    $metadata = Get-Content -LiteralPath (Join-Path $app 'pyproject.toml') -Raw
+    $metadata = Get-Content -LiteralPath (Join-Path $project 'pyproject.toml') -Raw
     $version = [regex]::Match($metadata, '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
     $distribution = Join-Path $app '.distribution'
     [IO.Directory]::CreateDirectory($distribution) | Out-Null
-    [IO.File]::WriteAllBytes((Join-Path $distribution 'runtime.tar'), [byte[]]@(1, 2, 3, 4))
-    [IO.File]::WriteAllBytes((Join-Path $distribution 'python-3.12.10-embed-amd64.zip'), [byte[]]@(1))
-    $runtime = [ordered]@{
-        schema_version = 1; os = 'linux'; architecture = 'amd64'
-        image_id = 'sha256:' + ('a' * 64); source_commit = 'c' * 40; archive_bytes = 4
-        archive_sha256 = (Get-FileHash -LiteralPath (Join-Path $distribution 'runtime.tar') -Algorithm SHA256).Hash.ToLowerInvariant()
-    }
-    $runtime | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $distribution 'runtime.json') -Encoding UTF8
-    [ordered]@{
-        schema_version = 1; package_version = $version
-        source_git = @{ available = $true; dirty = $false; commit = $runtime.source_commit }
-        python = @{ version = '3.12.10'; architecture = 'amd64'; archive_sha256 = '4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3' }
-        runtime = $runtime
-    } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $app 'release.json') -Encoding UTF8
-    @{ schema_version = 1; distribution = 'docker-desktop-installer' } |
-        ConvertTo-Json | Set-Content -LiteralPath (Join-Path $distribution 'docker-desktop.json') -Encoding UTF8
-
     $fakeSource = Join-Path $temporary 'FixturePython.cs'
     $fakePython = Join-Path $temporary 'FixturePython.exe'
     @'
@@ -229,95 +210,24 @@ class FixturePython {
     $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
     & $compiler /nologo /target:exe /platform:x64 "/out:$fakePython" $fakeSource
     if ($LASTEXITCODE -ne 0) { throw 'Could not compile the offline Python process fixture.' }
-    @'
-
-# Test-only external dependency boundaries appended to an isolated project copy.
-function Assert-NipatDocker { }
-function Install-NipatPython([string] $Project) {
-    Add-Content -LiteralPath $env:NIPAT_FIXTURE_EVENTS -Value 'install:python'
-    $directory = Join-Path $Project '.runtime\python'
-    [IO.Directory]::CreateDirectory($directory) | Out-Null
-    Copy-Item -LiteralPath $env:NIPAT_FIXTURE_PYTHON -Destination (Get-NipatPython $Project) -Force
-    '3.12.10' | Set-Content -LiteralPath (Join-Path $directory 'nipat-python.ready') -Encoding ASCII
-    '.' | Set-Content -LiteralPath (Join-Path $directory 'python312._pth') -Encoding ASCII
-    return (Get-NipatPython $Project)
-}
-function Install-NipatRuntime([string] $Project) {
-    Add-Content -LiteralPath $env:NIPAT_FIXTURE_EVENTS -Value 'install:runtime'
-    $image = 'sha256:' + ('b' * 64)
-    $image | Set-Content -LiteralPath (Join-Path $Project '.runtime\runtime-image.txt') -Encoding ASCII
-    $env:NIPAT_RUNTIME_IMAGE = $image
-}
-function Get-NipatImage([string] $Image) {
-    if ($Image -ceq ('sha256:' + ('b' * 64))) {
-        return [pscustomobject]@{ Id = $Image; Os = 'linux'; Architecture = 'amd64' }
-    }
-    return $null
-}
-'@ | Add-Content -LiteralPath (Join-Path $app 'scripts\windows\common.ps1') -Encoding UTF8
+    $pythonDirectory = Join-Path $app '.runtime\python'
+    [IO.Directory]::CreateDirectory($pythonDirectory) | Out-Null
+    Copy-Item -LiteralPath $fakePython -Destination (Join-Path $pythonDirectory 'python.exe')
     $events = Join-Path $temporary 'events.txt'
     $fail = Join-Path $temporary 'self-test-failure.flag'
     $localAppData = Join-Path $temporary 'user profile'
-    $data = Join-Path $localAppData 'NIPAT-DockerDesktop\data'
-    $runs = Join-Path $localAppData 'NIPAT-DockerDesktop\runs'
-    [IO.Directory]::CreateDirectory($data) | Out-Null
-    [IO.Directory]::CreateDirectory($runs) | Out-Null
-    'existing input' | Set-Content -LiteralPath (Join-Path $data 'preserved.txt') -Encoding ASCII
-    'existing result' | Set-Content -LiteralPath (Join-Path $runs 'preserved.txt') -Encoding ASCII
     $environment = @{
         NIPAT_FIXTURE_PYTHON = $fakePython; NIPAT_FIXTURE_EVENTS = $events; NIPAT_FIXTURE_FAIL = $fail
         LOCALAPPDATA = $localAppData; NIPAT_WORKSPACE_DIR = $null; NIPAT_DATA_DIR = $null; NIPAT_RUNS_DIR = $null
         NIPAT_BACKEND = 'wsl'; NIPAT_WSL_DISTRO = 'Unrelated-WSL'; NIPAT_RUNTIME_IMAGE = $null
     }
-    $readyPath = Join-Path $app '.runtime\portable-setup.json'
-    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -eq 0) ('real first-launch preparation succeeds: ' + $result.Output)
-    Assert-Test (Test-Path -LiteralPath $readyPath) 'real setup writes readiness only after checks'
-    $calls = @(Get-Content -LiteralPath $events)
-    Assert-Test (($calls -join ',') -ceq 'install:python,install:runtime,python:doctor,python:self-test,python:wizard') 'first launch prepares, checks and opens the menu in order'
-    $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
-    Assert-Test (Test-SamePath $capture[0] $script:CallerDirectory) 'preparation preserves caller directory for relative inputs'
-    Assert-Test ($capture[1] -ceq 'native') 'Docker installer ignores an inherited WSL selection'
-    Assert-Test ((Test-SamePath $capture[2] $data) -and (Test-SamePath $capture[3] $runs)) 'Docker installation uses its separate per-user data and results'
-
-    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -eq 0) ('second prepared launch succeeds: ' + $result.Output)
-    $calls = @(Get-Content -LiteralPath $events)
-    Assert-Test (@($calls | Where-Object { $_ -ceq 'install:runtime' }).Count -eq 1 -and @($calls | Where-Object { $_ -ceq 'python:self-test' }).Count -eq 1) 'second launch neither reloads the image nor repeats the setup self-test'
-    Assert-Test (@($calls | Where-Object { $_ -ceq 'python:wizard' }).Count -eq 2) 'second launch opens the menu directly'
-
-    # A changed component forces preparation even if a previous ready record exists.
-    # Its subsequent failure must remove that old success, not merely leave it stale.
-    'changed configuration' | Add-Content -LiteralPath (Join-Path $app '.runtime\python\python312._pth') -Encoding ASCII
-    'fail' | Set-Content -LiteralPath $fail -Encoding ASCII
-    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -ne 0) 'failed reference test returns failure through the actual launcher'
-    Assert-Test (-not (Test-Path -LiteralPath $readyPath) -and -not (Test-Path -LiteralPath $script:CapturePath)) 'failed setup does not claim ready or open the menu'
-    Assert-Test ($result.Output -match 'Test di riferimento falliti' -and $result.Output -match 'setup.log') 'failed preparation provides diagnostic guidance'
-    $setupLog = Join-Path $app '.runtime\setup.log'
-    Assert-Test ((Test-Path -LiteralPath $setupLog) -and
-        (Get-Content -LiteralPath $setupLog -Raw) -match 'Test di riferimento falliti') 'setup diagnostics contain the failure at the literal application path'
-    Remove-Item -LiteralPath $fail
-    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -eq 0 -and (Test-Path -LiteralPath $readyPath)) ('same executable retries a failed preparation: ' + $result.Output)
-    Assert-Test ((Get-Content -LiteralPath (Join-Path $data 'preserved.txt') -Raw).Trim() -ceq 'existing input' -and (Get-Content -LiteralPath (Join-Path $runs 'preserved.txt') -Raw).Trim() -ceq 'existing result') 'preparation and retry preserve existing data and results'
-
-    Remove-Item -LiteralPath $readyPath
-    $beforePreview = @(Get-Content -LiteralPath $events | Where-Object { $_ -like 'install:*' }).Count
-    $result = Invoke-TestLauncher -Executable $executable -Arguments @('--dry-run', 'wizard') -Environment $environment
-    Assert-Test ($result.ExitCode -eq 0) ('dry-run preview remains available without preparing: ' + $result.Output)
-    $afterPreview = @(Get-Content -LiteralPath $events | Where-Object { $_ -like 'install:*' }).Count
-    Assert-Test ($beforePreview -eq $afterPreview -and -not (Test-Path -LiteralPath $readyPath)) 'preview has no implicit setup or false readiness'
     # Exercise the ready WSL Preview through the compiled executable and real
     # launch scripts. Scientific execution remains at the fake Python boundary.
     foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $app "installer\windows\$name")
     }
-    foreach ($name in @('docker-desktop.json', 'runtime.json', 'runtime.tar')) {
-        Remove-Item -LiteralPath (Join-Path $distribution $name)
-    }
-    Remove-Item -LiteralPath (Join-Path $app 'release.json')
     $profile = Get-Content -LiteralPath (Join-Path $app 'installer\windows\install-profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $profileChannel = [string]$profile.channel
     $candidateBase = Join-Path $localAppData $profile.data_dir_name
     $candidateData = Join-Path $candidateBase 'data'
     $candidateRuns = Join-Path $candidateBase 'runs'
@@ -415,16 +325,100 @@ function Get-NipatImage([string] $Image) {
     Assert-Test (@(Get-Content -LiteralPath $events).Count -eq $beforeRejected) 'rejected installed identities execute neither setup nor analysis'
     Assert-Test ((Get-FileHash -LiteralPath $stableMarker -Algorithm SHA256).Hash -ceq $stableHash) 'launches and rejected identities preserve stable data'
 
-    # Source checkouts intentionally keep environment-based configuration; the
-    # installed-only reset must not discard the developer's chosen paths.
+    # Incomplete, failed and mismatched installation states never reach Python.
+    $manifest.installation_profile.channel = $profileChannel
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    foreach ($phase in @('failed', 'awaiting_reboot', 'verifying_installation')) {
+        $state.phase = $phase
+        $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+        $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) ("phase $phase does not authorize an analysis")
+        Assert-Test ($result.Output -match 'completa preparazione') 'incomplete installation directs the user to the setup shortcut'
+    }
+    $state.phase = 'ready'
+    $state.source_commit = '1' * 40
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'state for another source commit is rejected'
+    $state.source_commit = $manifest.source_commit
+    $state.runtime_archive_sha256 = '2' * 64
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'state for another scientific archive is rejected'
+    Remove-Item -LiteralPath $statePath
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'missing readiness state is rejected'
+    $state.runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -eq 0) ('a verified ready state permits the next launch: ' + $result.Output)
+    $pythonPath = Join-Path $pythonDirectory 'python.exe'
+    Remove-Item -LiteralPath $pythonPath
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'missing packaged Python does not start analysis'
+    Assert-Test ($result.Output -match 'completa preparazione') 'missing packaged Python offers the setup shortcut'
+    Copy-Item -LiteralPath $fakePython -Destination $pythonPath
+
+    # Setup dispatches installed packages to the WSL bootstrap and preserves a
+    # reboot-required result. Bootstrap state transitions are covered separately.
+    $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $setup = Join-Path $app 'scripts\windows\setup.ps1'
+    @'
+Add-Content -LiteralPath $env:NIPAT_FIXTURE_EVENTS -Value 'bootstrap:wsl'
+exit 3010
+'@ | Set-Content -LiteralPath (Join-Path $app 'installer\windows\bootstrap.ps1') -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $powershell -Arguments @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setup) -Environment $environment
+    Assert-Test ($result.ExitCode -eq 3010) ('installed setup preserves WSL reboot-required status: ' + $result.Output)
+    Assert-Test ((Get-Content -LiteralPath $events -Tail 1) -ceq 'bootstrap:wsl') 'installed setup delegates to the WSL bootstrap'
+
+    # Source launch retains deliberate developer paths. Source setup requires an
+    # explicit WSL configuration before it installs Python or creates directories.
     Remove-Item -LiteralPath $manifestPath
     Remove-Item -LiteralPath $backendPath
-    Remove-Item -LiteralPath (Join-Path $app '.runtime\runtime-image.txt')
+    $environment.NIPAT_BACKEND = 'wsl'
+    $environment.NIPAT_WSL_DISTRO = 'NIPAT-Development'
+    $environment.NIPAT_RUNTIME_IMAGE = 'sha256:' + ('c' * 64)
     $result = Invoke-TestLauncher -Executable $executable -Environment $environment
     Assert-Test ($result.ExitCode -eq 0) ('source launch keeps explicit environment configuration: ' + $result.Output)
     $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
     Assert-Test ((Test-SamePath $capture[2] $stableData) -and (Test-SamePath $capture[3] $stableRuns) -and
         (Test-SamePath $capture[4] $stableBase)) 'source checkouts retain deliberate environment data, results and workspace'
+    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq 'NIPAT-Development') 'source launch preserves the explicit WSL distribution'
+    @'
+
+# Offline replacement of the external Python download/install boundary.
+function Install-NipatPython([string] $Project) {
+    Add-Content -LiteralPath $env:NIPAT_FIXTURE_EVENTS -Value 'install:python'
+    return (Get-NipatPython $Project)
+}
+'@ | Add-Content -LiteralPath (Join-Path $app 'scripts\windows\common.ps1') -Encoding UTF8
+    $beforeSourceSetup = @(Get-Content -LiteralPath $events).Count
+    foreach ($invalid in @(
+        @{ NIPAT_BACKEND = 'native'; NIPAT_WSL_DISTRO = 'NIPAT-Development'; NIPAT_RUNTIME_IMAGE = ('sha256:' + ('c' * 64)) },
+        @{ NIPAT_BACKEND = 'wsl'; NIPAT_WSL_DISTRO = ''; NIPAT_RUNTIME_IMAGE = ('sha256:' + ('c' * 64)) },
+        @{ NIPAT_BACKEND = 'wsl'; NIPAT_WSL_DISTRO = 'NIPAT-Development'; NIPAT_RUNTIME_IMAGE = 'mutable:tag' }
+    )) {
+        $invalidEnvironment = $environment.Clone()
+        foreach ($name in $invalid.Keys) { $invalidEnvironment[$name] = $invalid[$name] }
+        $result = Invoke-TestLauncher -Executable $powershell -Arguments @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setup) -Environment $invalidEnvironment
+        Assert-Test ($result.ExitCode -ne 0 -and $result.Output -match 'NIPAT-Setup.exe') 'source setup rejects incomplete or native runtime configuration with installer guidance'
+    }
+    Assert-Test (@(Get-Content -LiteralPath $events).Count -eq $beforeSourceSetup) 'invalid source configuration starts neither Python installation nor analysis'
+    $sourceLock = [IO.File]::Open((Join-Path $app '.runtime\source-setup.lock'),
+        [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try {
+        $result = Invoke-TestLauncher -Executable $powershell -Arguments @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setup) -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and $result.Output -match 'gia in corso') 'concurrent source setup is rejected before client changes'
+        Assert-Test (@(Get-Content -LiteralPath $events).Count -eq $beforeSourceSetup) 'a held source lock prevents Python installation and analysis'
+    } finally { $sourceLock.Dispose() }
+    $result = Invoke-TestLauncher -Executable $powershell -Arguments @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setup) -Environment $environment
+    Assert-Test ($result.ExitCode -eq 0) ('configured WSL source client setup succeeds: ' + $result.Output)
+    $setupCalls = @(Get-Content -LiteralPath $events | Select-Object -Skip $beforeSourceSetup)
+    Assert-Test (($setupCalls -join ',') -ceq 'install:python,python:doctor,python:self-test') 'source setup prepares only Python then verifies the configured scientific image'
+    'fail' | Set-Content -LiteralPath $fail -Encoding ASCII
+    $result = Invoke-TestLauncher -Executable $powershell -Arguments @('-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $setup) -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and $result.Output -match 'Autotest non superati') 'source setup propagates a failed scientific self-test'
+    Assert-Test ((Get-FileHash -LiteralPath $stableMarker -Algorithm SHA256).Hash -ceq $stableHash) 'all launch and setup checks preserve existing user data'
     Write-Host "PASS: $checks launcher assertions."
 } finally {
     if (Test-Path -LiteralPath $temporary) {
