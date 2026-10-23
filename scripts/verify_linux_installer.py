@@ -236,6 +236,11 @@ def verify(package: Path, manifest_path: Path, work: Path, output: Path) -> None
              "samtools", "view", "-b", "-o", "/fixtures/" + bam.name,
              "/fixtures/reads_A.sam"], environment=environment, cwd=work)
         bam.chmod(0o600)
+        run([*DOCKER, "run", "--rm", "--pull", "never", "--network", "none", "--read-only",
+             "--user", f"{os.getuid()}:{os.getgid()}", "--mount",
+             f"type=bind,source={inputs},target=/fixtures", image,
+             "samtools", "faidx", "/fixtures/reference.fa"], environment=environment, cwd=work)
+        (inputs / "reference.fa.fai").chmod(0o600)
         originals = snapshot(inputs)
         run([COMMAND, "dnp-call", "--bam", str(bam), "--reference", str(inputs / "reference.fa"),
              "--panel", str(inputs / "DNP_list.txt"), "--run-name", "installed-dnp-private-inputs"],
