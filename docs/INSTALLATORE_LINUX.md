@@ -16,17 +16,22 @@ un archivio **Source code** di GitHub non è un installatore.
 | Componente | Requisito |
 | --- | --- |
 | Sistema | Ubuntu 24.04 LTS, architettura x86_64/amd64. |
-| Client | Python 3.12 del sistema. |
-| Runtime | Docker Engine locale e Compose v2. |
+| Client | Python 3.12 del sistema, installato da APT se mancante. |
+| Runtime | Docker Engine locale e Compose v2, installati da APT se mancanti. |
 | Accesso | Account non root autorizzato a usare il socket `/var/run/docker.sock`. |
 | Configurazione Docker | Daemon di sistema, container Linux amd64, senza modalità rootless o `userns-remap`. |
 | Archiviazione | Spazio per il pacchetto installato, l'immagine Docker decompressa, input, intermedi e risultati. |
 
 Il `.deb` dichiara le dipendenze `python3.12`, `docker.io | docker-ce` e
-`docker-compose-v2 | docker-compose-plugin`. APT le risolve dai repository
-configurati. Un'installazione Docker già presente deve soddisfare questi
-requisiti; il pacchetto NIPAT non aggiunge repository, sostituisce configurazioni
-o abilita automaticamente l'accesso al daemon per gli utenti.
+`docker-compose-v2 | docker-compose-plugin`. Installando il `.deb` con APT,
+le dipendenze mancanti vengono scaricate e installate dai repository
+configurati: non occorre installare prima Docker manualmente. Servono una
+connessione Internet e autorizzazione amministrativa. Su Ubuntu con i
+repository ordinari disponibili, la dipendenza Docker è soddisfatta da
+`docker.io` e `docker-compose-v2`. Un’installazione Docker già presente deve
+soddisfare questi requisiti. Il pacchetto NIPAT non aggiunge repository,
+non sostituisce configurazioni del daemon e non abilita automaticamente
+l’accesso degli utenti.
 
 Docker Engine deve essere avviato prima della preparazione. L'autorizzazione
 all'uso del gruppo `docker` è una scelta amministrativa: concede privilegi
@@ -48,10 +53,17 @@ Dalla cartella che contiene il file ricevuto da una build verificata:
 sudo apt install ./nipat-05-preview_0.5.0~a1_amd64.deb
 ```
 
-APT può richiedere una connessione per installare le dipendenze mancanti.
-Esaminare il riepilogo dei pacchetti prima di confermare. L'apertura del `.deb`
-con doppio clic dipende dal gestore di pacchetti presente sul desktop;
-il comando APT costituisce la procedura di riferimento.
+APT mostra anche le dipendenze da scaricare e installare. Esaminare il
+riepilogo prima di confermare. `dpkg -i` da solo non risolve né scarica le
+dipendenze mancanti. L’apertura del `.deb` con doppio clic richiede un
+gestore grafico che installi pacchetti locali e ne risolva le dipendenze;
+questa funzione dipende dal desktop configurato. Il comando APT costituisce
+la procedura di riferimento.
+
+L’installazione dei pacchetti e l’autorizzazione dell’account sono due
+operazioni distinte. Dopo l’installazione, verificare che Docker sia avviato
+e completare con l’amministratore l’accesso al socket. Il setup NIPAT
+non aggiunge automaticamente l’utente al gruppo `docker`.
 
 Dopo l'installazione:
 
@@ -172,8 +184,16 @@ dei dati, dello stato e delle risorse Docker estranee. Le prove usano
 un runner Ubuntu 24.04 con Docker già configurato; la reinstallazione
 non copre un aggiornamento fra versioni differenti.
 
-Queste prove non attestano l'esperienza completa su un Ubuntu Desktop pulito,
-la risoluzione di ogni configurazione APT o l'interazione con ogni gestore
-grafico dei pacchetti. Prima della distribuzione, registrare le prove sul
-sistema destinatario nella [scheda di validazione](VALIDAZIONE.md).
+Una prova separata installa il `.deb` in un container Ubuntu 24.04
+inizialmente privo delle dipendenze, verifica che APT installi Python 3.12,
+Docker Engine e Compose v2 e controlla i comandi informativi del pacchetto.
+Questa prova non avvia un daemon Docker nel container e non verifica
+l’autorizzazione di un account desktop.
+
+Le due prove automatiche non attestano l’esperienza completa su un Ubuntu
+Desktop pulito, la risoluzione di ogni configurazione APT o l’interazione
+con ogni gestore grafico dei pacchetti. Prima della distribuzione,
+completare il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md)
+sul pacchetto effettivo. La [scheda di validazione](VALIDAZIONE.md)
+consente di registrare anche le analisi di dominio.
 Evidenze, artefatti e confini della pipeline sono descritti in [CI/CD](CI_CD.md).

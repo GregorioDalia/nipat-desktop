@@ -67,5 +67,53 @@ class InstallationEvidenceTests(unittest.TestCase):
                         self.verify(changed)
 
 
+class DependencyEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.manifest_bytes = b"reviewed shared manifest"
+        self.manifest = {"source_commit": "a" * 40, "assets": {"scientific_image": {"sha256": "b" * 64}}}
+        self.package = {"sha256": "c" * 64}
+        self.evidence = {
+            "schema_version": 1, "distribution": "native-linux-deb",
+            "platform": "ubuntu-24.04-amd64", "scenario": "clean-ubuntu-container",
+            "source_commit": "a" * 40,
+            "installer_manifest_sha256": hashlib.sha256(self.manifest_bytes).hexdigest(),
+            "package_sha256": "c" * 64, "runtime_archive_sha256": "b" * 64,
+            "base_image": "ubuntu:24.04@sha256:" + "d" * 64,
+            "dependency_packages": dict.fromkeys(
+                ("python3.12", "docker.io", "docker-compose-v2", "nipat-05-preview"), "1.2.3"),
+            "checks": dict.fromkeys(VERIFY.DEPENDENCY_CHECKS, True),
+        }
+
+    def verify(self, evidence):
+        VERIFY.verify_dependency_check(evidence, self.manifest, self.manifest_bytes, self.package)
+
+    def test_accepts_bound_clean_container_dependency_check(self):
+        self.verify(self.evidence)
+
+    def test_rejects_unbound_or_misrepresented_scenarios(self):
+        for key, value in (
+            ("source_commit", "0" * 40), ("package_sha256", "0" * 64),
+            ("installer_manifest_sha256", "0" * 64), ("runtime_archive_sha256", "0" * 64),
+            ("scenario", "fresh-desktop"), ("base_image", "ubuntu:24.04"),
+            ("schema_version", True), ("dependency_packages", {}),
+        ):
+            changed = copy.deepcopy(self.evidence)
+            changed[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.verify(changed)
+
+    def test_rejects_missing_failed_or_nonboolean_dependency_checks(self):
+        for check in VERIFY.DEPENDENCY_CHECKS:
+            for value in (None, False, 1, "true"):
+                changed = copy.deepcopy(self.evidence)
+                if value is None:
+                    del changed["checks"][check]
+                else:
+                    changed["checks"][check] = value
+                with self.subTest(check=check, value=value), self.assertRaises(ValueError):
+                    self.verify(changed)
+
+
+
 if __name__ == "__main__":
     unittest.main()

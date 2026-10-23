@@ -2,8 +2,10 @@
 
 NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
 pubblicazione. La versione 0.5.0a1 è una Preview non pubblicata. La pipeline
-produce installatori Windows WSL e Ubuntu per revisione; la pubblicazione 0.5 è
-bloccata finché il contratto di distribuzione Windows/Linux non è completo.
+produce installatori Windows WSL e Ubuntu per revisione. La pubblicazione
+richiede una coppia di pacchetti verificata e un record di accettazione
+revisionato, riferito agli stessi file. Tale accettazione non è ancora
+registrata per la 0.5.0a1.
 
 ## Workflow GitHub Actions
 
@@ -11,12 +13,16 @@ bloccata finché il contratto di distribuzione Windows/Linux non è completo.
 | --- | --- | --- |
 | [CI](../.github/workflows/ci.yml) | Pull request, push su `main`, avvio manuale. | Test Linux/Windows, verifiche scientifiche quando richieste e controllo aggregato `required`. |
 | [Installers (review build)](../.github/workflows/windows-installer.yml) | Pull request sui percorsi di packaging/runtime indicati nel file, oppure avvio manuale. | Installatore WSL e pacchetto Ubuntu con lo stesso archivio scientifico, prove ed evidenze di costruzione. |
-| [Publish verified Windows pre-release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica e pubblicazione degli artefatti ammessi; rifiuta le versioni 0.5 finché il loro contratto di distribuzione è incompleto. |
+| [Publish verified pre-release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica la coppia Windows/Ubuntu e l’accettazione dei file esatti, quindi pubblica una pre-release senza ricostruire gli asset. |
 
 Una build di pull request serve alla revisione ed è rifiutata dal publisher.
-Una build destinata alla pubblicazione deve essere avviata manualmente sul
-commit già integrato in `main`. La pubblicazione riusa gli artefatti verificati
-senza ricostruirli; non modifica release già pubblicate.
+Per la 0.5, una build destinata alla pubblicazione deve essere avviata
+manualmente su un commit revisionato di questo repository; può provenire
+dal branch di sviluppo prima dell’integrazione. I pacchetti vengono provati
+e accettati su quel commit. Prima della pubblicazione, sorgenti e record di
+accettazione devono essere integrati in `main`, conservando il commit
+compilato nella sua storia. Il publisher opera da `main` e riusa gli stessi
+artefatti verificati senza ricostruirli; non modifica release già pubblicate.
 
 ## Controlli sui sorgenti
 
@@ -83,9 +89,20 @@ reinstallazione dello stesso pacchetto e rimozione con conservazione dei
 dati, dello stato e delle risorse Docker estranee. La reinstallazione
 non equivale a una prova di aggiornamento fra versioni differenti.
 
+Una prova separata usa un container Ubuntu 24.04 identificato da digest,
+inizialmente privo delle dipendenze. Installa il `.deb` tramite APT e
+verifica l’installazione di Python 3.12, `docker.io` e `docker-compose-v2`,
+l’avvio di `--help` e `--version` da un account non root e l’assenza di
+modifiche ai repository e di autorizzazioni Docker automatiche per l’utente.
+Conserva versioni ed esiti in `linux-dependency-check.json`. Non avvia
+un daemon nel container e non prova l’interfaccia Ubuntu Desktop.
+
 Il job conclusivo `installer-required` richiede il successo dei pacchetti
 Windows e Ubuntu e confronta commit, manifest e archivio scientifico nelle
-evidenze dei due installatori. Conserva l’esito in `installer-set-check.json`.
+evidenze dei due installatori. Richiede anche le prove Linux del ciclo
+di installazione e delle dipendenze. Conserva l’esito in
+`installer-set-check.json`, con `publication_authorized: false`: la verifica
+automatica non costituisce accettazione sui sistemi destinatari.
 
 | Artefatto Actions | Contenuto |
 | --- | --- |
@@ -94,7 +111,7 @@ evidenze dei due installatori. Conserva l’esito in `installer-set-check.json`.
 | `nipat-installer-inputs` | Applicazione preparata e manifest destinati al compilatore. |
 | `nipat-scientific-check-logs` | Registri e metadati delle regressioni conservati dalla build. |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`, manifest, checksum ed evidenze dell'installatore e del launcher. |
-| `nipat-linux-setup` | Pacchetto `.deb`, manifest comune, checksum, evidenze di costruzione e di installazione. |
+| `nipat-linux-setup` | Pacchetto `.deb`, manifest comune, checksum, evidenze di costruzione, installazione e risoluzione delle dipendenze. |
 | `nipat-installer-set-evidence` | `installer-set-check.json`, esito della verifica congiunta Windows/Ubuntu. |
 
 Gli artefatti Actions hanno una durata limitata indicata nel workflow.
@@ -129,16 +146,27 @@ superato tutti i controlli di correttezza.
 ## Evidenze richieste per una distribuzione
 
 Il successo della CI non dimostra l’installazione completa sui sistemi
-destinatari. Le prove PowerShell
-simulano i confini Windows/WSL; il test del motore interno usa Linux.
-Prima di autorizzare una distribuzione occorrono prove del pacchetto effettivo
-su Windows, inclusi prima installazione, riavvio, aggiornamento, ripresa dopo
-errore e conservazione dei risultati. Le prove automatiche del `.deb` usano
-un runner Ubuntu con Docker già pronto: occorre verificare separatamente
-installazione e avvio su Ubuntu Desktop pulito, comprese dipendenze,
-autorizzazioni e collegamento nel menu applicazioni.
+destinatari. Le prove PowerShell simulano i confini Windows/WSL; il test
+del motore interno usa Linux. La risoluzione APT in un container Ubuntu
+non verifica riavvio, autorizzazione dell’account o apertura del collegamento
+in un desktop reale.
+
+Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede prove
+degli installatori effettivi su Windows e Ubuntu Desktop: prima installazione,
+riavvio e analisi, coesistenza della Preview con NIPAT stabile su Windows,
+Docker già presente su Ubuntu, reinstallazione dello stesso pacchetto e
+rimozione con conservazione dei dati. Gli aggiornamenti fra versioni
+differenti richiedono prove aggiuntive.
+
+Il record di accettazione è sottoposto a revisione su `main` e identifica
+build, commit, manifest, archivio scientifico e checksum dei due installatori.
+Il publisher richiede tutte le prove completate e verifica nuovamente gli
+artefatti prima di creare o modificare una bozza. Un record assente, ancora
+`pending` o incoerente interrompe la pubblicazione. Gli artefatti accettati
+non vengono ricostruiti; una nuova build con file differenti richiede una
+nuova accettazione associata ai nuovi checksum.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
-regressione. Esiti, versioni e limiti devono essere registrati nella
+regressione. Esiti, versioni e limiti sono registrati nella
 [scheda di validazione](VALIDAZIONE.md). La procedura tecnica di pubblicazione
 è descritta in [Pubblicazione](../.github/RELEASE.md).

@@ -4,12 +4,12 @@ NIPAT distribuisce artefatti costruiti e verificati da GitHub Actions. La
 pubblicazione non ricompila applicazione o runtime e non richiede al manutentore
 di trasferire manualmente gli archivi dal proprio computer.
 
-**La pubblicazione 0.5 è bloccata.** Il contratto di questa versione richiede
-installatori Windows e Linux coerenti con lo stesso commit e archivio scientifico.
-Il workflow produce entrambi i pacchetti per revisione. Il publisher mantiene
-il blocco della 0.5: la procedura di pubblicazione e le prove di accettazione
-dei sistemi destinatari devono essere completate prima della distribuzione.
-Il blocco precede qualsiasi creazione o modifica di una release.
+La versione 0.5 richiede installatori Windows e Ubuntu dello stesso commit
+e con lo stesso archivio scientifico. La procedura verifica entrambi i
+pacchetti e richiede un’accettazione revisionata dei file esatti. La 0.5.0a1
+non è ancora pubblicata e non ha un record di accettazione completato.
+Un record assente o incompleto interrompe la pubblicazione prima della
+creazione o modifica di una release.
 
 Questo documento descrive le evidenze di build e le protezioni della procedura.
 La riuscita dei controlli automatici non autorizza da sola una distribuzione:
@@ -41,7 +41,7 @@ Gli artefatti da conservare per la verifica dei pacchetti sono:
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json` e launcher verificato. |
 | `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e relativi checksum. |
-| `nipat-linux-setup` | `.deb`, manifest comune, checksum, `linux-installer-build.json` e `linux-installation-check.json`. |
+| `nipat-linux-setup` | `.deb`, manifest comune, checksum, `linux-installer-build.json`, `linux-installation-check.json` e `linux-dependency-check.json`. |
 | `nipat-scientific-check-logs` | Metadati e registri delle regressioni conservati dalla build. |
 | `nipat-installer-set-evidence` | `installer-set-check.json`, verifica congiunta di sorgenti e archivio scientifico Windows/Ubuntu. |
 
@@ -67,9 +67,10 @@ Setup generati; le voci degli archivi specificano l'hash che il compilatore
 controlla durante l'inclusione. L'installatore deve essere inferiore a 2 GiB
 e non richiedere archivi `.bin` separati.
 
-La funzione `prepare_assets` del publisher verifica anche i pacchetti Windows
-0.5 durante la build, indipendentemente dal blocco di pubblicazione. Rifiuta
-evidenze mancanti, file provenienti da build diverse, un profilo incoerente e
+La funzione `prepare_assets` del publisher verifica i pacchetti Windows
+anche durante la build, indipendentemente dall’accettazione richiesta per
+pubblicarli. Rifiuta evidenze mancanti, file provenienti da build diverse,
+un profilo incoerente e
 artefatti Docker Desktop. Questi controlli legano l'EXE alla build e ai suoi
 input; non costituiscono una verifica ottenuta installando o estraendo
 indipendentemente l'eseguibile finale.
@@ -94,42 +95,92 @@ e Contamination e un caso DNPcall sintetico, proprietà dei risultati e
 conservazione dei dati dopo reinstallazione dello stesso pacchetto e
 rimozione. Non attestano un aggiornamento fra versioni differenti.
 
+Una prova distinta installa il `.deb` in un container Ubuntu 24.04
+inizialmente privo delle dipendenze. `linux-dependency-check.json` identifica
+il pacchetto e registra l’installazione APT di Python, Docker Engine e
+Compose v2 dai repository configurati. Controlla inoltre i comandi
+informativi da un utente non root, senza avviare un daemon o concedere
+automaticamente accesso Docker. Non è una prova su Ubuntu Desktop.
+
 Il controllo `installer-required` confronta commit, manifest comune e
-checksum scientifico dei due pacchetti e conserva `installer-set-check.json`.
+checksum scientifico dei due pacchetti, verifica entrambe le evidenze
+Linux e conserva `installer-set-check.json`.
 Questa corrispondenza lega gli installatori alla stessa esportazione.
-Le evidenze di build non
-sostituiscono le prove su Windows e Ubuntu Desktop puliti. I dettagli
+Le evidenze di build non sostituiscono le prove su Windows e Ubuntu Desktop puliti. I dettagli
 operativi del pacchetto sono nell’[installatore Linux](../docs/INSTALLATORE_LINUX.md).
+
+## Accettazione dei pacchetti
+
+Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
+le prove sui sistemi destinatari. Una scheda generata con
+`release_acceptance.py` parte da `pending` e non costituisce un’autorizzazione.
+I risultati devono essere osservati sugli stessi EXE e `.deb` della build
+che si intende pubblicare.
+
+Il record viene sottoposto a revisione in
+`.github/release-acceptance/v0.5.0a1.json` e integrato in `main` prima della
+pubblicazione, insieme al sorgente accettato. Può essere preparato e
+revisionato sul branch di sviluppo dopo le prove. È separato dai file
+incorporati negli installatori e dal commit della build provata. Collega versione,
+commit, ID della build, manifest comune, archivio scientifico e checksum
+di entrambi gli installatori alle prove completate, con responsabile,
+data UTC e collegamenti alle evidenze. Il successo della build non
+compila o approva automaticamente questo record.
+
+Il publisher legge l’accettazione dal commit della procedura su `main`.
+Un record mancante o non accettato interrompe l’operazione; dopo il download,
+i checksum devono coincidere con quelli dei pacchetti effettivi. Se gli
+artefatti scadono o vengono ricostruiti, non riutilizzare l’accettazione
+per file con digest differenti. La data di scadenza è quella indicata
+dalla conservazione degli artefatti Actions.
 
 ## Protezioni della pubblicazione
 
-Il workflow **Publish verified Windows pre-release** è esclusivamente manuale
-e opera su `main`. Richiede l'ID della build e il suo commit completo. Per il pacchetto da
-distribuire, avviare manualmente la build dell'installatore su `main`.
-Il publisher verifica l'esito riuscito, la corrispondenza del commit e la sua
-appartenenza alla storia di `main`; le build di pull request vengono rifiutate.
-Il successo del solo workflow CI non sostituisce una build dell'installatore.
+Il workflow **Publish verified pre-release** è esclusivamente manuale e
+opera su `main`. Richiede l’ID della build e il suo commit completo. Per la
+0.5, avviare manualmente **Installers (review build)** su un commit
+revisionato di questo repository: può essere il branch di sviluppo, così
+che le prove e l’accettazione precedano l’integrazione in `main`.
 
-Per le versioni ammesse dal publisher, la procedura:
+Dopo l’approvazione, integrare sorgenti e record di accettazione conservando
+il commit compilato nella storia di `main`. Il publisher verifica esito
+della build, corrispondenza del commit e sua appartenenza alla storia di
+`main` al momento della pubblicazione. Riutilizza gli artefatti accettati
+della build manuale, senza ricostruirli dopo l’integrazione. Le build di
+pull request vengono rifiutate. Il successo del solo workflow CI non
+sostituisce una build completa degli installatori.
 
-1. verifica commit, versione, build e contratto dei pacchetti;
-2. prepara gli asset verificati e un elenco combinato dei checksum;
-3. usa le note `docs/RELEASE_<versione>.md` del commit compilato;
-4. crea una bozza sul commit verificato e carica gli asset;
-5. verifica dimensioni e digest restituiti da GitHub;
-6. pubblica soltanto come **Pre-release**, senza indicare **Latest**.
+La procedura:
 
-Un errore lascia la bozza non pubblicata. Una bozza parziale può essere ripresa
-con `draft_release_id` soltanto se commit, note e contenuti coincidono con
-quelli verificati. Release già pubblicate e tag associati ad altri commit
-non vengono modificati. Non ricostruire un runtime per sostituire l'archivio
-già verificato o pubblicato.
+1. verifica commit, versione, build e accettazione richiesta;
+2. scarica gli artefatti di quella build e ripete la verifica della coppia
+   Windows/Ubuntu sui file effettivi;
+3. confronta pacchetti, manifest e archivio scientifico con il record di
+   accettazione e prepara un elenco combinato dei checksum;
+4. usa le note `docs/RELEASE_<versione>.md` del commit compilato;
+5. crea una bozza sul commit verificato e carica gli asset;
+6. verifica dimensioni e digest restituiti da GitHub;
+7. pubblica soltanto come **Pre-release**, senza indicare **Latest**.
 
-La rimozione del blocco 0.5 richiede una procedura di pubblicazione che
-verifichi entrambi gli installatori, le relative prove e il manifest della
-medesima build, oltre all’accettazione dei pacchetti sui sistemi dichiarati.
-Non è sufficiente modificare la stringa di versione o disattivare il
-controllo del publisher.
-Per l'organizzazione dei workflow e i confini dei test consultare
-[CI/CD](../docs/CI_CD.md); per il pacchetto Windows consultare
-[Installatore Windows](../docs/INSTALLATORE_WINDOWS.md).
+La verifica comprende il contenuto del `.deb`, l’evidenza di compilazione
+dell’EXE, gli archivi incorporati e le prove Linux. Non ricompila
+applicazione o immagine. La release conserva i due installatori, il manifest
+comune, gli archivi runtime, le evidenze di costruzione e prova,
+`desktop-acceptance.json`, `release-provenance.json` e `SHA256SUMS`.
+Per l’installazione ordinaria l’utente scarica soltanto l’EXE o il `.deb`
+della propria piattaforma; gli altri file servono alla verifica e al recupero.
+
+L’esito automatico del set, con
+`publication_authorized: false`, resta distinto dall’accettazione umana;
+il publisher richiede entrambi.
+
+Un errore lascia la bozza non pubblicata. Una bozza parziale può essere
+ripresa con `draft_release_id` soltanto se commit, note e contenuti
+coincidono con quelli verificati. Release già pubblicate e tag associati
+ad altri commit non vengono modificati. Non ricostruire un runtime per
+sostituire un archivio già verificato o pubblicato.
+
+Per l’organizzazione dei workflow e i confini dei test consultare
+[CI/CD](../docs/CI_CD.md); per i pacchetti consultare
+[Installatore Windows](../docs/INSTALLATORE_WINDOWS.md) e
+[Installatore Linux](../docs/INSTALLATORE_LINUX.md).

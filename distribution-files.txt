@@ -5,8 +5,10 @@
 .github/RELEASE.md
 .github/scripts/ci_changes.py
 .github/scripts/publish_windows_release.py
+.github/scripts/release_acceptance.py
 .github/scripts/test_ci_changes.py
 .github/scripts/test_publish_windows_release.py
+.github/scripts/test_release_acceptance.py
 .github/scripts/test_verify_installer_set.py
 .github/scripts/verify_installer_set.py
 .github/workflows/ci.yml
@@ -25,6 +27,7 @@ distribution-files.txt
 docker/scientific-runtime/Dockerfile
 docker/scientific-runtime/r-packages.tsv
 docker/scientific-runtime/verify-packages.R
+docs/ACCETTAZIONE_INSTALLATORI.md
 docs/ARCHITECTURE.md
 docs/CI_CD.md
 docs/DISTRIBUZIONE.md
@@ -32,6 +35,7 @@ docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
 docs/INSTALLATORE_LINUX.md
 docs/INSTALLATORE_WINDOWS.md
+docs/RELEASE_0.5.0a1.md
 docs/VALIDAZIONE.md
 engine/README.md
 engine/main.py
@@ -92,6 +96,7 @@ scripts/verify_cpi_update.py
 scripts/verify_dnp_engine.py
 scripts/verify_engine_package.py
 scripts/verify_input_modes.py
+scripts/verify_linux_dependencies.py
 scripts/verify_linux_installer.py
 scripts/verify_snp_example.py
 scripts/windows/common.ps1
@@ -166,6 +171,7 @@ tests/test_engine_package.py
 tests/test_input_modes.py
 tests/test_input_mounts.py
 tests/test_installer_assets.py
+tests/test_linux_dependencies.py
 tests/test_linux_installation_check.py
 tests/test_linux_installer.py
 tests/test_linux_launcher.py

@@ -86,8 +86,12 @@ stessi byte di questo archivio, identificati da dimensione e SHA-256 nel
 manifest comune. Ubuntu non include né richiede il filesystem WSL.
 
 Il pacchetto dichiara Python 3.12, Docker Engine e Compose v2 come dipendenze.
-APT risolve i pacchetti mancanti dai repository configurati; non è necessario
-installare R o samtools sul sistema. Docker Engine deve essere avviato e
+L’installazione con `sudo apt install ./<file.deb>` scarica e installa
+automaticamente i pacchetti mancanti dai repository configurati, inclusi
+Docker e Compose. Richiede autorizzazione amministrativa e una connessione
+per i download. Un Docker compatibile già installato soddisfa le dipendenze;
+NIPAT non aggiunge repository o sostituisce configurazioni del daemon.
+Non è necessario installare R o samtools sul sistema. Docker Engine deve essere avviato e
 accessibile al proprio account tramite il socket locale. Sono supportati
 il daemon di sistema e i container senza rimappatura degli UID; Docker
 rootless, `userns-remap` e daemon remoti non fanno parte di questo contratto.
@@ -153,9 +157,11 @@ per i manutentori; [CI_CD.md](CI_CD.md) descrive la copertura automatica.
 
 La verifica di un pacchetto comprende installazione, avvio, diagnostica,
 autotest e analisi con dati appropriati sul sistema dichiarato. L'esito della
-CI non sostituisce una prova dell'installer sul computer destinatario né la
-validazione di dominio. La [scheda dedicata](VALIDAZIONE.md) consente di
-registrare separatamente questi risultati.
+CI non sostituisce una prova dell’installer sul computer destinatario né la
+validazione di dominio. Il [protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md)
+definisce le prove richieste per autorizzare la pubblicazione della coppia
+Windows/Ubuntu. La [scheda di validazione](VALIDAZIONE.md) consente di
+registrare separatamente i risultati scientifici.
 
 Il codice originale NIPAT è distribuito con licenza
 [GPL-3.0-or-later](../LICENSE). Le attribuzioni e le licenze delle dipendenze

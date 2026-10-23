@@ -3,7 +3,10 @@
 Questa scheda accompagna **NIPAT 0.5.0a1**, versione non pubblicata.
 Consente di registrare separatamente installazione, esecuzione e concordanza
 scientifica. Un autotest superato verifica i casi inclusi; non attesta la
-validità per ogni campione o scenario d'impiego.
+validità per ogni campione o scenario d’impiego. Per l’autorizzazione alla
+pubblicazione degli installatori, applicare anche il
+[protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md): questa scheda
+non sostituisce il record associato ai pacchetti esatti.
 
 ## Ambiente e preparazione
 
@@ -41,9 +44,11 @@ cartella `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview`. Registrare
 se Docker era già installato e autorizzato: una prova su un sistema
 preparato non copre l’esperienza iniziale su Ubuntu Desktop pulito.
 
-Per entrambi i pacchetti, verificare aggiornamento nello stesso canale,
+Per entrambi i pacchetti, verificare reinstallazione della stessa build,
 ripresa dopo un errore, nuova apertura e rimozione con conservazione dei
-dati. Su Ubuntu controllare anche che installazione e rimozione non
+dati. Documentare separatamente un aggiornamento tra versioni differenti
+quando esiste un pacchetto precedente dello stesso canale: una
+reinstallazione non costituisce una prova di aggiornamento. Su Ubuntu controllare anche che installazione e rimozione non
 modifichino configurazioni o immagini Docker estranee a NIPAT.
 
 I controlli automatici del repository sono descritti in

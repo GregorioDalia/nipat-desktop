@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -10,10 +11,12 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import tarfile
 import tomllib
 from urllib.parse import urljoin
 import zipfile
 
+PROJECT = Path(__file__).resolve().parents[2]
 REPO = "GregorioDalia/nipat-desktop"
 MANIFEST = "installer-manifest.json"
 MAX_ASSET_BYTES = 2 * 1024**3
@@ -83,7 +86,7 @@ def validate_run(run, commit, run_id):
 def checksums(path):
     result = {}
     for line in path.read_text(encoding="utf-8-sig").splitlines():
-        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9._-]*)", line)
+        match = re.fullmatch(r"([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9._~-]*)", line)
         require(match is not None, f"Invalid checksum line in {path.name}")
         digest, name = match.groups()
         require(name not in result, "Duplicate checksum entry")
@@ -125,11 +128,68 @@ def verify_installation_profile(manifest, commit, read_source):
             "Installation profile differs from the built commit")
 
 
-def require_publication_supported(version):
-    # The 0.5 release requires matching Windows and Linux installers. This
-    # Windows-only publisher cannot authorize an incomplete release.
-    require(not requires_installation_profile(version),
-            "0.5 preview publication is disabled: Windows/Linux distribution is not ready")
+def load_module(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def require_publication_supported(version, acceptance=None, commit=None, run_id=None):
+    if requires_installation_profile(version):
+        require(acceptance is not None, "0.5 publication requires committed desktop acceptance")
+        validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
+        validator.validate(acceptance, version, commit, run_id)
+
+
+def extract_build_source(commit, destination):
+    """Read source from the reviewed Git commit, never from downloaded artifacts."""
+    destination.mkdir()
+    with tempfile.TemporaryFile() as stream:
+        subprocess.run(["git", "archive", "--format=tar", commit], stdout=stream, check=True)
+        stream.seek(0)
+        with tarfile.open(fileobj=stream, mode="r:") as archive:
+            archive.extractall(destination, filter="data")
+
+
+def prepare_installer_set(setup, runtime, linux, evidence, output, commit, acceptance,
+                          acceptance_bytes, run_id, publication_commit, source_project):
+    """Re-verify both packages before staging an accepted, immutable pair."""
+    validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
+    reviewer = load_module("nipat_release_pair", PROJECT / ".github/scripts/verify_installer_set.py")
+    with tempfile.TemporaryDirectory(prefix="nipat-pair-") as temporary:
+        actual = reviewer.verify_set(setup, linux, runtime, Path(temporary) / "evidence", commit,
+                                     project=source_project)
+    recorded_path = evidence / "installer-set-check.json"
+    require(recorded_path.is_file() and not recorded_path.is_symlink(), "Missing installer-set build evidence")
+    require(json.loads(recorded_path.read_text(encoding="utf-8")) == actual,
+            "Installer-set build evidence differs from the verified packages")
+    validator.validate(acceptance, actual["version"], commit, run_id, installer_set=actual)
+    require(json.loads(acceptance_bytes) == acceptance, "Acceptance bytes differ from the validated record")
+    manifest = prepare_assets(setup, runtime, output, commit)
+    additions = {
+        actual["linux"]["file"]: linux / actual["linux"]["file"],
+        "installer-build.json": setup / "installer-build.json",
+        "linux-installer-build.json": linux / "linux-installer-build.json",
+        "linux-installation-check.json": linux / "linux-installation-check.json",
+        "linux-dependency-check.json": linux / "linux-dependency-check.json",
+        "installer-set-check.json": recorded_path,
+    }
+    for name, path in additions.items():
+        require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
+                f"Missing or invalid joint release asset: {name}")
+        shutil.copyfile(path, output / name)
+    (output / "desktop-acceptance.json").write_bytes(acceptance_bytes)
+    provenance = {
+        "schema_version": 1, "source_commit": commit, "build_run_id": run_id,
+        "publication_commit": publication_commit,
+        "acceptance_path": validator.acceptance_path(actual["version"]),
+        "acceptance_sha256": hashlib.sha256(acceptance_bytes).hexdigest(),
+    }
+    (output / "release-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+    digests = {path.name: sha256(path) for path in output.iterdir() if path.name != "SHA256SUMS"}
+    (output / "SHA256SUMS").write_text("".join(f"{h}  {n}\n" for n, h in sorted(digests.items())), encoding="ascii")
+    return manifest
 
 
 def verify_installer_build(setup, manifest, manifest_bytes, commit):
@@ -367,7 +427,8 @@ def create_draft(tag, version, commit, notes, payload_path):
     payload_path.write_text(json.dumps({
         "tag_name": tag, "target_commitish": commit,
         "name": f"NIPAT CLI {version} — Windows con " +
-                ("WSL2 e Docker Desktop" if requires_desktop_bundle(version) else "WSL2"), "body": notes,
+                ("WSL2 e Docker Desktop" if requires_desktop_bundle(version) else
+                 "WSL2 e Ubuntu" if requires_installation_profile(version) else "WSL2"), "body": notes,
         "draft": True, "prerelease": True, "make_latest": "false",
     }), encoding="utf-8")
     # The list endpoint may lag behind a successful creation. Retain the exact
@@ -385,14 +446,28 @@ def main():
     require(re.fullmatch(r"[1-9][0-9]*", args.run_id), "Invalid run ID")
     require(re.fullmatch(r"[0-9a-f]{40}", args.source_commit), "Full source SHA is required")
     require(not args.draft_release_id or re.fullmatch(r"[1-9][0-9]*", args.draft_release_id), "Invalid draft ID")
+    require(os.environ.get("GITHUB_REPOSITORY") == REPO
+            and os.environ.get("GITHUB_REF") == "refs/heads/main"
+            and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch",
+            "Publication must run through the manual workflow on this repository's main branch")
     commit = args.source_commit
+    publication_commit = command("git", "rev-parse", "HEAD")
+    require(re.fullmatch(r"[0-9a-f]{40}", publication_commit), "Invalid publication procedure commit")
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], check=True)
     version = committed_version(commit)
-    require_publication_supported(version)
+    acceptance = acceptance_bytes = None
+    if requires_installation_profile(version):
+        validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
+        acceptance, acceptance_bytes = validator.load(version, commit, int(args.run_id), publication_commit, source_bytes)
+    require_publication_supported(version, acceptance, commit, int(args.run_id))
     run = api(f"actions/runs/{args.run_id}")
     validate_run(run, commit, int(args.run_id))
+    if requires_installation_profile(version):
+        require(run.get("event") == "workflow_dispatch", "Joint publication requires a manually dispatched installer build")
     jobs = api(f"actions/runs/{args.run_id}/jobs?per_page=100")["jobs"]
-    for name in ("linux-runtime", "windows-installer"):
+    required_jobs = ("windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required") \
+        if requires_installation_profile(version) else ("linux-runtime", "windows-installer")
+    for name in required_jobs:
         matches = [job for job in jobs if job["name"] == name]
         require(len(matches) == 1 and matches[0]["conclusion"] == "success", f"Missing successful job: {name}")
     with tempfile.TemporaryDirectory(prefix="nipat-release-") as temporary:
@@ -407,8 +482,18 @@ def main():
             command("gh", "run", "download", args.run_id, "--repo", REPO,
                     "--name", "nipat-docker-desktop", "--dir", str(desktop))
         output = root / "release"
-        manifest = prepare_assets(root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
-                                  output, commit, desktop=desktop)
+        if requires_installation_profile(version):
+            command("gh", "run", "download", args.run_id, "--repo", REPO,
+                    "--name", "nipat-linux-setup", "--name", "nipat-installer-set-evidence", "--dir", str(root / "artifacts"))
+            source_project = root / "build-source"
+            extract_build_source(commit, source_project)
+            manifest = prepare_installer_set(
+                root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
+                root / "artifacts/nipat-linux-setup", root / "artifacts/nipat-installer-set-evidence",
+                output, commit, acceptance, acceptance_bytes, int(args.run_id), publication_commit, source_project)
+        else:
+            manifest = prepare_assets(root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
+                                      output, commit, desktop=desktop)
         tag = manifest["release_tag"]
         notes = source_bytes(commit, f"docs/RELEASE_{manifest['version']}.md").decode("utf-8").strip()
         notes = re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
@@ -429,6 +514,12 @@ def main():
             else:
                 notes += "Lo ZIP Docker Desktop e' una distribuzione alternativa per chi dispone gia' di Docker Desktop. "
             notes += "Gli archivi runtime separati sono conservati come asset di recupero e verifica.\n"
+        if requires_installation_profile(manifest["version"]):
+            notes += ("\nPer Windows scaricare **NIPAT-Setup.exe**; per Ubuntu 24.04 x86_64 scaricare "
+                      "il pacchetto **nipat-05-preview_*.deb** e installarlo tramite APT. "
+                      "Entrambi contengono lo stesso archivio scientifico verificato. "
+                      "I risultati dell'accettazione dei pacchetti sono in `desktop-acceptance.json`; "
+                      "non costituiscono una validazione clinica o di dominio.\n")
         notes = notes.strip()
         files = {path.name: path for path in output.iterdir()}
         check_tag(tag, commit)

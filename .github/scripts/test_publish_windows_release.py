@@ -2,10 +2,13 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location("publisher", Path(__file__).with_name("publish_windows_release.py"))
@@ -171,6 +174,176 @@ class ReleaseGuards(unittest.TestCase):
             "staged_files_sha256": staged_hashes,
         }
         (self.desktop / "docker-installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    def joint_fixture(self):
+        self.make_preview_package()
+        linux = self.root / "linux"
+        evidence = self.root / "pair"
+        linux.mkdir()
+        evidence.mkdir()
+        package = linux / "nipat-05-preview_0.5.0~a1_amd64.deb"
+        package.write_bytes(b"deb fixture; actual package validation is covered by builder tests")
+        for name in ("linux-installer-build.json", "linux-installation-check.json", "linux-dependency-check.json"):
+            (linux / name).write_text("{}")
+        actual = {
+            "schema_version": 1, "version": "0.5.0a1", "source_commit": COMMIT,
+            "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
+            "scientific_archive": self.manifest["assets"]["scientific_image"],
+            "windows": {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(self.setup / "NIPAT-Setup.exe")},
+            "linux": {"file": package.name, "sha256": publisher.sha256(package)},
+            "publication_authorized": False,
+        }
+        (evidence / "installer-set-check.json").write_text(json.dumps(actual))
+        validator = publisher.load_module("acceptance_fixture", Path(__file__).with_name("release_acceptance.py"))
+        record = validator.template(actual, 123)
+        record["decision"] = "accepted"
+        for test in record["tests"].values():
+            test.update(result="passed", tester="Test operator", tested_at="2026-01-01T12:00:00Z",
+                        evidence=["https://github.com/example/repository/issues/1"])
+        return linux, evidence, actual, validator, record
+
+    def prepare_joint(self, linux, evidence, actual, validator, record):
+        calls = []
+        def verify_set(*args, **kwargs):
+            calls.append((args, kwargs))
+            return actual
+        original = publisher.prepare_assets
+        def prepare(*args, **kwargs):
+            return original(*args, **kwargs, read_source=lambda commit, name: self.sources[name])
+        with patch.object(publisher, "load_module", side_effect=lambda name, path:
+                          validator if path.name == "release_acceptance.py" else SimpleNamespace(verify_set=verify_set)), \
+                patch.object(publisher, "prepare_assets", side_effect=prepare):
+            result = publisher.prepare_installer_set(
+                self.setup, self.runtime, linux, evidence, self.root / "release", COMMIT,
+                record, json.dumps(record).encode(), 123, "b" * 40, self.root / "exact-built-source")
+        return result, calls
+
+    def test_joint_assets_require_fresh_verification_and_publish_both_packages_and_evidence(self):
+        parts = self.joint_fixture()
+        result, calls = self.prepare_joint(*parts)
+        self.assertEqual(result["version"], "0.5.0a1")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], {"project": self.root / "exact-built-source"})
+        digests = publisher.checksums(self.root / "release/SHA256SUMS")
+        self.assertIn("NIPAT-Setup.exe", digests)
+        self.assertIn(parts[2]["linux"]["file"], digests)
+        for name in ("installer-set-check.json", "desktop-acceptance.json", "linux-dependency-check.json",
+                     "linux-installation-check.json", "release-provenance.json"):
+            self.assertIn(name, digests)
+            self.assertEqual(publisher.sha256(self.root / "release" / name), digests[name])
+        provenance = json.loads((self.root / "release/release-provenance.json").read_text())
+        self.assertEqual(provenance["source_commit"], COMMIT)
+        self.assertEqual(provenance["publication_commit"], "b" * 40)
+        self.assertFalse(any("DockerDesktop" in name for name in digests))
+
+    def test_joint_assets_reject_changed_pair_record_before_staging(self):
+        parts = self.joint_fixture()
+        (parts[1] / "installer-set-check.json").write_text("{}")
+        with self.assertRaisesRegex(ValueError, "differs from the verified packages"):
+            self.prepare_joint(*parts)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_joint_assets_reject_other_accepted_installer_before_staging(self):
+        parts = self.joint_fixture()
+        parts[-1]["linux_installer_sha256"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "hashes do not identify"):
+            self.prepare_joint(*parts)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_joint_publication_requires_success_of_both_installers_and_pair_check(self):
+        parts = self.joint_fixture()
+        run = {"id": 123, "head_sha": COMMIT, "head_branch": "main", "status": "completed",
+               "conclusion": "success", "event": "workflow_dispatch",
+               "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
+               "head_repository": {"full_name": publisher.REPO}}
+        required = ("windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required")
+        for missing in ("linux-installer", "installer-required"):
+            jobs = {"jobs": [{"name": name, "conclusion": "success"} for name in required if name != missing]}
+            with self.subTest(missing=missing), \
+                    patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                    patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                            "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                    patch.object(publisher.subprocess, "run"), \
+                    patch.object(publisher, "committed_version", return_value="0.5.0a1"), \
+                    patch.object(publisher, "source_bytes", return_value=json.dumps(parts[-1]).encode()), \
+                    patch.object(publisher, "api", side_effect=[run, jobs]), \
+                    patch.object(publisher, "command", return_value="b" * 40) as command, \
+                    patch.object(publisher, "create_draft") as create:
+                with self.assertRaisesRegex(ValueError, f"Missing successful job: {missing}"):
+                    publisher.main()
+                command.assert_called_once_with("git", "rev-parse", "HEAD")
+                create.assert_not_called()
+
+    def test_invalid_pair_cannot_reach_tag_draft_or_upload_operations(self):
+        parts = self.joint_fixture()
+        run = {"id": 123, "head_sha": COMMIT, "head_branch": "feature/0.5-foundation", "status": "completed",
+               "conclusion": "success", "event": "workflow_dispatch",
+               "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
+               "head_repository": {"full_name": publisher.REPO}}
+        jobs = {"jobs": [{"name": name, "conclusion": "success"} for name in (
+            "windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required")]}
+        def command(*args):
+            if args == ("git", "rev-parse", "HEAD"):
+                return "b" * 40
+            self.assertEqual(args[:3], ("gh", "run", "download"))
+            folder = Path(args[-1]) / "nipat-runtime-assets"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / publisher.MANIFEST).write_text(json.dumps(self.manifest))
+            return ""
+        with patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                        "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                patch.object(publisher.subprocess, "run"), \
+                patch.object(publisher, "committed_version", return_value="0.5.0a1"), \
+                patch.object(publisher, "source_bytes", return_value=json.dumps(parts[-1]).encode()), \
+                patch.object(publisher, "api", side_effect=[run, jobs]) as api, \
+                patch.object(publisher, "command", side_effect=command), \
+                patch.object(publisher, "extract_build_source"), \
+                patch.object(publisher, "prepare_installer_set", side_effect=ValueError("corrupt pair")), \
+                patch.object(publisher, "create_draft") as create, \
+                patch.object(publisher, "check_tag") as tag:
+            with self.assertRaisesRegex(ValueError, "corrupt pair"):
+                publisher.main()
+        self.assertEqual(api.call_count, 2)  # Run/jobs reads only.
+        create.assert_not_called()
+        tag.assert_not_called()
+
+    def test_publication_requires_manual_main_workflow_before_any_api_or_command(self):
+        for settings in ({}, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/feature/test",
+                              "GITHUB_EVENT_NAME": "workflow_dispatch"},
+                         {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                          "GITHUB_EVENT_NAME": "push"}):
+            with self.subTest(settings=settings), patch.dict(os.environ, settings, clear=True), \
+                    patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                    patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
+                with self.assertRaisesRegex(ValueError, "manual workflow"):
+                    publisher.main()
+                command.assert_not_called()
+                api.assert_not_called()
+
+    def test_source_snapshot_uses_built_commit_when_publication_docs_changed(self):
+        repository = self.root / "git-source"
+        repository.mkdir()
+        def git(*args):
+            return subprocess.check_output(["git", *args], cwd=repository, text=True).strip()
+        git("init", "-q")
+        git("config", "user.email", "test@example.com")
+        git("config", "user.name", "Test")
+        (repository / "README.md").write_text("built documentation")
+        (repository / "distribution-files.txt").write_text("README.md\n")
+        git("add", ".")
+        git("commit", "-qm", "build")
+        built = git("rev-parse", "HEAD")
+        (repository / "README.md").write_text("later publication documentation")
+        git("add", ".")
+        git("commit", "-qm", "acceptance")
+        snapshot = self.root / "snapshot"
+        original = subprocess.run
+        with patch.object(publisher.subprocess, "run", side_effect=lambda *a, **kw:
+                          original(*a, **kw, cwd=repository)):
+            publisher.extract_build_source(built, snapshot)
+        self.assertEqual((snapshot / "README.md").read_text(), "built documentation")
+        self.assertEqual((repository / "README.md").read_text(), "later publication documentation")
 
     def test_combines_both_checksum_lists_without_losing_exe(self):
         self.prepare()
@@ -349,19 +522,22 @@ class ReleaseGuards(unittest.TestCase):
                     self.prepare()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_publication_stops_from_source_version_before_downloading_assets(self):
+    def test_preview_publication_stops_before_api_without_committed_acceptance(self):
         with patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                        "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
                 patch.object(publisher.subprocess, "run"), \
                 patch.object(publisher, "committed_version", return_value="0.5.0a1") as version, \
+                patch.object(publisher, "source_bytes", side_effect=subprocess.CalledProcessError(128, "git show")), \
                 patch.object(publisher, "api") as api, \
-                patch.object(publisher, "command") as command, \
+                patch.object(publisher, "command", return_value="b" * 40) as command, \
                 patch.object(publisher, "create_draft") as create, \
                 patch.object(publisher, "check_tag") as tag:
-            with self.assertRaisesRegex(ValueError, "preview publication is disabled"):
+            with self.assertRaisesRegex(ValueError, "Missing committed desktop acceptance"):
                 publisher.main()
         version.assert_called_once_with(COMMIT)
         api.assert_not_called()
-        command.assert_not_called()
+        command.assert_called_once_with("git", "rev-parse", "HEAD")
         create.assert_not_called()
         tag.assert_not_called()
         publisher.require_publication_supported("0.4.1")

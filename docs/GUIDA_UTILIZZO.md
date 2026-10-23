@@ -41,8 +41,10 @@ I dettagli dell'installazione e dei suoi limiti sono in
 ## Requisiti e avvio su Ubuntu
 
 Il pacchetto `.deb` richiede **Ubuntu 24.04 LTS x86_64**, Python 3.12,
-Docker Engine locale e Compose v2. Docker deve essere avviato e accessibile
-al proprio account, con daemon di sistema senza rimappatura degli UID.
+Docker Engine locale e Compose v2. L’installazione con APT scarica e installa
+queste dipendenze se mancano. Prima di avviare NIPAT, Docker deve essere
+avviato e accessibile al proprio account, con daemon di sistema senza
+rimappatura degli UID.
 L’installazione e l’autorizzazione a usare Docker sono descritte nella
 [guida dell’installatore Linux](INSTALLATORE_LINUX.md).
 

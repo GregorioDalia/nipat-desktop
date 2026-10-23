@@ -16,6 +16,11 @@ INSTALLATION_CHECKS = {
     "repeated_launch", "package_reinstallation",
     "package_removal_preserves_user_data", "shared_docker_unchanged",
 }
+DEPENDENCY_CHECKS = {
+    "dependencies_initially_absent", "apt_installs_required_packages",
+    "installed_cli_help_and_version", "no_automatic_docker_access",
+    "no_runtime_preparation", "apt_sources_unchanged", "embedded_manifest_matches",
+}
 
 
 def load_module(name, path):
@@ -60,11 +65,39 @@ def verify_installation_check(evidence, manifest, manifest_bytes, package_record
             "A required Linux installation check is missing or failed")
 
 
+def verify_dependency_check(evidence, manifest, manifest_bytes, package_record):
+    """Bind missing-dependency proof without claiming desktop acceptance."""
+    expected = {
+        "schema_version": 1, "distribution": "native-linux-deb",
+        "platform": "ubuntu-24.04-amd64", "scenario": "clean-ubuntu-container",
+        "source_commit": manifest["source_commit"],
+        "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "package_sha256": package_record["sha256"],
+        "runtime_archive_sha256": manifest["assets"]["scientific_image"]["sha256"],
+    }
+    require(all(type(evidence.get(key)) is type(value) and evidence.get(key) == value
+                for key, value in expected.items()), "Linux dependency evidence mismatch")
+    require(isinstance(evidence.get("base_image"), str) and re.fullmatch(
+        r"ubuntu:24\.04@sha256:[0-9a-f]{64}", evidence["base_image"]),
+        "The dependency check must use a pinned Ubuntu 24.04 image")
+    packages = evidence.get("dependency_packages")
+    require(isinstance(packages, dict)
+            and set(packages) == {"python3.12", "docker.io", "docker-compose-v2", "nipat-05-preview"}
+            and all(isinstance(version, str) and version.strip() for version in packages.values()),
+            "Missing dependency versions from the clean Ubuntu installation")
+    checks = evidence.get("checks")
+    require(isinstance(checks, dict) and set(checks) == DEPENDENCY_CHECKS
+            and all(value is True for value in checks.values()),
+            "A required Linux dependency check is missing or failed")
+
+
 def verify_set(windows, linux, assets, output, commit, project=PROJECT):
     require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "Invalid source commit")
     require(not output.exists(), "Evidence output directory must not already exist")
-    publisher = load_module("nipat_review_publisher", project / ".github/scripts/publish_windows_release.py")
-    builder = load_module("nipat_linux_builder", project / "scripts/build_linux_installer.py")
+    # Use the trusted verification implementation, while project may be a
+    # read-only snapshot of an earlier exact source commit being published.
+    publisher = load_module("nipat_review_publisher", PROJECT / ".github/scripts/publish_windows_release.py")
+    builder = load_module("nipat_linux_builder", PROJECT / "scripts/build_linux_installer.py")
     manifest_path = assets / "installer-manifest.json"
     manifest_bytes = manifest_path.read_bytes()
     require((linux / "installer-manifest.json").read_bytes() == manifest_bytes,
@@ -86,6 +119,8 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
             "Linux package checksum file mismatch")
     installation = read_json(linux / "linux-installation-check.json")
     verify_installation_check(installation, manifest, manifest_bytes, record)
+    dependencies = read_json(linux / "linux-dependency-check.json")
+    verify_dependency_check(dependencies, manifest, manifest_bytes, record)
     result = {
         "schema_version": 1, "version": manifest["version"], "source_commit": commit,
         "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
@@ -93,7 +128,8 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
             key: manifest["assets"]["scientific_image"][key] for key in ("file", "sha256", "size")
         },
         "windows": {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(windows / "NIPAT-Setup.exe")},
-        "linux": {"file": name, "sha256": record["sha256"], "installation_check": installation},
+        "linux": {"file": name, "sha256": record["sha256"], "installation_check": installation,
+                  "dependency_check": dependencies},
         "publication_authorized": False,
         "scope": "Build and prepared-runner checks; fresh desktop acceptance is separate.",
     }
@@ -112,7 +148,7 @@ def main():
     args = parser.parse_args()
     verify_set(args.windows_dir, args.linux_dir, args.assets_dir, args.output_dir, args.source_commit)
     print("PASS: Windows and Linux installers identify the same verified source and scientific archive.")
-    print("Review evidence only; NIPAT 0.5 publication remains disabled.")
+    print("Review evidence alone does not authorize publication; desktop acceptance is required.")
 
 
 if __name__ == "__main__":

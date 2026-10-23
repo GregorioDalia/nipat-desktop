@@ -47,9 +47,12 @@ nella [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
 [documentazione di distribuzione](docs/DISTRIBUZIONE.md).
 
 Il pacchetto Ubuntu incorpora l’applicazione e lo stesso archivio scientifico
-del pacchetto Windows. Si installa con APT; il collegamento **NIPAT 0.5 Preview**
-o il comando `nipat-05-preview` apre il menu. Docker Engine deve essere
-utilizzabile dal proprio account. Requisiti, preparazione iniziale e rimozione
+del pacchetto Windows. APT installa anche Python, Docker Engine e Compose v2
+se mancano, scaricandoli dai repository configurati. Servono Internet e
+autorizzazione amministrativa per queste dipendenze; l’accesso dell’utente
+a Docker richiede una configurazione amministrativa distinta. Il collegamento
+**NIPAT 0.5 Preview** o il comando `nipat-05-preview` apre il menu.
+Requisiti, preparazione iniziale e rimozione
 sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 
 ## Utilizzo
@@ -149,6 +152,7 @@ indipendenti e problemi riproducibili.
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
 - [Architettura](docs/ARCHITECTURE.md)
 - [Controlli CI/CD](docs/CI_CD.md)
+- [Accettazione degli installatori](docs/ACCETTAZIONE_INSTALLATORI.md)
 - [Componenti scientifici](scientific/README.md)
 
 Il codice originale NIPAT è distribuito con licenza

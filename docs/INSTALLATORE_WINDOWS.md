@@ -167,8 +167,11 @@ Per una prova tecnica usare il solo `NIPAT-Setup.exe` estratto dall'artefatto
 Il launcher separato nello stesso artefatto è un'evidenza di compilazione,
 non un'installazione autonoma.
 
-Registrare prima installazione, riavvio del runtime, analisi di un caso noto,
-aggiornamento nello stesso canale, ripresa dopo errore e disinstallazione con
-conservazione dei dati. I test automatici dei confini Windows/WSL non
-sostituiscono queste prove del pacchetto reale. Usare la
-[scheda di validazione](VALIDAZIONE.md) per associare gli esiti alla build.
+Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede
+prima installazione, riavvio del runtime, analisi di un caso noto,
+coesistenza con l’installazione stabile, reinstallazione dello stesso
+pacchetto e disinstallazione con conservazione dei dati. I test automatici
+dei confini Windows/WSL non sostituiscono queste prove del pacchetto reale.
+Un aggiornamento fra versioni differenti richiede una prova distinta;
+la reinstallazione della stessa build non la dimostra. La
+[scheda di validazione](VALIDAZIONE.md) registra le analisi di dominio.

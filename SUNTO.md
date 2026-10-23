@@ -21,8 +21,10 @@ Il pacchetto Windows è predisposto come un singolo `NIPAT-Setup.exe`, con
 avvio tramite l'icona **NIPAT 0.5 Preview**. Non richiede l'installazione
 separata degli strumenti scientifici. Ubuntu 24.04 x86_64 utilizza un singolo
 pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
-**NIPAT 0.5 Preview** o dal comando `nipat-05-preview`. Docker Engine locale
-e Compose v2 devono essere disponibili all’utente. Entrambi i pacchetti sono
+**NIPAT 0.5 Preview** o dal comando `nipat-05-preview`. APT installa
+automaticamente le dipendenze mancanti, inclusi Docker Engine e Compose v2;
+l’accesso dell’utente a Docker richiede autorizzazione amministrativa.
+Entrambi i pacchetti sono
 predisposti per verifica e non ancora pubblicati.
 
 Per utilizzare NIPAT si sceglie il workflow, si indicano file e parametri e

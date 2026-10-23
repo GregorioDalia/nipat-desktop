@@ -370,6 +370,16 @@ jobs:
           python scripts/build_linux_installer.py \
             --manifest build/assets/installer-manifest.json \
             --output-dir build/linux-output
+      - name: Install with missing dependencies in a clean Ubuntu container
+        # No host Docker socket or writable mount is exposed to the container.
+        # This verifies APT resolution, not a fresh Ubuntu Desktop installation.
+        run: |
+          package=(build/linux-output/*.deb)
+          test "${#package[@]}" -eq 1
+          python scripts/verify_linux_dependencies.py \
+            --package "${package[0]}" \
+            --manifest build/assets/installer-manifest.json \
+            --output build/linux-output/linux-dependency-check.json
       - name: Install and exercise the package as a non-root user
         # The runner already has Docker access. This is not a clean Ubuntu Desktop test.
         run: |
@@ -395,6 +405,7 @@ jobs:
         with:
           name: nipat-linux-installation-logs
           path: |
+            build/linux-output/linux-dependency-check.json
             build/linux-output/linux-installation-check.json
             ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-05-preview/setup.log
             ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-05-preview/state.json
