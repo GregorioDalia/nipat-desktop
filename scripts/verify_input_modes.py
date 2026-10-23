@@ -19,9 +19,9 @@ from nipat.errors import NipatError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
-from nipat.validation.integrity import verify_sha256_manifest
 from nipat.validation.self_test import compare_snp_outputs
 from verify_contamination_update import check_outputs as check_contamination_outputs
+from verify_contamination_update import check_bundled_run
 from verify_cpi_update import (
     EXPECTED_INFORMATIVE,
     INFORMATIVE_PAIR,
@@ -186,6 +186,7 @@ def run_checks(layout: ProjectLayout, inputs: dict[str, Path]) -> None:
     )
     print(f"Run: {run_dir}", flush=True)
     rows = compare_snp_outputs(inputs["snp_expected"], run_dir / "output/SNPcall_output.txt")
+    check_bundled_run(run_dir, layout, workflow="snp-call")
     print(f"Verifica SNPcall superata: {rows} righe uguali al riferimento.")
 
     print("\n2/4 Contamination da directory esterna ricorsiva", flush=True)
@@ -195,6 +196,7 @@ def run_checks(layout: ProjectLayout, inputs: dict[str, Path]) -> None:
     )
     print(f"Run: {run_dir}", flush=True)
     check_contamination_outputs(run_dir)
+    check_bundled_run(run_dir, layout, workflow="contamination")
     print("Verifica Contamination superata: tre campioni e valori per sito attesi.")
 
     cpi_arguments = {
@@ -212,6 +214,7 @@ def run_checks(layout: ProjectLayout, inputs: dict[str, Path]) -> None:
     )
     print(f"Run: {run_dir}", flush=True)
     check_cpi_outputs(run_dir, multiple_cutoffs=True)
+    check_bundled_run(run_dir, layout, workflow="cpi")
     print("Verifica CPI multi-pannello superata: quattro righe attese e tre PDF.")
 
     print("\n4/4 CPI ALL senza pannello", flush=True)
@@ -220,6 +223,7 @@ def run_checks(layout: ProjectLayout, inputs: dict[str, Path]) -> None:
     )
     print(f"Run: {run_dir}", flush=True)
     check_cpi_outputs(run_dir, multiple_cutoffs=False)
+    check_bundled_run(run_dir, layout, workflow="cpi")
     print("Verifica CPI ALL superata: due righe attese, senza Cutoff, e tre PDF.")
 
 
@@ -235,7 +239,6 @@ def main() -> int:
         layout = ProjectLayout.discover()
         if layout.project_dir != Path(__file__).resolve().parents[1]:
             raise ValidationError("Usare il Python del progetto e verificare NIPAT_PROJECT_DIR.")
-        verify_sha256_manifest(layout.project_dir / "scientific/SHA256SUMS")
         external = make_external_directory(layout, args.fixture_parent)
         print(f"Input esterni conservati per provenienza e diagnosi: {external}", flush=True)
         inputs = prepare_inputs(layout, external)

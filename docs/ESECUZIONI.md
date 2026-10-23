@@ -53,7 +53,7 @@ a mostrarlo nel terminale. I file JSON vengono sostituiti atomicamente dopo
 ogni aggiornamento. Il manifest scientifico viene verificato prima di
 eseguire i comandi dei workflow.
 
-Nel percorso di sviluppo 0.5, Contamination, SNPcall e DNPcall usano il motore incorporato.
+Nel percorso di sviluppo 0.5, tutti e quattro i workflow usano il motore incorporato.
 `work/engine-request.json` descrive la richiesta; `work/engine-compose.json`
 è l'unica configurazione Compose usata per l'analisi. Espone soltanto gli input
 selezionati in sola lettura e la cartella del run corrente in scrittura.
@@ -71,6 +71,17 @@ Il comportamento R rimane invariato, compresa una limitazione: la chiamata inter
 a samtools nasconde lo stderr e non ne verifica il codice di uscita. Lo stato del
 run riflette quindi quello del processo R, senza garantire il rilevamento di ogni
 errore interno di samtools. I controlli numerici degli output restano necessari.
+
+Per CPI il motore conserva in `work/inputs` le sole tabelle parentali richieste,
+copiate senza modificare i byte. Un campione riutilizzato in più coppie viene
+preparato una volta. Il pannello singolo diventa `work/DNPpanel.txt`; più pannelli
+diventano `work/cutoff_001.tsv`, ecc. La modalità ALL non genera pannelli e non
+aggiunge la colonna `Cutoff` al CSV. Con il pannello singolo, tale colonna conserva
+il percorso del pannello generato; con cutoff etichettati conserva le etichette.
+Prefissi e costante d'errore rimangono configurabili. I nomi dei risultati prodotti
+da R restano `Mother<id>-Father<id>_DNPs`, anche con prefissi di input diversi.
+Nomi ambigui dei campioni o delle coppie vengono rifiutati prima della preparazione
+per evitare la sovrascrittura di file nello stesso run.
 
 Per questi workflow, `source.role` vale `client`: gli hash locali descrivono
 l'applicazione, mentre `runtime.engine` identifica gli script R e i moduli Python

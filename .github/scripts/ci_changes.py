@@ -14,6 +14,7 @@ SCIENTIFIC_FILES = {
     "tests/test_bundled_runner.py",
     "tests/test_snp_engine.py", "tests/test_input_modes.py",
     "tests/test_dnp_engine.py", "tests/test_dnp_workflow.py",
+    "tests/test_cpi_engine.py",
     ".github/workflows/ci.yml", ".github/workflows/windows-installer.yml",
     ".github/scripts/ci_changes.py", ".github/scripts/test_ci_changes.py",
 }

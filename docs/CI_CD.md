@@ -17,8 +17,9 @@ separatamente: la presenza di un workflow non attesta che la build sia riuscita.
 La build completa degli installatori non parte per ogni modifica della CLI
 o della documentazione. I filtri sono definiti in
 [`windows-installer.yml`](../.github/workflows/windows-installer.yml);
-comprendono installatore, Dockerfile, script Windows e di packaging, elenco
-dei file distribuiti, configurazione del pacchetto e relativi controlli.
+comprendono installatore, Dockerfile, ingresso e moduli condivisi del motore,
+script Windows e di packaging, elenco dei file distribuiti, configurazione del
+pacchetto e relativi controlli.
 Una build di pull request serve alla revisione e non è ammessa dal publisher.
 Per distribuire un nuovo candidato occorre avviare la build completa sul
 commit già integrato in `main`, quindi seguire
@@ -33,8 +34,14 @@ Il workflow [`CI`](../.github/workflows/ci.yml) esegue sempre:
 - `windows-checks`: suite Python, sintassi PowerShell 5.1, controlli di setup,
   importazione del runtime, ripresa WSL e compilazione/prova del launcher.
 
-Il job `scientific` costruisce il runtime, esegue `doctor --runtime` e
-`self-test`. È richiesto per modifiche a `src/`, `scientific/`, `docker/`,
+Il job `scientific` costruisce il runtime, esegue `verify_engine_package.py`,
+`doctor --runtime` e `self-test`. Il primo verifica tutti e quattro i workflow
+completi senza mount dei sorgenti dell'applicazione, con input in lettura,
+run in scrittura, rete disabilitata e filesystem dell'immagine in sola lettura.
+Comprende valori numerici attesi, modalità di input, metadati del motore e casi
+non validi; per DNPcall confronta anche esecuzione sequenziale/parallela, per CPI
+l'effetto della costante d'errore con incompatibilità paterne sintetiche.
+È richiesto per modifiche a `src/`, `scientific/`, `docker/`, `engine/`,
 `tests/fixtures/`, agli script `verify_*` e `check_runtime_*`, alla configurazione
 di esecuzione o ai file CI indicati in
 [`ci_changes.py`](../.github/scripts/ci_changes.py). Un avvio manuale lo esegue

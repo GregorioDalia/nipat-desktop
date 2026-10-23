@@ -53,6 +53,8 @@ One invocation creates a fresh run outside the repository and verifies exactly
 these two CSV rows, the generated cutoff-panel path, and the PDF signatures of
 both pair plots and `All_CPIplots.pdf`. It does not compare PDF bytes, inspect
 plot appearance, or verify individual curve points that are not exported to CSV.
-No BAM, reference genome, new R package, or rebuild is required when the existing
-scientific image is available. Actual runtime execution must pass before this
-update is recorded as integration-tested.
+No BAM, reference genome or new R package is required. In the 0.5 development
+branch, the runtime image must provide the complete `cpi-v1` interface; an older
+image without that interface must be rebuilt or replaced with a compatible one.
+The check also verifies the image-owned code metadata and isolated mounts.
+Actual runtime execution must pass before this update is recorded as integration-tested.

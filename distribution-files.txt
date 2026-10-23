@@ -82,6 +82,7 @@ scripts/build_docker_installer.py
 scripts/build_windows_installer_assets.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
+scripts/verify_cpi_engine.py
 scripts/verify_dnp_engine.py
 scripts/verify_engine_package.py
 scripts/verify_input_modes.py
@@ -115,6 +116,7 @@ src/nipat/wizard.py
 src/nipat/wizard_forms.py
 src/nipat_scientific/__init__.py
 src/nipat_scientific/contamination.py
+src/nipat_scientific/cpi.py
 src/nipat_scientific/dnp.py
 src/nipat_scientific/errors.py
 src/nipat_scientific/files.py
@@ -132,6 +134,11 @@ tests/fixtures/cpi/samples/FatherInformative.txt
 tests/fixtures/cpi/samples/FatherNoSites.txt
 tests/fixtures/cpi/samples/MotherInformative.txt
 tests/fixtures/cpi/samples/MotherNoSites.txt
+tests/fixtures/cpi_engine/FatherP.txt
+tests/fixtures/cpi_engine/MotherM.txt
+tests/fixtures/cpi_engine/README.md
+tests/fixtures/cpi_engine/expected.tsv
+tests/fixtures/cpi_engine/popfreq.tsv
 tests/fixtures/dnp_engine/DNP_list.txt
 tests/fixtures/dnp_engine/README.md
 tests/fixtures/dnp_engine/expected.tsv
@@ -146,6 +153,7 @@ tests/fixtures/snp_engine/reference.fa
 tests/test_cli_validation.py
 tests/test_contamination_workflow.py
 tests/test_contamination_engine.py
+tests/test_cpi_engine.py
 tests/test_bundled_runner.py
 tests/test_distribution.py
 tests/test_docker_installer.py

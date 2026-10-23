@@ -1,6 +1,6 @@
 """Execute the bundled R scripts without importing the desktop application.
 
-Native script invocation remains available. Contamination, SNPcall and DNPcall also
+Native script invocation remains available. All four workflows also
 accept versioned requests prepared with the bundled shared adapters.
 """
 
@@ -26,10 +26,11 @@ SCRIPT_PATHS = {
     "cpi": "vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
 }
 PREPARATION_FILES = (
-    "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py",
+    "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
 )
 WORKFLOW_INTERFACES = {
     "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
+    "cpi": "cpi-v1",
 }
 
 
@@ -218,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
                 if arguments.workflow == "contamination":
                     from nipat_scientific.contamination import prepare_contamination
                     native_arguments = prepare_contamination(request)
+                elif arguments.workflow == "cpi":
+                    from nipat_scientific.cpi import prepare_cpi
+                    native_arguments = prepare_cpi(request)
                 elif arguments.workflow == "dnp-call":
                     from nipat_scientific.dnp import prepare_dnp
                     prepared = prepare_dnp(request)

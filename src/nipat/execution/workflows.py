@@ -8,7 +8,6 @@ from nipat.adapters.panels import (
     read_dnp_list,
     read_position_panel,
     read_snp_positions,
-    write_position_panel,
 )
 from nipat.errors import ValidationError
 from nipat.execution.mounts import INPUT_ROOT, InputMounts
@@ -23,6 +22,7 @@ from nipat.validation.files import (
     require_sidecar,
     require_snp_pileup,
 )
+from nipat_scientific.cpi import normalize_pairs
 
 
 def _bind_bam(mounts: InputMounts, bam: Path, target: PurePosixPath) -> list[Path]:
@@ -55,14 +55,6 @@ def _bind_reference(mounts: InputMounts, reference: Path) -> tuple[PurePosixPath
     return target, inputs
 
 
-def _name_component(value: str, label: str, *, empty: bool = False) -> str:
-    if (not value and not empty) or any(c in value for c in "/\\") or any(
-        ord(c) < 32 or ord(c) == 127 for c in value
-    ):
-        raise ValidationError(f"{label} deve essere un nome, senza separatori di cartella: {value!r}")
-    return value
-
-
 def _write_engine_request(destination: Path, request: dict) -> None:
     with destination.open("x", encoding="utf-8", newline="\n") as handle:
         json.dump(request, handle, ensure_ascii=False, indent=2)
@@ -73,9 +65,6 @@ class Workflows:
     def __init__(self, layout: ProjectLayout, runner: DockerComposeRunner) -> None:
         self.layout = layout
         self.runner = runner
-
-    def _script(self, relative_path: str) -> PurePosixPath:
-        return self.layout.container_path(self.layout.project_dir / relative_path)
 
     def dnp_call(
         self, *, bam: Path | None = None, bams: list[Path] | None = None,
@@ -277,37 +266,29 @@ class Workflows:
     ) -> Path:
         if sum((panel is not None, cutoffs is not None, cutoff_map is not None)) > 1:
             raise ValidationError("Scegliere --panel, --cutoff oppure --cutoff-map.")
-        if not math.isfinite(err_const) or err_const < 0:
+        try:
+            valid_error = type(err_const) in (int, float) and math.isfinite(err_const) and err_const >= 0
+        except OverflowError:
+            valid_error = False
+        if not valid_error:
             raise ValidationError("La costante di errore deve essere finita e non negativa.")
         input_dir = require_directory(input_dir, "Directory input CPI")
         popfreq = require_file(popfreq, "Tabella frequenze di popolazione")
         require_columns(popfreq, {"chr", "pos1", "pos2", "Ref_f.pop", "Alt_f.pop"},
                         "Frequenze di popolazione non compatibili")
-        _name_component(mother_prefix, "Prefisso madre", empty=True)
-        _name_component(father_prefix, "Prefisso padre", empty=True)
+        pairs, names = normalize_pairs(pairs, mother_prefix, father_prefix)
         mounts = InputMounts(self.layout)
         popfreq_path = mounts.bind_file(popfreq, target=INPUT_ROOT / "population.tsv")
         checked_inputs = [popfreq]
-        normalized_pairs = []
-        for pair in pairs.split(","):
-            identifiers = [part.strip() for part in pair.split(":")]
-            if len(identifiers) != 2 or not all(identifiers):
-                raise ValidationError(f"Coppia CPI non valida: {pair}")
-            for label, prefix, identifier in (
-                ("Madre", mother_prefix, identifiers[0]),
-                ("Padre", father_prefix, identifiers[1]),
-            ):
-                _name_component(identifier, f"Identificativo {label}")
-                name = f"{prefix}{identifier}.txt"
-                source = require_file(input_dir / name, label)
-                require_columns(source, DNP_OUTPUT_COLUMNS,
-                                f"Input {label.lower()} non compatibile", whitespace=True)
-                mounts.bind_file(source, target=INPUT_ROOT / "cpi" / name)
-                checked_inputs.append(source)
-            normalized_pairs.append(":".join(identifiers))
-        if len(set(normalized_pairs)) != len(normalized_pairs):
-            raise ValidationError("Coppia CPI duplicata.")
-        pairs = ",".join(normalized_pairs)
+        samples = []
+        for number, name in enumerate(names, 1):
+            source = require_file(input_dir / name, "Tabella campione CPI")
+            require_columns(source, DNP_OUTPUT_COLUMNS, "Input CPI non compatibile", whitespace=True)
+            sample_path = mounts.bind_file(
+                source, target=INPUT_ROOT / "cpi" / f"sample_{number:04d}.txt",
+            )
+            samples.append({"path": str(sample_path), "name": name})
+            checked_inputs.append(source)
         requested_cutoffs = list(cutoffs or [])
         if cutoffs is not None and not requested_cutoffs:
             raise ValidationError("Indicare almeno un cutoff.")
@@ -336,34 +317,40 @@ class Workflows:
                     raise ValidationError(f"Etichetta cutoff duplicata: {label}")
                 labels.add(label)
             source = require_file(source, "Pannello cutoff")
-            records = read_position_panel(source)
-            normalized_cutoffs.append((label, source, records))
+            read_position_panel(source)
+            normalized_cutoffs.append((label, source))
             checked_inputs.append(source)
+        cutoff_mode = "panel" if panel is not None else "named" if normalized_cutoffs else "all"
+        mapped_cutoffs = [
+            {"label": label, "path": str(mounts.bind_file(
+                source, target=INPUT_ROOT / "cpi-cutoffs" / f"panel_{number:03d}.tsv",
+            ))}
+            for number, (label, source) in enumerate(normalized_cutoffs, 1)
+        ]
         run_dir = self.layout.new_run_dir("cpi", run_name)
         with self.runner.record_run(
             run_dir, workflow="cpi", inputs=list(dict.fromkeys(checked_inputs)), mounts=mounts,
+            bundled_workflow="cpi",
             parameters={"pairs": pairs, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
                         "err_const": err_const, "input_dir": str(input_dir), "popfreq": str(popfreq),
                         "panel": str(panel) if panel else None,
+                        "cutoff_mode": cutoff_mode,
                         "cutoffs": [{"label": label, "path": str(source)}
-                                    for label, source, _ in normalized_cutoffs]},
+                                    for label, source in normalized_cutoffs]},
         ):
-            command: list[str | PurePosixPath] = [
-                "Rscript", self._script("scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R"),
-                "--pileup_dir", INPUT_ROOT / "cpi",
-                "--out_dir", self.layout.container_path(run_dir / "output"),
-                "--pairs", pairs, "--mother_prefix", mother_prefix,
-                "--father_prefix", father_prefix, "--popfreq", popfreq_path,
-                "--err_const", str(err_const),
-            ]
-            maps = []
-            for number, (label, _, records) in enumerate(normalized_cutoffs, 1):
-                filename = "DNPpanel.txt" if panel is not None else f"cutoff_{number:03d}.tsv"
-                destination = run_dir / "work" / filename
-                write_position_panel(records, destination)
-                mapped = str(self.layout.container_path(destination))
-                maps.append(f"{label}={mapped}" if label else mapped)
-            if maps:
-                command.extend(["--cutoff_map", ",".join(maps)])
-            self.runner.run(command, working_dir=self.layout.container_path(run_dir / "work"))
+            request = {
+                "schema_version": 1, "workflow": "cpi", "samples": samples,
+                "pairs": pairs, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
+                "popfreq": str(popfreq_path), "cutoff_mode": cutoff_mode,
+                "cutoffs": mapped_cutoffs, "err_const": err_const,
+                "work_dir": str(self.layout.container_path(run_dir / "work")),
+                "out_dir": str(self.layout.container_path(run_dir / "output")),
+            }
+            request_file = run_dir / "work" / "engine-request.json"
+            _write_engine_request(request_file, request)
+            self.runner.run(
+                ["python3", "/opt/nipat/engine/main.py", "execute", "cpi",
+                 "--request", self.layout.container_path(request_file)],
+                working_dir=self.layout.container_path(run_dir / "work"),
+            )
         return run_dir

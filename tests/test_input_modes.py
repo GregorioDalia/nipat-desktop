@@ -171,13 +171,49 @@ class InputModeTests(unittest.TestCase):
                 record = read_position_panel(self.write(name, text))[0]
                 self.assertEqual((record.chromosome, record.pos1, record.pos2), ("chr1", 100, 105))
 
-    def test_cpi_all_omits_cutoff_flag_and_accepts_zero_error(self):
+    def cpi_request(self, run):
+        return json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
+
+    def test_cpi_all_delegates_to_engine_with_zero_error_and_no_host_staging(self):
         args = self.cpi_args()
-        self.workflows.cpi(**args, err_const=0)
+        run = self.workflows.cpi(**args, err_const=0)
         command = self.runner.calls[0]
-        self.assertNotIn("--cutoff_map", command)
-        self.assertEqual(command[command.index("--err_const") + 1], "0")
+        self.assertEqual(command, [
+            "python3", "/opt/nipat/engine/main.py", "execute", "cpi", "--request",
+            str(self.layout.container_path(run / "work/engine-request.json")),
+        ])
+        self.assertEqual(self.cpi_request(run), {
+            "schema_version": 1, "workflow": "cpi", "samples": [
+                {"path": f"/workspace/inputs/cpi/sample_{number:04d}.txt", "name": name}
+                for number, name in enumerate(("MotherInformative.txt", "FatherInformative.txt",
+                                               "MotherNoSites.txt", "FatherNoSites.txt"), 1)
+            ],
+            "pairs": args["pairs"], "mother_prefix": "Mother", "father_prefix": "Father",
+            "popfreq": "/workspace/inputs/population.tsv", "cutoff_mode": "all",
+            "cutoffs": [], "err_const": 0,
+            "work_dir": str(self.layout.container_path(run / "work")),
+            "out_dir": str(self.layout.container_path(run / "output")),
+        })
         self.assertEqual(self.runner.records[0]["parameters"]["cutoffs"], [])
+        self.assertEqual(self.runner.records[0]["bundled_workflow"], "cpi")
+        self.assertEqual({path.name for path in (run / "work").iterdir()}, {"engine-request.json"})
+        self.assertEqual(self.runner.calls, [command])
+
+    def test_cpi_single_panel_is_original_readonly_mount_not_client_normalized_file(self):
+        args = self.cpi_args()
+        panel = self.write("single panel $ ,= è.tsv", "pos2\tchr\tpos1\n101\tchr1\t100\n")
+        before = panel.read_bytes()
+        run = self.workflows.cpi(**args, panel=panel, err_const=0.125)
+        request = self.cpi_request(run)
+        self.assertEqual(request["cutoff_mode"], "panel")
+        self.assertEqual(request["cutoffs"], [{"label": "", "path": "/workspace/inputs/cpi-cutoffs/panel_001.tsv"}])
+        self.assertEqual(request["err_const"], 0.125)
+        self.assertFalse((run / "work/DNPpanel.txt").exists())
+        self.assertEqual(panel.read_bytes(), before)
+        mappings = self.runner.records[0]["mounts"].mappings
+        self.assertTrue(all(item["read_only"] for item in mappings))
+        self.assertIn({"host_path": str(panel.resolve()), "container_path": request["cutoffs"][0]["path"],
+                       "read_only": True}, mappings)
 
     def test_cpi_multiple_panels_use_safe_paths_keep_labels_and_originals(self):
         args = self.cpi_args()
@@ -185,11 +221,14 @@ class InputModeTests(unittest.TestCase):
         second = self.write("cutoff two.tsv", "chr1\t200\t201\tAA\tCC\n")
         original = first.read_bytes()
         run = self.workflows.cpi(**args, cutoffs=[("Full panel", first), ("Second", second)])
-        command = self.runner.calls[0]
-        mapping = command[command.index("--cutoff_map") + 1]
-        self.assertEqual(mapping,
-                         f"Full panel={self.layout.container_path(run / 'work' / 'cutoff_001.tsv')},"
-                         f"Second={self.layout.container_path(run / 'work' / 'cutoff_002.tsv')}")
+        request = self.cpi_request(run)
+        self.assertEqual(request["cutoff_mode"], "named")
+        self.assertEqual(request["cutoffs"], [
+            {"label": "Full panel", "path": "/workspace/inputs/cpi-cutoffs/panel_001.tsv"},
+            {"label": "Second", "path": "/workspace/inputs/cpi-cutoffs/panel_002.tsv"},
+        ])
+        self.assertFalse((run / "work/cutoff_001.tsv").exists())
+        self.assertFalse((run / "work/cutoff_002.tsv").exists())
         self.assertEqual(first.read_bytes(), original)
         self.assertEqual(self.runner.records[0]["parameters"]["cutoffs"][0]["path"], str(first.resolve()))
 
@@ -199,18 +238,62 @@ class InputModeTests(unittest.TestCase):
         # Native syntax uses commas as separators, so use a path without commas.
         simple = self.layout.project_dir / "native.tsv"
         shutil.copy2(panel, simple)
-        self.workflows.cpi(**args, cutoff_map=f"Native={simple}")
-        command = self.runner.calls[0]
-        self.assertTrue(command[command.index("--cutoff_map") + 1].startswith("Native=/workspace/runs/"))
+        run = self.workflows.cpi(**args, cutoff_map=f"Native={simple}")
+        self.assertEqual(self.cpi_request(run)["cutoffs"], [
+            {"label": "Native", "path": "/workspace/inputs/cpi-cutoffs/panel_001.tsv"},
+        ])
+
+    def test_cpi_bare_native_cutoff_map_preserves_filename_as_label(self):
+        args = self.cpi_args()
+        panel = self.layout.project_dir / "native.tsv"
+        panel.write_text("chr\tpos1\tpos2\nchr1\t100\t101\n", encoding="utf-8")
+        run = self.workflows.cpi(**args, cutoff_map=str(panel))
+        self.assertEqual(self.cpi_request(run)["cutoff_mode"], "named")
+        self.assertEqual(self.cpi_request(run)["cutoffs"][0]["label"], str(panel))
 
     def test_cpi_pair_whitespace_is_normalized_and_selected_files_only_are_mounted(self):
         args = self.cpi_args()
         args["pairs"] = " Informative : Informative "
-        self.workflows.cpi(**args)
+        run = self.workflows.cpi(**args)
         record = self.runner.records[0]
         self.assertEqual(record["parameters"]["pairs"], "Informative:Informative")
         mounted = {Path(item["host_path"]).name for item in record["mounts"].mappings}
         self.assertEqual(mounted, {"MotherInformative.txt", "FatherInformative.txt", "frequenze $ ,=.tsv"})
+        self.assertEqual(self.cpi_request(run)["pairs"], "Informative:Informative")
+
+    def test_cpi_shared_parent_is_selected_once_and_pair_order_is_preserved(self):
+        args = self.cpi_args()
+        args["pairs"] = " Informative : NoSites , Informative : Informative "
+        run = self.workflows.cpi(**args)
+        request = self.cpi_request(run)
+        self.assertEqual(request["pairs"], "Informative:NoSites,Informative:Informative")
+        self.assertEqual([sample["name"] for sample in request["samples"]],
+                         ["MotherInformative.txt", "FatherNoSites.txt", "FatherInformative.txt"])
+        self.assertEqual(len(self.runner.records[0]["inputs"]), 4)
+        self.assertEqual(len(self.runner.records[0]["mounts"].mappings), 4)
+
+    def test_cpi_empty_and_custom_prefixes_preserve_filenames_and_bytes(self):
+        args = self.cpi_args()
+        original_dir = args["input_dir"]
+        for source, target in (("MotherInformative.txt", "Informative.txt"),
+                               ("FatherInformative.txt", "--Padre è $= Informative.txt")):
+            shutil.copyfile(original_dir / source, original_dir / target)
+        args.update(pairs="Informative:Informative", mother_prefix="", father_prefix="--Padre è $= ")
+        before = {path: path.read_bytes() for path in original_dir.iterdir()}
+        run = self.workflows.cpi(**args)
+        request = self.cpi_request(run)
+        self.assertEqual((request["mother_prefix"], request["father_prefix"]), ("", "--Padre è $= "))
+        self.assertEqual([sample["name"] for sample in request["samples"]],
+                         ["Informative.txt", "--Padre è $= Informative.txt"])
+        self.assertEqual({path: path.read_bytes() for path in original_dir.iterdir()}, before)
+
+    def test_cpi_identical_sample_for_both_roles_has_one_selected_file(self):
+        args = self.cpi_args()
+        args.update(pairs="Informative:Informative", father_prefix="Mother")
+        run = self.workflows.cpi(**args)
+        self.assertEqual([sample["name"] for sample in self.cpi_request(run)["samples"]],
+                         ["MotherInformative.txt"])
+        self.assertEqual(len(self.runner.records[0]["mounts"].mappings), 2)
 
     def test_cpi_rejects_duplicate_pairs_and_cutoff_labels_before_run(self):
         args = self.cpi_args()
@@ -219,6 +302,50 @@ class InputModeTests(unittest.TestCase):
             self.workflows.cpi(**{**args, "pairs": "Informative:Informative, Informative:Informative"})
         with self.assertRaisesRegex(ValidationError, "Etichetta cutoff duplicata"):
             self.workflows.cpi(**args, cutoffs=[("A", panel), ("A", panel)])
+        self.assertEqual(self.runner.calls, [])
+        self.assertFalse(self.layout.runs_dir.exists())
+
+    def test_cpi_rejects_ambiguous_output_or_sample_names_before_run(self):
+        args = self.cpi_args()
+        for pairs in ("A-FatherB:C,A:B-FatherC", "Informative:Informative,informative:NoSites"):
+            with self.subTest(pairs=pairs), self.assertRaises(ValidationError):
+                self.workflows.cpi(**{**args, "pairs": pairs})
+        self.assertEqual(self.runner.calls, [])
+        self.assertFalse(self.layout.runs_dir.exists())
+
+    def test_cpi_rejects_nonfinite_negative_or_boolean_error_before_run(self):
+        args = self.cpi_args()
+        for value in (-1, float("inf"), float("nan"), 10 ** 1000, True, False, "0.2", None):
+            with self.subTest(value=value), self.assertRaisesRegex(ValidationError, "costante di errore"):
+                self.workflows.cpi(**args, err_const=value)
+        self.assertEqual(self.runner.calls, [])
+        self.assertFalse(self.layout.runs_dir.exists())
+
+    def test_cpi_rejects_incompatible_or_empty_cutoff_modes_before_run(self):
+        args = self.cpi_args()
+        panel = self.write("panel.tsv", "chr\tpos1\tpos2\nchr1\t100\t101\n")
+        for options in ({"panel": panel, "cutoffs": [("Full", panel)]},
+                        {"cutoffs": []}, {"cutoff_map": ""}, {"cutoff_map": "Full="},
+                        {"cutoffs": [("bad,label", panel)]}):
+            with self.subTest(options=options), self.assertRaises(ValidationError):
+                self.workflows.cpi(**args, **options)
+        self.assertEqual(self.runner.calls, [])
+        self.assertFalse(self.layout.runs_dir.exists())
+
+    def test_cpi_rejects_missing_or_malformed_tables_before_run(self):
+        args = self.cpi_args()
+        source = args["input_dir"] / "MotherInformative.txt"
+        original = source.read_bytes()
+        source.unlink()
+        with self.assertRaises(ValidationError):
+            self.workflows.cpi(**args)
+        source.write_text("chr\tpos1\tpos2\nchr1\t100\t101\n", encoding="utf-8")
+        with self.assertRaises(ValidationError):
+            self.workflows.cpi(**args)
+        source.write_bytes(original)
+        args["popfreq"].write_text("chr\tpos1\tpos2\nchr1\t100\t101\n", encoding="utf-8")
+        with self.assertRaises(ValidationError):
+            self.workflows.cpi(**args)
         self.assertEqual(self.runner.calls, [])
         self.assertFalse(self.layout.runs_dir.exists())
 

@@ -1,6 +1,6 @@
 # Percorso incrementale verso NIPAT 0.5
 
-Stato: quarto incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
+Stato: quinto incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
 registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 
 ## Baseline e separazione dalla validazione in corso
@@ -151,9 +151,43 @@ interno di DNPcall: elimina pileup e BED al termine e non verifica esplicitament
 lo stato della chiamata a samtools, di cui nasconde lo stderr. Il successo del
 processo non equivale alla verifica scientifica degli output.
 
-CPI, i nuovi installer e la dismissione Docker Desktop restano i passi successivi.
+Il quarto incremento è stato verificato nella
+[CI 39946173365](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39946173365)
+e nella [build di revisione 39946173352](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39946173352),
+entrambe concluse con successo sul commit `2592935`.
+
+## Quinto incremento: workflow CPI completo
+
+La richiesta `cpi-v1` trasferisce al motore le tabelle parentali selezionate,
+le coppie, i prefissi, le frequenze di popolazione, la costante d'errore e i
+pannelli richiesti. Il motore verifica questi input, conserva le tabelle senza
+modificarne i byte in `work/inputs` e normalizza i pannelli prima di eseguire R.
+Un campione condiviso fra coppie viene preparato una sola volta. La CLI usa
+l'esecuzione isolata e i metadati dell'immagine già introdotti per gli altri workflow.
+
+Rimangono disponibili ALL senza pannello, `--panel`, `--cutoff` ripetuto e
+`--cutoff-map`. Sono conservati anche il percorso come etichetta per il pannello
+singolo, le etichette esplicite dei cutoff, i prefissi personalizzati o vuoti e
+la costante d'errore nulla. Nomi che collidono nello staging o nei PDF delle
+coppie sono rifiutati prima di scrivere, anche quando differiscono soltanto
+per maiuscole/minuscole. Questo evita sovrascritture su filesystem Windows.
+
+Le regressioni dell'immagine confrontano le modalità migrate con i valori
+analitici già disponibili, includono il caso senza siti informativi e verificano
+CSV, PDF, isolamento dei mount e input originali invariati. Una fixture aggiuntiva
+con incompatibilità paterna dimostra numericamente l'effetto della costante
+d'errore: per i due siti sintetici i prodotti CPI sono `20e²` e `4e`, verificati
+con `e = 0.01`, `0.1` e `0`. Le prove usano anche il client senza sorgenti
+scientifici nella sua cartella applicativa. Gli esiti reali della CI e del
+confezionamento vengono riportati nella PR di sviluppo.
+I controlli locali comprendono 293 test Python e 37 controlli CI/publisher superati;
+la verifica numerica nello script R reale rimane distinta e viene eseguita in CI.
+
+Con questo incremento i quattro workflow analitici sono migrati. Restano
+l'adeguamento della diagnostica e del client Windows, l'isolamento delle identità
+di installazione, la dismissione Docker Desktop e i nuovi installer Windows/Linux.
 Le build di revisione non sono candidati 0.5 da distribuire e non devono sostituire
-l'installazione 0.4.1.
+l'installazione 0.4.1. Il codice R e il manifest scientifico rimangono invariati.
 
 ## Passaggi e criteri di completamento
 

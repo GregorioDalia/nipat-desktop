@@ -14,6 +14,7 @@ python3 /opt/nipat/engine/main.py run snp-call -- \
 python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute dnp-call --request /run/work/request.json
+python3 /opt/nipat/engine/main.py execute cpi --request /run/work/request.json
 ```
 
 The workflow names are `dnp-call`, `snp-call`, `contamination` and `cpi`.
@@ -24,9 +25,10 @@ must match the bundled `scientific/SHA256SUMS` before any workflow can run.
 the manifest hash, and each workflow's bundled path and source hash. It also
 reports `workflow_interfaces.contamination = contamination-v1`,
 `workflow_interfaces.snp-call = snp-call-v1`,
-`workflow_interfaces.dnp-call = dnp-call-v1` and preparation metadata interface
+`workflow_interfaces.dnp-call = dnp-call-v1`,
+`workflow_interfaces.cpi = cpi-v1` and preparation metadata interface
 `workflow-preparation-v1`. `preparation.file_sha256` identifies the entry point
-and seven shared Python modules.
+and eight shared Python modules.
 Missing modules or paths escaping the bundle are rejected. These hashes record
 the Python source bytes in the selected image; the R hashes are additionally
 checked against the scientific manifest. They do not identify a published
@@ -143,10 +145,69 @@ is unchanged: the engine preserves the R exit status but cannot guarantee that
 every internal samtools failure is reported. A successful process alone does not
 validate its scientific output.
 
+## CPI request
+
+```json
+{
+  "schema_version": 1,
+  "workflow": "cpi",
+  "samples": [
+    {"path": "/inputs/sample_0001.txt", "name": "MotherA.txt"},
+    {"path": "/inputs/sample_0002.txt", "name": "FatherB.txt"}
+  ],
+  "pairs": "A:B",
+  "mother_prefix": "Mother",
+  "father_prefix": "Father",
+  "popfreq": "/inputs/population.tsv",
+  "cutoff_mode": "named",
+  "cutoffs": [{"label": "Full", "path": "/inputs/panel.tsv"}],
+  "err_const": 0.0000892303778101497,
+  "work_dir": "/run/work",
+  "out_dir": "/run/output"
+}
+```
+
+The request preserves the existing native parameters. Pairs use `mother:father`
+identifiers separated by commas; surrounding identifier whitespace is normalized.
+Prefixes may be empty or customized. The selected sample names must be exactly
+the required `<prefix><identifier>.txt` names. A parent used in several pairs is
+staged once. The client maps only the requested tables, population frequencies
+and panels; the engine validates them again and copies the selected sample tables
+byte-for-byte into `work/inputs`. Unselected files are not exposed to R.
+
+Cutoff modes are explicit:
+
+- `all`: an empty cutoff list; omit native `--cutoff_map` and retain the output
+  without a `Cutoff` column.
+- `panel`: one cutoff with an empty label; write `work/DNPpanel.txt` and preserve
+  its generated container path as the CSV `Cutoff` value.
+- `named`: one or more unique nonempty labels; write `work/cutoff_001.tsv`, etc.
+  The client accepts repeated `--cutoff` options and the native `--cutoff-map`
+  syntax. A bare path in the latter is also its label, as before.
+
+Position panels retain the existing headered/headerless three-column and legacy
+five-column support; they are normalized to tab-separated `chr`, `pos1`, `pos2`.
+XLSX panels are not supported by this interface. Labels cannot contain commas,
+equals signs or control characters. Generated cutoff paths cannot contain commas
+or equals signs because the unchanged native parser cannot encode them; standard
+client container aliases avoid that restriction on original host paths.
+
+`err_const` must be a finite nonnegative number; zero remains accepted. Native
+option values are passed as arguments, without a shell; empty prefixes and values
+beginning with a hyphen remain unambiguous. Output pair labels and PDF filenames
+remain `Mother<id>-Father<id>_DNPs`, independently of input prefixes. Ambiguous
+sample filenames and colliding pair output names are rejected before staging,
+including case-only collisions that would overwrite results on Windows.
+
+Work/output directories must not overlap or contain inputs, output must be empty,
+and existing staging/panel files are never overwritten. The request, staged tables
+and normalized panels remain in `work`; the CSV and PDFs remain under `output`.
+
 The shared preparation package is the single source of the existing panel and
-table validators; client preflight imports use compatibility exports. CPI still
-uses client-side preparation; its cutoff preparation is the remaining workflow
-migration step. R algorithms are unchanged.
+table validators; client preflight imports use compatibility exports. All four
+analytical workflows now execute through the bundled engine. R algorithms are
+unchanged. Client diagnostics and installer packaging remain transitional and
+are not completed by this workflow migration alone.
 
 Input datasets and output directories are supplied separately. Production
 execution must not mount application/source directories over `/opt/nipat`.

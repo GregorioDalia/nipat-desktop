@@ -23,9 +23,10 @@ BUNDLED_WORKFLOW_INTERFACES = {
     "dnp-call": "dnp-call-v1",
     "contamination": "contamination-v1",
     "snp-call": "snp-call-v1",
+    "cpi": "cpi-v1",
 }
 BUNDLED_WORKFLOW_LABELS = {
-    "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall",
+    "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall", "cpi": "CPI",
 }
 
 
@@ -93,6 +94,7 @@ class DockerComposeRunner:
             "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
             "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
             "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
+            "lib/nipat_scientific/cpi.py",
         }
 
         def has_digest(value: Any) -> bool:

@@ -64,14 +64,16 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
         self.assertEqual(metadata["workflow_interfaces"], {
             "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
+            "cpi": "cpi-v1",
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 8)
+        self.assertEqual(len(hashes), 9)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)
         self.assertIn("lib/nipat_scientific/dnp.py", hashes)
+        self.assertIn("lib/nipat_scientific/cpi.py", hashes)
         for relative, digest in hashes.items():
             self.assertEqual(hashlib.sha256((self.root / relative).read_bytes()).hexdigest(), digest)
         for workflow, relative in engine.SCRIPT_PATHS.items():
@@ -248,6 +250,98 @@ class EnginePackageTests(unittest.TestCase):
     def test_repository_scientific_manifest_matches_all_supported_workflows(self):
         metadata = engine.verify_bundle(PROJECT_ROOT)
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
+
+    def cpi_request(self):
+        inputs = self.root / "CPI original inputs ,= è"
+        inputs.mkdir()
+        samples = []
+        for number, name in enumerate(("A.txt", "--FatherB.txt")):
+            path = inputs / f"alias_{number:04d}.tsv"
+            path.write_bytes(b"chr pos1 pos2 REF ALT N_REF N_ALT N_Other total_count\r\n"
+                             b"chr1 100 101 AC GT 98 2 0 100\r\n")
+            samples.append({"path": str(path), "name": name})
+        panel = inputs / "panel ,=.tsv"
+        panel.write_text("chr\tpos1\tpos2\nchr1\t100\t101\n", encoding="utf-8")
+        popfreq = inputs / "population ,=.tsv"
+        popfreq.write_text("chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t100\t101\t0.8\t0.2\n",
+                           encoding="utf-8")
+        run = self.root / "CPI run è"
+        request = {
+            "schema_version": 1, "workflow": "cpi", "samples": samples,
+            "pairs": " A : B ", "mother_prefix": "", "father_prefix": "--Father",
+            "popfreq": str(popfreq), "cutoff_mode": "named",
+            "cutoffs": [{"label": "-Panel è", "path": str(panel)}], "err_const": 0.01,
+            "work_dir": str(run / "work"), "out_dir": str(run / "output"),
+        }
+        request_file = self.root / "cpi-request.json"
+        request_file.write_text(json.dumps(request), encoding="utf-8")
+        return request_file, request
+
+    def cpi_tools(self):
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        executable = fake_bin / "Rscript"
+        executable.write_text(
+            f"#!{sys.executable}\n"
+            "import argparse, json, os, sys\nfrom pathlib import Path\n"
+            "parser = argparse.ArgumentParser()\n"
+            "for key in ('pileup_dir','out_dir','pairs','mother_prefix','father_prefix','popfreq','err_const','cutoff_map'):\n"
+            "    parser.add_argument('--' + key, required=True)\n"
+            "args = parser.parse_args(sys.argv[2:])\n"
+            "samples = {p.name: p.read_bytes().hex() for p in Path(args.pileup_dir).iterdir()}\n"
+            "Path(os.environ['CPI_TEST_EVENTS']).write_text(json.dumps({\n"
+            "    'argv': sys.argv, 'args': vars(args), 'samples': samples,\n"
+            "    'output': Path(args.out_dir).is_dir(),\n"
+            "    'panel': Path(args.cutoff_map.split('=', 1)[1]).read_text(),\n"
+            "}))\n"
+            "sys.exit(37)\n", encoding="utf-8",
+        )
+        executable.chmod(0o755)
+        environment = os.environ.copy()
+        environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+        environment["PYTHONPATH"] = str(self.root / "absent application")
+        environment["CPI_TEST_EVENTS"] = str(self.root / "cpi-events.json")
+        return environment
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture exercises the Linux image entry point.")
+    def test_relocated_cpi_stages_and_preserves_native_values_and_r_exit(self):
+        request_file, request = self.cpi_request()
+        environment = self.cpi_tools()
+        result = subprocess.run(
+            [sys.executable, str(self.root / "engine/main.py"), "execute", "cpi",
+             "--request", str(request_file)], cwd=self.root / "engine", env=environment,
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+        self.assertEqual(result.returncode, 37, result.stderr)
+        event = json.loads(Path(environment["CPI_TEST_EVENTS"]).read_text())
+        self.assertEqual(event["argv"][1], str(self.root / "scientific" / engine.SCRIPT_PATHS["cpi"]))
+        self.assertEqual(event["args"], {
+            "pileup_dir": str(Path(request["work_dir"]) / "inputs"), "out_dir": request["out_dir"],
+            "pairs": "A:B", "mother_prefix": "", "father_prefix": "--Father",
+            "popfreq": request["popfreq"], "err_const": "0.01",
+            "cutoff_map": f"-Panel è={Path(request['work_dir']) / 'cutoff_001.tsv'}",
+        })
+        self.assertEqual(event["samples"], {
+            item["name"]: Path(item["path"]).read_bytes().hex() for item in request["samples"]
+        })
+        self.assertTrue(event["output"])
+        self.assertEqual(event["panel"], "n°DNP\tchr\tpos1\tpos2\nDNP001\tchr1\t100\t101\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture exercises the Linux image entry point.")
+    def test_invalid_cpi_request_prevents_r_and_native_staging(self):
+        request_file, request = self.cpi_request()
+        request["err_const"] = -1
+        request_file.write_text(json.dumps(request), encoding="utf-8")
+        environment = self.cpi_tools()
+        result = subprocess.run(
+            [sys.executable, str(self.root / "engine/main.py"), "execute", "cpi",
+             "--request", str(request_file)], cwd=self.root, env=environment,
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("non negativa", result.stderr)
+        self.assertFalse(Path(environment["CPI_TEST_EVENTS"]).exists())
+        self.assertFalse(Path(request["work_dir"]).parent.exists())
 
     def dnp_request(self, parallel=False):
         # Container aliases are deliberately shell-safe even when the bundled

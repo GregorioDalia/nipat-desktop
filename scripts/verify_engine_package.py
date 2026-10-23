@@ -1,6 +1,6 @@
 """Check bundled R scripts without mounting the application or source checkout.
 
-This verifies native R invocation and complete Contamination/SNPcall/DNPcall workflows.
+This verifies native R invocation and all four complete scientific workflows.
 Only fixture input and result directories are mounted into the image.
 """
 
@@ -29,6 +29,7 @@ from verify_contamination_update import check_bundled_run
 from verify_contamination_update import check_outputs as check_contamination
 from verify_cpi_update import check_outputs as check_cpi
 from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_workflow
+from verify_cpi_engine import check_cpi_client_without_host_scripts, check_cpi_workflow
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -107,11 +108,13 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("The engine lacks the complete SNPcall interface.")
     if description.get("workflow_interfaces", {}).get("dnp-call") != "dnp-call-v1":
         raise ValueError("The engine lacks the complete DNPcall interface.")
+    if description.get("workflow_interfaces", {}).get("cpi") != "cpi-v1":
+        raise ValueError("The engine lacks the complete CPI interface.")
     preparation = description.get("preparation", {})
     if preparation.get("interface") != "workflow-preparation-v1":
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
-    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py"):
+    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py"):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
     expected_sources = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -443,6 +446,8 @@ def main() -> int:
         check_contamination_fixture(identifier, root)
         check_contamination_workflow(identifier, root)
         check_cpi_fixture(identifier, root)
+        cpi_inputs = check_cpi_workflow(identifier, root, run_image=run_image, write_request=write_request)
+        check_cpi_client_without_host_scripts(identifier, root, cpi_inputs)
         check_contamination_client_without_host_scripts(identifier, root)
     except (NipatError, OSError, RuntimeError, ValueError, KeyError) as exc:
         print(f"Engine package verification failed: {exc}", file=sys.stderr)
@@ -451,7 +456,7 @@ def main() -> int:
         return 1
     shutil.rmtree(root)
     print("PASS: numeric regressions and validation failures without application/source mounts or network.")
-    print("Complete DNPcall, SNPcall and Contamination workflows verified; CPI native R regression retained.")
+    print("Complete DNPcall, SNPcall, Contamination and CPI workflows verified inside the bundled engine.")
     return 0
 
 

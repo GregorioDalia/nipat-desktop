@@ -27,7 +27,7 @@ def engine_metadata():
             for name in ("dnp-call", "snp-call", "contamination", "cpi")
         },
         "workflow_interfaces": {"contamination": "contamination-v1", "snp-call": "snp-call-v1",
-                                "dnp-call": "dnp-call-v1"},
+                                "dnp-call": "dnp-call-v1", "cpi": "cpi-v1"},
         "preparation": {
             "interface": "workflow-preparation-v1",
             "file_sha256": {name: "d" * 64 for name in (
@@ -35,6 +35,7 @@ def engine_metadata():
                 "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
                 "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
                 "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
+                "lib/nipat_scientific/cpi.py",
             )},
         },
     }
@@ -173,7 +174,7 @@ class BundledRunnerTests(unittest.TestCase):
                 self.assertIsNone(self.runner._bundled_workflow)
 
     def test_callers_run_with_pinned_engine_without_client_scientific_sources(self):
-        for workflow in ("snp-call", "dnp-call"):
+        for workflow in ("snp-call", "dnp-call", "cpi"):
             with self.subTest(workflow=workflow):
                 run, context = self.begin(f"{workflow}-bundled", workflow=workflow)
                 with redirect_stdout(self.stdout), patch.object(
@@ -206,7 +207,7 @@ class BundledRunnerTests(unittest.TestCase):
 
     def test_callers_require_their_own_contract_and_preparation_source(self):
         for workflow, module, label in (("snp-call", "snp", "SNPcall"),
-                                        ("dnp-call", "dnp", "DNPcall")):
+                                        ("dnp-call", "dnp", "DNPcall"), ("cpi", "cpi", "CPI")):
             missing_interface = engine_metadata()
             del missing_interface["workflow_interfaces"][workflow]
             wrong_interface = engine_metadata()

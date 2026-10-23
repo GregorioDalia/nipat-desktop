@@ -116,7 +116,7 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
         raise ValidationError("Identità dell'immagine o provenienza del motore mancanti.")
     hashes = engine["preparation"].get("file_sha256", {})
     required = {"engine/main.py", *(f"lib/nipat_scientific/{name}.py" for name in (
-        "__init__", "errors", "panels", "files", "contamination", "snp", "dnp",
+        "__init__", "errors", "panels", "files", "contamination", "snp", "dnp", "cpi",
     ))}
     if set(hashes) != required or any(not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in hashes.values()):
         raise ValidationError("Hash del codice di preparazione incompleti o non validi.")
