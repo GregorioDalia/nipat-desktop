@@ -19,6 +19,13 @@ from nipat.paths import ProjectLayout
 from nipat.validation.integrity import verify_sha256_manifest
 
 
+BUNDLED_WORKFLOW_INTERFACES = {
+    "contamination": "contamination-v1",
+    "snp-call": "snp-call-v1",
+}
+BUNDLED_WORKFLOW_LABELS = {"contamination": "Contamination", "snp-call": "SNPcall"}
+
+
 class DockerComposeRunner:
     def __init__(self, layout: ProjectLayout, dry_run: bool = False) -> None:
         self.layout = layout
@@ -82,6 +89,7 @@ class DockerComposeRunner:
             "engine/main.py", "lib/nipat_scientific/__init__.py",
             "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
             "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
+            "lib/nipat_scientific/snp.py",
         }
 
         def has_digest(value: Any) -> bool:
@@ -91,7 +99,8 @@ class DockerComposeRunner:
             return (isinstance(value, str) and value.startswith(prefix) and "\\" not in value
                     and all(part not in ("", ".", "..") for part in value.split("/")))
 
-        valid = isinstance(description, dict)
+        expected_interface = BUNDLED_WORKFLOW_INTERFACES.get(workflow)
+        valid = isinstance(description, dict) and expected_interface is not None
         if valid:
             manifest = description.get("manifest")
             workflows = description.get("workflows")
@@ -102,7 +111,7 @@ class DockerComposeRunner:
                 and description.get("schema_version") == 1
                 and description.get("interface") == "native-r-v1"
                 and isinstance(interfaces, dict)
-                and interfaces.get(workflow) == "contamination-v1"
+                and interfaces.get(workflow) == expected_interface
                 and isinstance(manifest, dict)
                 and manifest.get("path") == "scientific/SHA256SUMS"
                 and has_digest(manifest.get("sha256"))
@@ -112,7 +121,7 @@ class DockerComposeRunner:
                         and relative_path(source.get("script"), "scientific/")
                         and has_digest(source.get("sha256")) for source in workflows.values())
                 and isinstance(preparation, dict)
-                and preparation.get("interface") == "contamination-v1"
+                and preparation.get("interface") == "workflow-preparation-v1"
                 and isinstance(preparation.get("file_sha256"), dict)
             )
             if valid:
@@ -123,8 +132,8 @@ class DockerComposeRunner:
                 )
         if not valid:
             raise RuntimeExecutionError(
-                "L'immagine non offre il contratto Contamination incorporato richiesto "
-                "(contamination-v1), con metadati scientifici completi. "
+                f"L'immagine non offre il contratto {BUNDLED_WORKFLOW_LABELS.get(workflow, workflow)} "
+                f"incorporato richiesto ({expected_interface}), con metadati scientifici completi. "
                 "Usare un runtime costruito per questa versione di NIPAT."
             )
         return description
@@ -296,7 +305,7 @@ class DockerComposeRunner:
     ) -> Iterator[RunRecord]:
         if self._record is not None:
             raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
-        if bundled_workflow not in (None, "contamination"):
+        if bundled_workflow is not None and bundled_workflow not in BUNDLED_WORKFLOW_INTERFACES:
             raise ValidationError(f"Workflow incorporato non supportato: {bundled_workflow}")
         record = RunRecord(run_dir, workflow, parameters)
         self._record = record

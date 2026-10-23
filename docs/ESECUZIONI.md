@@ -23,7 +23,7 @@ registrate in UTC con fuso esplicito.
 | `interrupted` | Interruzione intercettata dal processo, per esempio Ctrl+C. |
 
 Il successo riguarda l'esecuzione, non la validità scientifica del risultato.
-Per CPI e Contamination gli script di autotest confrontano i valori dopo la
+Per SNPcall, CPI e Contamination gli script di autotest confrontano i valori dopo la
 chiusura del workflow: fa fede anche l'esito finale di `nipat self-test`.
 
 Il record comprende input e parametri, versione del Python effettivo, hash dei
@@ -52,13 +52,18 @@ a mostrarlo nel terminale. I file JSON vengono sostituiti atomicamente dopo
 ogni aggiornamento. Il manifest scientifico viene verificato prima di
 eseguire i comandi dei workflow.
 
-Nel percorso di sviluppo 0.5, Contamination usa già il motore incorporato.
+Nel percorso di sviluppo 0.5, Contamination e SNPcall usano già il motore incorporato.
 `work/engine-request.json` descrive la richiesta; `work/engine-compose.json`
 è l'unica configurazione Compose usata per l'analisi. Espone soltanto gli input
 selezionati in sola lettura e la cartella del run corrente in scrittura.
 Il motore genera `work/DNPpanel.txt` e `work/inputs`, conservando i nomi dei campioni.
+Per SNPcall da BAM genera `work/snp_regions.bed` e `work/pileup.txt`, quindi avvia R
+soltanto se samtools termina con successo. Nella modalità pileup usa direttamente
+il file selezionato. Il risultato rimane `output/SNPcall_output.txt`.
+`run.json` registra una sola invocazione del motore per l'intero workflow;
+il log contiene anche il comando samtools eseguito all'interno del container.
 
-Per questo workflow, `source.role` vale `client`: gli hash locali descrivono
+Per questi workflow, `source.role` vale `client`: gli hash locali descrivono
 l'applicazione, mentre `runtime.engine` identifica gli script R e i moduli Python
 di preparazione effettivamente presenti nell'immagine. Il controllo di integrità
 scientifica riguarda quindi il manifest incorporato, non una copia R sul PC.

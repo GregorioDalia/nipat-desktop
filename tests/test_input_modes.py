@@ -61,11 +61,23 @@ class InputModeTests(unittest.TestCase):
         panel = self.write("SNP list.tsv", "pos\tref\talt\nchr1:1\tA\tC\n")
         pileup = self.write("pileup $ ,=.txt", "chr1\t1\tA\t1\t.\tI\tread1\n")
         before = pileup.read_bytes()
-        self.workflows.snp_call(pileup=pileup, panel=panel)
+        run = self.workflows.snp_call(pileup=pileup, panel=panel)
         self.assertEqual(len(self.runner.calls), 1)
         command = self.runner.calls[0]
-        self.assertEqual(command[0], "Rscript")
-        self.assertEqual(command[command.index("--pileup") + 1], "/workspace/inputs/snp-pileup.txt")
+        self.assertEqual(command[:4],
+                         ["python3", "/opt/nipat/engine/main.py", "execute", "snp-call"])
+        request = json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
+        self.assertEqual(request, {
+            "schema_version": 1, "workflow": "snp-call", "mode": "pileup",
+            "panel": "/workspace/inputs/snp-list.tsv",
+            "pileup": "/workspace/inputs/snp-pileup.txt", "bam": None, "reference": None,
+            "work_dir": str(self.layout.container_path(run / "work")),
+            "out_dir": str(self.layout.container_path(run / "output")),
+        })
+        self.assertEqual(command[-1], str(self.layout.container_path(run / "work/engine-request.json")))
+        self.assertEqual(self.runner.records[0]["bundled_workflow"], "snp-call")
+        self.assertFalse((run / "work/snp_regions.bed").exists())
+        self.assertFalse((run / "work/pileup.txt").exists())
         self.assertEqual(pileup.read_bytes(), before)
         mappings = self.runner.records[0]["mounts"].mappings
         self.assertTrue(all(item["read_only"] for item in mappings))
@@ -88,15 +100,50 @@ class InputModeTests(unittest.TestCase):
         self.workflows.snp_call(pileup=pileup, panel=panel)
         self.assertEqual(len(self.runner.calls), 1)
 
-    def test_snp_bam_without_optional_bam_index_runs_both_steps(self):
+    def test_snp_bam_without_optional_bam_index_delegates_preparation_to_engine(self):
         panel = self.write("SNP.tsv", "pos\tref\talt\nchr1:100\tA\tC\n")
         bam = self.write("sample.bam", "fixture")
         reference = self.write("genome.fa", ">chr1\nACGT\n")
         self.write("genome.fa.fai", "chr1\t4\t6\t4\t5\n")
-        self.workflows.snp_call(bam=bam, reference=reference, panel=panel)
-        self.assertEqual([call[0] for call in self.runner.calls], ["samtools", "Rscript"])
-        self.assertIn("--output-QNAME", self.runner.calls[0])
-        self.assertEqual(self.runner.calls[0][-1], "/workspace/inputs/bam/sample.bam")
+        before = {path: path.read_bytes() for path in self.external.iterdir()}
+        run = self.workflows.snp_call(bam=bam, reference=reference, panel=panel)
+        self.assertEqual(len(self.runner.calls), 1)
+        self.assertEqual(self.runner.calls[0][:4],
+                         ["python3", "/opt/nipat/engine/main.py", "execute", "snp-call"])
+        request = json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
+        self.assertEqual(request["mode"], "bam")
+        self.assertEqual(request["bam"], "/workspace/inputs/bam/sample.bam")
+        self.assertEqual(request["reference"], "/workspace/inputs/reference/genome.fa")
+        self.assertIsNone(request["pileup"])
+        self.assertFalse((run / "work/snp_regions.bed").exists())
+        self.assertFalse((run / "work/pileup.txt").exists())
+        self.assertTrue(all(path.read_bytes() == data for path, data in before.items()))
+        self.assertEqual(self.runner.records[0]["bundled_workflow"], "snp-call")
+        mappings = self.runner.records[0]["mounts"].mappings
+        self.assertTrue(all(item["read_only"] for item in mappings))
+        self.assertEqual(len(mappings), 4)
+        self.assertEqual(self.runner.records[0]["parameters"]["bam"], str(bam.resolve()))
+
+    def test_snp_compressed_reference_and_optional_indexes_keep_adjacent_safe_aliases(self):
+        panel = self.write("SNP.tsv", "pos\tref\talt\nchr1:100\tA\tC\n")
+        bam = self.write("sample $ ,=.bam", "fixture")
+        self.write("sample $ ,=.bai", "index")
+        self.write("sample $ ,=.bam.csi", "index")
+        reference = self.write("genome $ ,=.fa.bgz", "compressed fixture")
+        self.write("genome $ ,=.fa.bgz.fai", "chr1\t4\t6\t4\t5\n")
+        self.write("genome $ ,=.fa.bgz.gzi", "index")
+        run = self.workflows.snp_call(bam=bam, reference=reference, panel=panel)
+        request = json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
+        self.assertEqual(request["reference"], "/workspace/inputs/reference/genome.fa.gz")
+        mappings = self.runner.records[0]["mounts"].mappings
+        self.assertEqual({item["container_path"] for item in mappings}, {
+            "/workspace/inputs/snp-list.tsv", "/workspace/inputs/bam/sample.bam",
+            "/workspace/inputs/bam/sample.bam.bai", "/workspace/inputs/bam/sample.bam.csi",
+            "/workspace/inputs/reference/genome.fa.gz",
+            "/workspace/inputs/reference/genome.fa.gz.fai",
+            "/workspace/inputs/reference/genome.fa.gz.gzi",
+        })
+        self.assertTrue(all(item["read_only"] for item in mappings))
 
     def test_contamination_recursive_folder_excludes_panel_and_preserves_inputs(self):
         folder = self.external / "recursive"

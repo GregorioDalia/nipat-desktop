@@ -10,7 +10,6 @@ from nipat.adapters.panels import (
     read_snp_positions,
     write_dnp_list,
     write_position_panel,
-    write_snp_bed,
 )
 from nipat.errors import ValidationError
 from nipat.execution.mounts import INPUT_ROOT, InputMounts
@@ -157,12 +156,13 @@ class Workflows:
         if pileup is not None and reference is not None:
             raise ValidationError("--reference si usa soltanto con --bam.")
         panel = require_file(panel, "Lista SNP")
-        positions = read_snp_positions(panel, for_bed=bam is not None)
+        read_snp_positions(panel, for_bed=bam is not None)
         mounts = InputMounts(self.layout)
         panel_path = mounts.bind_file(panel, target=INPUT_ROOT / "snp-list.tsv")
         input_files = [panel]
         reference_path = None
         bam_path = None
+        pileup_path = None
         if bam is not None:
             bam = require_file(bam, "BAM")
             bam_path = INPUT_ROOT / "bam" / "sample.bam"
@@ -178,26 +178,27 @@ class Workflows:
         run_dir = self.layout.new_run_dir("snp-call", run_name)
         with self.runner.record_run(
             run_dir, workflow="snp-call", inputs=input_files, mounts=mounts,
+            bundled_workflow="snp-call",
             parameters={"mode": "bam" if bam is not None else "pileup",
                         "bam": str(bam) if bam else None,
                         "pileup": str(pileup) if pileup else None,
                         "reference": str(reference) if reference else None, "panel": str(panel)},
         ):
-            if bam is not None:
-                bed_file = run_dir / "work" / "snp_regions.bed"
-                write_snp_bed(positions, bed_file)
-                pileup_path = self.layout.container_path(run_dir / "work" / "pileup.txt")
-                self.runner.run(
-                    ["samtools", "mpileup", "-f", reference_path,
-                     "-l", self.layout.container_path(bed_file), "--output-QNAME",
-                     "--no-output-ins", "--no-output-del", "--no-output-ends",
-                     "-o", pileup_path, bam_path],
-                    working_dir=self.layout.container_path(run_dir / "work"),
-                )
+            request = {
+                "schema_version": 1, "workflow": "snp-call",
+                "mode": "bam" if bam is not None else "pileup",
+                "panel": str(panel_path),
+                "bam": str(bam_path) if bam_path is not None else None,
+                "pileup": str(pileup_path) if pileup_path is not None else None,
+                "reference": str(reference_path) if reference_path is not None else None,
+                "work_dir": str(self.layout.container_path(run_dir / "work")),
+                "out_dir": str(self.layout.container_path(run_dir / "output")),
+            }
+            request_file = run_dir / "work" / "engine-request.json"
+            _write_engine_request(request_file, request)
             self.runner.run(
-                ["Rscript", self._script("scientific/vendor/NEWPAT/SNPcall/SNPcall.R"),
-                 "--pileup", pileup_path, "--snplist", panel_path, "--out",
-                 self.layout.container_path(run_dir / "output" / "SNPcall_output.txt")],
+                ["python3", "/opt/nipat/engine/main.py", "execute", "snp-call",
+                 "--request", self.layout.container_path(request_file)],
                 working_dir=self.layout.container_path(run_dir / "work"),
             )
         return run_dir

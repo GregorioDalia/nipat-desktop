@@ -1,6 +1,6 @@
 """Check bundled R scripts without mounting the application or source checkout.
 
-This verifies native R invocation and full Contamination preparation/execution.
+This verifies native R invocation and complete Contamination/SNPcall workflows.
 Only fixture input and result directories are mounted into the image.
 """
 
@@ -24,6 +24,7 @@ from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
 from nipat.validation.self_test import compare_snp_outputs
+from nipat.validation.files import require_snp_pileup
 from verify_contamination_update import check_bundled_run
 from verify_contamination_update import check_outputs as check_contamination
 from verify_cpi_update import check_outputs as check_cpi
@@ -57,8 +58,8 @@ def image_id(reference: str) -> str:
     return identifier
 
 
-def run_image(identifier: str, arguments: list[str], *, inputs: Path | None = None,
-              results: Path | None = None, expected_returncode: int = 0) -> str:
+def run_container(identifier: str, arguments: list[str], *, inputs: Path | None = None,
+                  results: Path | None = None, expected_returncode: int = 0) -> str:
     command = [
         "run", "--rm", "--pull", "never", "--network", "none", "--read-only",
         "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m", "--env", "HOME=/tmp",
@@ -80,8 +81,14 @@ def run_image(identifier: str, arguments: list[str], *, inputs: Path | None = No
         ])
     else:
         command.extend(["--workdir", "/tmp"])
-    return docker([*command, identifier, *ENTRYPOINT, *arguments],
+    return docker([*command, identifier, *arguments],
                   expected_returncode=expected_returncode)
+
+
+def run_image(identifier: str, arguments: list[str], *, inputs: Path | None = None,
+              results: Path | None = None, expected_returncode: int = 0) -> str:
+    return run_container(identifier, [*ENTRYPOINT, *arguments], inputs=inputs,
+                         results=results, expected_returncode=expected_returncode)
 
 
 def check_metadata(identifier: str) -> dict:
@@ -94,11 +101,13 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("Bundled scientific manifest differs from this checkout.")
     if description.get("workflow_interfaces", {}).get("contamination") != "contamination-v1":
         raise ValueError("The engine lacks the complete Contamination interface.")
+    if description.get("workflow_interfaces", {}).get("snp-call") != "snp-call-v1":
+        raise ValueError("The engine lacks the complete SNPcall interface.")
     preparation = description.get("preparation", {})
-    if preparation.get("interface") != "contamination-v1":
+    if preparation.get("interface") != "workflow-preparation-v1":
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
-    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py"):
+    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py"):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
     expected_sources = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -150,6 +159,160 @@ def write_request(results: Path, request: dict) -> None:
     (results / "work/request.json").write_text(
         json.dumps(request, ensure_ascii=False, indent=2) + "\n", encoding="utf-8",
     )
+
+
+def compare_snp_with_diagnostics(expected: Path, actual: Path) -> int:
+    try:
+        return compare_snp_outputs(expected, actual)
+    except NipatError:
+        print(f"Expected SNPcall output:\n{expected.read_text(encoding='utf-8')}", file=sys.stderr)
+        if actual.is_file():
+            print(f"Actual SNPcall output:\n{actual.read_text(encoding='utf-8')}", file=sys.stderr)
+        raise
+
+
+def check_snp_intermediates(run_dir: Path) -> Path:
+    expected_bed = "chrSynthetic\t48\t51\nchrSynthetic\t118\t121\n"
+    if (run_dir / "work/snp_regions.bed").read_text(encoding="utf-8") != expected_bed:
+        raise ValueError("The engine produced unexpected SNP three-base BED windows.")
+    pileup = run_dir / "work/pileup.txt"
+    require_snp_pileup(pileup)
+    rows = [line.split("\t") for line in pileup.read_text(encoding="utf-8").splitlines()]
+    expected_positions = {(str(position), str(depth)) for position, depth in (
+        (49, 7), (50, 7), (51, 7), (119, 6), (120, 6), (121, 6),
+    )}
+    if (len(rows) != 6 or any(row[0] != "chrSynthetic" or len(row) != 7 for row in rows)
+            or {(row[1], row[3]) for row in rows} != expected_positions):
+        raise ValueError(f"Unexpected retained SNP pileup positions/depths: {rows}")
+    return pileup
+
+
+def build_snp_bam_fixture(identifier: str, root: Path) -> Path:
+    """Compile committed synthetic text inputs using the image's own samtools."""
+    fixture = PROJECT / "tests/fixtures/snp_engine"
+    generated = root / "generated SNP assets"
+    inputs = generated / "work"
+    inputs.mkdir(parents=True)
+    for name in ("reference.fa", "SNPlist.tsv"):
+        shutil.copyfile(fixture / name, inputs / name)
+    run_container(identifier, [
+        "samtools", "view", "-b", "-o", "/results/work/sample.bam", "/inputs/reads.sam",
+    ], inputs=fixture, results=generated)
+    run_container(identifier, ["samtools", "faidx", "/results/work/reference.fa"],
+                  results=generated)
+    if not (inputs / "sample.bam").is_file() or not (inputs / "reference.fa.fai").is_file():
+        raise ValueError("Synthetic BAM/FASTA-index preparation failed.")
+    if any(inputs.glob("*.bai")) or any(inputs.glob("*.csi")):
+        raise ValueError("This regression must exercise the supported unindexed-BAM path.")
+    return inputs
+
+
+def check_snp_workflow(identifier: str, root: Path) -> tuple[Path, Path]:
+    examples = PROJECT / "scientific/vendor/NEWPAT/SNPcall/examples"
+    example_inputs = root / "snp-inputs"
+    pileup_request = {
+        "schema_version": 1, "workflow": "snp-call", "mode": "pileup",
+        "panel": "/inputs/SNPlist.txt", "bam": None,
+        "pileup": "/inputs/pileup.txt", "reference": None,
+        "work_dir": "/results/work", "out_dir": "/results/output",
+    }
+    pileup_results = root / "complete SNP pileup results"
+    write_request(pileup_results, pileup_request)
+    run_image(identifier, ["execute", "snp-call", "--request", "/results/work/request.json"],
+              inputs=example_inputs, results=pileup_results)
+    compare_snp_with_diagnostics(examples / "output.txt", pileup_results / "output/SNPcall_output.txt")
+    if (pileup_results / "work/snp_regions.bed").exists() or (pileup_results / "work/pileup.txt").exists():
+        raise ValueError("An existing pileup must not trigger BAM preparation.")
+    if any((example_inputs / name).read_bytes() != (examples / name).read_bytes()
+           for name in ("pileup.txt", "SNPlist.txt")):
+        raise ValueError("The complete SNP pileup workflow changed an original input.")
+    print("PASS: complete SNPcall from an existing pileup, all nine reference rows.", flush=True)
+
+    inputs = build_snp_bam_fixture(identifier, root)
+    originals = {path: path.read_bytes() for path in inputs.iterdir() if path.is_file()}
+    bam_request = {
+        **pileup_request, "mode": "bam", "panel": "/inputs/SNPlist.tsv",
+        "bam": "/inputs/sample.bam", "pileup": None, "reference": "/inputs/reference.fa",
+    }
+    bam_results = root / "complete SNP BAM results"
+    write_request(bam_results, bam_request)
+    run_image(identifier, ["execute", "snp-call", "--request", "/results/work/request.json"],
+              inputs=inputs, results=bam_results)
+    expected = PROJECT / "tests/fixtures/snp_engine/expected.tsv"
+    compare_snp_with_diagnostics(expected, bam_results / "output/SNPcall_output.txt")
+    check_snp_intermediates(bam_results)
+    if any(path.read_bytes() != content for path, content in originals.items()):
+        raise ValueError("The complete SNP BAM workflow changed an original input.")
+    print("PASS: complete SNPcall from unindexed BAM, independent allele counts, BED and pileup retained.",
+          flush=True)
+
+    invalid_pileup = inputs / "six-columns.txt"
+    invalid_pileup.write_text("chrSynthetic\t50\tA\t1\t.\tI\n", encoding="utf-8")
+    rejected_pileup = root / "rejected SNP pileup"
+    write_request(rejected_pileup, {
+        **pileup_request, "panel": "/inputs/SNPlist.tsv", "pileup": "/inputs/six-columns.txt",
+    })
+    diagnostics = run_image(
+        identifier, ["execute", "snp-call", "--request", "/results/work/request.json"],
+        inputs=inputs, results=rejected_pileup, expected_returncode=2,
+    )
+    if "7 colonne" not in diagnostics or "NIPAT scientific engine:" not in diagnostics:
+        raise ValueError(f"Unexpected six-column pileup diagnostics: {diagnostics}")
+    if ({path.name for path in (rejected_pileup / "work").iterdir()} != {"request.json"}
+            or any((rejected_pileup / "output").iterdir())):
+        raise ValueError("Invalid SNP input produced intermediate or scientific output.")
+
+    invalid_bam = inputs / "invalid.bam"
+    invalid_bam.write_bytes(b"This deliberately is not a BAM file.\n")
+    rejected_bam = root / "failed SNP samtools"
+    write_request(rejected_bam, {**bam_request, "bam": "/inputs/invalid.bam"})
+    diagnostics = run_image(
+        identifier, ["execute", "snp-call", "--request", "/results/work/request.json"],
+        inputs=inputs, results=rejected_bam, expected_returncode=1,
+    )
+    if "samtools" not in diagnostics.lower() and "mpileup" not in diagnostics.lower():
+        raise ValueError(f"Expected a samtools failure, got: {diagnostics}")
+    if "snpscall started" in diagnostics or any((rejected_bam / "output").iterdir()):
+        raise ValueError("R ran after failed samtools preparation.")
+    print("PASS: SNPcall rejects invalid pileup before preparation and propagates samtools failure without R.",
+          flush=True)
+    return inputs, expected
+
+
+def check_snp_client_without_host_scripts(identifier: str, root: Path,
+                                          inputs: Path, expected: Path) -> None:
+    project = root / "SNP client without scientific sources"
+    project.mkdir()
+    shutil.copyfile(PROJECT / "compose.yaml", project / "compose.yaml")
+    layout = ProjectLayout(project, root, root / "SNP client data", root / "SNP client results",
+                           project / "compose.yaml")
+    originals = {path: path.read_bytes() for path in inputs.iterdir() if path.is_file()}
+    with patch.dict(os.environ, {"NIPAT_RUNTIME_IMAGE": identifier, "NIPAT_BACKEND": "native"}):
+        workflow = Workflows(layout, DockerComposeRunner(layout))
+        bam_run = workflow.snp_call(
+            bam=inputs / "sample.bam", reference=inputs / "reference.fa",
+            panel=inputs / "SNPlist.tsv", run_name="complete-snp-bam",
+        )
+        compare_snp_with_diagnostics(expected, bam_run / "output/SNPcall_output.txt")
+        pileup = check_snp_intermediates(bam_run)
+        pileup_bytes = pileup.read_bytes()
+        check_bundled_run(bam_run, layout, workflow="snp-call")
+        # Reuse a real intermediate from a previous run through public input
+        # selection. It must be mounted read-only, not become a writable old run.
+        pileup_run = workflow.snp_call(
+            pileup=pileup, panel=inputs / "SNPlist.tsv", run_name="complete-snp-pileup",
+        )
+    compare_snp_with_diagnostics(expected, pileup_run / "output/SNPcall_output.txt")
+    compare_snp_outputs(bam_run / "output/SNPcall_output.txt", pileup_run / "output/SNPcall_output.txt")
+    check_bundled_run(pileup_run, layout, workflow="snp-call")
+    if pileup.read_bytes() != pileup_bytes or any(
+        path.read_bytes() != content for path, content in originals.items()
+    ):
+        raise ValueError("The CLI SNP workflows changed original inputs or a previous run's pileup.")
+    if {path.name for path in project.iterdir()} != {"compose.yaml"}:
+        raise ValueError("The source-free client test unexpectedly populated its application directory.")
+    print("PASS: CLI SNPcall BAM and reused-pileup modes without host scientific sources, "
+          "with isolated mounts, numeric parity and recorded engine identity.", flush=True)
 
 
 def check_contamination_workflow(identifier: str, root: Path) -> None:
@@ -261,21 +424,26 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True, help="already-built local Docker image")
     args = parser.parse_args()
+    root: Path | None = None
     try:
         identifier = image_id(args.image)
         check_metadata(identifier)
         print(f"PASS: bundled code integrity, image {identifier}", flush=True)
-        with tempfile.TemporaryDirectory(prefix="nipat engine package ") as directory:
-            root = Path(directory).resolve()
-            check_snp(identifier, root)
-            check_contamination_fixture(identifier, root)
-            check_contamination_workflow(identifier, root)
-            check_cpi_fixture(identifier, root)
-            check_contamination_client_without_host_scripts(identifier, root)
+        root = Path(tempfile.mkdtemp(prefix="nipat engine package ")).resolve()
+        check_snp(identifier, root)
+        snp_inputs, snp_expected = check_snp_workflow(identifier, root)
+        check_snp_client_without_host_scripts(identifier, root, snp_inputs, snp_expected)
+        check_contamination_fixture(identifier, root)
+        check_contamination_workflow(identifier, root)
+        check_cpi_fixture(identifier, root)
+        check_contamination_client_without_host_scripts(identifier, root)
     except (NipatError, OSError, RuntimeError, ValueError, KeyError) as exc:
         print(f"Engine package verification failed: {exc}", file=sys.stderr)
+        if root is not None:
+            print(f"Synthetic inputs and failed-run diagnostics retained at: {root}", file=sys.stderr)
         return 1
-    print("PASS: five numeric checks and validation failures without application/source mounts or network.")
+    shutil.rmtree(root)
+    print("PASS: nine numeric checks and validation failures without application/source mounts or network.")
     print("DNPcall code is bundled and hash-verified; its BAM regression is a separate step.")
     return 0
 

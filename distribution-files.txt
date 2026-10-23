@@ -117,6 +117,7 @@ src/nipat_scientific/contamination.py
 src/nipat_scientific/errors.py
 src/nipat_scientific/files.py
 src/nipat_scientific/panels.py
+src/nipat_scientific/snp.py
 tests/fixtures/contamination/DNP_list.txt
 tests/fixtures/contamination/README.md
 tests/fixtures/contamination/samples/NoRatio.tsv
@@ -129,6 +130,11 @@ tests/fixtures/cpi/samples/FatherInformative.txt
 tests/fixtures/cpi/samples/FatherNoSites.txt
 tests/fixtures/cpi/samples/MotherInformative.txt
 tests/fixtures/cpi/samples/MotherNoSites.txt
+tests/fixtures/snp_engine/README.md
+tests/fixtures/snp_engine/SNPlist.tsv
+tests/fixtures/snp_engine/expected.tsv
+tests/fixtures/snp_engine/reads.sam
+tests/fixtures/snp_engine/reference.fa
 tests/test_cli_validation.py
 tests/test_contamination_workflow.py
 tests/test_contamination_engine.py
@@ -144,6 +150,7 @@ tests/test_panels.py
 tests/test_paths.py
 tests/test_results.py
 tests/test_run_tracking.py
+tests/test_snp_engine.py
 tests/test_terminal.py
 tests/test_validation.py
 tests/test_wizard_guidance.py

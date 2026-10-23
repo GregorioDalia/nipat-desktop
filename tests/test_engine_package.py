@@ -8,9 +8,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -27,7 +29,7 @@ class EnginePackageTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="nipat engine ")
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         (self.root / "engine").mkdir()
         shutil.copyfile(MODULE_PATH, self.root / "engine" / "main.py")
         shutil.copytree(PROJECT_ROOT / "src" / "nipat_scientific",
@@ -60,11 +62,15 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(metadata["manifest"]["sha256"],
                          hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
-        self.assertEqual(metadata["workflow_interfaces"], {"contamination": "contamination-v1"})
+        self.assertEqual(metadata["workflow_interfaces"], {
+            "contamination": "contamination-v1", "snp-call": "snp-call-v1",
+        })
+        self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 6)
+        self.assertEqual(len(hashes), 7)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
+        self.assertIn("lib/nipat_scientific/snp.py", hashes)
         for relative, digest in hashes.items():
             self.assertEqual(hashlib.sha256((self.root / relative).read_bytes()).hexdigest(), digest)
         for workflow, relative in engine.SCRIPT_PATHS.items():
@@ -241,6 +247,167 @@ class EnginePackageTests(unittest.TestCase):
     def test_repository_scientific_manifest_matches_all_supported_workflows(self):
         metadata = engine.verify_bundle(PROJECT_ROOT)
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
+
+    def snp_request(self, mode="bam"):
+        inputs = self.root / "selected SNP inputs"
+        inputs.mkdir()
+        panel = inputs / "panel.tsv"
+        panel.write_text("pos\tref\talt\nchr1:100\tA\tC\n", encoding="utf-8")
+        bam = inputs / "sample.bam"
+        bam.write_bytes(b"samtools fixture")
+        reference = inputs / "genome.fa"
+        reference.write_text(">chr1\n" + "A" * 200 + "\n", encoding="utf-8")
+        Path(str(reference) + ".fai").write_text("chr1\t200\t6\t200\t201\n", encoding="utf-8")
+        pileup = inputs / "pileup.txt"
+        pileup.write_text("chr1\t100\tA\t1\t.\tI\tread1\n", encoding="utf-8")
+        request = {
+            "schema_version": 1, "workflow": "snp-call", "mode": mode,
+            "panel": str(panel), "bam": str(bam) if mode == "bam" else None,
+            "reference": str(reference) if mode == "bam" else None,
+            "pileup": str(pileup) if mode == "pileup" else None,
+            "work_dir": str(self.root / "snp-results/work"),
+            "out_dir": str(self.root / "snp-results/output"),
+        }
+        request_file = self.root / "snp-request.json"
+        request_file.write_text(json.dumps(request), encoding="utf-8")
+        return request_file, request
+
+    def snp_tools(self, samtools_body):
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        header = (
+            f"#!{sys.executable}\n"
+            "import json, os, sys\nfrom pathlib import Path\n"
+            "with Path(os.environ['SNP_TEST_EVENTS']).open('a') as log:\n"
+            "    log.write(json.dumps(sys.argv) + '\\n')\n"
+        )
+        for name, body in (("samtools", samtools_body), ("Rscript", "sys.exit(37)\n")):
+            executable = fake_bin / name
+            executable.write_text(header + body, encoding="utf-8")
+            executable.chmod(0o755)
+        environment = os.environ.copy()
+        environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+        environment["PYTHONPATH"] = str(self.root / "absent application")
+        environment["SNP_TEST_EVENTS"] = str(self.root / "events.jsonl")
+        return environment
+
+    def run_snp_request(self, request_file, environment):
+        return subprocess.run(
+            [sys.executable, str(self.root / "engine/main.py"), "execute", "snp-call",
+             "--request", str(request_file)], cwd=self.root, env=environment,
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+
+    def snp_events(self):
+        path = self.root / "events.jsonl"
+        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_relocated_snp_bam_executes_samtools_then_r_with_original_options(self):
+        request_file, request = self.snp_request()
+        environment = self.snp_tools(
+            "Path(sys.argv[sys.argv.index('-o') + 1]).write_text('chr1\\t100\\tA\\t1\\t.\\tI\\tread1\\n')\n"
+        )
+        result = self.run_snp_request(request_file, environment)
+        self.assertEqual(result.returncode, 37, result.stderr)
+        commands = self.snp_events()
+        self.assertEqual([Path(command[0]).name for command in commands], ["samtools", "Rscript"])
+        self.assertEqual(commands[0][1:], [
+            "mpileup", "-f", request["reference"], "-l", request["work_dir"] + "/snp_regions.bed",
+            "--output-QNAME", "--no-output-ins", "--no-output-del", "--no-output-ends",
+            "-o", request["work_dir"] + "/pileup.txt", request["bam"],
+        ])
+        self.assertEqual(commands[1][1:], [
+            str(self.root / "scientific" / engine.SCRIPT_PATHS["snp-call"]),
+            "--pileup", request["work_dir"] + "/pileup.txt", "--snplist", request["panel"],
+            "--out", request["out_dir"] + "/SNPcall_output.txt",
+        ])
+        self.assertEqual(Path(request["work_dir"], "snp_regions.bed").read_text(), "chr1\t98\t101\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_snp_existing_pileup_skips_samtools(self):
+        request_file, request = self.snp_request(mode="pileup")
+        result = self.run_snp_request(request_file, self.snp_tools("sys.exit(99)\n"))
+        self.assertEqual(result.returncode, 37, result.stderr)
+        commands = self.snp_events()
+        self.assertEqual([Path(command[0]).name for command in commands], ["Rscript"])
+        self.assertEqual(commands[0][commands[0].index("--pileup") + 1], request["pileup"])
+        self.assertEqual(list(Path(request["work_dir"]).iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_snp_samtools_failure_preserves_exit_code_without_starting_r(self):
+        request_file, request = self.snp_request()
+        result = self.run_snp_request(request_file, self.snp_tools("sys.exit(17)\n"))
+        self.assertEqual(result.returncode, 17, result.stderr)
+        self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+        self.assertTrue(Path(request["work_dir"], "snp_regions.bed").is_file())
+        self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_snp_generated_pileup_must_be_valid_before_r(self):
+        request_file, request = self.snp_request()
+        environment = self.snp_tools(
+            "Path(sys.argv[sys.argv.index('-o') + 1]).write_text('chr1\\t100\\tA\\t1\\t.\\tI\\n')\n"
+        )
+        result = self.run_snp_request(request_file, environment)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("7 colonne", result.stderr)
+        self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+        self.assertTrue(Path(request["work_dir"], "pileup.txt").is_file())
+        self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_snp_success_without_usable_pileup_never_starts_r(self):
+        request_file, request = self.snp_request()
+        environment = self.snp_tools(
+            "if os.environ['SNP_TEST_PILEUP_MODE'] == 'empty':\n"
+            "    Path(sys.argv[sys.argv.index('-o') + 1]).write_text('')\n"
+        )
+        for mode in ("missing", "empty"):
+            with self.subTest(mode=mode):
+                case = {**request, "work_dir": str(self.root / mode / "work"),
+                        "out_dir": str(self.root / mode / "output")}
+                request_file.write_text(json.dumps(case), encoding="utf-8")
+                environment["SNP_TEST_PILEUP_MODE"] = mode
+                Path(environment["SNP_TEST_EVENTS"]).unlink(missing_ok=True)
+                result = self.run_snp_request(request_file, environment)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+                self.assertEqual(list(Path(case["out_dir"]).iterdir()), [])
+
+    @unittest.skipIf(os.name == "nt", "POSIX signals exercise the Linux container supervisor.")
+    def test_snp_cancellation_reaches_samtools_and_prevents_r_even_if_child_returns_zero(self):
+        request_file, request = self.snp_request()
+        environment = self.snp_tools(
+            "import signal, time\n"
+            "def stop(signum, frame):\n"
+            "    Path(os.environ['SNP_TEST_EVENTS'] + '.signal').write_text(str(signum))\n"
+            "    sys.exit(0)\n"
+            "signal.signal(signal.SIGTERM, stop)\n"
+            "Path(os.environ['SNP_TEST_EVENTS'] + '.ready').write_text('ready')\n"
+            "while True: time.sleep(0.1)\n"
+        )
+        process = subprocess.Popen(
+            [sys.executable, str(self.root / "engine/main.py"), "execute", "snp-call",
+             "--request", str(request_file)], env=environment, cwd=self.root,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            ready = Path(environment["SNP_TEST_EVENTS"] + ".ready")
+            deadline = time.monotonic() + 5
+            while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertTrue(ready.exists(), "samtools fixture did not become ready")
+            process.send_signal(signal.SIGTERM)
+            stdout, stderr = process.communicate(timeout=5)
+            self.assertEqual(process.returncode, 128 + signal.SIGTERM, stdout + stderr)
+            self.assertEqual(Path(environment["SNP_TEST_EVENTS"] + ".signal").read_text(), str(signal.SIGTERM))
+            self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+            self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=5)
 
 
 if __name__ == "__main__":

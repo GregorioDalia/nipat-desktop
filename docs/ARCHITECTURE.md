@@ -38,19 +38,24 @@ the same `Workflows` service, rather than invoke R or Docker directly.
 
 ## Incremental 0.5 engine migration
 
-Contamination now uses a separate execution path. The client selects files,
+Contamination and SNPcall now use a separate execution path. The client selects files,
 performs early validation with the shared `nipat_scientific` library, maps the
-original paths and writes a `contamination-v1` request. The bundled library
-validates the request again, normalizes the panel and stages the tables before
-executing the unchanged R script. There is one implementation of the panel and
+original paths and writes a versioned workflow request (`contamination-v1` or
+`snp-call-v1`). The bundled library validates the request again and prepares the
+inputs before executing the unchanged R script. Contamination normalizes its panel
+and stages tables. SNPcall accepts an existing QNAME pileup or generates the
+three-base BED windows and calls samtools before R for BAM input.
+There is one implementation of the panel and
 table validators, included in both client and image; no host Python source is
 mounted into the container.
 
 The runner uses `work/engine-compose.json` as its only Compose file for this
-workflow. It mounts individual selected inputs read-only and the current run
+workflows. It mounts individual selected inputs read-only and the current run
 read-write; the application, default data folder and other runs are not mounted.
 The image filesystem is read-only and the network is disabled. Staging remains
-visible under `work/inputs` and `work/DNPpanel.txt`, with the original sample names.
+visible under `work/inputs` and `work/DNPpanel.txt` for Contamination, with the
+original sample names. SNPcall BAM mode retains `work/snp_regions.bed` and
+`work/pileup.txt`. A failed or interrupted samtools process prevents R from starting.
 
 The runner negotiates the image's workflow interface before analysis and records
 the verified R manifest plus the actual engine/preparation Python hashes under
@@ -59,7 +64,7 @@ the verified R manifest plus the actual engine/preparation Python hashes under
 there is no silent fallback to host R scripts. Dry-run records a request and the
 planned command without claiming the image has been verified.
 
-SNPcall, DNPcall and CPI still use the legacy client preparation and mounts during
+DNPcall and CPI still use the legacy client preparation and mounts during
 this increment. Their R scripts are already bundled, but their complete workflow
 migration is pending. Version 0.5 retains the guided CLI without a GUI. Installer
 identity isolation and removal of the Windows Docker Desktop edition are later

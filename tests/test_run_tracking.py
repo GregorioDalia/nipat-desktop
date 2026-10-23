@@ -89,20 +89,21 @@ class RunTrackingTests(unittest.TestCase):
         panel.write_text("pos\tref\talt\nchr1:100\tA\tC\n", encoding="utf-8")
         return bam, reference, panel
 
-    def test_second_snp_command_failure_marks_whole_workflow_failed(self):
+    def test_snp_engine_failure_marks_whole_workflow_failed(self):
         bam, reference, panel = self.bam_inputs()
         with redirect_stdout(self.output), patch(
             "nipat.execution.runner.subprocess.Popen",
-            side_effect=self.popen_factory(["print('pileup ready')", "import sys; print('R failed'); sys.exit(7)"]),
-        ):
+            side_effect=self.popen_factory(["import sys; print('pileup ready'); print('R failed'); sys.exit(7)"]),
+        ), patch.object(self.runner, "_describe_bundled_engine"):
             with self.assertRaisesRegex(RuntimeExecutionError, "codice 7"):
                 Workflows(self.layout, self.runner).snp_call(
                     bam=bam, reference=reference, panel=panel, run_name="failed-snp"
                 )
         record = self.record("failed-snp")
         self.assertEqual(record["status"], "failed")
-        self.assertEqual([c["status"] for c in record["commands"]], ["succeeded", "failed"])
-        self.assertEqual([c["returncode"] for c in record["commands"]], [0, 7])
+        self.assertEqual([c["status"] for c in record["commands"]], ["failed"])
+        self.assertEqual([c["returncode"] for c in record["commands"]], [7])
+        self.assertIn("snp-call", record["commands"][0]["argv"])
         self.assertIn("R failed", (self.layout.runs_dir / "failed-snp" / "execution.log").read_text())
 
     def test_dry_run_is_planned_and_launches_no_process(self):
@@ -118,7 +119,7 @@ class RunTrackingTests(unittest.TestCase):
         popen.assert_not_called()
         record = self.record("planned")
         self.assertEqual(record["status"], "planned")
-        self.assertEqual([c["status"] for c in record["commands"]], ["planned", "planned"])
+        self.assertEqual([c["status"] for c in record["commands"]], ["planned"])
         self.assertTrue(all(c["returncode"] is None for c in record["commands"]))
 
     def test_keyboard_interrupt_is_recorded_and_propagated(self):

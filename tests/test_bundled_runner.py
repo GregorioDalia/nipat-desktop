@@ -1,4 +1,4 @@
-"""Execution boundaries for the image-owned Contamination workflow."""
+"""Execution boundaries for image-owned scientific workflows."""
 
 import io
 import json
@@ -26,13 +26,14 @@ def engine_metadata():
             name: {"script": f"scientific/vendor/{name}/main.R", "sha256": "c" * 64}
             for name in ("dnp-call", "snp-call", "contamination", "cpi")
         },
-        "workflow_interfaces": {"contamination": "contamination-v1"},
+        "workflow_interfaces": {"contamination": "contamination-v1", "snp-call": "snp-call-v1"},
         "preparation": {
-            "interface": "contamination-v1",
+            "interface": "workflow-preparation-v1",
             "file_sha256": {name: "d" * 64 for name in (
                 "engine/main.py", "lib/nipat_scientific/__init__.py",
                 "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
                 "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
+                "lib/nipat_scientific/snp.py",
             )},
         },
     }
@@ -73,11 +74,11 @@ class BundledRunnerTests(unittest.TestCase):
         process.poll.return_value = code
         return process
 
-    def begin(self, name="bundled"):
-        run = self.layout.new_run_dir("contamination", name)
+    def begin(self, name="bundled", workflow="contamination"):
+        run = self.layout.new_run_dir(workflow, name)
         context = self.runner.record_run(
-            run, workflow="contamination", inputs=[self.source], parameters={},
-            mounts=self.mounts, bundled_workflow="contamination",
+            run, workflow=workflow, inputs=[self.source], parameters={},
+            mounts=self.mounts, bundled_workflow=workflow,
         )
         return run, context
 
@@ -166,6 +167,56 @@ class BundledRunnerTests(unittest.TestCase):
                 self.assertEqual(record["status"], "failed")
                 self.assertEqual(record["commands"], [])
                 self.assertIsNone(self.runner._bundled_workflow)
+
+    def test_snp_request_runs_with_pinned_engine_without_client_scientific_sources(self):
+        run, context = self.begin("snp-bundled", workflow="snp-call")
+        with redirect_stdout(self.stdout), patch.object(
+            self.runner, "_capture", side_effect=self.captured(),
+        ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process()) as popen:
+            with context:
+                self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute",
+                                 "snp-call", "--request", "/workspace/request.json"])
+        self.assertFalse((self.project / "scientific").exists())
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "succeeded")
+        self.assertEqual(record["bundled_workflow"], "snp-call")
+        self.assertEqual(record["runtime"]["image_id"], IMAGE_ID)
+        self.assertEqual(record["runtime"]["engine"]["workflow_interfaces"]["snp-call"], "snp-call-v1")
+        self.assertEqual(record["source"]["role"], "client")
+        service = json.loads((run / "work/engine-compose.json").read_text(encoding="utf-8"))[
+            "services"]["scientific"]
+        self.assertEqual(service["image"], IMAGE_ID)
+        self.assertEqual(service["network_mode"], "none")
+        self.assertTrue(service["read_only"])
+        self.assertEqual({volume["target"] for volume in service["volumes"]}, {
+            "/workspace/inputs/sample_001.tsv", str(self.layout.container_path(run)),
+        })
+        self.assertEqual([volume["read_only"] for volume in service["volumes"]], [True, False])
+        command = popen.call_args.args[0]
+        self.assertEqual([command[i + 1] for i, arg in enumerate(command) if arg == "-f"],
+                         [str(run / "work/engine-compose.json")])
+
+    def test_snp_requires_its_own_contract_and_preparation_source(self):
+        missing_interface = engine_metadata()
+        del missing_interface["workflow_interfaces"]["snp-call"]
+        wrong_interface = engine_metadata()
+        wrong_interface["workflow_interfaces"]["snp-call"] = "contamination-v1"
+        missing_source = engine_metadata()
+        del missing_source["preparation"]["file_sha256"]["lib/nipat_scientific/snp.py"]
+        for index, description in enumerate((missing_interface, wrong_interface, missing_source)):
+            with self.subTest(index=index):
+                run, context = self.begin(f"snp-incompatible-{index}", workflow="snp-call")
+                with redirect_stdout(self.stdout), patch.object(
+                    self.runner, "_capture", side_effect=self.captured(description),
+                ), patch("nipat.execution.runner.subprocess.Popen") as popen:
+                    with self.assertRaisesRegex(RuntimeExecutionError, r"contratto SNPcall.*snp-call-v1"):
+                        with context:
+                            self.fail("An incompatible image must not execute SNPcall.")
+                popen.assert_not_called()
+                record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+                self.assertEqual(record["status"], "failed")
+                self.assertEqual(record["commands"], [])
+                self.assertFalse((run / "work/engine-compose.json").exists())
 
     def test_failed_engine_probe_is_actionable_and_tracked(self):
         answers = self.captured()

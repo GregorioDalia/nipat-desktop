@@ -87,7 +87,7 @@ def check_outputs(run_dir: Path) -> None:
         raise ValidationError("NoSites: atteso file per sito con sola intestazione.")
 
 
-def check_bundled_run(run_dir: Path, layout: ProjectLayout) -> None:
+def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "contamination") -> None:
     """Check the real client selected only the bundled engine and scoped mounts."""
     record = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     config = json.loads((run_dir / "work/engine-compose.json").read_text(encoding="utf-8"))
@@ -109,24 +109,26 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout) -> None:
     runtime = record["runtime"]
     engine = runtime.get("engine", {})
     if (record["status"] != "succeeded" or record["source"].get("role") != "client"
-            or engine.get("workflow_interfaces", {}).get("contamination") != "contamination-v1"
-            or engine.get("preparation", {}).get("interface") != "contamination-v1"
+            or record.get("workflow") != workflow
+            or engine.get("workflow_interfaces", {}).get(workflow) != f"{workflow}-v1"
+            or engine.get("preparation", {}).get("interface") != "workflow-preparation-v1"
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime.get("image_id", ""))):
         raise ValidationError("Identità dell'immagine o provenienza del motore mancanti.")
     hashes = engine["preparation"].get("file_sha256", {})
     required = {"engine/main.py", *(f"lib/nipat_scientific/{name}.py" for name in (
-        "__init__", "errors", "panels", "files", "contamination",
+        "__init__", "errors", "panels", "files", "contamination", "snp",
     ))}
     if set(hashes) != required or any(not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in hashes.values()):
         raise ValidationError("Hash del codice di preparazione incompleti o non validi.")
     commands = record["commands"]
     if len(commands) != 1:
-        raise ValidationError("Attesa un'unica invocazione completa del motore Contamination.")
+        raise ValidationError(f"Attesa un'unica invocazione completa del motore {workflow}.")
     argv = commands[0]["argv"]
     compose_paths = [argv[index + 1].replace("\\", "/")
                      for index, value in enumerate(argv[:-1]) if value == "-f"]
     if (len(compose_paths) != 1 or not compose_paths[0].endswith("/engine-compose.json")
-            or "/opt/nipat/engine/main.py" not in argv or "execute" not in argv):
+            or "/opt/nipat/engine/main.py" not in argv or "execute" not in argv
+            or argv[argv.index("execute") + 1:argv.index("execute") + 2] != [workflow]):
         raise ValidationError("La CLI non sta usando esclusivamente il motore incorporato.")
 
 

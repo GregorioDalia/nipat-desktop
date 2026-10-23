@@ -1,6 +1,6 @@
 # Percorso incrementale verso NIPAT 0.5
 
-Stato: secondo incremento tecnico in sviluppo, 22 ottobre 2026. Questo documento
+Stato: terzo incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
 registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 
 ## Baseline e separazione dalla validazione in corso
@@ -94,6 +94,36 @@ sorgenti scientifici. SNPcall, DNPcall e CPI mantengono ancora il percorso prece
 La suite locale comprende 224 test Python e 37 controlli CI/publisher superati;
 la prova dell'immagine e il confezionamento sono verifiche distinte in GitHub Actions.
 Questo incremento non modifica gli installer pubblicati né completa la release 0.5.
+
+Il secondo incremento è stato verificato nella
+[CI 39812476371](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39812476371)
+e nella [build di revisione 39812476253](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39812476253),
+entrambe concluse con successo sul commit `56701ee`.
+
+## Terzo incremento: workflow SNPcall completo
+
+La richiesta `snp-call-v1` comprende entrambe le modalità esistenti. Con pileup
+già disponibile, il motore verifica il formato con colonna QNAME e avvia R.
+Con BAM e riferimento FASTA, verifica gli input e gli indici richiesti del
+riferimento, genera le finestre BED di tre basi e il pileup tramite samtools,
+quindi avvia R soltanto dopo il successo di samtools. L'indice BAM resta opzionale.
+Sono mantenuti i riferimenti BGZF con indici `.fai` e `.gzi`.
+
+La CLI usa gli stessi mount selettivi e lo stesso isolamento di Contamination.
+Gli intermedi `work/snp_regions.bed` e `work/pileup.txt` rimangono consultabili;
+il risultato continua a essere `output/SNPcall_output.txt`. Anche l'autotest
+SNPcall usa il percorso di esecuzione completo. Lo script R e il manifest
+scientifico rimangono invariati.
+
+Le verifiche comprendono le nove righe di riferimento già distribuite e una
+fixture BAM sintetica con conteggi attesi espliciti, entrambe le modalità CLI
+da una cartella applicativa priva di sorgenti scientifici, input non validi,
+fallimento di samtools e gestione dell'interruzione. L'esecuzione reale
+dell'immagine viene verificata in GitHub Actions, separatamente dai test Python.
+I controlli locali comprendono 243 test Python e 37 test CI/publisher superati;
+gli esiti numerici e di confezionamento del commit sono riportati nella PR di sviluppo.
+DNPcall e CPI, i nuovi installer e la dismissione Docker Desktop restano i passi
+successivi. Le build di revisione non sono candidati 0.5 da distribuire.
 
 ## Passaggi e criteri di completamento
 

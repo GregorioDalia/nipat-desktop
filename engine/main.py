@@ -1,7 +1,7 @@
 """Execute the bundled R scripts without importing the desktop application.
 
-Native script invocation remains available. Contamination also accepts a
-versioned request and prepares its inputs with the bundled shared adapters.
+Native script invocation remains available. Contamination and SNPcall also
+accept versioned requests prepared with the bundled shared adapters.
 """
 
 from __future__ import annotations
@@ -12,6 +12,9 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
+import signal
+import subprocess
 import sys
 
 
@@ -23,8 +26,9 @@ SCRIPT_PATHS = {
     "cpi": "vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
 }
 PREPARATION_FILES = (
-    "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py",
+    "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
 )
+WORKFLOW_INTERFACES = {"contamination": "contamination-v1", "snp-call": "snp-call-v1"}
 
 
 class BundleError(Exception):
@@ -62,7 +66,7 @@ def describe_preparation(bundle_root: Path) -> dict:
                 ).hexdigest()
         except OSError as exc:
             raise BundleError(f"Cannot read preparation module: {path.name}") from exc
-    return {"interface": "contamination-v1", "file_sha256": hashes}
+    return {"interface": "workflow-preparation-v1", "file_sha256": hashes}
 
 
 def verify_bundle(bundle_root: Path) -> dict:
@@ -121,7 +125,7 @@ def verify_bundle(bundle_root: Path) -> dict:
             "sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         },
         "workflows": workflows,
-        "workflow_interfaces": {"contamination": "contamination-v1"},
+        "workflow_interfaces": WORKFLOW_INTERFACES.copy(),
         "preparation": describe_preparation(bundle_root),
     }
 
@@ -142,9 +146,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Native R arguments, normally preceded by --; no desktop input adaptation.",
     )
     execute = commands.add_parser("execute", help="Prepare and run a bundled workflow request.")
-    execute.add_argument("workflow", choices=("contamination",))
+    execute.add_argument("workflow", choices=WORKFLOW_INTERFACES)
     execute.add_argument("--request", type=Path, required=True, help="JSON request with container paths.")
     return parser
+
+
+def run_preparation(command: list[str]) -> int:
+    """Run samtools with inherited output and forward container stop signals.
+
+    Python is PID 1 until it replaces itself with R. Explicit handlers ensure
+    cancellation also reaches samtools; R is never started after cancellation,
+    even when the child catches the signal and returns success.
+    """
+    child = None
+    received_signal = None
+
+    def forward(signum, _frame):
+        nonlocal received_signal
+        received_signal = signum
+        if child is not None and child.poll() is None:
+            try:
+                child.send_signal(signum)
+            except ProcessLookupError:
+                pass
+
+    previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        for signum in previous:
+            signal.signal(signum, forward)
+        print("$ " + shlex.join(command), flush=True)
+        child = subprocess.Popen(command)
+        if received_signal is not None:
+            forward(received_signal, None)
+        returncode = child.wait()
+        if received_signal is not None:
+            return 128 + received_signal
+        return returncode if returncode >= 0 else 128 - returncode
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -169,12 +209,23 @@ def main(argv: list[str] | None = None) -> int:
             sys.path.insert(0, str(library))
             # All required module paths were checked above. This exact bundled
             # library precedes PYTHONPATH; the desktop package is never imported.
-            from nipat_scientific.contamination import prepare_contamination
             from nipat_scientific.errors import ValidationError
 
             try:
                 request = json.loads(arguments.request.read_text(encoding="utf-8"))
-                native_arguments = prepare_contamination(request)
+                if arguments.workflow == "contamination":
+                    from nipat_scientific.contamination import prepare_contamination
+                    native_arguments = prepare_contamination(request)
+                else:
+                    from nipat_scientific.files import require_snp_pileup
+                    from nipat_scientific.snp import prepare_snp
+                    prepared = prepare_snp(request)
+                    if prepared.preparation_command is not None:
+                        returncode = run_preparation(prepared.preparation_command)
+                        if returncode:
+                            return returncode
+                        require_snp_pileup(prepared.generated_pileup)
+                    native_arguments = prepared.native_arguments
             except (ValidationError, ValueError) as exc:
                 raise BundleError(str(exc)) from exc
         else:
