@@ -1,9 +1,10 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT 0.5.0a1**, con interfaccia testuale guidata e CLI
-diretta. La versione non è ancora pubblicata: le istruzioni descrivono
-i pacchetti Windows e Ubuntu predisposti per la verifica tecnica, non
-installatori già disponibili dalla pagina Releases.
+Questa guida descrive **NIPAT 0.5.0a1 Preview**, con interfaccia testuale
+guidata e CLI diretta, per i pacchetti Windows e Ubuntu. Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
+artefatti GitHub Actions sono destinati alla revisione tecnica.
 
 NIPAT esegue DNPcall, SNPcall, Contamination e CPI sul computer dell'utente.
 Il motore scientifico contiene gli script R e gli strumenti necessari.

@@ -6,10 +6,12 @@ e immagine scientifica con R, samtools, dipendenze e preparazione dei workflow.
 Il motore è lo stesso archivio verificato incluso nel pacchetto Windows.
 Non è necessario scaricare o spostare separatamente l'immagine.
 
-La versione è una Preview non pubblicata. Il pacchetto viene prodotto come
-artefatto per revisione e non è ancora disponibile nella pagina Releases.
-Le istruzioni si riferiscono a un pacchetto della build identificata;
-un archivio **Source code** di GitHub non è un installatore.
+La versione appartiene al canale Preview. Le versioni pubblicate e i
+relativi pacchetti sono elencati nella pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+I pacchetti degli artefatti GitHub Actions servono alla revisione tecnica.
+Le istruzioni si riferiscono a una build identificata; un archivio
+**Source code** di GitHub non è un installatore.
 
 ## Requisiti
 

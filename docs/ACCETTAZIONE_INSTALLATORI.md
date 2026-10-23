@@ -4,7 +4,8 @@ Questo protocollo verifica i pacchetti **NIPAT 0.5 Preview** su Windows 11 x64
 con WSL2 e Ubuntu 24.04 LTS x86_64. Si applica agli installatori effettivi
 che si intende pubblicare, identificati da commit, build GitHub Actions e
 checksum. La riuscita della CI e gli autotest non sostituiscono queste prove.
-La versione 0.5.0a1 non ha ancora un’accettazione registrata per la pubblicazione.
+La pubblicazione richiede un record di accettazione revisionato e coerente
+con i pacchetti verificati; questo documento non ne attesta il completamento.
 
 L’accettazione tecnica riguarda installazione, avvio, conservazione dei dati
 e funzionamento dei workflow. La validazione scientifica sui dati e sugli

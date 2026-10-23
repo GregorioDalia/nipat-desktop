@@ -6,8 +6,9 @@ di trasferire manualmente gli archivi dal proprio computer.
 
 La versione 0.5 richiede installatori Windows e Ubuntu dello stesso commit
 e con lo stesso archivio scientifico. La procedura verifica entrambi i
-pacchetti e richiede un’accettazione revisionata dei file esatti. La 0.5.0a1
-non è ancora pubblicata e non ha un record di accettazione completato.
+pacchetti e richiede un’accettazione revisionata dei file esatti. Le versioni
+pubblicate e le relative evidenze sono disponibili nella pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
 Un record assente o incompleto interrompe la pubblicazione prima della
 creazione o modifica di una release.
 

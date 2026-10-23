@@ -5,8 +5,10 @@ il launcher `NIPAT.exe`, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-La versione 0.5.0a1 è una Preview non pubblicata. I pacchetti prodotti da
-GitHub Actions sono artefatti di revisione tecnica; la loro costruzione non
+La versione 0.5.0a1 appartiene al canale Preview. Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni pubblicate e gli installatori disponibili. I pacchetti degli
+artefatti GitHub Actions servono alla revisione tecnica; la loro costruzione non
 attesta il completamento delle prove di installazione o della validazione di
 dominio. Questo documento descrive struttura, preparazione e verifica del
 pacchetto Windows. L'uso delle analisi è trattato nella

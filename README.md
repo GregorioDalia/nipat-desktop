@@ -5,9 +5,11 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione di questo documento: 0.5.0a1, non pubblicata.** La documentazione
-descrive il contenuto di questa versione. Gli installatori 0.5 non sono ancora
-scaricabili dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+**Versione di questo documento: 0.5.0a1 Preview.** La documentazione
+descrive il contenuto di questa versione. Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni pubblicate e i relativi installatori. Gli artefatti GitHub Actions
+sono pacchetti di revisione tecnica e non equivalgono a una release.
 La disponibilità del software e il superamento degli autotest non equivalgono
 alla validazione scientifica per uno specifico impiego.
 
@@ -27,10 +29,10 @@ sia nel menu sia nella CLI diretta; la GUI grafica non fa parte della 0.5.
 
 ## Piattaforme e installazione
 
-| Piattaforma | Ambiente di esecuzione | Disponibilità 0.5 |
+| Piattaforma | Ambiente di esecuzione | Installatore |
 | --- | --- | --- |
-| Windows 11 x64 | WSL2 con distribuzione NIPAT dedicata e Docker Engine gestito dall'applicazione | Installatore `NIPAT-Setup.exe` predisposto; pubblicazione e verifica completa del pacchetto su Windows ancora da completare. |
-| Ubuntu 24.04 LTS x86_64 | Docker Engine locale e Compose v2, accessibili all’utente | Pacchetto `.deb` predisposto; pubblicazione e verifica su Ubuntu Desktop pulito ancora da completare. |
+| Windows 11 x64 | WSL2 con distribuzione NIPAT dedicata e Docker Engine gestito dall'applicazione | Unico file `NIPAT-Setup.exe`. |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale e Compose v2, accessibili all’utente | Unico pacchetto `.deb`. |
 
 Il pacchetto Windows contiene Python portabile, l'ambiente Linux e l'immagine
 scientifica. Non richiede installazioni separate di Python, R, samtools o

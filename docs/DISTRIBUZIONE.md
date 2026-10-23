@@ -1,17 +1,17 @@
 # Distribuzione e requisiti
 
-Questo documento descrive **NIPAT 0.5.0a1**. La versione non è pubblicata e
-non dispone di installer scaricabili dalla pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-Gli artefatti generati dai controlli automatici servono alla verifica tecnica;
-non attestano una distribuzione pronta per l'utilizzo generale.
+Questo documento descrive **NIPAT 0.5.0a1 Preview**. Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni pubblicate, i pacchetti disponibili e le relative evidenze.
+Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
+dalle release; la loro costruzione non autorizza da sola la pubblicazione.
 
 ## Piattaforme
 
-| Sistema | Esecuzione scientifica | Modalità disponibile |
+| Sistema | Esecuzione scientifica | Installatore |
 | --- | --- | --- |
-| Windows 11 x64 | Distribuzione WSL2 dedicata, Docker Engine interno, immagine NIPAT autonoma | Pacchetto `NIPAT-Setup.exe` predisposto; verifica completa sul sistema e pubblicazione non concluse. |
-| Ubuntu 24.04 LTS x86_64 | Docker Engine locale con Compose v2 e immagine NIPAT autonoma | Pacchetto `.deb` predisposto; verifica su Ubuntu Desktop pulito e pubblicazione non concluse. |
+| Windows 11 x64 | Distribuzione WSL2 dedicata, Docker Engine interno, immagine NIPAT autonoma | Unico file `NIPAT-Setup.exe`. |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale con Compose v2 e immagine NIPAT autonoma | Unico pacchetto `.deb`. |
 
 L'immagine scientifica contiene gli script R, samtools, le dipendenze e i
 moduli di preparazione degli input. Le analisi non richiedono un'installazione

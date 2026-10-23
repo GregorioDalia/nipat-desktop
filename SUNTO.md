@@ -1,8 +1,8 @@
 # NIPAT in sintesi
 
 **NIPAT 0.5.0a1** è un'applicazione locale per eseguire quattro workflow
-scientifici da un menu testuale guidato o dalla riga di comando. Questa
-versione non è ancora pubblicata e non include una GUI grafica.
+scientifici da un menu testuale guidato o dalla riga di comando. È una
+Preview destinata alla validazione e non include una GUI grafica.
 
 | Workflow | Funzione |
 | --- | --- |
@@ -17,15 +17,16 @@ degli input, gli script R, samtools e le dipendenze. Su Windows l'immagine
 viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
 nativo. I calcoli e i dati rimangono sul computer.
 
-Il pacchetto Windows è predisposto come un singolo `NIPAT-Setup.exe`, con
+Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
 avvio tramite l'icona **NIPAT 0.5 Preview**. Non richiede l'installazione
 separata degli strumenti scientifici. Ubuntu 24.04 x86_64 utilizza un singolo
 pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
 **NIPAT 0.5 Preview** o dal comando `nipat-05-preview`. APT installa
 automaticamente le dipendenze mancanti, inclusi Docker Engine e Compose v2;
 l’accesso dell’utente a Docker richiede autorizzazione amministrativa.
-Entrambi i pacchetti sono
-predisposti per verifica e non ancora pubblicati.
+Le versioni pubblicate e i relativi pacchetti sono elencati nella pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases); gli
+artefatti GitHub Actions sono invece destinati alla revisione tecnica.
 
 Per utilizzare NIPAT si sceglie il workflow, si indicano file e parametri e
 si conferma il riepilogo con **Avvia analisi**. Le indicazioni nei campi

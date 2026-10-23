@@ -1,6 +1,6 @@
 # Validazione tecnica e di dominio
 
-Questa scheda accompagna **NIPAT 0.5.0a1**, versione non pubblicata.
+Questa scheda accompagna **NIPAT 0.5.0a1 Preview**.
 Consente di registrare separatamente installazione, esecuzione e concordanza
 scientifica. Un autotest superato verifica i casi inclusi; non attesta la
 validità per ogni campione o scenario d’impiego. Per l’autorizzazione alla

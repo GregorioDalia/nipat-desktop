@@ -1,11 +1,11 @@
 # Integrazione continua e distribuzione
 
 NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
-pubblicazione. La versione 0.5.0a1 è una Preview non pubblicata. La pipeline
+pubblicazione. La versione 0.5.0a1 appartiene al canale Preview. La pipeline
 produce installatori Windows WSL e Ubuntu per revisione. La pubblicazione
 richiede una coppia di pacchetti verificata e un record di accettazione
-revisionato, riferito agli stessi file. Tale accettazione non è ancora
-registrata per la 0.5.0a1.
+revisionato, riferito agli stessi file. Il publisher verifica il record
+prima di modificare una release.
 
 ## Workflow GitHub Actions
 
