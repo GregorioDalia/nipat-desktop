@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from contextlib import nullcontext
@@ -64,6 +65,10 @@ class DnpWorkflowTests(unittest.TestCase):
         self.assertEqual(self.runner.calls, [])
         self.assertFalse(self.layout.runs_dir.exists())
 
+    @staticmethod
+    def request_for(run):
+        return json.loads((run / "work" / "engine-request.json").read_text(encoding="utf-8"))
+
     def test_external_paths_use_safe_read_only_aliases_and_preserve_originals(self):
         originals = {path: path.read_bytes() for path in (
             self.bam, self.reference, self.fai, self.panel,
@@ -76,18 +81,28 @@ class DnpWorkflowTests(unittest.TestCase):
         self.assertEqual(mounted[self.reference], "/workspace/inputs/reference/genome.fa")
         self.assertEqual(mounted[self.fai], "/workspace/inputs/reference/genome.fa.fai")
         self.assertTrue(all(item["read_only"] for item in mappings))
-        self.assertNotIn(self.panel, mounted)
+        self.assertEqual(mounted[self.panel], "/workspace/inputs/dnp-panel.txt")
         self.assertEqual(set(record["inputs"]), set(originals))
+        self.assertEqual(record["bundled_workflow"], "dnp-call")
         self.assertEqual(
-            (run / "work" / "bamlist.txt").read_text(encoding="utf-8"),
-            "/workspace/inputs/bams/sample_0001.bam\n",
+            self.request_for(run), {
+                "schema_version": 1, "workflow": "dnp-call",
+                "panel": "/workspace/inputs/dnp-panel.txt",
+                "samples": [{"path": "/workspace/inputs/bams/sample_0001.bam",
+                             "sample_id": "sample_0001"}],
+                "reference": "/workspace/inputs/reference/genome.fa", "parallel": False,
+                "work_dir": str(self.layout.container_path(run / "work")),
+                "out_dir": str(self.layout.container_path(run / "output")),
+            },
         )
+        self.assertFalse((run / "work" / "bamlist.txt").exists())
+        self.assertFalse((run / "work" / "DNP_list.txt").exists())
         self.assertEqual(len(self.runner.calls), 1)
         command, working_dir = self.runner.calls[0]
-        self.assertIn("--reference=/workspace/inputs/reference/genome.fa", command)
-        self.assertIn("--out=output", command)
-        panel_arg = f"--DNPs={self.layout.container_path(run / 'work' / 'DNP_list.txt')}"
-        self.assertIn(panel_arg, command)
+        self.assertEqual(command, [
+            "python3", "/opt/nipat/engine/main.py", "execute", "dnp-call", "--request",
+            str(self.layout.container_path(run / "work" / "engine-request.json")),
+        ])
         self.assertEqual(working_dir, str(self.layout.container_path(run)))
         self.assertFalse(any(str(self.external) in argument for argument in command))
         for path, original in originals.items():
@@ -112,8 +127,9 @@ class DnpWorkflowTests(unittest.TestCase):
         ]
         self.assertEqual([sample["container_path"] for sample in samples], expected_aliases)
         self.assertEqual(
-            (run / "work" / "bamlist.txt").read_text(encoding="utf-8").splitlines(),
-            expected_aliases,
+            self.request_for(run)["samples"],
+            [{"path": alias, "sample_id": f"sample_{number:04d}"}
+             for number, alias in enumerate(expected_aliases, 1)],
         )
         mounted = {item["container_path"]: item["host_path"]
                    for item in self.runner.records[0][1]["mounts"].mappings}
@@ -130,16 +146,37 @@ class DnpWorkflowTests(unittest.TestCase):
             encoding="utf-8-sig",
         )
         original = source_list.read_bytes()
-        self.invoke(bamlist=source_list)
+        run = self.invoke(bamlist=source_list)
         record = self.runner.records[0][1]
         self.assertEqual(record["parameters"]["bams"], [str(second), str(first)])
         self.assertEqual(record["parameters"]["bamlist"], str(source_list))
         self.assertIn(source_list, record["inputs"])
+        self.assertFalse(any(
+            item["host_path"] == str(source_list) for item in record["mounts"].mappings
+        ))
+        self.assertEqual(self.request_for(run)["samples"], [
+            {"path": "/workspace/inputs/bams/sample_0001.bam", "sample_id": "sample_0001"},
+            {"path": "/workspace/inputs/bams/sample_0002.bam", "sample_id": "sample_0002"},
+        ])
         self.assertEqual(source_list.read_bytes(), original)
 
     def test_duplicate_bams_are_rejected_before_run_creation(self):
         with self.assertRaisesRegex(ValidationError, "più volte"):
             self.invoke(bams=[self.bam, self.bam.parent / "." / self.bam.name])
+        self.assert_not_started()
+
+    def test_empty_or_conflicting_bam_modes_are_rejected_before_run_creation(self):
+        for arguments in ({"bams": []}, {"bam": None},
+                          {"bam": self.bam, "bams": [self.bam]}):
+            with self.subTest(arguments=arguments):
+                with self.assertRaises(ValidationError):
+                    self.invoke(**arguments)
+                self.assert_not_started()
+
+    def test_invalid_panel_is_rejected_before_run_creation(self):
+        self.panel.write_text("chr1\t100\t102\tAA\tCC\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValidationError, "pos2 deve essere"):
+            self.invoke()
         self.assert_not_started()
 
     def test_no_bam_index_is_required_or_created(self):
@@ -160,31 +197,54 @@ class DnpWorkflowTests(unittest.TestCase):
             self.invoke()
         self.assert_not_started()
 
+    def test_compressed_reference_and_available_bam_indexes_keep_safe_aliases(self):
+        reference = self.write_file(self.external / "genome $ compressed.bgz", b"BGZF fixture\n")
+        fai = self.write_file(Path(str(reference) + ".fai"), b"FAI fixture\n")
+        gzi = self.write_file(Path(str(reference) + ".gzi"), b"GZI fixture\n")
+        bai = self.write_file(self.bam.with_suffix(".bai"), b"BAI fixture\n")
+        csi = self.write_file(Path(str(self.bam) + ".csi"), b"CSI fixture\n")
+        run = self.invoke(reference=reference)
+        self.assertEqual(self.request_for(run)["reference"], "/workspace/inputs/reference/genome.fa.gz")
+        record = self.runner.records[0][1]
+        mounted = {Path(item["host_path"]): item["container_path"]
+                   for item in record["mounts"].mappings}
+        for path, alias in (
+            (reference, "/workspace/inputs/reference/genome.fa.gz"),
+            (fai, "/workspace/inputs/reference/genome.fa.gz.fai"),
+            (gzi, "/workspace/inputs/reference/genome.fa.gz.gzi"),
+            (bai, "/workspace/inputs/bams/sample_0001.bam.bai"),
+            (csi, "/workspace/inputs/bams/sample_0001.bam.csi"),
+        ):
+            self.assertEqual(mounted[path], alias)
+            self.assertIn(path, record["inputs"])
+
+    def test_missing_compressed_reference_index_is_rejected_before_run_creation(self):
+        reference = self.write_file(self.external / "genome.fa.gz", b"BGZF fixture\n")
+        self.write_file(Path(str(reference) + ".fai"), b"FAI fixture\n")
+        with self.assertRaisesRegex(ValidationError, "Indice FASTA BGZF"):
+            self.invoke(reference=reference)
+        self.assert_not_started()
+
     def test_parallel_flag_matches_requested_mode(self):
-        self.invoke(parallel=False, run_name="serial")
-        self.invoke(parallel=True, run_name="parallel")
-        self.assertNotIn("--parallel", self.runner.calls[0][0])
-        self.assertEqual(self.runner.calls[1][0].count("--parallel"), 1)
+        serial = self.invoke(parallel=False, run_name="serial")
+        parallel = self.invoke(parallel=True, run_name="parallel")
+        self.assertIs(self.request_for(serial)["parallel"], False)
+        self.assertIs(self.request_for(parallel)["parallel"], True)
         self.assertFalse(self.runner.records[0][1]["parameters"]["parallel"])
         self.assertTrue(self.runner.records[1][1]["parameters"]["parallel"])
 
-    def test_lowercase_panel_is_normalized_in_run_copy_without_altering_source(self):
+    def test_panel_normalization_is_delegated_without_altering_source(self):
         original = b"chr1 100 101 aa cC\nchr2\t200\t201\tgT\tAC\n"
         self.panel.write_bytes(original)
         run = self.invoke()
-        normalized = run / "work" / "DNP_list.txt"
-        self.assertEqual(
-            normalized.read_bytes(), b"chr1\t100\t101\tAA\tCC\nchr2\t200\t201\tGT\tAC\n",
-        )
+        self.assertFalse((run / "work" / "DNP_list.txt").exists())
         self.assertEqual(self.panel.read_bytes(), original)
-        self.assertIn(
-            f"--DNPs={self.layout.container_path(normalized)}", self.runner.calls[0][0],
-        )
+        self.assertEqual(self.request_for(run)["panel"], "/workspace/inputs/dnp-panel.txt")
         record = self.runner.records[0][1]
         self.assertIn(self.panel, record["inputs"])
-        self.assertFalse(any(
-            item["host_path"] == str(self.panel) for item in record["mounts"].mappings
-        ))
+        self.assertIn({"host_path": str(self.panel),
+                       "container_path": "/workspace/inputs/dnp-panel.txt", "read_only": True},
+                      record["mounts"].mappings)
 
 
 if __name__ == "__main__":

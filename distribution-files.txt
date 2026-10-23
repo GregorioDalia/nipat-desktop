@@ -82,6 +82,7 @@ scripts/build_docker_installer.py
 scripts/build_windows_installer_assets.py
 scripts/verify_contamination_update.py
 scripts/verify_cpi_update.py
+scripts/verify_dnp_engine.py
 scripts/verify_engine_package.py
 scripts/verify_input_modes.py
 scripts/verify_snp_example.py
@@ -114,6 +115,7 @@ src/nipat/wizard.py
 src/nipat/wizard_forms.py
 src/nipat_scientific/__init__.py
 src/nipat_scientific/contamination.py
+src/nipat_scientific/dnp.py
 src/nipat_scientific/errors.py
 src/nipat_scientific/files.py
 src/nipat_scientific/panels.py
@@ -130,6 +132,12 @@ tests/fixtures/cpi/samples/FatherInformative.txt
 tests/fixtures/cpi/samples/FatherNoSites.txt
 tests/fixtures/cpi/samples/MotherInformative.txt
 tests/fixtures/cpi/samples/MotherNoSites.txt
+tests/fixtures/dnp_engine/DNP_list.txt
+tests/fixtures/dnp_engine/README.md
+tests/fixtures/dnp_engine/expected.tsv
+tests/fixtures/dnp_engine/reads_A.sam
+tests/fixtures/dnp_engine/reads_B.sam
+tests/fixtures/dnp_engine/reference.fa
 tests/fixtures/snp_engine/README.md
 tests/fixtures/snp_engine/SNPlist.tsv
 tests/fixtures/snp_engine/expected.tsv
@@ -142,6 +150,7 @@ tests/test_bundled_runner.py
 tests/test_distribution.py
 tests/test_docker_installer.py
 tests/test_dnp_workflow.py
+tests/test_dnp_engine.py
 tests/test_engine_package.py
 tests/test_input_modes.py
 tests/test_input_mounts.py

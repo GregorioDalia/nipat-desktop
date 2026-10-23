@@ -1,6 +1,6 @@
 # Percorso incrementale verso NIPAT 0.5
 
-Stato: terzo incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
+Stato: quarto incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
 registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 
 ## Baseline e separazione dalla validazione in corso
@@ -122,8 +122,38 @@ fallimento di samtools e gestione dell'interruzione. L'esecuzione reale
 dell'immagine viene verificata in GitHub Actions, separatamente dai test Python.
 I controlli locali comprendono 243 test Python e 37 test CI/publisher superati;
 gli esiti numerici e di confezionamento del commit sono riportati nella PR di sviluppo.
-DNPcall e CPI, i nuovi installer e la dismissione Docker Desktop restano i passi
-successivi. Le build di revisione non sono candidati 0.5 da distribuire.
+Il terzo incremento è stato verificato nella
+[CI 39940948277](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39940948277)
+e nella [build di revisione 39940948282](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39940948282),
+entrambe concluse con successo sul commit `aad3002`.
+
+## Quarto incremento: workflow DNPcall completo
+
+La richiesta `dnp-call-v1` trasferisce al motore il pannello originale, l'elenco
+ordinato dei BAM, il riferimento e la scelta sequenziale/parallela. Il client
+mantiene le modalità BAM singolo, più BAM e lista, con percorsi relativi alla
+lista e corrispondenza fra alias sicuri e file originali in `run.json`.
+Il motore prepara `work/DNP_list.txt` e `work/bamlist.txt`, quindi esegue lo
+script R dalla radice del run con argomenti relativi compatibili con i suoi
+nomi di output. BAM e FASTA vengono montati in sola lettura, senza copiarli.
+
+Le prove dell'immagine usano BAM sintetici costruiti da SAM e FASTA leggibili,
+con conteggi e genotipi attesi indipendenti. Coprono il motore completo e la CLI
+senza mount dei sorgenti, campioni singoli e multipli, liste relative,
+corrispondenza dei campioni e parità sequenziale/parallela. Il confronto con
+l'invocazione R nativa verifica anche che il confezionamento conservi gli output.
+Gli esiti effettivi e i limiti delle prove sono riportati nella PR di sviluppo.
+I controlli locali comprendono 266 test Python e 37 test CI/publisher superati;
+l'esecuzione numerica nell'immagine resta una verifica distinta in GitHub Actions.
+
+Il codice R e il manifest rimangono invariati. Rimane quindi anche il comportamento
+interno di DNPcall: elimina pileup e BED al termine e non verifica esplicitamente
+lo stato della chiamata a samtools, di cui nasconde lo stderr. Il successo del
+processo non equivale alla verifica scientifica degli output.
+
+CPI, i nuovi installer e la dismissione Docker Desktop restano i passi successivi.
+Le build di revisione non sono candidati 0.5 da distribuire e non devono sostituire
+l'installazione 0.4.1.
 
 ## Passaggi e criteri di completamento
 

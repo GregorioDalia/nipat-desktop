@@ -42,7 +42,8 @@ Gli input possono provenire da percorsi esterni al progetto. Ogni esecuzione
 registra la corrispondenza fra i file originali e i percorsi montati in sola
 lettura nel container, anche in `work/input-mounts.json`. I file BAM e FASTA
 non vengono copiati per spostarli dentro il progetto. Gli adattamenti di
-piccole tabelle e i file intermedi sono conservati in `work`.
+piccole tabelle sono conservati in `work`; la conservazione degli altri intermedi
+dipende dal workflow.
 Per DNPcall gli alias `sample_0001.bam`, ecc. evitano le limitazioni dei nomi
 nello script R: la corrispondenza dei campioni nei metadati permette di
 attribuire i risultati ai BAM originali.
@@ -52,16 +53,24 @@ a mostrarlo nel terminale. I file JSON vengono sostituiti atomicamente dopo
 ogni aggiornamento. Il manifest scientifico viene verificato prima di
 eseguire i comandi dei workflow.
 
-Nel percorso di sviluppo 0.5, Contamination e SNPcall usano già il motore incorporato.
+Nel percorso di sviluppo 0.5, Contamination, SNPcall e DNPcall usano il motore incorporato.
 `work/engine-request.json` descrive la richiesta; `work/engine-compose.json`
 è l'unica configurazione Compose usata per l'analisi. Espone soltanto gli input
 selezionati in sola lettura e la cartella del run corrente in scrittura.
-Il motore genera `work/DNPpanel.txt` e `work/inputs`, conservando i nomi dei campioni.
+Per Contamination il motore genera `work/DNPpanel.txt` e `work/inputs`, conservando i nomi dei campioni.
 Per SNPcall da BAM genera `work/snp_regions.bed` e `work/pileup.txt`, quindi avvia R
 soltanto se samtools termina con successo. Nella modalità pileup usa direttamente
 il file selezionato. Il risultato rimane `output/SNPcall_output.txt`.
 `run.json` registra una sola invocazione del motore per l'intero workflow;
-il log contiene anche il comando samtools eseguito all'interno del container.
+per SNPcall il log contiene anche il comando samtools eseguito nel container.
+
+Per DNPcall il motore conserva `work/DNP_list.txt` e `work/bamlist.txt`, con gli
+alias ordinati dei campioni. Lo script R genera il pileup e il BED nella radice
+del run e li elimina al termine: non sono intermedi conservati stabilmente.
+Il comportamento R rimane invariato, compresa una limitazione: la chiamata interna
+a samtools nasconde lo stderr e non ne verifica il codice di uscita. Lo stato del
+run riflette quindi quello del processo R, senza garantire il rilevamento di ogni
+errore interno di samtools. I controlli numerici degli output restano necessari.
 
 Per questi workflow, `source.role` vale `client`: gli hash locali descrivono
 l'applicazione, mentre `runtime.engine` identifica gli script R e i moduli Python

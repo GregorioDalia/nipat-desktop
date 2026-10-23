@@ -8,7 +8,6 @@ from nipat.adapters.panels import (
     read_dnp_list,
     read_position_panel,
     read_snp_positions,
-    write_dnp_list,
     write_position_panel,
 )
 from nipat.errors import ValidationError
@@ -105,8 +104,9 @@ class Workflows:
         if len(set(checked)) != len(checked):
             raise ValidationError("Lo stesso BAM compare più volte nella lista.")
         panel = require_file(panel, "Pannello DNP")
-        records = read_dnp_list(panel)
+        read_dnp_list(panel)
         mounts = InputMounts(self.layout)
+        panel_path = mounts.bind_file(panel, target=INPUT_ROOT / "dnp-panel.txt")
         reference_path, reference_inputs = _bind_reference(mounts, reference)
         input_files = [*reference_inputs, panel]
         if source_list is not None:
@@ -123,26 +123,29 @@ class Workflows:
         run_dir = self.layout.new_run_dir("dnp-call", run_name)
         with self.runner.record_run(
             run_dir, workflow="dnp-call", inputs=input_files, mounts=mounts,
+            bundled_workflow="dnp-call",
             parameters={"bams": [str(path) for path in checked],
                         "bamlist": str(source_list) if source_list else None,
                         "reference": str(reference_inputs[0]), "panel": str(panel),
                         "parallel": parallel, "sample_mapping": samples},
         ):
-            normalized_panel = run_dir / "work" / "DNP_list.txt"
-            write_dnp_list(records, normalized_panel)
-            panel_path = self.layout.container_path(normalized_panel)
-            generated_list = run_dir / "work" / "bamlist.txt"
-            generated_list.write_text(
-                "".join(sample["container_path"] + "\n" for sample in samples), encoding="utf-8",
+            request = {
+                "schema_version": 1, "workflow": "dnp-call", "panel": str(panel_path),
+                "samples": [
+                    {"path": sample["container_path"], "sample_id": sample["sample_id"]}
+                    for sample in samples
+                ],
+                "reference": str(reference_path), "parallel": parallel,
+                "work_dir": str(self.layout.container_path(run_dir / "work")),
+                "out_dir": str(self.layout.container_path(run_dir / "output")),
+            }
+            request_file = run_dir / "work" / "engine-request.json"
+            _write_engine_request(request_file, request)
+            self.runner.run(
+                ["python3", "/opt/nipat/engine/main.py", "execute", "dnp-call",
+                 "--request", self.layout.container_path(request_file)],
+                working_dir=self.layout.container_path(run_dir),
             )
-            command: list[str | PurePosixPath] = [
-                "Rscript", self._script("scientific/vendor/DNPcall/DNPcall.R"),
-                f"--bamlist={self.layout.container_path(generated_list)}",
-                f"--DNPs={panel_path}", f"--reference={reference_path}", "--out=output",
-            ]
-            if parallel:
-                command.append("--parallel")
-            self.runner.run(command, working_dir=self.layout.container_path(run_dir))
         return run_dir
 
     def snp_call(

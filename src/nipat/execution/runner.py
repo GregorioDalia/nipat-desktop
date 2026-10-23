@@ -20,10 +20,13 @@ from nipat.validation.integrity import verify_sha256_manifest
 
 
 BUNDLED_WORKFLOW_INTERFACES = {
+    "dnp-call": "dnp-call-v1",
     "contamination": "contamination-v1",
     "snp-call": "snp-call-v1",
 }
-BUNDLED_WORKFLOW_LABELS = {"contamination": "Contamination", "snp-call": "SNPcall"}
+BUNDLED_WORKFLOW_LABELS = {
+    "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall",
+}
 
 
 class DockerComposeRunner:
@@ -89,7 +92,7 @@ class DockerComposeRunner:
             "engine/main.py", "lib/nipat_scientific/__init__.py",
             "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
             "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
-            "lib/nipat_scientific/snp.py",
+            "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
         }
 
         def has_digest(value: Any) -> bool:

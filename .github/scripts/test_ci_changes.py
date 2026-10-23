@@ -69,7 +69,8 @@ class ScientificSelection(unittest.TestCase):
         for name in ("engine/main.py", "engine/contract.json", "tests/test_engine_package.py",
                      "tests/test_contamination_engine.py", "tests/test_bundled_runner.py",
                      "tests/test_snp_engine.py", "tests/test_input_modes.py",
-                     "scripts/verify_engine_package.py"):
+                     "tests/test_dnp_engine.py", "tests/test_dnp_workflow.py",
+                     "scripts/verify_engine_package.py", "scripts/verify_dnp_engine.py"):
             with self.subTest(path=name):
                 self.write(name, "changed\n")
                 self.assertTrue(self.selected())

@@ -13,6 +13,7 @@ python3 /opt/nipat/engine/main.py run snp-call -- \
   --pileup /inputs/pileup.txt --snplist /inputs/SNPlist.txt --out /outputs/output.txt
 python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
+python3 /opt/nipat/engine/main.py execute dnp-call --request /run/work/request.json
 ```
 
 The workflow names are `dnp-call`, `snp-call`, `contamination` and `cpi`.
@@ -22,9 +23,10 @@ must match the bundled `scientific/SHA256SUMS` before any workflow can run.
 `describe --json` reports interface `native-r-v1`, metadata schema version 1,
 the manifest hash, and each workflow's bundled path and source hash. It also
 reports `workflow_interfaces.contamination = contamination-v1`,
-`workflow_interfaces.snp-call = snp-call-v1` and preparation metadata interface
+`workflow_interfaces.snp-call = snp-call-v1`,
+`workflow_interfaces.dnp-call = dnp-call-v1` and preparation metadata interface
 `workflow-preparation-v1`. `preparation.file_sha256` identifies the entry point
-and six shared Python modules.
+and seven shared Python modules.
 Missing modules or paths escaping the bundle are rejected. These hashes record
 the Python source bytes in the selected image; the R hashes are additionally
 checked against the scientific manifest. They do not identify a published
@@ -99,11 +101,52 @@ mode skips both preparation files and samtools. Both modes write
 work/output directories; existing generated artifacts and nonempty output
 directories are rejected before preparation starts.
 
+## DNPcall request
+
+```json
+{
+  "schema_version": 1,
+  "workflow": "dnp-call",
+  "panel": "/inputs/DNP_list.txt",
+  "samples": [
+    {"path": "/inputs/bams/sample_0001.bam", "sample_id": "sample_0001"}
+  ],
+  "reference": "/inputs/genome.fa",
+  "parallel": false,
+  "work_dir": "/run/work",
+  "out_dir": "/run/output"
+}
+```
+
+The client accepts individual BAMs, multiple BAMs or a BAM list. It maps BAMs
+under sequential `sample_0001.bam` aliases and retains the association with the
+original files in `run.json`. List entries are resolved relative to the list's
+directory. Large BAM and reference files are mounted read-only, not copied.
+The reference requires `.fai`, and BGZF references additionally require `.gzi`;
+BAM indexes remain optional.
+
+The engine validates the ordered aliases and panel, then writes
+`work/DNP_list.txt` and `work/bamlist.txt`. Work and output must be siblings named
+`work` and `output`. Execution changes directory to their parent and supplies
+relative native arguments `--bamlist=work/bamlist.txt`,
+`--DNPs=work/DNP_list.txt` and `--out=output`. This preserves the unchanged R
+script's output naming. Its internal shell calls require safe ASCII BAM/reference
+container paths; the client supplies these even for original filenames containing
+spaces or Unicode. `parallel` is a boolean and enables R's existing `--parallel`.
+
+Existing generated staging files, nonempty output, and run-root `mpileup.txt`
+or `bedfile_for_mpileup.bed` are rejected before preparation. The native script
+creates and removes those last two files itself on success. The normalized panel,
+BAM list and request remain available. DNPcall invokes samtools internally,
+suppresses its stderr and does not check its exit status. This inherited behavior
+is unchanged: the engine preserves the R exit status but cannot guarantee that
+every internal samtools failure is reported. A successful process alone does not
+validate its scientific output.
+
 The shared preparation package is the single source of the existing panel and
-table validators; client preflight imports use compatibility exports. DNPcall
-and CPI still use their native script interfaces here. Their desktop panel
-preparation, sample aliases and CPI cutoff preparation are later migration steps.
-R algorithms are unchanged.
+table validators; client preflight imports use compatibility exports. CPI still
+uses client-side preparation; its cutoff preparation is the remaining workflow
+migration step. R algorithms are unchanged.
 
 Input datasets and output directories are supplied separately. Production
 execution must not mount application/source directories over `/opt/nipat`.

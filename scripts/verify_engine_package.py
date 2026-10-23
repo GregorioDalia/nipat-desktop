@@ -1,6 +1,6 @@
 """Check bundled R scripts without mounting the application or source checkout.
 
-This verifies native R invocation and complete Contamination/SNPcall workflows.
+This verifies native R invocation and complete Contamination/SNPcall/DNPcall workflows.
 Only fixture input and result directories are mounted into the image.
 """
 
@@ -28,6 +28,7 @@ from nipat.validation.files import require_snp_pileup
 from verify_contamination_update import check_bundled_run
 from verify_contamination_update import check_outputs as check_contamination
 from verify_cpi_update import check_outputs as check_cpi
+from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_workflow
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -59,7 +60,8 @@ def image_id(reference: str) -> str:
 
 
 def run_container(identifier: str, arguments: list[str], *, inputs: Path | None = None,
-                  results: Path | None = None, expected_returncode: int = 0) -> str:
+                  results: Path | None = None, expected_returncode: int = 0,
+                  working_dir: str | None = None) -> str:
     command = [
         "run", "--rm", "--pull", "never", "--network", "none", "--read-only",
         "--tmpfs", "/tmp:rw,nosuid,nodev,size=128m", "--env", "HOME=/tmp",
@@ -77,10 +79,10 @@ def run_container(identifier: str, arguments: list[str], *, inputs: Path | None 
         (results / "output").mkdir(exist_ok=True)
         command.extend([
             "--mount", f"type=bind,source={results},target=/results",
-            "--workdir", "/results/work",
+            "--workdir", working_dir or "/results/work",
         ])
     else:
-        command.extend(["--workdir", "/tmp"])
+        command.extend(["--workdir", working_dir or "/tmp"])
     return docker([*command, identifier, *arguments],
                   expected_returncode=expected_returncode)
 
@@ -103,11 +105,13 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("The engine lacks the complete Contamination interface.")
     if description.get("workflow_interfaces", {}).get("snp-call") != "snp-call-v1":
         raise ValueError("The engine lacks the complete SNPcall interface.")
+    if description.get("workflow_interfaces", {}).get("dnp-call") != "dnp-call-v1":
+        raise ValueError("The engine lacks the complete DNPcall interface.")
     preparation = description.get("preparation", {})
     if preparation.get("interface") != "workflow-preparation-v1":
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
-    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py"):
+    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py"):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
     expected_sources = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -433,6 +437,9 @@ def main() -> int:
         check_snp(identifier, root)
         snp_inputs, snp_expected = check_snp_workflow(identifier, root)
         check_snp_client_without_host_scripts(identifier, root, snp_inputs, snp_expected)
+        dnp_inputs = check_dnp_workflow(identifier, root, run_container=run_container,
+                                      run_image=run_image, write_request=write_request)
+        check_dnp_client_without_host_scripts(identifier, root, dnp_inputs)
         check_contamination_fixture(identifier, root)
         check_contamination_workflow(identifier, root)
         check_cpi_fixture(identifier, root)
@@ -443,8 +450,8 @@ def main() -> int:
             print(f"Synthetic inputs and failed-run diagnostics retained at: {root}", file=sys.stderr)
         return 1
     shutil.rmtree(root)
-    print("PASS: nine numeric checks and validation failures without application/source mounts or network.")
-    print("DNPcall code is bundled and hash-verified; its BAM regression is a separate step.")
+    print("PASS: numeric regressions and validation failures without application/source mounts or network.")
+    print("Complete DNPcall, SNPcall and Contamination workflows verified; CPI native R regression retained.")
     return 0
 
 

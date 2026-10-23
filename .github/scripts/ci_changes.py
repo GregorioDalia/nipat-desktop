@@ -13,6 +13,7 @@ SCIENTIFIC_FILES = {
     "tests/test_engine_package.py", "tests/test_contamination_engine.py",
     "tests/test_bundled_runner.py",
     "tests/test_snp_engine.py", "tests/test_input_modes.py",
+    "tests/test_dnp_engine.py", "tests/test_dnp_workflow.py",
     ".github/workflows/ci.yml", ".github/workflows/windows-installer.yml",
     ".github/scripts/ci_changes.py", ".github/scripts/test_ci_changes.py",
 }

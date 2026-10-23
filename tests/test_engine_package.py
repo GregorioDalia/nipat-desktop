@@ -63,14 +63,15 @@ class EnginePackageTests(unittest.TestCase):
                          hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
         self.assertEqual(metadata["workflow_interfaces"], {
-            "contamination": "contamination-v1", "snp-call": "snp-call-v1",
+            "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 7)
+        self.assertEqual(len(hashes), 8)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)
+        self.assertIn("lib/nipat_scientific/dnp.py", hashes)
         for relative, digest in hashes.items():
             self.assertEqual(hashlib.sha256((self.root / relative).read_bytes()).hexdigest(), digest)
         for workflow, relative in engine.SCRIPT_PATHS.items():
@@ -247,6 +248,93 @@ class EnginePackageTests(unittest.TestCase):
     def test_repository_scientific_manifest_matches_all_supported_workflows(self):
         metadata = engine.verify_bundle(PROJECT_ROOT)
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
+
+    def dnp_request(self, parallel=False):
+        # Container aliases are deliberately shell-safe even when the bundled
+        # application, source panel and run root have arbitrary user names.
+        temporary = tempfile.TemporaryDirectory(prefix="nipat_dnp_aliases_")
+        self.addCleanup(temporary.cleanup)
+        inputs = Path(temporary.name).resolve()
+        panel = self.root / "selected panel = à.txt"
+        panel.write_text("chr1 100 101 ac gt\n", encoding="utf-8")
+        samples = []
+        for number in range(1, 3):
+            sample_id = f"sample_{number:04d}"
+            bam = inputs / f"{sample_id}.bam"
+            bam.write_bytes(f"BAM fixture {number}".encode())
+            samples.append({"path": str(bam), "sample_id": sample_id})
+        reference = inputs / "genome.fa"
+        reference.write_text(">chr1\nACGT\n", encoding="utf-8")
+        Path(str(reference) + ".fai").write_text("chr1\t4\t6\t4\t5\n", encoding="utf-8")
+        run = self.root / "run with spaces = à"
+        request = {
+            "schema_version": 1, "workflow": "dnp-call", "panel": str(panel),
+            "samples": samples, "reference": str(reference), "parallel": parallel,
+            "work_dir": str(run / "work"), "out_dir": str(run / "output"),
+        }
+        request_file = self.root / "dnp-request.json"
+        request_file.write_text(json.dumps(request), encoding="utf-8")
+        return request_file, request
+
+    def dnp_tools(self):
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        executable = fake_bin / "Rscript"
+        executable.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, sys\nfrom pathlib import Path\n"
+            "Path(os.environ['DNP_TEST_EVENTS']).write_text(json.dumps({\n"
+            "    'argv': sys.argv, 'cwd': str(Path.cwd()),\n"
+            "    'panel': Path('work/DNP_list.txt').read_text(),\n"
+            "    'bamlist': Path('work/bamlist.txt').read_text(),\n"
+            "    'output': Path('output').is_dir(),\n"
+            "}))\n"
+            "sys.exit(37)\n", encoding="utf-8",
+        )
+        executable.chmod(0o755)
+        environment = os.environ.copy()
+        environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
+        environment["PYTHONPATH"] = str(self.root / "absent application")
+        environment["DNP_TEST_EVENTS"] = str(self.root / "dnp-events.json")
+        return environment
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture exercises the Linux image entry point.")
+    def test_relocated_dnp_uses_run_root_native_arguments_and_preserves_r_exit_code(self):
+        request_file, request = self.dnp_request(parallel=True)
+        environment = self.dnp_tools()
+        result = subprocess.run(
+            [sys.executable, str(self.root / "engine/main.py"), "execute", "dnp-call",
+             "--request", str(request_file)], cwd=self.root / "engine", env=environment,
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+        self.assertEqual(result.returncode, 37, result.stderr)
+        event = json.loads(Path(environment["DNP_TEST_EVENTS"]).read_text())
+        self.assertEqual(event["cwd"], str(Path(request["work_dir"]).parent))
+        self.assertEqual(event["argv"][1:], [
+            str(self.root / "scientific" / engine.SCRIPT_PATHS["dnp-call"]),
+            "--bamlist=work/bamlist.txt", "--DNPs=work/DNP_list.txt",
+            "--out=output", f"--reference={request['reference']}", "--parallel",
+        ])
+        self.assertEqual(event["panel"], "chr1\t100\t101\tAC\tGT\n")
+        self.assertEqual(event["bamlist"].splitlines(), [item["path"] for item in request["samples"]])
+        self.assertTrue(event["output"])
+        self.assertEqual(Path(request["panel"]).read_text(), "chr1 100 101 ac gt\n")
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture exercises the Linux image entry point.")
+    def test_invalid_dnp_request_prevents_r_and_native_staging(self):
+        request_file, request = self.dnp_request()
+        request["parallel"] = "false"
+        request_file.write_text(json.dumps(request), encoding="utf-8")
+        environment = self.dnp_tools()
+        result = subprocess.run(
+            [sys.executable, str(self.root / "engine/main.py"), "execute", "dnp-call",
+             "--request", str(request_file)], cwd=self.root, env=environment,
+            capture_output=True, text=True, check=False, timeout=10,
+        )
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("booleana", result.stderr)
+        self.assertFalse(Path(environment["DNP_TEST_EVENTS"]).exists())
+        self.assertFalse(Path(request["work_dir"]).parent.exists())
 
     def snp_request(self, mode="bam"):
         inputs = self.root / "selected SNP inputs"

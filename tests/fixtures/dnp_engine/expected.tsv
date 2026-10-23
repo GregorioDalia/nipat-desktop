@@ -1,0 +1,7 @@
+sample	chr	pos1	pos2	REF	ALT	OTHER	N_REF	N_ALT	N_Other	GT	total_count
+A	chrDnpSynthetic	50	51	AC	GT	AT	20	0	1	0/0	21
+A	chrDnpSynthetic	140	141	TA	CG	TG	10	10	1	0/1	21
+A	chrDnpSynthetic	230	231	GC	AT	GA	0	20	1	1/1	21
+B	chrDnpSynthetic	50	51	AC	GT	AT	0	20	1	1/1	21
+B	chrDnpSynthetic	140	141	TA	CG	TG	12	8	1	0/1	21
+B	chrDnpSynthetic	230	231	GC	AT	GA	20	0	1	0/0	21

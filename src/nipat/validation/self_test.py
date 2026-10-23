@@ -112,4 +112,4 @@ def run_self_tests(layout: ProjectLayout) -> None:
                 f"Autotest {label} non superato. Consultare l'errore e i run appena creati."
             ) from exc
     print("\nAutotest superati: esempi numerici, percorsi esterni e modalità di input.")
-    print("DNPcall da BAM e validazione su campioni reali richiedono le prove di dominio.")
+    print("Questo autotest non include DNPcall da BAM; le prove su campioni reali restano necessarie.")
