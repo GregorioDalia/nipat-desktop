@@ -2,7 +2,7 @@
 
 NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
 pubblicazione. La versione 0.5.0a1 è una Preview non pubblicata. La pipeline
-produce un installatore Windows WSL per revisione; la pubblicazione 0.5 è
+produce installatori Windows WSL e Ubuntu per revisione; la pubblicazione 0.5 è
 bloccata finché il contratto di distribuzione Windows/Linux non è completo.
 
 ## Workflow GitHub Actions
@@ -10,7 +10,7 @@ bloccata finché il contratto di distribuzione Windows/Linux non è completo.
 | Workflow | Attivazione | Risultato |
 | --- | --- | --- |
 | [CI](../.github/workflows/ci.yml) | Pull request, push su `main`, avvio manuale. | Test Linux/Windows, verifiche scientifiche quando richieste e controllo aggregato `required`. |
-| [Windows installer (review build)](../.github/workflows/windows-installer.yml) | Pull request sui percorsi di packaging/runtime indicati nel file, oppure avvio manuale. | Installatore WSL autosufficiente e relative evidenze di costruzione. |
+| [Installers (review build)](../.github/workflows/windows-installer.yml) | Pull request sui percorsi di packaging/runtime indicati nel file, oppure avvio manuale. | Installatore WSL e pacchetto Ubuntu con lo stesso archivio scientifico, prove ed evidenze di costruzione. |
 | [Publish verified Windows pre-release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica e pubblicazione degli artefatti ammessi; rifiuta le versioni 0.5 finché il loro contratto di distribuzione è incompleto. |
 
 Una build di pull request serve alla revisione ed è rifiutata dal publisher.
@@ -56,7 +56,7 @@ pull request obbligatoria, controllo `required`, branch aggiornato e divieto
 di force push e cancellazione. Queste regole sono impostazioni di GitHub,
 non vengono applicate automaticamente copiando i file del repository.
 
-## Costruzione dell'installatore Windows
+## Costruzione degli installatori
 
 La build esegue i controlli Windows prima delle operazioni più costose.
 Il medesimo `NIPAT.exe` compilato e verificato viene incorporato nell'installatore.
@@ -67,7 +67,25 @@ Il test di importazione usa un motore isolato del filesystem WSL distribuito,
 inizialmente privo dell'immagine. Carica l'archivio esportato, avvia R e samtools
 e ripete il caricamento per verificare la ripresa. La compilazione Inno Setup
 usa gli stessi archivi verificati, il profilo di installazione e il launcher.
-La verifica finale confronta manifest, sorgenti, EXE ed evidenze di costruzione.
+La verifica finale Windows confronta manifest, sorgenti, EXE ed evidenze
+di costruzione.
+
+Il job `linux-installer` riceve il medesimo archivio esportato, senza
+ricostruirlo, e prepara il pacchetto `nipat-05-preview` per Ubuntu 24.04 amd64.
+Il builder verifica versione, commit, sorgenti e checksum, quindi produce
+il `.deb`, il manifest e le evidenze. La prova installa il pacchetto con APT
+su un runner con Docker configurato e avvia preparazione e analisi da
+un account non root. Oltre agli autotest SNPcall, CPI e Contamination,
+esegue DNPcall su BAM sintetico con confronto dei conteggi e dei genotipi
+attesi. Usa input privati e percorsi con spazi e caratteri non ASCII;
+verifica proprietà e accessibilità dei risultati, ripetizione dell’avvio,
+reinstallazione dello stesso pacchetto e rimozione con conservazione dei
+dati, dello stato e delle risorse Docker estranee. La reinstallazione
+non equivale a una prova di aggiornamento fra versioni differenti.
+
+Il job conclusivo `installer-required` richiede il successo dei pacchetti
+Windows e Ubuntu e confronta commit, manifest e archivio scientifico nelle
+evidenze dei due installatori. Conserva l’esito in `installer-set-check.json`.
 
 | Artefatto Actions | Contenuto |
 | --- | --- |
@@ -76,6 +94,8 @@ La verifica finale confronta manifest, sorgenti, EXE ed evidenze di costruzione.
 | `nipat-installer-inputs` | Applicazione preparata e manifest destinati al compilatore. |
 | `nipat-scientific-check-logs` | Registri e metadati delle regressioni conservati dalla build. |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`, manifest, checksum ed evidenze dell'installatore e del launcher. |
+| `nipat-linux-setup` | Pacchetto `.deb`, manifest comune, checksum, evidenze di costruzione e di installazione. |
+| `nipat-installer-set-evidence` | `installer-set-check.json`, esito della verifica congiunta Windows/Ubuntu. |
 
 Gli artefatti Actions hanno una durata limitata indicata nel workflow.
 Non equivalgono a una release pubblica. La versione 0.5 non produce un
@@ -90,6 +110,8 @@ installatore Docker Desktop.
 | samtools | Versione 1.21 e SHA-256 dell'archivio sorgente. |
 | Filesystem WSL | Base Debian identificata da digest e versioni esplicite di Docker Engine/CLI, containerd, Buildx e Compose. |
 | Python Windows | Archivio portabile 3.12.10 identificato e verificato dal builder. |
+| Python Ubuntu | Pacchetto di sistema 3.12.x dichiarato nelle dipendenze del `.deb`. |
+| Docker Ubuntu | Engine e Compose v2 del sistema, con accesso utente al socket locale; il launcher verifica la configurazione supportata. |
 | Azioni GitHub | Riferimenti a commit espliciti nei workflow. |
 
 L'immagine scientifica conserva gli inventari R e APT in
@@ -106,12 +128,15 @@ superato tutti i controlli di correttezza.
 
 ## Evidenze richieste per una distribuzione
 
-Il successo della CI non dimostra un'installazione reale. Le prove PowerShell
+Il successo della CI non dimostra l’installazione completa sui sistemi
+destinatari. Le prove PowerShell
 simulano i confini Windows/WSL; il test del motore interno usa Linux.
 Prima di autorizzare una distribuzione occorrono prove del pacchetto effettivo
 su Windows, inclusi prima installazione, riavvio, aggiornamento, ripresa dopo
-errore e conservazione dei risultati. L'installer Linux richiede prove separate
-sulla piattaforma dichiarata.
+errore e conservazione dei risultati. Le prove automatiche del `.deb` usano
+un runner Ubuntu con Docker già pronto: occorre verificare separatamente
+installazione e avvio su Ubuntu Desktop pulito, comprese dipendenze,
+autorizzazioni e collegamento nel menu applicazioni.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
 regressione. Esiti, versioni e limiti devono essere registrati nella

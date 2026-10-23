@@ -155,7 +155,7 @@ della stessa build; non riutilizzare nomi di distribuzioni gestite da altri cana
 
 ## Costruzione e accettazione del pacchetto
 
-Il workflow [Windows installer](../.github/workflows/windows-installer.yml)
+Il workflow [Installers (review build)](../.github/workflows/windows-installer.yml)
 compila e prova il launcher, verifica il motore scientifico, esporta gli archivi,
 prepara i sorgenti ammessi da `distribution-files.txt` e compila l'EXE con
 Inno Setup. `installer-build.json` lega l'eseguibile a commit, versione,

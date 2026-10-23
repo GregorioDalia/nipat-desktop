@@ -19,10 +19,11 @@ nativo. I calcoli e i dati rimangono sul computer.
 
 Il pacchetto Windows è predisposto come un singolo `NIPAT-Setup.exe`, con
 avvio tramite l'icona **NIPAT 0.5 Preview**. Non richiede l'installazione
-separata degli strumenti scientifici. Il pacchetto non è ancora pubblicato;
-per Ubuntu 24.04 x86_64 è disponibile il percorso da sorgenti e non è presente
-un installatore Linux. WSL2 su Windows e Docker Engine su Linux costituiscono
-l'ambiente necessario alle analisi.
+separata degli strumenti scientifici. Ubuntu 24.04 x86_64 utilizza un singolo
+pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
+**NIPAT 0.5 Preview** o dal comando `nipat-05-preview`. Docker Engine locale
+e Compose v2 devono essere disponibili all’utente. Entrambi i pacchetti sono
+predisposti per verifica e non ancora pubblicati.
 
 Per utilizzare NIPAT si sceglie il workflow, si indicano file e parametri e
 si conferma il riepilogo con **Avvia analisi**. Le indicazioni nei campi

@@ -11,7 +11,7 @@ non attestano una distribuzione pronta per l'utilizzo generale.
 | Sistema | Esecuzione scientifica | Modalità disponibile |
 | --- | --- | --- |
 | Windows 11 x64 | Distribuzione WSL2 dedicata, Docker Engine interno, immagine NIPAT autonoma | Pacchetto `NIPAT-Setup.exe` predisposto; verifica completa sul sistema e pubblicazione non concluse. |
-| Ubuntu 24.04 LTS x86_64 | Docker Engine nativo con Compose v2 e immagine NIPAT autonoma | Checkout da sorgenti; installatore Linux non disponibile. |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale con Compose v2 e immagine NIPAT autonoma | Pacchetto `.deb` predisposto; verifica su Ubuntu Desktop pulito e pubblicazione non concluse. |
 
 L'immagine scientifica contiene gli script R, samtools, le dipendenze e i
 moduli di preparazione degli input. Le analisi non richiedono un'installazione
@@ -77,6 +77,41 @@ risultati e ambiente WSL vengono conservati: la disinstallazione non deve
 essere interpretata come cancellazione completa dei dati di ricerca.
 I dettagli tecnici e le prove richieste sono in
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
+
+## Pacchetto Ubuntu
+
+Il file `.deb` installa **NIPAT 0.5 Preview**, la documentazione e l’archivio
+scientifico già verificato dalla build. Windows e Ubuntu incorporano gli
+stessi byte di questo archivio, identificati da dimensione e SHA-256 nel
+manifest comune. Ubuntu non include né richiede il filesystem WSL.
+
+Il pacchetto dichiara Python 3.12, Docker Engine e Compose v2 come dipendenze.
+APT risolve i pacchetti mancanti dai repository configurati; non è necessario
+installare R o samtools sul sistema. Docker Engine deve essere avviato e
+accessibile al proprio account tramite il socket locale. Sono supportati
+il daemon di sistema e i container senza rimappatura degli UID; Docker
+rootless, `userns-remap` e daemon remoti non fanno parte di questo contratto.
+
+Il primo avvio verifica e importa l’archivio incluso, controlla il motore ed
+esegue gli autotest prima di consentire le analisi. L’applicazione non cambia
+i gruppi dell’utente, i permessi del socket o la configurazione Docker.
+L’accesso al gruppo `docker` deve essere autorizzato dall’amministratore,
+poiché concede privilegi equivalenti a root.
+
+| Elemento | Posizione o identificativo |
+| --- | --- |
+| Pacchetto | `nipat-05-preview` |
+| Applicazione | `/opt/nipat-05-preview` |
+| Avvio | Collegamento **NIPAT 0.5 Preview** o `nipat-05-preview` |
+| Dati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/data` |
+| Risultati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/runs` |
+| Stato e log della preparazione | `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview` |
+
+Un aggiornamento del pacchetto conserva i dati dell’utente e richiede la
+verifica della nuova combinazione di applicazione e immagine. La rimozione
+del pacchetto conserva dati, risultati, stato e immagini Docker. I comandi
+di installazione, diagnosi e rimozione sono nella
+[guida dell’installatore Linux](INSTALLATORE_LINUX.md).
 
 ## Ubuntu: installazione da sorgenti
 

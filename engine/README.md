@@ -3,7 +3,7 @@
 L'immagine NIPAT installa il motore in `/opt/nipat/engine`, gli script R in
 `/opt/nipat/scientific` e la libreria di preparazione in
 `/opt/nipat/lib/nipat_scientific`. Il motore non dipende dalla directory
-corrente, dai sorgenti del client o dalla cartella dell'applicazione Windows.
+corrente, dai sorgenti del client o dalla cartella dell’applicazione installata.
 Python usa la sola libreria standard; R, samtools e le dipendenze sono inclusi
 nell'immagine.
 

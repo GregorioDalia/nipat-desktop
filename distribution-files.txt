@@ -1,4 +1,4 @@
-# Explicit source allowlist for the NIPAT Windows installer.
+# Explicit source allowlist for the NIPAT Windows and Linux installers.
 # Update explicitly when adding a deliverable; local data and outputs never belong here.
 .dockerignore
 .gitattributes
@@ -7,6 +7,8 @@
 .github/scripts/publish_windows_release.py
 .github/scripts/test_ci_changes.py
 .github/scripts/test_publish_windows_release.py
+.github/scripts/test_verify_installer_set.py
+.github/scripts/verify_installer_set.py
 .github/workflows/ci.yml
 .github/workflows/publish-windows-release.yml
 .github/workflows/windows-installer.yml
@@ -28,10 +30,12 @@ docs/CI_CD.md
 docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
+docs/INSTALLATORE_LINUX.md
 docs/INSTALLATORE_WINDOWS.md
 docs/VALIDAZIONE.md
 engine/README.md
 engine/main.py
+installer/linux/launch.py
 installer/runtime/Dockerfile
 installer/runtime/nipat-engine
 installer/runtime/write-provenance.py
@@ -79,14 +83,16 @@ scientific/vendor/NEWPAT/contamination/detect_contamination.R
 scientific/vendor/NEWPAT/contamination/examples/inputs/DNPpanel.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample1.txt
 scientific/vendor/NEWPAT/contamination/examples/inputs/sample2.txt
+scripts/build_linux_installer.py
 scripts/build_windows_installer_assets.py
 scripts/distribution_support.py
 scripts/verify_contamination_update.py
-scripts/verify_cpi_update.py
 scripts/verify_cpi_engine.py
+scripts/verify_cpi_update.py
 scripts/verify_dnp_engine.py
 scripts/verify_engine_package.py
 scripts/verify_input_modes.py
+scripts/verify_linux_installer.py
 scripts/verify_snp_example.py
 scripts/windows/common.ps1
 scripts/windows/run.ps1
@@ -148,18 +154,21 @@ tests/fixtures/snp_engine/SNPlist.tsv
 tests/fixtures/snp_engine/expected.tsv
 tests/fixtures/snp_engine/reads.sam
 tests/fixtures/snp_engine/reference.fa
-tests/test_cli_validation.py
-tests/test_contamination_workflow.py
-tests/test_contamination_engine.py
-tests/test_cpi_engine.py
 tests/test_bundled_runner.py
+tests/test_cli_validation.py
+tests/test_contamination_engine.py
+tests/test_contamination_workflow.py
+tests/test_cpi_engine.py
 tests/test_distribution.py
-tests/test_dnp_workflow.py
 tests/test_dnp_engine.py
+tests/test_dnp_workflow.py
 tests/test_engine_package.py
 tests/test_input_modes.py
 tests/test_input_mounts.py
 tests/test_installer_assets.py
+tests/test_linux_installation_check.py
+tests/test_linux_installer.py
+tests/test_linux_launcher.py
 tests/test_panels.py
 tests/test_paths.py
 tests/test_results.py

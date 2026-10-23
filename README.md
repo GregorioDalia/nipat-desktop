@@ -30,7 +30,7 @@ sia nel menu sia nella CLI diretta; la GUI grafica non fa parte della 0.5.
 | Piattaforma | Ambiente di esecuzione | Disponibilità 0.5 |
 | --- | --- | --- |
 | Windows 11 x64 | WSL2 con distribuzione NIPAT dedicata e Docker Engine gestito dall'applicazione | Installatore `NIPAT-Setup.exe` predisposto; pubblicazione e verifica completa del pacchetto su Windows ancora da completare. |
-| Ubuntu 24.04 LTS x86_64 | Docker Engine nativo e Compose v2 | Esecuzione da sorgenti; installatore Linux non disponibile. |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale e Compose v2, accessibili all’utente | Pacchetto `.deb` predisposto; pubblicazione e verifica su Ubuntu Desktop pulito ancora da completare. |
 
 Il pacchetto Windows contiene Python portabile, l'ambiente Linux e l'immagine
 scientifica. Non richiede installazioni separate di Python, R, samtools o
@@ -45,6 +45,12 @@ la configurazione deve terminare con `NIPAT: ready`. Il collegamento **NIPAT
 manualmente PowerShell. Requisiti, percorsi e gestione dell'installazione sono
 nella [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
 [documentazione di distribuzione](docs/DISTRIBUZIONE.md).
+
+Il pacchetto Ubuntu incorpora l’applicazione e lo stesso archivio scientifico
+del pacchetto Windows. Si installa con APT; il collegamento **NIPAT 0.5 Preview**
+o il comando `nipat-05-preview` apre il menu. Docker Engine deve essere
+utilizzabile dal proprio account. Requisiti, preparazione iniziale e rimozione
+sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 
 ## Utilizzo
 
@@ -92,6 +98,15 @@ il motore scientifico. `NIPAT.exe --help` e `NIPAT.exe <workflow> --help`
 elencano le opzioni. La [guida](docs/GUIDA_UTILIZZO.md) documenta formati,
 modalità alternative e parametri.
 
+Su Ubuntu installato dal pacchetto `.deb`, usare `nipat-05-preview` al posto
+di `.\NIPAT.exe`, percorsi Linux e `\` per continuare un comando su più righe.
+Le opzioni e i workflow sono gli stessi. Per esempio:
+
+```bash
+nipat-05-preview --runs-dir "$HOME/risultati-nipat" contamination \
+  --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
+```
+
 ### Ubuntu: esecuzione da sorgenti
 
 Servono Python 3.12 con `venv`, Docker Engine e Compose v2, accessibili
@@ -131,6 +146,7 @@ indipendenti e problemi riproducibili.
 - [Sintesi del prodotto](SUNTO.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
+- [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
 - [Architettura](docs/ARCHITECTURE.md)
 - [Controlli CI/CD](docs/CI_CD.md)
 - [Componenti scientifici](scientific/README.md)

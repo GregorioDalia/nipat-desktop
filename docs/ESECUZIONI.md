@@ -2,8 +2,9 @@
 
 In NIPAT 0.5 ogni analisi crea un nuovo **run** nella cartella risultati.
 La destinazione predefinita Windows è
-`%LOCALAPPDATA%\NIPAT-0.5-Preview\runs`; nel checkout da sorgenti è `runs`
-accanto al progetto. Si può impostare una destinazione con `--runs-dir`
+`%LOCALAPPDATA%\NIPAT-0.5-Preview\runs`; nel pacchetto Ubuntu è
+`${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/runs`. Nel checkout
+da sorgenti è `runs` accanto al progetto. Si può impostare una destinazione con `--runs-dir`
 prima del sottocomando o con **5 — Cartella risultati** per la sessione corrente.
 Un run esistente non viene sovrascritto.
 

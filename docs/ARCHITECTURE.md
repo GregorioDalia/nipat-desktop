@@ -34,8 +34,10 @@ Il trasporto Docker nativo non è ammesso sul client Windows.
 
 Su Linux, il client usa Docker Engine e Compose del sistema con un container
 `linux/amd64`. La piattaforma Linux di riferimento è Ubuntu 24.04 LTS x86_64.
-L'esecuzione da sorgenti è disponibile; l'installer Linux non è ancora disponibile.
-Il container usa UID e GID dell'utente Linux per i risultati. Il trasporto WSL
+Il pacchetto `.deb` usa il socket locale `unix:///var/run/docker.sock`
+senza modificare il contesto Docker dell’utente. Richiede un daemon di sistema
+senza `rootless` o rimappatura `userns`: il container usa UID e GID
+dell’utente Linux per i risultati. Il trasporto WSL
 usa UID e GID 0 nell'ambiente dedicato; l'accesso ai file Windows dipende dai
 permessi dell'account che ha avviato WSL.
 
@@ -113,6 +115,29 @@ proprio manifest e backend verificati. La configurazione è attivata dopo
 la riuscita di diagnostica e autotest; uno stato incompleto impedisce l'avvio
 dell'analisi. Identità, aggiornamento e recupero sono descritti nel
 [riferimento dell'installatore](INSTALLATORE_WINDOWS.md).
+
+## Installazione Ubuntu
+
+Il pacchetto `nipat-05-preview` installa i file applicativi in
+`/opt/nipat-05-preview`. Il launcher usa Python 3.12 del sistema in modalità
+isolata e seleziona l’applicazione installata, il backend locale e le cartelle
+XDG dell’utente. Le variabili ereditate non possono sostituire il backend,
+il progetto o l’immagine verificata; le opzioni CLI restano disponibili
+per selezionare dati e risultati.
+
+La preparazione è eseguita dall’utente normale, sotto un lock esclusivo.
+Verifica dimensione e SHA-256 dell’archivio scientifico incluso, importa
+l’immagine e verifica l’identificativo restituito dal daemon locale.
+La configurazione pronta viene scritta atomicamente dopo diagnostica e
+autotest riusciti. Il record collega commit, manifest, archivio e ID locale;
+un aggiornamento o un’immagine rimossa richiedono una nuova preparazione.
+
+Lo stesso archivio scientifico viene incorporato nei pacchetti Windows
+e Ubuntu senza nuove esportazioni. L’ID locale dell’immagine può dipendere
+dal motore Docker; l’identità condivisa di distribuzione è il checksum
+dell’archivio. Il pacchetto non gestisce il daemon di sistema, i gruppi utenti
+o la cancellazione delle immagini. Requisiti e ciclo di vita sono descritti
+nell’[installatore Linux](INSTALLATORE_LINUX.md).
 
 ## Limiti tecnici
 

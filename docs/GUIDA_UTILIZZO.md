@@ -1,10 +1,9 @@
 # Guida per l'utilizzo di NIPAT
 
 Questa guida descrive **NIPAT 0.5.0a1**, con interfaccia testuale guidata e CLI
-diretta. La versione non è ancora pubblicata: le istruzioni Windows descrivono
-il pacchetto predisposto, non un installatore già disponibile al download.
-Per Ubuntu 24.04 LTS x86_64 è disponibile l'esecuzione da sorgenti;
-l'installatore Linux non è disponibile.
+diretta. La versione non è ancora pubblicata: le istruzioni descrivono
+i pacchetti Windows e Ubuntu predisposti per la verifica tecnica, non
+installatori già disponibili dalla pagina Releases.
 
 NIPAT esegue DNPcall, SNPcall, Contamination e CPI sul computer dell'utente.
 Il motore scientifico contiene gli script R e gli strumenti necessari.
@@ -38,6 +37,23 @@ la causa indicata e aprire **NIPAT 0.5 Preview - completa preparazione** dal
 menu Start. L'applicazione non avvia analisi finché il setup non è completato.
 I dettagli dell'installazione e dei suoi limiti sono in
 [DISTRIBUZIONE.md](DISTRIBUZIONE.md).
+
+## Requisiti e avvio su Ubuntu
+
+Il pacchetto `.deb` richiede **Ubuntu 24.04 LTS x86_64**, Python 3.12,
+Docker Engine locale e Compose v2. Docker deve essere avviato e accessibile
+al proprio account, con daemon di sistema senza rimappatura degli UID.
+L’installazione e l’autorizzazione a usare Docker sono descritte nella
+[guida dell’installatore Linux](INSTALLATORE_LINUX.md).
+
+Dopo l’installazione, aprire **NIPAT 0.5 Preview** dal menu delle applicazioni,
+oppure eseguire `nipat-05-preview` nel terminale. Il primo avvio importa
+l’immagine inclusa e completa diagnostica e autotest; il menu appare solo
+dopo la riuscita della preparazione. NIPAT non va eseguito con `sudo`.
+
+Per riprendere una preparazione interrotta, risolvere la causa segnalata e
+riaprire NIPAT oppure eseguire `nipat-05-preview --setup`. Il launcher
+conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview`.
 
 ## Menu guidato
 
@@ -107,6 +123,11 @@ in un file BAM list partono invece dalla cartella della lista.
 | Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
 | Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
 
+Su Ubuntu installato dal pacchetto, l’applicazione si trova in
+`/opt/nipat-05-preview`; dati e risultati predefiniti sono nelle sottocartelle
+`data` e `runs` di `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview`.
+Le variabili XDG, se definite, devono indicare percorsi assoluti.
+
 Per il checkout da sorgenti, `data` e `runs` si trovano accanto alla cartella
 del progetto. `data` è una cartella di comodità e non limita la selezione
 degli input. La cartella dei risultati deve essere scrivibile e separata
@@ -119,8 +140,8 @@ lasciare vuoto il nome per ottenere quello automatico.
 
 Nella CLI, `--data-dir` e `--runs-dir` impostano esplicitamente i percorsi.
 Il checkout da sorgenti accetta anche `NIPAT_DATA_DIR` e `NIPAT_RUNS_DIR`.
-L'applicazione Windows installata utilizza la propria configurazione e
-ignora eventuali variabili ereditate per questi percorsi; usare le opzioni
+I launcher dei pacchetti installati utilizzano la propria configurazione e
+ignorano eventuali variabili NIPAT ereditate per questi percorsi; usare le opzioni
 CLI o il menu per selezionare una destinazione diversa.
 
 ## Input dei quattro workflow
@@ -228,8 +249,20 @@ Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-0.5-Preview")
 
 `NIPAT.exe` senza argomenti apre il menu; accetta anche gli argomenti CLI.
 `nipat.cmd` offre gli stessi comandi per l'uso nei terminali e negli script.
-Su Linux, dopo l'installazione da sorgenti, usare `nipat` al posto di
-`.\NIPAT.exe` e la sintassi dei percorsi del sistema.
+Su Ubuntu installato dal pacchetto, usare `nipat-05-preview` al posto di
+`.\NIPAT.exe` e la sintassi dei percorsi Linux. Nel checkout da sorgenti
+il comando è `nipat`. Per esempio:
+
+```bash
+nipat-05-preview --help
+nipat-05-preview dnp-call --help
+nipat-05-preview --runs-dir "$HOME/risultati-nipat" contamination \
+  --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
+```
+
+Il launcher Ubuntu permette `--help` e `--version` anche senza Docker
+disponibile. `--setup` ripete la verifica dell’archivio, la diagnostica e
+gli autotest senza aprire il menu.
 
 Le opzioni globali precedono il sottocomando. Esempio di simulazione:
 
@@ -242,7 +275,9 @@ Le opzioni globali precedono il sottocomando. Esempio di simulazione:
 motore scientifico. Registra uno stato `planned`, non produce risultati
 scientifici e non sostituisce una verifica del runtime. La prova reale richiede
 un nuovo nome di run. Per simulare il menu usare `NIPAT.exe --dry-run wizard`;
-per effettuare analisi reali aprire normalmente NIPAT.
+per effettuare analisi reali aprire normalmente NIPAT. Nel pacchetto Ubuntu,
+`--dry-run` non importa l’immagine e non avvia la preparazione o gli autotest;
+non attesta quindi che l’ambiente scientifico sia disponibile.
 
 Per verificare strumenti e casi di prova:
 
@@ -293,6 +328,7 @@ Una cartella di output parziale non dimostra il completamento del workflow.
 | Problema | Verifica da effettuare |
 | --- | --- |
 | Setup Windows incompleto | Conservare `setup.log` e `state.json` in `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview\.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
+| Preparazione Ubuntu incompleta | Conservare `setup.log` e `state.json` nella cartella di stato XDG; verificare servizio e accesso a Docker, quindi ripetere `nipat-05-preview --setup`. Consultare [Installatore Linux](INSTALLATORE_LINUX.md). |
 | File non accessibile | Controllare percorso, permessi e disponibilità del disco; su Windows usare un disco locale fisso. |
 | Indice FASTA assente | Fornire il `.fai` del riferimento selezionato e, per BGZF, il `.gzi`. |
 | Nome di run già presente | Scegliere un nome nuovo o lasciare il nome automatico. |

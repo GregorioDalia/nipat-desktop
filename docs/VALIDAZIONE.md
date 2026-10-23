@@ -8,9 +8,9 @@ validità per ogni campione o scenario d'impiego.
 ## Ambiente e preparazione
 
 Compilare una scheda per ciascuna combinazione di sistema e pacchetto.
-Per Windows il perimetro è Windows 11 x64 con WSL2; per Linux il percorso
-da sorgenti richiede Ubuntu 24.04 LTS x86_64 e Docker Engine con Compose v2.
-L'installatore Linux non è disponibile.
+Per Windows il perimetro è Windows 11 x64 con WSL2. Il pacchetto Linux
+richiede Ubuntu 24.04 LTS x86_64, Docker Engine locale con Compose v2
+e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
 
 | Campo | Valore da registrare |
 | --- | --- |
@@ -18,7 +18,7 @@ L'installatore Linux non è disponibile.
 | Versione NIPAT e commit o identificativo del pacchetto | |
 | Origine del pacchetto e checksum, se disponibile | |
 | Windows: versione e disponibilità iniziale di WSL2 | |
-| Linux: versioni Docker Engine e Compose | |
+| Linux: versioni Docker Engine e Compose, origine dei pacchetti e accesso utente | |
 | Prima installazione o aggiornamento dello stesso canale | |
 | Cartelle dati e risultati configurate | |
 | Esito del setup, eventuali autorizzazioni o riavvii | |
@@ -32,6 +32,19 @@ Annotare eventuali passaggi manuali non previsti. Conservare `setup.log` e
 `state.json` in `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview\.runtime\installer`.
 L'attivazione iniziale di WSL, la ripresa dopo riavvio e un aggiornamento
 costituiscono prove distinte dall'installazione su WSL già funzionante.
+
+Nel pacchetto Ubuntu verificare installazione tramite APT, apertura del
+collegamento nel menu applicazioni e avvio con `nipat-05-preview`. Provare
+la preparazione iniziale da un account non root, input privati e risultati
+leggibili e scrivibili dallo stesso utente. Conservare stato e log nella
+cartella `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview`. Registrare
+se Docker era già installato e autorizzato: una prova su un sistema
+preparato non copre l’esperienza iniziale su Ubuntu Desktop pulito.
+
+Per entrambi i pacchetti, verificare aggiornamento nello stesso canale,
+ripresa dopo un errore, nuova apertura e rimozione con conservazione dei
+dati. Su Ubuntu controllare anche che installazione e rimozione non
+modifichino configurazioni o immagini Docker estranee a NIPAT.
 
 I controlli automatici del repository sono descritti in
 [CI_CD.md](CI_CD.md). Una build riuscita non dimostra il completamento
