@@ -44,6 +44,9 @@ class DistributionTests(unittest.TestCase):
         manifest = {
             "schema_version": 1, "version": "0.2.0a1", "release_tag": tag,
             "source_commit": "c" * 40, "runtime_image": "sha256:" + "a" * 64,
+            "installation_profile": json.loads((
+                Path(__file__).resolve().parents[1] / "installer/windows/install-profile.json"
+            ).read_text(encoding="utf-8")),
             "assets": {"scientific_image": asset, "rootfs": rootfs},
             "source_sha256": {path.relative_to(project).as_posix(): bundle.sha256_file(path)
                               for path in bundle.source_files(project)},

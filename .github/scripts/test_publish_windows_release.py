@@ -122,7 +122,22 @@ class ReleaseGuards(unittest.TestCase):
                 for key in ("rootfs", "scientific_image")
             },
         }
+        if "installation_profile" in self.manifest:
+            evidence["installation_profile"] = self.manifest["installation_profile"]
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    def make_preview_package(self):
+        profile_path = Path(__file__).resolve().parents[2] / publisher.INSTALLATION_PROFILE_SOURCE
+        profile_bytes = profile_path.read_bytes()
+        self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = profile_bytes
+        self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
+        self.manifest["source_sha256"] = {
+            name: hashlib.sha256(content).hexdigest() for name, content in self.sources.items()
+        }
+        self.manifest["installation_profile"] = json.loads(profile_bytes)
+        self.make_dual_package("0.5.0a1")
+        (self.desktop / "NIPAT-DockerDesktop-Setup.exe").write_bytes(b"Review installer fixture")
+        self.write_docker_installer_evidence()
 
     def make_docker_installer(self):
         self.make_dual_package("0.4.1")
@@ -212,6 +227,100 @@ class ReleaseGuards(unittest.TestCase):
         self.assertNotIn(self.package_name, result)
         self.assertFalse((self.root / "release" / self.package_name).exists())
         self.assertFalse((self.root / "release/docker-installer-build.json").exists())
+
+    def test_preview_review_accepts_profile_bound_to_source_and_installer(self):
+        self.make_preview_package()
+        result = self.prepare(desktop=self.desktop)
+        self.assertEqual(result["installation_profile"]["channel"], "preview-0.5")
+        evidence = json.loads((self.setup / "installer-build.json").read_text())
+        self.assertEqual(evidence["installation_profile"], result["installation_profile"])
+
+    def test_preview_rejects_missing_or_foreign_manifest_profile(self):
+        self.make_preview_package()
+        original = copy.deepcopy(self.manifest["installation_profile"])
+        for key, value in (("channel", "stable"), ("app_dir_name", "NIPAT"),
+                           ("data_dir_name", "NIPAT"), ("distro_prefix", "NIPAT-Runtime-"),
+                           ("resume_key", "NIPAT-ResumeSetup"), ("schema_version", True)):
+            with self.subTest(field=key):
+                self.manifest["installation_profile"] = dict(original, **{key: value})
+                self.write_manifests()
+                self.write_installer_evidence()
+                with self.assertRaisesRegex(ValueError, "isolated 0.5 preview namespace"):
+                    self.prepare(desktop=self.desktop)
+        del self.manifest["installation_profile"]
+        self.write_manifests()
+        with self.assertRaisesRegex(ValueError, "isolated 0.5 preview namespace"):
+            self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_preview_rejects_profile_not_bound_to_verified_source(self):
+        self.make_preview_package()
+        changed = dict(self.manifest["installation_profile"], display_name="Other channel")
+        source = publisher.INSTALLATION_PROFILE_SOURCE
+        self.sources[source] = json.dumps(changed).encode()
+        self.manifest["source_sha256"][source] = hashlib.sha256(self.sources[source]).hexdigest()
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "profile differs from the built commit"):
+            self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_preview_rejects_profile_omitted_from_source_allowlist(self):
+        self.make_preview_package()
+        source = publisher.INSTALLATION_PROFILE_SOURCE
+        del self.sources[source]
+        self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
+        self.manifest["source_sha256"] = {
+            name: hashlib.sha256(content).hexdigest() for name, content in self.sources.items()
+        }
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "profile is missing from the verified source list"):
+            self.prepare(desktop=self.desktop)
+
+    def test_preview_rejects_installer_evidence_missing_or_changing_profile(self):
+        self.make_preview_package()
+        path = self.setup / "installer-build.json"
+        original = json.loads(path.read_text())
+        for mutation in ("missing", "foreign"):
+            with self.subTest(mutation=mutation):
+                evidence = copy.deepcopy(original)
+                if mutation == "missing":
+                    del evidence["installation_profile"]
+                else:
+                    evidence["installation_profile"]["app_dir_name"] = "NIPAT"
+                path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(ValueError, "installer build evidence mismatch"):
+                    self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_preview_publication_stops_before_any_release_mutation(self):
+        run = {"id": 123, "head_sha": COMMIT, "status": "completed", "conclusion": "success", "event": "push",
+               "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
+               "head_repository": {"full_name": publisher.REPO}}
+        jobs = {"jobs": [{"name": name, "conclusion": "success"}
+                         for name in ("linux-runtime", "windows-installer")]}
+
+        def download(*arguments):
+            self.assertEqual(arguments[:3], ("gh", "run", "download"))
+            runtime = Path(arguments[-1]) / "nipat-runtime-assets"
+            runtime.mkdir(parents=True)
+            (runtime / publisher.MANIFEST).write_text(json.dumps({"version": "0.5.0a1"}))
+            return ""
+
+        with patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                patch.object(publisher.subprocess, "run"), \
+                patch.object(publisher, "api", side_effect=[run, jobs]) as api, \
+                patch.object(publisher, "command", side_effect=download) as command, \
+                patch.object(publisher, "create_draft") as create, \
+                patch.object(publisher, "check_tag") as tag:
+            with self.assertRaisesRegex(ValueError, "preview publication is disabled"):
+                publisher.main()
+        self.assertEqual(api.call_count, 2)
+        self.assertEqual(command.call_count, 1)
+        create.assert_not_called()
+        tag.assert_not_called()
+        publisher.require_publication_supported("0.4.1")
 
     def test_041_requires_docker_installer_and_bound_evidence(self):
         self.make_dual_package("0.4.1")

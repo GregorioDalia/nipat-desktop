@@ -18,6 +18,18 @@ function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
     $dockerInstaller = $false
     $dockerInstallerPath = Join-Path $Project '.distribution\docker-desktop.json'
     $backendFile = Join-Path $Project ".runtime\backend.json"
+    $installerManifestPath = Join-Path $Project '.distribution\installer-manifest.json'
+    $profile = $null
+    if (Test-Path -LiteralPath $installerManifestPath -PathType Leaf) {
+        . (Join-Path $Project 'installer\windows\bootstrap-common.ps1')
+        $installerManifest = Read-NipatInstallerManifest $installerManifestPath
+        $profile = Get-NipatInstallationProfile
+        if (-not (Test-Path -LiteralPath $backendFile -PathType Leaf)) {
+            throw 'Installazione Preview da completare: riaprire il setup della stessa versione.'
+        }
+    } elseif (Test-Path -LiteralPath $backendFile -PathType Leaf) {
+        throw 'Configurazione WSL priva del manifest della stessa installazione. Ripristinare il pacchetto Preview.'
+    }
     if (Test-Path -LiteralPath $dockerInstallerPath -PathType Leaf) {
         $desktop = Get-Content -LiteralPath $dockerInstallerPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($desktop.schema_version -ne 1 -or $desktop.distribution -cne 'docker-desktop-installer' -or
@@ -37,6 +49,18 @@ function Set-NipatEnvironment([string] $Project, [switch] $Preparing) {
             -not [IO.Path]::IsPathRooted($installed.data_dir) -or
             -not [IO.Path]::IsPathRooted($installed.runs_dir)) {
             throw "Configurazione dell installer non valida: riaprire 1_SETUP.cmd."
+        }
+        Assert-NipatInstallationChannel $installed 'configurazione di avvio'
+        $expectedDistro = $profile.distro_prefix + $installerManifest.assets.rootfs.sha256.Substring(0, 40)
+        if ($installed.wsl_distro -cne $expectedDistro) {
+            throw 'La configurazione di avvio seleziona una distribuzione esterna a questa installazione Preview.'
+        }
+        # An installed application owns its defaults. An inherited shell may
+        # belong to the stable application; only explicit CLI flags may override
+        # the candidate data/result paths after this boundary.
+        foreach ($name in @('NIPAT_WORKSPACE_DIR', 'NIPAT_DATA_DIR', 'NIPAT_RUNS_DIR',
+            'NIPAT_BACKEND', 'NIPAT_WSL_DISTRO', 'NIPAT_RUNTIME_IMAGE')) {
+            Remove-Item -LiteralPath ('Env:' + $name) -ErrorAction SilentlyContinue
         }
         $env:NIPAT_BACKEND = 'wsl'
         $env:NIPAT_WSL_DISTRO = $installed.wsl_distro

@@ -1,5 +1,57 @@
 # Installatore Windows: compilazione e verifica
 
+## Isolamento del candidato 0.5
+
+Il ramo di sviluppo identifica il candidato come **0.5.0a1**, canale
+`preview-0.5`, nome **NIPAT 0.5 Preview**. Non è una release pubblicata.
+Il profilo in `installer/windows/install-profile.json` determina le identità
+usate dal manifest, dal setup e dal launcher; la build genera e verifica
+le corrispondenti istruzioni Inno Setup.
+
+| Componente | Candidato 0.5 |
+| --- | --- |
+| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
+| Dati e risultati predefiniti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` e `runs` |
+| Cache e registri del runtime | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` e `wsl` |
+| Distribuzione WSL | `NIPAT-05-Preview-<prime 40 cifre dello SHA-256 del rootfs>` |
+| Collegamenti e voce di disinstallazione | **NIPAT 0.5 Preview** |
+| Ripresa dopo riavvio | Valore RunOnce `NIPAT-05-Preview-ResumeSetup` |
+
+L'AppId e il mutex del setup sono dedicati al canale. La destinazione
+applicativa è fissa e viene controllata prima della copia: un parametro `/DIR`
+che selezioni un'altra cartella viene rifiutato. Il setup non adotta ambienti
+WSL della 0.4.1, neppure se il rootfs ha lo stesso hash. Manifest, stato,
+configurazione, proprietà del runtime e registri di recupero devono appartenere
+al canale previsto; configurazioni estranee o prive di questa identità sono
+rifiutate.
+
+All'interno dello stesso canale, un rootfs già verificato può essere riutilizzato;
+un rootfs diverso viene preparato accanto al precedente. Restano i controlli
+di proprietà, la ripresa dopo interruzione e l'attivazione soltanto dopo gli
+autotest. Le cartelle configurate da una precedente installazione Preview
+valida vengono conservate. Il launcher installato usa la propria configurazione
+senza ereditare le variabili di percorso NIPAT di un'altra installazione;
+restano disponibili le opzioni esplicite `--data-dir` e `--runs-dir`.
+
+La disinstallazione rimuove l'applicazione Preview e la propria ripresa automatica;
+conserva dati, risultati, cache e distribuzioni WSL. Non modifica la 0.4.1.
+Il componente WSL di Windows è condiviso dal sistema: l'isolamento riguarda
+le risorse possedute da NIPAT, non una seconda installazione di Windows/WSL.
+
+Le prove automatiche verificano la logica di separazione con confini WSL simulati,
+la compilazione e la coerenza dei pacchetti. Non sostituiscono una prima
+installazione, un aggiornamento e una ripresa reali su Windows/WSL.
+Gli artefatti di questa PR rimangono di revisione; la rimozione del percorso
+Docker Desktop e il nuovo installer Linux sono incrementi successivi.
+L'EXE Docker Desktop ancora generato dalla pipeline conserva l'identità
+precedente e non deve essere installato: la separazione descritta qui riguarda
+il candidato WSL.
+
+## Riferimento della versione pubblicata 0.4.1
+
+Le sezioni seguenti descrivono la release 0.4.1 e i relativi percorsi storici.
+Per l'identità e le destinazioni del candidato 0.5 vale la sezione precedente.
+
 La pre-release **0.4.1** fornisce `NIPAT-Setup.exe` per **Windows 11 x64**:
 un unico file con i componenti NIPAT incorporati, il launcher `NIPAT.exe` e
 l'ambiente scientifico. L'alternativa `NIPAT-DockerDesktop-Setup.exe` installa

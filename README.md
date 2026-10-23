@@ -1,5 +1,23 @@
 # NIPAT Desktop
 
+**Development branch: CLI 0.5.0a1 — not published.**
+The four analytical workflows now prepare inputs and execute inside the scientific
+image, including the unchanged R scripts. Version 0.5 keeps the guided CLI;
+it does not add a GUI.
+
+The Windows candidate has a separate **NIPAT 0.5 Preview** installation identity:
+application, data, cache, WSL distribution, shortcuts and setup-resume state are
+separate from 0.4.1. Updates within this preview channel keep that identity.
+Review artifacts are not ready for distribution: Windows/WSL installation tests,
+Docker Desktop retirement and the Ubuntu 24.04 x86_64 installer remain pending.
+See the [0.5 development plan](docs/PIANO_0.5.md) and
+[preview installation boundaries](docs/INSTALLATORE_WINDOWS.md#isolamento-del-candidato-05).
+
+## Published version: 0.4.1
+
+The download links and installation instructions below refer to the unchanged
+published release, not to the development branch.
+
 **CLI 0.4.1 — pre-release for domain testing on Windows 11 x64.**
 This version provides the guided terminal interface, a common Windows launcher
 and two distribution options. It is ready to be evaluated with domain data;

@@ -74,9 +74,13 @@ class DockerTransport:
         if backend in ("", "native"):
             return cls(dry_run=dry_run)
         if backend == "wsl":
-            return WslDockerTransport(
-                os.environ.get("NIPAT_WSL_DISTRO", "NIPAT-Runtime"), dry_run=dry_run
-            )
+            distro = os.environ.get("NIPAT_WSL_DISTRO", "")
+            if not distro:
+                raise ValidationError(
+                    "NIPAT_WSL_DISTRO deve identificare esplicitamente la distribuzione "
+                    "di questa installazione. Ripetere la preparazione NIPAT."
+                )
+            return WslDockerTransport(distro, dry_run=dry_run)
         raise ValidationError("NIPAT_BACKEND deve essere 'native' oppure 'wsl'.")
 
     @property

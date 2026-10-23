@@ -45,6 +45,8 @@ installer/windows/bootstrap-common.ps1
 installer/windows/bootstrap-migration.ps1
 installer/windows/bootstrap.ps1
 installer/windows/build-launcher.ps1
+installer/windows/install-profile.json
+installer/windows/install-profile.ps1
 installer/windows/launch.ps1
 installer/windows/test-bootstrap.ps1
 installer/windows/test-launcher.ps1

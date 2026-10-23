@@ -1,6 +1,6 @@
 # Percorso incrementale verso NIPAT 0.5
 
-Stato: quinto incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
+Stato: sesto incremento tecnico in sviluppo, 23 ottobre 2026. Questo documento
 registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 
 ## Baseline e separazione dalla validazione in corso
@@ -15,7 +15,7 @@ registra le decisioni, il lavoro già svolto e i controlli ancora necessari.
 - I candidati 0.5 devono poter essere provati senza sostituire l'applicazione 0.4.1:
   identità dell'installazione, collegamenti, configurazione, distribuzione WSL e
   cartelle predefinite dei risultati devono essere distinti durante le prove.
-  Non basta creare un nuovo branch: l'installer attuale usa una destinazione fissa.
+  Il sesto incremento introduce un canale Preview con destinazioni dedicate.
 - Nessuna pubblicazione automatica o sostituzione degli asset distribuiti.
   L'eventuale migrazione dalla 0.4.1 sarà un passaggio esplicito e verificato.
 
@@ -188,6 +188,47 @@ l'adeguamento della diagnostica e del client Windows, l'isolamento delle identit
 di installazione, la dismissione Docker Desktop e i nuovi installer Windows/Linux.
 Le build di revisione non sono candidati 0.5 da distribuire e non devono sostituire
 l'installazione 0.4.1. Il codice R e il manifest scientifico rimangono invariati.
+
+Il quinto incremento è stato verificato nella
+[CI 39949743382](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39949743382)
+e nella [build di revisione 39949743373](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39949743373),
+entrambe concluse con successo sul commit `29fc5be`.
+
+## Sesto incremento: installazione Windows Preview separata
+
+La versione interna passa a `0.5.0a1`, senza pubblicare una release. Il profilo
+`preview-0.5` mantiene un'identità costante fra gli aggiornamenti del candidato:
+**NIPAT 0.5 Preview**, cartella applicativa
+`%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` e cartella dati
+`%LOCALAPPDATA%\NIPAT-0.5-Preview`. Quest'ultima contiene `data`, `runs`,
+`cache` e `wsl`. AppId, collegamenti, voce di disinstallazione, mutex e RunOnce
+sono separati da quelli della 0.4.1. Una destinazione applicativa alternativa
+viene rifiutata prima della copia dei file.
+
+Il nome WSL contiene il prefisso `NIPAT-05-Preview-` seguito dalle prime
+40 cifre dell'hash del rootfs. Il candidato non legge né riutilizza i registri
+legacy della 0.4.1, anche a parità di rootfs. Manifest, stato, backend,
+proprietà e recupero registrano il canale. Una configurazione priva del canale
+previsto viene rifiutata; gli aggiornamenti Preview conservano invece le
+proprie cartelle dati/risultati e le garanzie di ripresa e attivazione già presenti.
+
+Il launcher installato seleziona il proprio ambiente, evitando che variabili
+NIPAT ereditate da una shell della versione stabile ne cambino le cartelle.
+Gli input restano selezionabili dai percorsi locali supportati e le opzioni
+CLI esplicite permettono di scegliere destinazioni diverse. La disinstallazione
+conserva dati, risultati, cache e distribuzioni; la 0.4.1 resta separata.
+Il prerequisito Windows WSL rimane condiviso a livello di sistema.
+
+Le prove di questo incremento riguardano manifest e pacchetti, separazione
+delle identità, ripresa/aggiornamento nello stesso canale e avvio del launcher.
+I controlli locali comprendono 300 test Python e 43 test CI/publisher superati.
+Gli esiti effettivi sono riportati nella PR; i controlli PowerShell con confini
+WSL simulati non sostituiscono l'installazione reale. Restano l'adeguamento
+finale del client Windows, la rimozione Docker Desktop, l'installer Ubuntu e
+le prove dei pacchetti. Nessuna build di revisione di questo incremento è
+ancora destinata alla distribuzione per il testing di dominio.
+L'installer Docker Desktop ancora prodotto dalla pipeline transitoria conserva
+l'identità precedente: non beneficia dell'isolamento WSL e non deve essere installato.
 
 ## Passaggi e criteri di completamento
 

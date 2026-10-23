@@ -19,6 +19,20 @@ MAX_ASSET_BYTES = 2 * 1024**3
 PYTHON_NAME = "python-3.12.10-embed-amd64.zip"
 PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
 DOCKER_INSTALLER_MARKER = b'{"schema_version":1,"distribution":"docker-desktop-installer"}\n'
+INSTALLATION_PROFILE_SOURCE = "installer/windows/install-profile.json"
+# Publication checks independently protect the stable installation namespace.
+# The source comparison below also binds the complete profile to the reviewed commit.
+PREVIEW_INSTALLATION_PROFILE = {
+    "schema_version": 1,
+    "channel": "preview-0.5",
+    "display_name": "NIPAT 0.5 Preview",
+    "app_dir_name": "NIPAT-0.5-Preview",
+    "data_dir_name": "NIPAT-0.5-Preview",
+    "distro_prefix": "NIPAT-05-Preview-",
+    "resume_key": "NIPAT-05-Preview-ResumeSetup",
+    "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
+    "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05",
+}
 
 
 def require(condition, message):
@@ -76,6 +90,32 @@ def requires_desktop_installer(version):
     return components is not None and tuple(map(int, components.groups())) >= (0, 4, 1)
 
 
+def requires_installation_profile(version):
+    components = re.match(r"([0-9]+)\.([0-9]+)\.([0-9]+)", version)
+    return components is not None and tuple(map(int, components.groups())) >= (0, 5, 0)
+
+
+def verify_installation_profile(manifest, commit, read_source):
+    if not requires_installation_profile(manifest["version"]):
+        return
+    require(INSTALLATION_PROFILE_SOURCE in manifest["source_sha256"],
+            "Installation profile is missing from the verified source list")
+    profile = manifest.get("installation_profile")
+    require(isinstance(profile, dict) and type(profile.get("schema_version")) is int
+            and profile == PREVIEW_INSTALLATION_PROFILE,
+            "Installation profile does not use the isolated 0.5 preview namespace")
+    trusted = json.loads(read_source(commit, INSTALLATION_PROFILE_SOURCE))
+    require(trusted == profile and type(trusted.get("schema_version")) is int,
+            "Installation profile differs from the built commit")
+
+
+def require_publication_supported(version):
+    # The review pipeline intentionally still verifies transitional Windows packages.
+    # Publication will be enabled only after the Windows/Linux 0.5 delivery is ready.
+    require(not requires_installation_profile(version),
+            "0.5 preview publication is disabled: Windows/Linux distribution is not ready")
+
+
 def verify_installer_build(setup, manifest, manifest_bytes, commit):
     """Bind the self-contained EXE to the inputs checked by the successful build."""
     require(not any(path.suffix.casefold() == ".bin" for path in setup.rglob("*")),
@@ -99,6 +139,8 @@ def verify_installer_build(setup, manifest, manifest_bytes, commit):
             for key in ("rootfs", "scientific_image")
         },
     }
+    if requires_installation_profile(manifest["version"]):
+        expected["installation_profile"] = manifest["installation_profile"]
     require(evidence == expected, "Self-contained installer build evidence mismatch")
 
 
@@ -224,6 +266,7 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
         require(not path.is_absolute() and ".." not in path.parts, "Invalid source path")
         require(hashlib.sha256(read_source(commit, name)).hexdigest() == manifest["source_sha256"][name],
                 f"Source hash mismatch: {name}")
+    verify_installation_profile(manifest, commit, read_source)
     require(set(manifest["assets"]) == {"rootfs", "scientific_image"}, "Unexpected runtime asset set")
     files = {"NIPAT-Setup.exe": setup / "NIPAT-Setup.exe", MANIFEST: setup / MANIFEST}
     for key, stem in (("rootfs", "nipat-wsl-rootfs"), ("scientific_image", "nipat-scientific-runtime")):
@@ -330,6 +373,7 @@ def main():
         command("gh", "run", "download", args.run_id, "--repo", REPO,
                 "--name", "nipat-windows-setup", "--name", "nipat-runtime-assets", "--dir", str(root / "artifacts"))
         build_manifest = json.loads((root / "artifacts/nipat-runtime-assets" / MANIFEST).read_text(encoding="utf-8"))
+        require_publication_supported(build_manifest["version"])
         desktop = None
         if requires_desktop_bundle(build_manifest["version"]):
             desktop = root / "artifacts/nipat-docker-desktop"

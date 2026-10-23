@@ -215,7 +215,11 @@ class FixturePython {
             string[] record = new string[] { Directory.GetCurrentDirectory(),
                 Environment.GetEnvironmentVariable("NIPAT_BACKEND"),
                 Environment.GetEnvironmentVariable("NIPAT_DATA_DIR"),
-                Environment.GetEnvironmentVariable("NIPAT_RUNS_DIR") }.Concat(args).Select(Encode).ToArray();
+                Environment.GetEnvironmentVariable("NIPAT_RUNS_DIR"),
+                Environment.GetEnvironmentVariable("NIPAT_WORKSPACE_DIR"),
+                Environment.GetEnvironmentVariable("NIPAT_WSL_DISTRO"),
+                Environment.GetEnvironmentVariable("NIPAT_RUNTIME_IMAGE"),
+                Environment.GetEnvironmentVariable("NIPAT_PROJECT_DIR") }.Concat(args).Select(Encode).ToArray();
             File.WriteAllLines(Environment.GetEnvironmentVariable("NIPAT_LAUNCH_TEST_CAPTURE"), record);
         }
         return 0;
@@ -304,6 +308,123 @@ function Get-NipatImage([string] $Image) {
     Assert-Test ($result.ExitCode -eq 0) ('dry-run preview remains available without preparing: ' + $result.Output)
     $afterPreview = @(Get-Content -LiteralPath $events | Where-Object { $_ -like 'install:*' }).Count
     Assert-Test ($beforePreview -eq $afterPreview -and -not (Test-Path -LiteralPath $readyPath)) 'preview has no implicit setup or false readiness'
+    # Exercise the ready WSL Preview through the compiled executable and real
+    # launch scripts. Scientific execution remains at the fake Python boundary.
+    foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $app "installer\windows\$name")
+    }
+    foreach ($name in @('docker-desktop.json', 'runtime.json', 'runtime.tar')) {
+        Remove-Item -LiteralPath (Join-Path $distribution $name)
+    }
+    Remove-Item -LiteralPath (Join-Path $app 'release.json')
+    $profile = Get-Content -LiteralPath (Join-Path $app 'installer\windows\install-profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $candidateBase = Join-Path $localAppData $profile.data_dir_name
+    $candidateData = Join-Path $candidateBase 'data'
+    $candidateRuns = Join-Path $candidateBase 'runs'
+    [IO.Directory]::CreateDirectory($candidateData) | Out-Null
+    [IO.Directory]::CreateDirectory($candidateRuns) | Out-Null
+    $rootfsHash = 'd' * 64
+    $distro = $profile.distro_prefix + $rootfsHash.Substring(0, 40)
+    $manifestPath = Join-Path $distribution 'installer-manifest.json'
+    $manifest = [ordered]@{
+        schema_version = 1; version = $version; release_tag = ('v' + $version)
+        source_commit = 'e' * 40; runtime_image = ('sha256:' + ('a' * 64))
+        installation_profile = $profile
+        assets = @{
+            rootfs = @{ file = ('rootfs-' + $version + '.tar.gz'); sha256 = $rootfsHash; size = 10
+                url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v' + $version + '/rootfs-' + $version + '.tar.gz') }
+            scientific_image = @{ file = ('scientific-' + $version + '.tar.gz'); sha256 = ('f' * 64); size = 20
+                url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v' + $version + '/scientific-' + $version + '.tar.gz') }
+        }
+    }
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    $backendPath = Join-Path $app '.runtime\backend.json'
+    $backend = [ordered]@{
+        schema_version = 1; backend = 'wsl'; installation_channel = $profile.channel
+        wsl_distro = $distro; rootfs_sha256 = $rootfsHash
+        runtime_image = ('sha256:' + ('b' * 64)); source_runtime_image = $manifest.runtime_image
+        source_commit = $manifest.source_commit; release_tag = $manifest.release_tag
+        runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
+        data_dir = $candidateData; runs_dir = $candidateRuns
+    }
+    $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+    $stateDirectory = Join-Path $app '.runtime\installer'
+    [IO.Directory]::CreateDirectory($stateDirectory) | Out-Null
+    $statePath = Join-Path $stateDirectory 'state.json'
+    $state = [ordered]@{
+        schema_version = 1; phase = 'ready'; installation_channel = $profile.channel
+        source_commit = $manifest.source_commit; runtime_image = $manifest.runtime_image
+        wsl_distro = $distro; rootfs_sha256 = $rootfsHash
+        resolved_runtime_image = $backend.runtime_image
+        runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
+    }
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $stableBase = Join-Path $localAppData 'NIPAT'
+    $stableData = Join-Path $stableBase 'data'
+    $stableRuns = Join-Path $stableBase 'runs'
+    [IO.Directory]::CreateDirectory($stableData) | Out-Null
+    [IO.Directory]::CreateDirectory($stableRuns) | Out-Null
+    $stableMarker = Join-Path $stableBase 'stable-sentinel.txt'
+    'stable installation untouched' | Set-Content -LiteralPath $stableMarker -Encoding ASCII
+    $stableHash = (Get-FileHash -LiteralPath $stableMarker -Algorithm SHA256).Hash
+    $environment.NIPAT_PROJECT_DIR = Join-Path $localAppData 'Programs\NIPAT'
+    $environment.NIPAT_WORKSPACE_DIR = $stableBase
+    $environment.NIPAT_DATA_DIR = $stableData
+    $environment.NIPAT_RUNS_DIR = $stableRuns
+    $environment.NIPAT_BACKEND = 'native'
+    $environment.NIPAT_WSL_DISTRO = 'NIPAT-Runtime'
+    $environment.NIPAT_RUNTIME_IMAGE = 'sha256:' + ('c' * 64)
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -eq 0) ('ready Preview launches from a stable configured shell: ' + $result.Output)
+    $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
+    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq $distro -and $capture[6] -ceq $backend.runtime_image) 'Preview selects only its verified WSL distribution and image'
+    Assert-Test ((Test-SamePath $capture[2] $candidateData) -and (Test-SamePath $capture[3] $candidateRuns) -and
+        (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'installed Preview resets inherited stable project, workspace, data and runs'
+    Assert-Test ($capture[8] -ceq '-m' -and $capture[9] -ceq 'nipat' -and $capture[10] -ceq 'wizard') 'ready Preview opens the guided CLI without preparation'
+
+    $explicitRuns = Join-Path $temporary 'explicit user results'
+    $result = Invoke-TestLauncher -Executable $executable -Arguments @('--runs-dir', $explicitRuns, 'wizard') -Environment $environment
+    Assert-Test ($result.ExitCode -eq 0) ('Preview preserves explicit output override: ' + $result.Output)
+    $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
+    Assert-Test ($capture[10] -ceq '--runs-dir' -and $capture[11] -ceq $explicitRuns -and $capture[12] -ceq 'wizard') 'explicit CLI output directory reaches Python unchanged'
+
+    $beforeRejected = @(Get-Content -LiteralPath $events).Count
+    foreach ($foreignChannel in @('stable', $null)) {
+        $backend.installation_channel = $foreignChannel
+        $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+        $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'foreign or markerless backend never reaches Python'
+    }
+    $backend.installation_channel = $profile.channel
+    $backend.wsl_distro = 'NIPAT-Runtime'
+    $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'candidate backend cannot select the stable WSL distribution'
+    $backend.wsl_distro = $distro
+    $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+    $state.installation_channel = 'stable'
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'stable readiness state cannot authorize a Preview launch'
+    $state.installation_channel = $profile.channel
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $manifest.installation_profile.channel = 'stable'
+    $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'foreign installer manifest is rejected before running Python'
+    Assert-Test (@(Get-Content -LiteralPath $events).Count -eq $beforeRejected) 'rejected installed identities execute neither setup nor analysis'
+    Assert-Test ((Get-FileHash -LiteralPath $stableMarker -Algorithm SHA256).Hash -ceq $stableHash) 'launches and rejected identities preserve stable data'
+
+    # Source checkouts intentionally keep environment-based configuration; the
+    # installed-only reset must not discard the developer's chosen paths.
+    Remove-Item -LiteralPath $manifestPath
+    Remove-Item -LiteralPath $backendPath
+    Remove-Item -LiteralPath (Join-Path $app '.runtime\runtime-image.txt')
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -eq 0) ('source launch keeps explicit environment configuration: ' + $result.Output)
+    $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
+    Assert-Test ((Test-SamePath $capture[2] $stableData) -and (Test-SamePath $capture[3] $stableRuns) -and
+        (Test-SamePath $capture[4] $stableBase)) 'source checkouts retain deliberate environment data, results and workspace'
     Write-Host "PASS: $checks launcher assertions."
 } finally {
     if (Test-Path -LiteralPath $temporary) {

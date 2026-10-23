@@ -1,10 +1,12 @@
 # NIPAT: stato del progetto e funzionamento
 
-**CLI 0.4.1 — pre-release per le prove di dominio su Windows 11 x64.**
+**Sviluppo CLI 0.5.0a1, non pubblicato; la versione per le prove di dominio resta 0.4.1.**
 NIPAT riunisce quattro analisi locali in un'interfaccia testuale guidata.
 Python gestisce gli input e le esecuzioni; gli script R di DNPcall e NEWPAT
 eseguono i calcoli nel runtime scientifico, insieme a samtools.
-La disponibilità per il testing non equivale a validazione scientifica completa.
+Nella 0.5, preparazione degli input e calcolo dei quattro workflow avvengono
+nell'immagine scientifica, che comprende anche gli script R invariati.
+La disponibilità della 0.4.1 per il testing non equivale a validazione scientifica completa.
 
 | Analisi | Input disponibili | Risultati |
 | --- | --- | --- |
@@ -30,7 +32,20 @@ si assume WSL2 funzionante. Registrare separatamente installazione e analisi
 per ciascun pacchetto. Le prove precedenti e i relativi limiti restano nella
 [documentazione delle verifiche](docs/DISTRIBUZIONE.md).
 
-## Come si usa
+## Separazione della 0.5 in sviluppo
+
+Il candidato Windows usa il nome **NIPAT 0.5 Preview**, una cartella applicativa
+propria e un ambiente WSL distinto. Configurazione, dati, risultati predefiniti,
+cache e ripresa del setup sono separati dalla 0.4.1. Gli aggiornamenti successivi
+dello stesso canale Preview possono conservare le proprie cartelle configurate.
+Il componente WSL di Windows rimane un prerequisito comune del sistema.
+
+La 0.5 non è ancora da distribuire: restano la verifica dell'installazione reale,
+la rimozione del percorso Docker Desktop e l'installer Ubuntu 24.04 x86_64.
+La GUI non rientra nella 0.5. Il [piano di sviluppo](docs/PIANO_0.5.md) distingue
+l'implementazione dai controlli effettivamente conclusi.
+
+## Come si usa la versione pubblicata 0.4.1
 
 Il percorso principale è un unico [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe):
 scaricarlo dalla [pre-release v0.4.1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1),

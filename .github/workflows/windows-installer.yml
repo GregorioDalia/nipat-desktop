@@ -336,6 +336,7 @@ jobs:
             installer_manifest_sha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
             launcher_sha256 = (Get-FileHash -LiteralPath "$stage/app/NIPAT.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
             embedded_assets = $embedded
+            installation_profile = $manifest.installation_profile
           }
           [IO.File]::WriteAllText((Join-Path $output 'installer-build.json'), ($record | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
           "$hash  NIPAT-Setup.exe" | Set-Content -LiteralPath "$output/SHA256SUMS" -Encoding ascii

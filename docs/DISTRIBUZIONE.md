@@ -1,5 +1,17 @@
 # Distribuzione tramite GitHub
 
+## Ramo di sviluppo 0.5: nessuna nuova release
+
+La versione interna `0.5.0a1` identifica il lavoro in corso nella PR di sviluppo.
+Il candidato WSL ha un'identità **NIPAT 0.5 Preview** separata dalla 0.4.1;
+i dettagli sono nel [documento dell'installer](INSTALLATORE_WINDOWS.md#isolamento-del-candidato-05).
+Gli artefatti di revisione non sono ancora pacchetti da condividere per prove di
+dominio. Restano da completare la dismissione Docker Desktop, l'installer Ubuntu
+24.04 x86_64 e le verifiche di installazione sui sistemi dichiarati supportati.
+La pipeline mantiene temporaneamente anche il pacchetto Docker Desktop: questo
+non costituisce una nuova edizione approvata per la distribuzione 0.5.
+La versione pubblicata e i suoi asset rimangono quelli descritti sotto.
+
 ## Pre-release 0.4.1: due pacchetti per le prove di dominio
 
 [NIPAT 0.4.1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1) identifica la versione da

@@ -1,5 +1,13 @@
 # Guida per l’utilizzo
 
+**Ambito della guida:** le istruzioni di installazione e i link qui riportati
+riguardano la release pubblicata **0.4.1**. Il ramo di sviluppo `0.5.0a1` non è
+ancora distribuito. Mantiene la CLI guidata e prepara un'installazione separata
+**NIPAT 0.5 Preview**, descritta nel
+[piano 0.5](PIANO_0.5.md) e nelle
+[note di isolamento](INSTALLATORE_WINDOWS.md#isolamento-del-candidato-05).
+Non usare le cartelle o la configurazione della 0.4.1 per configurare il candidato.
+
 NIPAT mette a disposizione quattro workflow tramite un menu testuale o la
 riga di comando. Gli input e i risultati rimangono sul computer.
 Gli autotest inclusi verificano casi noti; la validazione con altri input e

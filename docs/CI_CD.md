@@ -6,6 +6,23 @@ il tag, gli installatori o gli altri asset già distribuiti. Gli esiti delle
 esecuzioni GitHub Actions e delle prove reali su Windows vanno registrati
 separatamente: la presenza di un workflow non attesta che la build sia riuscita.
 
+## Candidato 0.5 e identità di installazione
+
+Il ramo `feature/0.5-foundation` usa la versione interna `0.5.0a1` e il canale
+Windows `preview-0.5`; non pubblica una release. Il profilo di installazione
+è un sorgente incluso nel manifest. La build verifica che il profilo, le
+istruzioni Inno generate, la cache degli archivi e l'applicazione preparata
+usino la stessa identità. I controlli Windows verificano separatamente
+la logica di migrazione/ripresa e la selezione dell'ambiente del launcher,
+compreso il rifiuto di configurazioni appartenenti a un altro canale.
+
+I confini WSL sono simulati nei test della logica di installazione. La loro
+riuscita e la compilazione dell'EXE non attestano un'installazione reale su
+Windows/WSL. La pipeline conserva ancora il percorso Docker Desktop per la
+transizione; la sua rimozione e la sostituzione con l'installer Linux restano
+passi successivi. Non usare il publisher attuale per distribuire la 0.5 prima
+del completamento di questi passi e delle prove di installazione.
+
 ## Tre procedure distinte
 
 | Workflow | Attivazione | Scopo |

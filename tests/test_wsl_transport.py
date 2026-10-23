@@ -41,6 +41,14 @@ class WslTransportTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 WslDockerTransport(invalid)
 
+    def test_wsl_requires_explicit_distribution_without_falling_back_to_stable(self):
+        with patch.dict(os.environ, {"NIPAT_BACKEND": "wsl"}, clear=True), patch(
+            "nipat.execution.transport.subprocess.run"
+        ) as run:
+            with self.assertRaisesRegex(ValidationError, "NIPAT_WSL_DISTRO"):
+                DockerTransport.from_environment()
+        run.assert_not_called()
+
     def test_live_path_uses_wslpath_once_and_preserves_special_characters(self):
         transport = WslDockerTransport("NIPAT-Runtime")
         source = r"D:\Caso è, $VALUE & friends\sample.bam"

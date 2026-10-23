@@ -26,10 +26,13 @@ class DockerInstallerTests(unittest.TestCase):
         project = self.root / "project"
         project.mkdir()
         sources = {
-            "pyproject.toml": '[project]\nversion = "0.4.1"\n',
+            "pyproject.toml": '[project]\nversion = "0.5.0a1"\n',
             "compose.yaml": "services: {}\n", "1_SETUP.cmd": "@echo off\n",
             "2_AVVIA.cmd": "@echo off\n", "nipat.cmd": "@echo off\n", "LICENSE": "fixture\n",
             "installer/windows/NIPAT-DockerDesktop.iss": "[Setup]\nDiskSpanning=no\n",
+            "installer/windows/install-profile.json": (
+                Path(__file__).resolve().parents[1] / "installer/windows/install-profile.json"
+            ).read_text(encoding="utf-8"),
         }
         sources["distribution-files.txt"] = "\n".join(sorted({*sources, "distribution-files.txt"})) + "\n"
         for name, content in sources.items():
@@ -64,12 +67,12 @@ class DockerInstallerTests(unittest.TestCase):
         self.manifest_path.write_text(json.dumps(self.manifest), encoding="utf-8")
         runtime = {
             "schema_version": 1, "image_id": self.manifest["runtime_image"],
-            "source_reference": "v0.4.1", "os": "linux", "architecture": "amd64",
+            "source_reference": "v0.5.0a1", "os": "linux", "architecture": "amd64",
             "archive_sha256": installer.bundle.sha256_file(scientific),
             "archive_bytes": scientific.stat().st_size, "source_commit": "a" * 40,
             "installer_manifest_sha256": installer.bundle.sha256_file(self.manifest_path),
         }
-        self.package = self.root / "NIPAT-DockerDesktop-0.4.1-windows-x64.zip"
+        self.package = self.root / "NIPAT-DockerDesktop-0.5.0a1-windows-x64.zip"
         installer.bundle.package_sources(project, self.package, python, scientific, runtime, self.launcher)
         self.refresh_package_record()
         self.stage = self.root / "stage"
@@ -77,7 +80,7 @@ class DockerInstallerTests(unittest.TestCase):
 
     def refresh_package_record(self):
         record = {
-            "schema_version": 1, "version": "0.4.1", "source_commit": "a" * 40,
+            "schema_version": 1, "version": "0.5.0a1", "source_commit": "a" * 40,
             "file": self.package.name, "size": self.package.stat().st_size,
             "sha256": installer.bundle.sha256_file(self.package),
             "launcher_sha256": installer.bundle.sha256_file(self.launcher),

@@ -51,7 +51,7 @@ try {
         sha256 = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     $manifest = [pscustomobject]@{
-        runtime_image = $sourceId; source_commit = ('c' * 40); release_tag = 'v0.3.0a1'
+        runtime_image = $sourceId; source_commit = ('c' * 40); release_tag = 'v0.5.0a1'; installation_profile = (Get-NipatInstallationProfile)
         assets = [pscustomobject]@{ scientific_image = $asset; rootfs = [pscustomobject]@{ sha256 = ('d' * 64) } }
     }
     $failLoad = $false
@@ -91,28 +91,30 @@ try {
 
     $state = [pscustomobject]@{
         runtime_image = $sourceId; resolved_runtime_image = $localId; runtime_archive_sha256 = $asset.sha256
-        wsl_distro = 'NIPAT-Test'; rootfs_sha256 = $manifest.assets.rootfs.sha256
+        installation_channel = (Get-NipatInstallationProfile).channel
+        wsl_distro = ((Get-NipatInstallationProfile).distro_prefix + ('d' * 40)); rootfs_sha256 = $manifest.assets.rootfs.sha256
     }
     $configuration = [pscustomobject]@{
         runtime_image = $localId; source_runtime_image = $sourceId; runtime_archive_sha256 = $asset.sha256
         source_commit = $manifest.source_commit; release_tag = $manifest.release_tag
-        wsl_distro = 'NIPAT-Test'; rootfs_sha256 = $manifest.assets.rootfs.sha256
+        installation_channel = (Get-NipatInstallationProfile).channel
+        wsl_distro = ((Get-NipatInstallationProfile).distro_prefix + ('d' * 40)); rootfs_sha256 = $manifest.assets.rootfs.sha256
     }
     Assert-NipatRuntimeBinding $manifest $state $configuration
     Assert-Test $true 'accept verified mapping between different build and local image IDs'
-    foreach ($property in @('runtime_image', 'source_runtime_image', 'runtime_archive_sha256', 'source_commit', 'release_tag', 'wsl_distro', 'rootfs_sha256')) {
+    foreach ($property in @('runtime_image', 'source_runtime_image', 'runtime_archive_sha256', 'source_commit', 'release_tag', 'wsl_distro', 'rootfs_sha256', 'installation_channel')) {
         $before = $configuration.$property
         $configuration.$property = 'wrong'
         Assert-Rejected { Assert-NipatRuntimeBinding $manifest $state $configuration } "reject changed $property"
         $configuration.$property = $before
     }
-    foreach ($property in @('runtime_image', 'resolved_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256')) {
+    foreach ($property in @('runtime_image', 'resolved_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256', 'installation_channel')) {
         $before = $state.$property
         $state.$property = 'wrong'
         Assert-Rejected { Assert-NipatRuntimeBinding $manifest $state $configuration } "reject inconsistent state $property"
         $state.$property = $before
     }
-    foreach ($property in @('wsl_distro', 'rootfs_sha256')) {
+    foreach ($property in @('wsl_distro', 'rootfs_sha256', 'installation_channel')) {
         $legacyState = $state | ConvertTo-Json | ConvertFrom-Json
         $legacyState.PSObject.Properties.Remove($property)
         Assert-Rejected { Assert-NipatRuntimeBinding $manifest $legacyState $configuration } "require setup for legacy state without $property"
