@@ -47,6 +47,7 @@ def debian_version(version: str) -> str:
 def verified_inputs(project: Path, manifest_path: Path, *, require_clean: bool = True,
                     require_archive: bool = True) -> tuple[dict, bytes, list[Path], Path]:
     """Reject untrusted paths and mismatched inputs before creating an output."""
+    project = project.resolve()
     if manifest_path.is_symlink() or not manifest_path.is_file():
         raise ValueError("Manifest installer mancante o collegamento simbolico.")
     manifest_bytes = manifest_path.read_bytes()
