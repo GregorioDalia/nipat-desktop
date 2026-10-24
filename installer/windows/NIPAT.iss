@@ -32,7 +32,9 @@ Compression=lzma2
 SolidCompression=yes
 DiskSpanning=no
 WizardStyle=modern
+SetupIconFile={#StageDir}\app\assets\branding\nipat-icon.ico
 UninstallDisplayName={#NipatDisplayName} {#NipatVersion}
+UninstallDisplayIcon={app}\NIPAT.exe
 CloseApplications=yes
 RestartApplications=no
 
@@ -52,7 +54,7 @@ Name: "desktopicon"; Description: "Crea un collegamento {#NipatDisplayName} sul 
 [Icons]
 Name: "{autodesktop}\{#NipatDisplayName}"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"; Tasks: desktopicon
 Name: "{group}\{#NipatDisplayName}"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"
-Name: "{group}\{#NipatDisplayName} - completa preparazione"; Filename: "{app}\1_SETUP.cmd"; WorkingDir: "{app}"
+Name: "{group}\{#NipatDisplayName} - completa preparazione"; Filename: "{app}\1_SETUP.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\NIPAT.exe"
 Name: "{group}\Guida {#NipatDisplayName}"; Filename: "{app}\docs\GUIDA_UTILIZZO.md"
 Name: "{group}\Disinstalla {#NipatDisplayName}"; Filename: "{uninstallexe}"
 

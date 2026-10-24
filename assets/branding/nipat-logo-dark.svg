@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 536 160" role="img" aria-label="NIPAT">
+<title>NIPAT</title>
+<g transform="scale(0.625)">
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#142D4E"/>
+  <polyline points="72,184 72,72 184,184 184,72" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="105,72 184,151" fill="none" stroke="#48D6C5" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(194 41)" fill="#FFFFFF" fill-rule="evenodd">
+<path transform="translate(0 0)" d="M0 78V0H13L45 55V0H59V78H46L14 23V78Z"/>
+<path transform="translate(78 0)" d="M0 0H14V78H0Z"/>
+<path transform="translate(111 0)" d="M0 78V0H31C49 0 59 9 59 25C59 42 49 51 31 51H14V78ZM14 13V38H30C40 38 45 34 45 25C45 17 40 13 30 13Z"/>
+<path transform="translate(184 0)" d="M0 78L27 0H43L70 78H55L49 59H21L15 78ZM25 46H45L35 15Z"/>
+<path transform="translate(264 0)" d="M0 0H62V14H38V78H24V14H0Z"/>
+</g>
+</svg>

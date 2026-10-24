@@ -35,6 +35,7 @@ class LinuxInstallerTests(unittest.TestCase):
             "LICENSE": "License fixture\n",
             "THIRD_PARTY_NOTICES.md": "Third-party notices fixture\n",
             "installer/linux/launch.py": 'print("launcher fixture")\n',
+            linux.ICON_SOURCE: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"/>\n',
             "installer/windows/install-profile.json": json.dumps(linux.assets.EXPECTED_INSTALLATION_PROFILE),
         }
         files["distribution-files.txt"] = "\n".join([*files, "distribution-files.txt"]) + "\n"
@@ -157,6 +158,9 @@ class LinuxInstallerTests(unittest.TestCase):
         self.assertFalse((app / ".distribution" / self.rootfs.name).exists())
         self.assertEqual((extracted / "usr/bin" / linux.PACKAGE).stat().st_mode & 0o777, 0o755)
         self.assertIn("Terminal=true", (extracted / "usr/share/applications/nipat-05-preview.desktop").read_text())
+        desktop = (extracted / "usr/share/applications/nipat-05-preview.desktop").read_text()
+        self.assertIn(f"Icon=/{linux.APP_PATH.as_posix()}/{linux.ICON_SOURCE}\n", desktop)
+        self.assertEqual((app / linux.ICON_SOURCE).read_bytes(), (self.project / linux.ICON_SOURCE).read_bytes())
         dependencies = subprocess.check_output(["dpkg-deb", "-f", str(package), "Depends"], text=True).strip()
         self.assertEqual(dependencies, linux.DEPENDENCIES)
 

@@ -21,6 +21,13 @@ LICENSE
 README.md
 SUNTO.md
 THIRD_PARTY_NOTICES.md
+assets/branding/README.md
+assets/branding/build_assets.py
+assets/branding/nipat-icon.ico
+assets/branding/nipat-icon.png
+assets/branding/nipat-logo-dark.svg
+assets/branding/nipat-logo.svg
+assets/branding/nipat-symbol.svg
 compose.yaml
 config/defaults.toml
 distribution-files.txt
@@ -35,6 +42,7 @@ docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
 docs/INSTALLATORE_LINUX.md
 docs/INSTALLATORE_WINDOWS.md
+docs/FIRMA_WINDOWS.md
 docs/RELEASE_0.5.0a1.md
 docs/VALIDAZIONE.md
 engine/README.md
@@ -61,6 +69,8 @@ installer/windows/test-launcher.ps1
 installer/windows/test-migration.ps1
 installer/windows/test-runtime-image.ps1
 installer/windows/test-scientific-image.ps1
+installer/windows/test-signatures.ps1
+installer/windows/verify-signatures.ps1
 nipat.cmd
 pyproject.toml
 scientific/README.md

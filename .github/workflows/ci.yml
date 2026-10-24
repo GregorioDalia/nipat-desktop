@@ -96,6 +96,9 @@ jobs:
       - name: Test resumable WSL migration with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
+      - name: Test Authenticode verification policy with mocked trust results
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1
       - name: Compile the shared NIPAT executable
         shell: powershell
         run: |

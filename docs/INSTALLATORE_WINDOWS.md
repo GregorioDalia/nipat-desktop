@@ -24,6 +24,23 @@ Le politiche di un dispositivo gestito possono richiedere l'intervento
 dell'amministratore. Docker Desktop, R, samtools e Python installati a livello
 di sistema non sono necessari.
 
+### Controlli di sicurezza di Windows e del browser
+
+I checksum identificano i file distribuiti; non costituiscono una firma
+Authenticode né attestano il riconoscimento del distributore da parte di Windows.
+Le build di revisione non firmate possono essere bloccate da Smart App Control.
+Un'installazione riuscita non dimostra che tutti i componenti siano autorizzati
+all'esecuzione sul dispositivo.
+
+In presenza di un blocco, conservare il testo completo dell'avviso, il nome del
+file indicato e il riferimento alla build scaricata. Distinguere Smart App
+Control, SmartScreen e un rilevamento antivirus: richiedono verifiche diverse.
+Non disattivare le protezioni né introdurre esclusioni antivirus per completare
+il collaudo. Segnalare il blocco e attendere una candidata verificata per quel caso.
+La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifiche.
+
+### Procedura
+
 1. Avviare `NIPAT-Setup.exe` con doppio clic dal proprio account Windows,
    senza scegliere «Esegui come amministratore».
 2. Completare il setup e, se richiesto, autorizzare l'abilitazione dei componenti

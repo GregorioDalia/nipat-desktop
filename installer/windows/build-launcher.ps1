@@ -32,7 +32,9 @@ using System.Reflection;
 "@ | Set-Content -LiteralPath $assemblyInfo -Encoding UTF8
     $source = Join-Path $PSScriptRoot 'NipatLauncher.cs'
     $manifest = Join-Path $PSScriptRoot 'NipatLauncher.manifest'
-    & $compiler /nologo /target:exe /platform:x64 /optimize+ "/win32manifest:$manifest" "/out:$target" $source $assemblyInfo
+    $icon = Join-Path $project 'assets\branding\nipat-icon.ico'
+    if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw 'Icona NIPAT mancante.' }
+    & $compiler /nologo /target:exe /platform:x64 /optimize+ "/win32manifest:$manifest" "/win32icon:$icon" "/out:$target" $source $assemblyInfo
     if ($LASTEXITCODE -ne 0) { throw 'Compilazione di NIPAT.exe fallita.' }
     if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'NIPAT.exe non e stato prodotto.' }
     Write-Host "Launcher NIPAT $version compilato: $target"

@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/branding/nipat-logo-dark.svg">
+  <img src="assets/branding/nipat-logo.svg" alt="NIPAT" width="335">
+</picture>
+
 # NIPAT
 
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso

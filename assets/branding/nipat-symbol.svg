@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="NIPAT">
+<title>NIPAT</title>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#142D4E"/>
+  <polyline points="72,184 72,72 184,184 184,72" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="105,72 184,151" fill="none" stroke="#48D6C5" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

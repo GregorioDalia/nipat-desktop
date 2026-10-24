@@ -78,6 +78,15 @@ che contiene dati di ricerca per ottenere un ambiente iniziale pulito.
 
 ## Verifiche durante le analisi
 
+Su Windows registrare anche lo stato di Smart App Control e gli eventuali
+avvisi di Chrome, SmartScreen o antivirus. Provare download, setup, avvio,
+abilitazione dei prerequisiti e disinstallazione con le protezioni attive.
+Un blocco richiede il nome del componente e il testo dell'avviso; un'installazione
+completata dopo un aggiramento non soddisfa questo controllo. La verifica delle
+firme deve riguardare i file finali: una firma applicata dopo il collaudo modifica
+i digest e richiede una nuova candidata. Consultare la
+[copertura della firma Windows](FIRMA_WINDOWS.md).
+
 Per entrambi i sistemi includere input fuori dalla cartella dell’applicazione,
 percorsi con spazi e caratteri non ASCII e una destinazione dei risultati
 scelta dall’utente. Su Ubuntu includere input privati leggibili dal solo account.

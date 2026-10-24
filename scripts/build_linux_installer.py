@@ -29,6 +29,7 @@ bundle = assets.bundle
 PACKAGE = "nipat-05-preview"
 APP_PATH = Path("opt") / PACKAGE
 LAUNCH_SOURCE = "installer/linux/launch.py"
+ICON_SOURCE = "assets/branding/nipat-symbol.svg"
 BUILD_RECORD = "linux-installer-build.json"
 DEPENDENCIES = (
     "python3.12 (>= 3.12), python3.12 (<< 3.13), "
@@ -80,8 +81,8 @@ def verified_inputs(project: Path, manifest_path: Path, *, require_clean: bool =
     hashes = {path.relative_to(project).as_posix(): bundle.sha256_file(path) for path in files}
     if hashes != manifest.get("source_sha256"):
         raise ValueError("I sorgenti non corrispondono al manifest compilato in CI.")
-    if not {LAUNCH_SOURCE, "LICENSE", "THIRD_PARTY_NOTICES.md"}.issubset(hashes):
-        raise ValueError("Il manifest dei sorgenti deve includere il launcher Linux e le licenze.")
+    if not {LAUNCH_SOURCE, ICON_SOURCE, "LICENSE", "THIRD_PARTY_NOTICES.md"}.issubset(hashes):
+        raise ValueError("Il manifest dei sorgenti deve includere il launcher Linux, l'icona e le licenze.")
     entry = manifest["assets"]["scientific_image"]
     archive = manifest_path.parent / entry["file"]
     if require_archive and assets.asset_metadata(archive, manifest["release_tag"]) != entry:
@@ -117,7 +118,7 @@ def generated_files(manifest: dict, manifest_bytes: bytes) -> dict[str, tuple[by
         "[Desktop Entry]\nType=Application\nName=NIPAT 0.5 Preview\n"
         "Comment=Scientific analysis with the NIPAT guided command line\n"
         f"Exec=/usr/bin/{PACKAGE} --desktop\nTryExec=/usr/bin/{PACKAGE}\n"
-        "Terminal=true\nIcon=applications-science\nCategories=Science;Biology;\n"
+        f"Terminal=true\nIcon=/{APP_PATH.as_posix()}/{ICON_SOURCE}\nCategories=Science;Biology;\n"
     )
     return {
         f"{APP_PATH.as_posix()}/.distribution/{assets.MANIFEST_NAME}": (manifest_bytes, 0o644),

@@ -112,6 +112,15 @@ operativi del pacchetto sono nell’[installatore Linux](../docs/INSTALLATORE_LI
 
 ## Accettazione dei pacchetti
 
+La verifica dei checksum e il successo dei test non attestano la firma
+Authenticode. La candidata Windows deve essere valutata anche con Smart App
+Control attivo e senza aggirare i blocchi del browser o dell'antivirus.
+La [procedura di firma Windows](../docs/FIRMA_WINDOWS.md) definisce l'ordine
+di firma, la copertura e il legame con i digest finali. Il verificatore delle
+firme è uno strumento preparatorio: il servizio di firma e il relativo
+controllo obbligatorio di pubblicazione devono essere attivati prima di
+distribuire una release dichiarata firmata.
+
 Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
 le prove sui sistemi destinatari. Una scheda generata con
 `release_acceptance.py` parte da `pending` e non costituisce un’autorizzazione.
