@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument(
         "--runtime",
         action="store_true",
-        help="controlla anche R e samtools nell'immagine già costruita",
+        help="verifica R, samtools e i quattro workflow nell'immagine scientifica",
     )
 
     subparsers.add_parser("build-runtime", help="costruisce l'immagine R/samtools")

@@ -93,15 +93,12 @@ jobs:
       - name: Test scientific image identity with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
-      - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
-      - name: Test single-click Docker preparation with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-bootstrap.ps1
       - name: Test resumable WSL migration with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
+      - name: Test Authenticode verification policy with mocked trust results
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1
       - name: Compile the shared NIPAT executable
         shell: powershell
         run: |
@@ -143,6 +140,8 @@ jobs:
           provenance: false
           cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
           cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
+      - name: Verify bundled scientific scripts without host sources
+        run: python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE"
       - name: Scientific regression and input-mode checks
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data

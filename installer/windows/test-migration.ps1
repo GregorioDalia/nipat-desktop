@@ -52,7 +52,7 @@ function Invoke-NipatWsl([string[]] $Arguments, [switch] $AllowFailure, [int] $T
     throw 'Unexpected WSL operation; destructive commands are never allowed by this fixture.'
 }
 function New-Ownership([string] $Distro, [string] $Hash, [string] $Status = 'owned') {
-    return [pscustomobject]@{ schema_version = 1; distro = $Distro; owner_id = ('a' * 32); rootfs_sha256 = $Hash; status = $Status }
+    return [pscustomobject]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; distro = $Distro; owner_id = ('a' * 32); rootfs_sha256 = $Hash; status = $Status }
 }
 try {
     $hash = 'b' * 64
@@ -60,7 +60,7 @@ try {
     $wsl = Join-Path $temporary 'wsl'
     [IO.Directory]::CreateDirectory($wsl) | Out-Null
     $target = Get-NipatRuntimeTarget $wsl $hash @()
-    Assert-Test ($target.Distro -ceq ('NIPAT-Runtime-' + $hash.Substring(0, 40)) -and $target.Distro.Length -le 64) 'fresh install uses deterministic digest-qualified name'
+    Assert-Test ($target.Distro -ceq ((Get-NipatInstallationProfile).distro_prefix + $hash.Substring(0, 40)) -and $target.Distro.Length -le 64) 'fresh install uses deterministic digest-qualified name'
     Initialize-NipatRuntimeTarget $target $asset '' ''
     Assert-Test ($registrations.Count -eq 1 -and $target.Ownership.status -ceq 'owned') 'fresh import verifies owner before marking owned'
     $receipt = Get-Content -LiteralPath $target.OwnershipPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -73,6 +73,7 @@ try {
     $legacyPath = Join-Path $wsl 'ownership.json'
     $oldHash = 'c' * 64
     $legacy = New-Ownership 'NIPAT-Runtime' $oldHash
+    $legacy.PSObject.Properties.Remove('installation_channel')
     Write-NipatJsonAtomic $legacyPath $legacy
     $legacyBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($legacyPath))
     $registrations['NIPAT-Runtime'] = @{ directory = (Join-Path $wsl 'NIPAT-Runtime'); product = 'nipat-runtime-v1'; owner = $legacy.owner_id }
@@ -84,11 +85,19 @@ try {
     Assert-Test (@($calls | Where-Object { $_[0] -ceq '--distribution' -and $_[1] -ceq 'NIPAT-Runtime' }).Count -eq 0) 'migration does not execute commands inside old runtime'
     $sameLegacy = Get-NipatRuntimeTarget $wsl $oldHash @($registrations.Keys)
     Initialize-NipatRuntimeTarget $sameLegacy ([pscustomobject]@{ sha256 = $oldHash }) '' ''
-    Assert-Test ($sameLegacy.Legacy -and $sameLegacy.Distro -ceq 'NIPAT-Runtime') 'same-hash legacy runtime is reused after full ownership checks'
-    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($legacyPath)) -ceq $legacyBefore) 'legacy reuse does not rewrite its ownership record'
-    $registrations['NIPAT-Runtime'].owner = 'wrong'
-    Assert-Rejected { Initialize-NipatRuntimeTarget $sameLegacy $asset '' '' } 'reject legacy owner mismatch even when rootfs hash agrees'
-    $registrations['NIPAT-Runtime'].owner = $legacy.owner_id
+    Assert-Test (-not $sameLegacy.Legacy -and $sameLegacy.Distro -cne 'NIPAT-Runtime') 'same-hash stable runtime is not reused by the candidate'
+    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($legacyPath)) -ceq $legacyBefore) 'candidate preparation does not rewrite stable ownership record'
+    Assert-Test (@($calls | Where-Object { $_[0] -ceq '--distribution' -and $_[1] -ceq 'NIPAT-Runtime' }).Count -eq 0) 'identical rootfs does not execute any command in stable distro'
+    $stableQualified = 'NIPAT-Runtime-' + ('9' * 40)
+    $registrations[$stableQualified] = @{ directory = (Join-Path $wsl $stableQualified); product = 'nipat-runtime-v1'; owner = 'stable owner' }
+    $stableQualifiedTarget = Get-NipatRuntimeTarget $wsl ('9' * 64) @($registrations.Keys)
+    Initialize-NipatRuntimeTarget $stableQualifiedTarget ([pscustomobject]@{ sha256 = ('9' * 64) }) '' ''
+    Assert-Test ($stableQualifiedTarget.Distro -cne $stableQualified -and $registrations[$stableQualified].owner -ceq 'stable owner') 'digest-qualified stable name is isolated even for identical rootfs'
+    $badOwnership = $sameLegacy.Ownership | ConvertTo-Json | ConvertFrom-Json
+    $badOwnership.installation_channel = 'stable'
+    Write-NipatJsonAtomic $sameLegacy.OwnershipPath $badOwnership
+    Assert-Rejected { Get-NipatRuntimeTarget $wsl $oldHash @($registrations.Keys) } 'candidate cannot adopt foreign ownership record'
+    Write-NipatJsonAtomic $sameLegacy.OwnershipPath $sameLegacy.Ownership
 
     $unknownHash = 'e' * 64
     $unknown = Get-NipatRuntimeTarget $wsl $unknownHash @($registrations.Keys)
@@ -134,23 +143,41 @@ try {
     [IO.Directory]::CreateDirectory($runs) | Out-Null
     [IO.File]::WriteAllText((Join-Path $data 'input.txt'), 'input sentinel')
     [IO.File]::WriteAllText((Join-Path $runs 'result.txt'), 'result sentinel')
-    $previous = [pscustomobject]@{ schema_version = 1; backend = 'wsl'; wsl_distro = 'NIPAT-Runtime'; runtime_image = ('sha256:' + ('2' * 64)); data_dir = $data; runs_dir = $runs }
+    $previous = [pscustomobject]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; runtime_image = ('sha256:' + ('2' * 64)); data_dir = $data; runs_dir = $runs }
     Write-NipatJsonAtomic $backendPath $previous
     [IO.File]::WriteAllText($runtimeImagePath, $previous.runtime_image)
-    Write-NipatJsonAtomic $statePath ([ordered]@{ schema_version = 1; phase = 'ready'; source_commit = ('3' * 40) })
+    Write-NipatJsonAtomic $statePath ([ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; phase = 'ready'; source_commit = ('3' * 40) })
     $manifest = [pscustomobject]@{ source_commit = ('4' * 40); assets = [pscustomobject]@{ rootfs = [pscustomobject]@{ sha256 = $hash } } }
     $snapshotPath = Save-NipatRecoverySnapshot $project $manifest
     $snapshotBytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($snapshotPath))
     $snapshot = Get-Content -LiteralPath $snapshotPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $savedBackend = $snapshot.previous_files.PSObject.Properties['.runtime/backend.json'].Value
     Assert-Test ($savedBackend.content_base64 -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($backendPath))) 'snapshot preserves previous backend bytes'
-    $state = [ordered]@{ schema_version = 1; phase = 'verifying_installation'; updated_utc = ''; wsl_distro = $target.Distro; rootfs_sha256 = $hash }
+    $state = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; phase = 'verifying_installation'; updated_utc = ''; wsl_distro = $target.Distro; rootfs_sha256 = $hash }
     Write-NipatJsonAtomic $statePath $state
     Save-NipatRecoverySnapshot $project $manifest | Out-Null
     Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($snapshotPath)) -ceq $snapshotBytes) 'retry never overwrites first recovery evidence'
+    $foreign = $previous | ConvertTo-Json | ConvertFrom-Json
+    $foreign.PSObject.Properties.Remove('installation_channel')
+    Write-NipatJsonAtomic $backendPath $foreign
+    $beforeForeignCheck = [Convert]::ToBase64String([IO.File]::ReadAllBytes($backendPath))
+    Assert-Rejected { Get-NipatPreviousDataRoots $project $temporary } 'legacy backend is not adopted without channel'
+    Assert-Rejected { Save-NipatRecoverySnapshot $project $manifest } 'foreign backend rejected before recovery writes'
+    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($backendPath)) -ceq $beforeForeignCheck) 'foreign backend bytes remain untouched'
+    $foreign | Add-Member -NotePropertyName installation_channel -NotePropertyValue 'stable'
+    Write-NipatJsonAtomic $backendPath $foreign
+    Assert-Rejected { Get-NipatPreviousDataRoots $project $temporary } 'backend from another channel is rejected'
+    Write-NipatJsonAtomic $backendPath $previous
     $roots = Get-NipatPreviousDataRoots $project (Join-Path $temporary 'default')
     Assert-Test ($roots.data_dir -ceq $data -and $roots.runs_dir -ceq $runs) 'custom data and result roots survive update'
-    $configuration = [ordered]@{ schema_version = 1; backend = 'wsl'; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_image = ('sha256:' + ('5' * 64)); data_dir = $roots.data_dir; runs_dir = $roots.runs_dir }
+    $configuration = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_image = ('sha256:' + ('5' * 64)); data_dir = $roots.data_dir; runs_dir = $roots.runs_dir }
+    $foreignConfiguration = [pscustomobject]@{
+        installation_channel = (Get-NipatInstallationProfile).channel
+        wsl_distro = 'NIPAT-Runtime'; rootfs_sha256 = $hash
+    }
+    $foreignVerify = @{ called = $false }
+    Assert-Rejected { Complete-NipatRuntimeActivation $project $statePath $state $foreignConfiguration { $foreignVerify.called = $true } } 'activation rejects stable distro even if channel field was copied'
+    Assert-Test (-not $foreignVerify.called) 'foreign runtime is rejected before any verification command'
     $backendBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($backendPath))
     $runtimeImageBefore = [IO.File]::ReadAllText($runtimeImagePath)
     $envBefore = [Environment]::GetEnvironmentVariable('NIPAT_WSL_DISTRO', 'Process')

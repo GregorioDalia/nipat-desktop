@@ -34,7 +34,7 @@ installazione e analisi per ciascun pacchetto nella
 [scheda di validazione](VALIDAZIONE.md), che include la
 [prima prova con Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop).
 
-La [guida per l’utilizzo](GUIDA_UTILIZZO.md) accompagna questa versione.
+La [guida per l’utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.0/docs/GUIDA_UTILIZZO.md) accompagna questa versione.
 Le verifiche tecniche storiche sono conservate separatamente e non attestano
 la correttezza scientifica di nuovi casi. Per WSL sono supportati dischi locali
 fissi; unità di rete e condivisioni UNC non sono incluse. Concatenamento

@@ -24,7 +24,7 @@ which the upstream directory reader requires. Original files stay unchanged.
 Both samples must have four informative DNPs, mean contamination
 `(0 + 0 + 0.05 + 0.05) / 4 = 0.025` (2.5%), and sample standard deviation
 `sqrt(0.0025 / (4 - 1)) = 0.0288675134594813`.
-The update includes zero-contamination sites; excluding them would instead yield
+The calculation includes zero-contamination sites; excluding them would instead yield
 two sites and a mean of 0.05. The verifier checks exact retained coordinates as
 well as ratios and per-site contamination, so a matching aggregate alone cannot pass.
 
@@ -37,5 +37,5 @@ rows and the columns individuo, informative_DNPs, mean_contamination,
 sd_contamination. Per-site files are `contamination_<sample>.txt`.
 
 The expected values are derived analytically. The integration check executes
-the unchanged upstream R script through NIPAT; it must succeed in the target
-runtime before this update is recorded as integration-tested.
+the bundled R script through NIPAT and verifies numerical results in the selected
+runtime image.

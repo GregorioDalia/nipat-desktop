@@ -80,7 +80,7 @@ def _help(ui: Terminal, workflows: Workflows, layout: ProjectLayout, dry_run: bo
                 "run.json registra gli input e lo stato; execution.log conserva i dettagli del processo.",
                 "Il punto 6 del menu riapre l'ultima esecuzione della sessione. I risultati precedenti restano su disco.",
                 "Per concatenare analisi, utilizzare i file prodotti come input del workflow successivo.",
-                "I comandi diretti sono disponibili con nipat.cmd --help.",
+                "Per i comandi diretti: NIPAT.exe --help su Windows; nipat --help su Linux.",
                 f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}",
             ):
                 ui.message(instruction, kind="muted")

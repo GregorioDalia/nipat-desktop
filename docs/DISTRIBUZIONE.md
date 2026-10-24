@@ -1,144 +1,168 @@
-# Distribuzione tramite GitHub
+# Distribuzione e requisiti
 
-## Pre-release 0.4.1: due pacchetti per le prove di dominio
+Questo documento descrive **NIPAT 0.5.0a1 Preview**. Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni pubblicate, i pacchetti disponibili e le relative evidenze.
+Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
+dalle release; la loro costruzione non autorizza da sola la pubblicazione.
 
-[NIPAT 0.4.1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1) identifica la versione da
-condividere per il testing di dominio, con l'interfaccia guidata e il launcher
-Windows. È una pre-release, non una dichiarazione di validazione scientifica
-completa. Le [note della versione](RELEASE_0.4.1.md) ne precisano il perimetro.
+## Piattaforme
 
-La release offre due modalità di distribuzione:
-
-| Asset | Contenuto e prerequisiti | Avvio |
+| Sistema | Esecuzione scientifica | Installatore |
 | --- | --- | --- |
-| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe) | Un solo file con applicazione, Python portabile, ambiente Linux interno e runtime scientifico incorporati. Il perimetro iniziale resta Windows 11 x64 con WSL2 funzionante. | Doppio clic per installare; poi icona **NIPAT** che avvia `NIPAT.exe`. |
-| [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe) | Un solo installatore con applicazione, Python portabile e runtime scientifico. Richiede Docker Desktop installato e avviato con container Linux. | Doppio clic per installare; poi icona **NIPAT (Docker Desktop)**, con preparazione automatica prima del menu. |
+| Windows 11 x64 | Distribuzione WSL2 dedicata, Docker Engine interno, immagine NIPAT autonoma | Unico file `NIPAT-Setup.exe`. |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale con Compose v2 e immagine NIPAT autonoma | Unico pacchetto `.deb`. |
 
-`NIPAT.exe` apre la CLI guidata senza richiedere un terminale già aperto.
-Entrambi i percorsi richiedono un solo EXE: l'utilizzatore non deve estrarre
-ZIP, spostare archivi o preparare cartelle `assets`. Nel percorso Docker
-Desktop non occorre eseguire `1_SETUP.cmd`: l'applicazione prepara l'ambiente
-e gli autotest prima del menu e riprende dalla stessa icona dopo un errore.
-**Docker Desktop può inizialmente essere vuoto, senza immagini né container.**
-L'EXE `0.4.1` incorpora l'archivio scientifico: la preparazione ne verifica
-l'hash e lo importa automaticamente. Non servono `docker pull`, build manuali
-o ulteriori download dei componenti NIPAT. Docker Desktop installato e avviato
-in modalità Linux rimane il prerequisito di questa modalità.
-Il setup conserva automaticamente i componenti necessari alla ripresa.
-I due installatori usano lo stesso launcher e i sorgenti dello
-stesso commit. Il pacchetto Docker riutilizza esattamente l'archivio scientifico
-esportato per WSL, identificato da dimensione e SHA-256; non lo ricostruisce sul
-PC dell'utilizzatore. L'identificativo locale dell'immagine viene risolto dopo
-l'importazione, perché motori diversi possono identificare oggetti differenti.
+L'immagine scientifica contiene gli script R, samtools, le dipendenze e i
+moduli di preparazione degli input. Le analisi non richiedono un'installazione
+R sul sistema dell'utente. Il client e l'immagine devono appartenere a una
+combinazione compatibile: NIPAT controlla le interfacce dei workflow e
+l'integrità del motore prima dell'esecuzione.
 
-Gli artefatti di revisione restano separati dalla pubblicazione. La procedura
-in [.github/RELEASE.md](../.github/RELEASE.md) verifica commit, manifest,
-contenuto dei pacchetti e checksum prima di pubblicare una pre-release.
-Una build di pull request serve alla revisione; il commit scelto deve essere
-integrato e costruito con la procedura ammessa per la pubblicazione.
-Non sostituire gli asset di una release già distribuita.
+## Pacchetto Windows
 
-Per ciascuna installazione, registrare la prova del pacchetto su Windows:
-completamento del setup e degli autotest, apertura di `NIPAT.exe`, uso dell'interfaccia e almeno
-un'esecuzione reale. La validazione di dominio utilizza la
-[scheda dedicata](VALIDAZIONE.md), con risultati attesi e osservati.
-Nel percorso WSL l'aggiornamento riguarda l'ambiente Linux interno usato da NIPAT per le analisi:
-non richiede una manutenzione manuale di Windows o WSL. Il setup prepara
-un ambiente separato quando cambia il rootfs. Conserva quello precedente e
-le cartelle dati/risultati, verifica il nuovo ambiente con `doctor` e `self-test`, quindi
-attiva la nuova configurazione. La ripetizione del setup riprende lo stesso
-target; non occorre eliminare distribuzioni o sovrascrivere la configurazione.
-Se il setup non termina, la nuova applicazione resta bloccata: i vecchi file
-applicativi non vengono ripristinati automaticamente. Le prove reali di prima
-installazione e aggiornamento su Windows devono ancora essere registrate per
-il pacchetto finale, oltre ai controlli automatici dell'implementazione.
+`NIPAT-Setup.exe` incorpora applicazione, launcher `NIPAT.exe`, Python
+portabile, ambiente Linux e archivio dell'immagine scientifica. Il setup
+verifica gli archivi, prepara la distribuzione WSL, importa l'immagine ed
+esegue i controlli dell'ambiente e gli autotest. Non sono necessari download
+separati dei componenti NIPAT né spostamenti manuali degli archivi.
 
-Il codice originale NIPAT è distribuito con licenza GPL-3.0-or-later; le licenze
-e le attribuzioni dei componenti inclusi sono conservate in
-[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) e nei rispettivi percorsi.
+Sono richiesti Windows 11 x64, disponibilità della virtualizzazione e WSL2.
+L'attivazione dei componenti Windows può richiedere Internet, consenso
+amministrativo e riavvio. Il setup deve essere eseguito normalmente dal
+proprio account: richiede l'elevazione soltanto per le operazioni di sistema
+che la necessitano. Le policy amministrative del computer possono impedire
+l'attivazione di WSL. L'installazione completa su un sistema privo di WSL e
+la ripresa dopo riavvio devono essere verificate separatamente dai test
+automatici del codice.
 
-## Controlli per le build successive
+La configurazione ha identità **NIPAT 0.5 Preview**:
 
-Il ramo di sviluppo aggiunge una [procedura CI/CD](CI_CD.md) con controlli
-rapidi su Linux e Windows per ogni pull request e push su `main`, regressioni
-scientifiche selezionate in base ai file modificati e un esito aggregato
-`required`. La compilazione completa degli installatori resta una procedura
-separata; la pubblicazione continua a richiedere l'avvio manuale e la verifica
-degli artefatti dello stesso commit.
-
-Le nuove build fissano le immagini di base, lo snapshot dei pacchetti R,
-le versioni attese dei pacchetti R utilizzati e i principali componenti del
-motore interno. I limiti e gli inventari sono descritti nella stessa procedura.
-Questi controlli riguardano le build successive: la versione e gli asset
-pubblicati di `0.4.1` rimangono invariati.
-
-## Versione precedente: 0.4.0
-
-La [pre-release 0.4.0](RELEASE_0.4.0.md) prevedeva lo ZIP Docker Desktop e un
-passaggio separato con `1_SETUP.cmd`. Quella procedura resta documentata per
-la relativa versione; il normale percorso `0.4.1` usa gli EXE sopra indicati.
-
-## Versione precedente: installatore 0.3.0a1
-
-Il percorso pubblicato prepara **NIPAT-Setup.exe** attraverso GitHub Actions.
-L’installatore contiene l’applicazione e un manifest con gli hash dei due
-asset della stessa versione: ambiente WSL dedicato e immagine scientifica.
-Li scarica dalla release GitHub e li verifica prima di importarli.
-Python portabile viene verificato con il suo hash. Non occorre che chi
-utilizza il programma installi o configuri Docker Desktop.
-
-Le dipendenze R vengono risolte in fase di costruzione del runtime su GitHub;
-gli autotest vengono eseguiti sull’immagine risultante. L’immagine viene quindi
-esportata e identificata dal suo ID: ogni installazione della stessa release
-riceve gli stessi byte. Una ricompilazione futura può produrre un’immagine
-diversa e richiede una nuova verifica. Non modificare gli asset di una release
-già distribuita.
-
-Il workflow produce artefatti da verificare, senza pubblicare automaticamente
-una release. I passaggi di compilazione, prova su Windows e pubblicazione
-sono descritti in [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
-La [guida per l’utilizzo](GUIDA_UTILIZZO.md) descrive l’avvio e gli input.
-
-La prima consegna `0.3.0a1` è una **pre-release per prove di dominio su Windows
-11 x64 con WSL2 già funzionante**. L'utilizzatore scarica soltanto l'EXE dalla
-release e attende `NIPAT: ready`; Git e PyCharm non servono. L'attivazione
-iniziale di WSL e la ripresa dopo riavvio Windows restano da verificare.
-Le [note della pre-release](RELEASE_0.3.0a1.md) descrivono il perimetro e i limiti.
-
-Il candidato corretto localmente ha completato setup, autotest, riavvio del
-motore dopo arresto WSL e confronto DNPcall su un BAM reale. La build GitHub
-`39581854492` ha poi superato i controlli anche nel motore effettivamente
-distribuito. Sono evidenze distinte, dettagliate in
-[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md); non attestano la prima
-installazione del nuovo EXE su un altro PC né una validazione di dominio completa.
-
-## Evidenze della release precedente
-
-La release `v0.2.0a2` identifica il commit
-`70e944b5dcbf84954492798dc387e8d61134343c`. Si utilizza tramite archivio
-sorgente, `1_SETUP.cmd` e `2_AVVIA.cmd`, con Docker Desktop già attivo.
-I tag `v0.2.0a1` e `v0.2.0a2` restano invariati.
-
-### Verifiche osservate il 20 ottobre 2026
-
-Le prove riguardano la revisione locale `0.2.0a2` sul PC dello sviluppatore,
-prima del commit e della nuova release. Non costituiscono una prova di
-prima installazione su un PC diverso.
-
-| Controllo | Esito osservato |
+| Elemento | Posizione o identificativo |
 | --- | --- |
-| Suite Python Windows | 100 test raccolti: 99 superati, uno saltato perché i collegamenti simbolici non erano disponibili. |
-| Correzione degli import con Python portabile | Successiva esecuzione dei 34 test CLI, incluso il nuovo caso di regressione: tutti superati. Le due esecuzioni non equivalgono a una singola suite Windows da 101 test. |
-| `1_SETUP.cmd` | Completato con Python 3.12.10 portabile e runtime Docker Linux disponibile. |
-| Autotest numerici di base | Esempio SNPcall: 9 righe corrispondenti; CPI e Contamination: valori attesi, inclusi i casi senza siti informativi. |
-| Input esterni | Quattro analisi Docker riuscite con input su un'altra unità, in percorsi contenenti spazi e caratteri speciali: SNPcall da pileup, Contamination da cartella, CPI con due cutoff e CPI ALL. Input originali invariati. |
-| Menu e destinazione risultati | Scelta di una cartella tramite percorso relativo, ritorno al menu e uscita con codice 0. |
-| DNPcall da BAM reale | Input esterni alla radice `data` configurata e risultati in una nuova radice: tutti gli 11 siti e le 17 colonne dell'output individuale coincidono con il run precedente, indipendentemente dall'ordine delle righe. Alias e BAM originale associati in `run.json`. |
+| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
+| Dati predefiniti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
+| Risultati predefiniti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
+| Cache dei componenti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
+| Distribuzione WSL | Nome con prefisso `NIPAT-05-Preview-`, derivato dall'archivio Linux. |
+| Avvio | Collegamento **NIPAT 0.5 Preview** nel menu Start o sul desktop. |
 
-I quattro gruppi di `self-test` comprendono sette analisi scientifiche; la prova
-DNPcall è separata e non viene eseguita dal setup. Il confronto DNPcall usa un
-risultato precedente dello stesso programma, non un riferimento indipendente.
-Riguarda un solo campione: restano da provare con dati appropriati l'esecuzione
-DNPcall con più campioni e parallela, l'equivalenza delle modalità di input e
-gli altri casi scelti per la validazione. Le precedenti prove SNPcall da BAM non sono
-state ripetute in questa revisione.
+Applicazione, configurazione, cache e distribuzione appartengono a questo
+canale. Il setup rifiuta cartelle applicative diverse da quella prevista;
+i dati di analisi e la destinazione dei risultati si selezionano invece
+nell'applicazione. La cartella dati non limita la posizione degli input:
+sono ammessi file su dischi locali fissi.
+
+L'esito finale della configurazione è `NIPAT: ready`. Se si interrompe,
+la nuova applicazione resta bloccata per le analisi. Il collegamento
+**NIPAT 0.5 Preview - completa preparazione** riprende il setup utilizzando
+i componenti conservati. Stato e log si trovano nella sottocartella
+`.runtime\installer` dell'applicazione.
+
+### Aggiornamento e rimozione
+
+Un aggiornamento dello stesso canale conserva le cartelle dati e risultati
+configurate. Se cambia l'archivio dell'ambiente Linux, il setup prepara una
+distribuzione dedicata al nuovo archivio e attiva la configurazione dopo i
+controlli. La distribuzione precedente viene conservata. Un'interruzione
+non attiva una configurazione incompleta; i file applicativi già installati
+non vengono però ripristinati automaticamente.
+
+La gestione di questa distribuzione NIPAT è distinta dalla manutenzione del
+componente WSL di Windows. L'applicazione non costituisce un sistema di
+aggiornamento automatico generale di Windows o WSL.
+
+La disinstallazione rimuove i file applicativi e i collegamenti. Dati,
+risultati e ambiente WSL vengono conservati: la disinstallazione non deve
+essere interpretata come cancellazione completa dei dati di ricerca.
+I dettagli tecnici e le prove richieste sono in
+[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
+
+## Pacchetto Ubuntu
+
+Il file `.deb` installa **NIPAT 0.5 Preview**, la documentazione e l’archivio
+scientifico già verificato dalla build. Windows e Ubuntu incorporano gli
+stessi byte di questo archivio, identificati da dimensione e SHA-256 nel
+manifest comune. Ubuntu non include né richiede il filesystem WSL.
+
+Il pacchetto dichiara Python 3.12, Docker Engine e Compose v2 come dipendenze.
+L’installazione con `sudo apt install ./<file.deb>` scarica e installa
+automaticamente i pacchetti mancanti dai repository configurati, inclusi
+Docker e Compose. Richiede autorizzazione amministrativa e una connessione
+per i download. Un Docker compatibile già installato soddisfa le dipendenze;
+NIPAT non aggiunge repository o sostituisce configurazioni del daemon.
+Non è necessario installare R o samtools sul sistema. Docker Engine deve essere avviato e
+accessibile al proprio account tramite il socket locale. Sono supportati
+il daemon di sistema e i container senza rimappatura degli UID; Docker
+rootless, `userns-remap` e daemon remoti non fanno parte di questo contratto.
+
+Il primo avvio verifica e importa l’archivio incluso, controlla il motore ed
+esegue gli autotest prima di consentire le analisi. L’applicazione non cambia
+i gruppi dell’utente, i permessi del socket o la configurazione Docker.
+L’accesso al gruppo `docker` deve essere autorizzato dall’amministratore,
+poiché concede privilegi equivalenti a root.
+
+| Elemento | Posizione o identificativo |
+| --- | --- |
+| Pacchetto | `nipat-05-preview` |
+| Applicazione | `/opt/nipat-05-preview` |
+| Avvio | Collegamento **NIPAT 0.5 Preview** o `nipat-05-preview` |
+| Dati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/data` |
+| Risultati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/runs` |
+| Stato e log della preparazione | `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview` |
+
+Un aggiornamento del pacchetto conserva i dati dell’utente e richiede la
+verifica della nuova combinazione di applicazione e immagine. La rimozione
+del pacchetto conserva dati, risultati, stato e immagini Docker. I comandi
+di installazione, diagnosi e rimozione sono nella
+[guida dell’installatore Linux](INSTALLATORE_LINUX.md).
+
+## Ubuntu: installazione da sorgenti
+
+Servono Python 3.12 con supporto `venv`, Docker Engine locale, Compose v2 e
+permessi per utilizzare il motore con il proprio account. La compilazione
+dell'immagine richiede Internet. Il repository completo contiene i file di
+build e i dati sintetici degli autotest.
+
+Dalla radice del checkout:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+nipat build-runtime
+nipat doctor --runtime
+nipat self-test
+nipat wizard
+```
+
+L'applicazione utilizza `data` e `runs` accanto al progetto. Si possono
+scegliere altre destinazioni con `--data-dir` e `--runs-dir`, prima del
+sottocomando, oppure con `NIPAT_DATA_DIR` e `NIPAT_RUNS_DIR`. I file selezionati
+come input vengono montati in sola lettura; la cartella del run corrente è
+scrivibile dal container.
+
+L'installazione Python non include l'immagine scientifica. Un archivio
+**Source code** di GitHub è un checkout da preparare secondo questa procedura,
+non un installatore autonomo. L'esecuzione da sorgenti richiede competenze
+nell'amministrazione di Python e Docker.
+
+## Integrità e verifica del pacchetto
+
+Una distribuzione deve associare versione, commit, manifest degli asset e
+checksum dei file. Gli asset di una release pubblicata costituiscono un
+insieme versionato: un aggiornamento richiede una nuova versione.
+La [procedura di pubblicazione](../.github/RELEASE.md) descrive i controlli
+per i manutentori; [CI_CD.md](CI_CD.md) descrive la copertura automatica.
+
+La verifica di un pacchetto comprende installazione, avvio, diagnostica,
+autotest e analisi con dati appropriati sul sistema dichiarato. L'esito della
+CI non sostituisce una prova dell’installer sul computer destinatario né la
+validazione di dominio. Il [protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md)
+definisce le prove richieste per autorizzare la pubblicazione della coppia
+Windows/Ubuntu. La [scheda di validazione](VALIDAZIONE.md) consente di
+registrare separatamente i risultati scientifici.
+
+Il codice originale NIPAT è distribuito con licenza
+[GPL-3.0-or-later](../LICENSE). Le attribuzioni e le licenze delle dipendenze
+sono conservate in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

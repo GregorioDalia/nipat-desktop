@@ -15,7 +15,7 @@ from pathlib import Path
 
 
 _SPEC = importlib.util.spec_from_file_location(
-    "nipat_validation_bundle", Path(__file__).with_name("build_validation_bundle.py")
+    "nipat_distribution_support", Path(__file__).with_name("distribution_support.py")
 )
 bundle = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(bundle)
@@ -24,6 +24,33 @@ RELEASE_REPOSITORY = "GregorioDalia/nipat-desktop"
 MAX_ASSET_BYTES = 2 * 1024**3  # GitHub release files must be smaller than 2 GiB.
 MANIFEST_NAME = "installer-manifest.json"
 RUNTIME_INCLUDE_NAME = "runtime-assets.iss"
+PROFILE_INCLUDE_NAME = "install-profile.iss"
+PROFILE_PATH = Path("installer/windows/install-profile.json")
+# This guard deliberately excludes the published stable installation identity.
+# The JSON is the shared input for PowerShell, generated Inno directives and metadata.
+EXPECTED_INSTALLATION_PROFILE = {
+    "schema_version": 1,
+    "channel": "preview-0.5",
+    "display_name": "NIPAT 0.5 Preview",
+    "app_dir_name": "NIPAT-0.5-Preview",
+    "data_dir_name": "NIPAT-0.5-Preview",
+    "distro_prefix": "NIPAT-05-Preview-",
+    "resume_key": "NIPAT-05-Preview-ResumeSetup",
+    "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
+    "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05",
+}
+
+
+def validate_installation_profile(profile: dict) -> None:
+    if (type(profile) is not dict or profile != EXPECTED_INSTALLATION_PROFILE
+            or type(profile.get("schema_version")) is not int):
+        raise ValueError("Profilo di installazione diverso dal canale Preview isolato.")
+
+
+def installation_profile(project: Path) -> dict:
+    profile = json.loads((project / PROFILE_PATH).read_text(encoding="utf-8"))
+    validate_installation_profile(profile)
+    return profile
 
 
 def checked_version(project: Path) -> str:
@@ -115,6 +142,7 @@ def make_manifest(
     sources = bundle.source_files(project)
     return {
         "schema_version": 1,
+        "installation_profile": installation_profile(project),
         "version": version,
         "release_tag": release_tag,
         "source_commit": source_commit,
@@ -180,6 +208,11 @@ def validate_manifest(manifest: dict) -> None:
     version = manifest.get("version", "")
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:a[0-9]+|b[0-9]+|rc[0-9]+)?", version):
         raise ValueError("Versione nel manifest non valida.")
+    # Published pre-0.5 archives remain verifiable. This compatibility is read-only:
+    # every WSL staging/include writer below independently requires the Preview profile.
+    major_minor = tuple(int(part) for part in version.split(".")[:2])
+    if major_minor >= (0, 5) or "installation_profile" in manifest:
+        validate_installation_profile(manifest.get("installation_profile"))
     tag = manifest.get("release_tag")
     if tag != f"v{version}":
         raise ValueError("Release tag diverso dalla versione del manifest.")
@@ -218,17 +251,36 @@ def verify_runtime_assets(manifest: dict, asset_directory: Path) -> None:
 def runtime_assets_include(manifest: dict) -> str:
     """Emit portable Inno inputs; each embedded archive becomes its persistent cache file."""
     validate_manifest(manifest)
+    validate_installation_profile(manifest.get("installation_profile"))
     lines = ["; Generated from the verified installer manifest. Do not edit."]
     for key in ("rootfs", "scientific_image"):
         entry = manifest["assets"][key]
         lines.append(
             f'Source: "{{#RuntimeAssetsDir}}\\{entry["file"]}"; '
-            'DestDir: "{localappdata}\\NIPAT\\cache"; '
+            f'DestDir: "{{localappdata}}\\{manifest["installation_profile"]["data_dir_name"]}\\cache"; '
             f'DestName: "{entry["sha256"]}-{entry["file"]}"; '
             f'Hash: "{entry["sha256"]}"; '
             'Flags: ignoreversion uninsneveruninstall nocompression solidbreak'
         )
     return "\n".join(lines) + "\n"
+
+
+def installation_profile_include(manifest: dict) -> str:
+    """Generate the complete Windows identity from the same verified manifest."""
+    validate_manifest(manifest)
+    validate_installation_profile(manifest.get("installation_profile"))
+    profile = manifest["installation_profile"]
+    values = {
+        "NipatVersion": manifest["version"],
+        "NipatAppId": "{{" + profile["app_id"] + "}",
+        "NipatDisplayName": profile["display_name"],
+        "NipatAppDirectory": profile["app_dir_name"],
+        "NipatDataDirectory": profile["data_dir_name"],
+        "NipatResumeKey": profile["resume_key"],
+    }
+    return "; Generated from the verified installer manifest. Do not edit.\n" + "".join(
+        f'#define {key} "{value}"\n' for key, value in values.items()
+    )
 
 
 def verify_embedded_inputs(manifest_path: Path, stage: Path, asset_directory: Path) -> Path:
@@ -241,6 +293,11 @@ def verify_embedded_inputs(manifest_path: Path, stage: Path, asset_directory: Pa
     include = stage / RUNTIME_INCLUDE_NAME
     if include.read_text(encoding="utf-8") != runtime_assets_include(manifest):
         raise ValueError("Le istruzioni di incorporamento degli asset non corrispondono al manifest.")
+    profile_include = stage / PROFILE_INCLUDE_NAME
+    if profile_include.read_text(encoding="utf-8") != installation_profile_include(manifest):
+        raise ValueError("Il profilo Inno di installazione non corrisponde al manifest.")
+    if installation_profile(stage / "app") != manifest["installation_profile"]:
+        raise ValueError("Il profilo incorporato non corrisponde al manifest.")
     return include
 
 
@@ -248,6 +305,9 @@ def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path)
     project = project.resolve()
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     validate_manifest(manifest)
+    validate_installation_profile(manifest.get("installation_profile"))
+    if installation_profile(project) != manifest["installation_profile"]:
+        raise ValueError("Profilo dei sorgenti diverso dal manifest runtime.")
     if checked_version(project) != manifest["version"]:
         raise ValueError("Versione dei sorgenti diversa dal manifest runtime.")
     files = bundle.source_files(project)
@@ -258,6 +318,7 @@ def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path)
     bundle.require_python_archive(python_zip)
     stage.mkdir(parents=True, exist_ok=False)
     (stage / RUNTIME_INCLUDE_NAME).write_text(runtime_assets_include(manifest), encoding="utf-8")
+    (stage / PROFILE_INCLUDE_NAME).write_text(installation_profile_include(manifest), encoding="utf-8")
     app = stage / "app"
     for source in files:
         target = app / source.relative_to(project)

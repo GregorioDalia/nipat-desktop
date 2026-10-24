@@ -1,0 +1,4 @@
+err_const	N_sites_mother	N_sites_father	Median_fetal_fraction_raw	Median_fetal_fraction_percent	Max_logCPI	Min_logCPI	Median_logCPI	Mean_logCPI	CPI_medianFF
+0.01	2	2	0.05	5	-1.398	-2.699	-2.048	-2.048	-2.699
+0.1	2	2	0.05	5	-0.398	-0.699	-0.548	-0.548	-0.699
+0	2	2	0.05	5	NA	NA	NA	NA	NA

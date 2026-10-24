@@ -48,9 +48,14 @@ class InstallerAssetTests(unittest.TestCase):
         self.assertIsNotNone(guard, "Expected an explicit supported installer version")
         self.assertEqual(guard.group(1), version)
         setup = (project / "installer/windows/NIPAT.iss").read_text(encoding="utf-8")
-        definition = re.search(r'#define NipatVersion "([^"]+)"', setup)
-        self.assertIsNotNone(definition, "Expected the installer display version")
-        self.assertEqual(definition.group(1), version)
+        self.assertIn('#include StageDir + "\\install-profile.iss"', setup)
+        definition = assets.installation_profile_include(dict(
+            self.manifest, version=version, release_tag=f"v{version}",
+            assets={key: dict(value, url=value["url"].replace("v0.5.0a1", f"v{version}"))
+                    for key, value in self.manifest["assets"].items()},
+        ))
+        self.assertIn(f'#define NipatVersion "{version}"', definition)
+        self.assertEqual(assets.installation_profile(project), assets.EXPECTED_INSTALLATION_PROFILE)
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -59,12 +64,15 @@ class InstallerAssetTests(unittest.TestCase):
         self.project = self.root / "project"
         self.project.mkdir()
         (self.project / "pyproject.toml").write_text(
-            '[project]\nversion = "0.4.1"\n', encoding="utf-8",
+            '[project]\nversion = "0.5.0a1"\n', encoding="utf-8",
         )
         (self.project / "README.md").write_text("Approved source\n", encoding="utf-8")
         (self.project / "distribution-files.txt").write_text(
-            "distribution-files.txt\npyproject.toml\nREADME.md\n", encoding="utf-8",
+            "distribution-files.txt\npyproject.toml\nREADME.md\ninstaller/windows/install-profile.json\n", encoding="utf-8",
         )
+        profile = self.project / assets.PROFILE_PATH
+        profile.parent.mkdir(parents=True)
+        profile.write_text(json.dumps(assets.EXPECTED_INSTALLATION_PROFILE), encoding="utf-8")
         (self.project / "private-local.txt").write_text("not selected", encoding="utf-8")
         self.rootfs = self.root / "rootfs.tar.gz"
         self.scientific = self.root / "scientific.tar.gz"
@@ -86,10 +94,11 @@ class InstallerAssetTests(unittest.TestCase):
 
     def test_manifest_identifies_exact_sources_and_assets(self):
         assets.validate_manifest(self.manifest)
+        self.assertEqual(self.manifest["installation_profile"], assets.EXPECTED_INSTALLATION_PROFILE)
         self.assertEqual(self.manifest["source_commit"], COMMIT)
         self.assertEqual(self.manifest["runtime_image"], SCIENTIFIC)
         self.assertEqual(set(self.manifest["source_sha256"]), {
-            "distribution-files.txt", "pyproject.toml", "README.md",
+            "distribution-files.txt", "pyproject.toml", "README.md", "installer/windows/install-profile.json",
         })
         for key, path in [("rootfs", self.rootfs), ("scientific_image", self.scientific)]:
             entry = self.manifest["assets"][key]
@@ -97,7 +106,90 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(entry["size"], path.stat().st_size)
             self.assertEqual(entry["url"],
                              "https://github.com/GregorioDalia/nipat-desktop/releases/"
-                             f"download/v0.4.1/{path.name}")
+                             f"download/v0.5.0a1/{path.name}")
+
+    def test_manifest_rejects_foreign_or_ambiguous_installation_profile(self):
+        mutations = {
+            "channel": "stable",
+            "app_dir_name": "NIPAT",
+            "data_dir_name": "NIPAT",
+            "display_name": "NIPAT",
+            "distro_prefix": "NIPAT-Runtime-",
+            "resume_key": "NIPAT-ResumeSetup",
+            "mutex_prefix": "Local\\NIPAT-Setup-",
+            "app_id": "5C0FD852-ED53-4F4B-92D2-64B784E7F9B3",
+            "schema_version": True,
+        }
+        for key, value in mutations.items():
+            manifest = copy.deepcopy(self.manifest)
+            manifest["installation_profile"][key] = value
+            with self.subTest(field=key), self.assertRaisesRegex(ValueError, "Profilo"):
+                assets.validate_manifest(manifest)
+        for value in (None, {}, {**assets.EXPECTED_INSTALLATION_PROFILE, "other": "field"}):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Profilo"):
+                assets.validate_manifest(dict(self.manifest, installation_profile=value))
+
+    def test_historical_manifest_is_verifiable_but_cannot_stage_a_new_wsl_installer(self):
+        historical = copy.deepcopy(self.manifest)
+        historical.pop("installation_profile")
+        historical["version"] = "0.4.1"
+        historical["release_tag"] = "v0.4.1"
+        for entry in historical["assets"].values():
+            entry["url"] = entry["url"].replace("v0.5.0a1", "v0.4.1")
+        assets.validate_manifest(historical)
+        assets.verify_runtime_assets(historical, self.root)
+        for builder in (assets.runtime_assets_include, assets.installation_profile_include):
+            with self.subTest(builder=builder.__name__), self.assertRaisesRegex(ValueError, "Profilo"):
+                builder(historical)
+        self.manifest_path.write_text(json.dumps(historical), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Profilo"):
+            assets.stage_app(self.project, self.manifest_path, self.root / "stage", self.python_archive)
+        self.assertFalse((self.root / "stage").exists())
+        historical["installation_profile"] = {"channel": "stable"}
+        with self.assertRaisesRegex(ValueError, "Profilo"):
+            assets.validate_manifest(historical)
+
+    def test_manifest_rejects_source_profile_with_stable_destination(self):
+        profile_path = self.project / assets.PROFILE_PATH
+        profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile["data_dir_name"] = "NIPAT"
+        profile_path.write_text(json.dumps(profile), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Profilo"):
+            assets.make_manifest(
+                self.project, source_commit=COMMIT, runtime_image=SCIENTIFIC,
+                rootfs=self.rootfs, scientific_image=self.scientific,
+                rootfs_provenance=self.provenance,
+            )
+
+    def test_profile_include_carries_only_verified_candidate_identity(self):
+        include = assets.installation_profile_include(self.manifest)
+        definitions = dict(re.findall(r'^#define (\w+) "([^\"]+)"$', include, re.MULTILINE))
+        self.assertEqual(definitions, {
+            "NipatVersion": "0.5.0a1",
+            "NipatAppId": "{{9E27D451-67B5-4D28-B388-A41CFE2F7D05}",
+            "NipatDisplayName": "NIPAT 0.5 Preview",
+            "NipatAppDirectory": "NIPAT-0.5-Preview",
+            "NipatDataDirectory": "NIPAT-0.5-Preview",
+            "NipatResumeKey": "NIPAT-05-Preview-ResumeSetup",
+        })
+        bad = copy.deepcopy(self.manifest)
+        bad["installation_profile"]["display_name"] += '\"\n#define Injected "1'
+        with self.assertRaisesRegex(ValueError, "Profilo"):
+            assets.installation_profile_include(bad)
+
+    def test_setup_guards_explicit_path_group_and_junction_overrides_before_copying(self):
+        setup = (Path(__file__).resolve().parents[1] / "installer/windows/NIPAT.iss").read_text(encoding="utf-8")
+        self.assertIn("UsePreviousAppDir=no", setup)
+        self.assertIn("UsePreviousGroup=no", setup)
+        guard = setup.split("function PrepareToInstall(var NeedsRestart: Boolean): String;", 1)[1]
+        guard = guard.split("function QuoteNipatArgument", 1)[0]
+        self.assertIn("ExpandConstant('{app}')", guard)
+        self.assertIn("WizardGroupValue, '{#NipatDisplayName}'", guard)
+        self.assertIn("NipatPathHasReparsePoint(ExpectedApp)", guard)
+        self.assertIn("NipatTreeHasReparsePoint(ExpectedApp)", guard)
+        self.assertIn("NipatTreeHasReparsePoint(AddBackslash(DataRoot) + 'cache')", guard)
+        self.assertIn("'{#NipatResumeKey}'", setup)
+        self.assertNotIn("'NIPAT-ResumeSetup'", setup)
 
     def test_manifest_and_stage_accept_noncanonical_project_root(self):
         prior_directory = Path.cwd()
@@ -207,7 +299,7 @@ class InstallerAssetTests(unittest.TestCase):
             fields = dict(re.findall(r'(\w+): "([^"]*)"', line))
             entry = self.manifest["assets"][key]
             self.assertEqual(fields["Source"], "{#RuntimeAssetsDir}\\" + entry["file"])
-            self.assertEqual(fields["DestDir"], "{localappdata}\\NIPAT\\cache")
+            self.assertEqual(fields["DestDir"], "{localappdata}\\NIPAT-0.5-Preview\\cache")
             self.assertEqual(fields["DestName"], entry["sha256"] + "-" + entry["file"])
             self.assertEqual(fields["Hash"], entry["sha256"])
             flags = line.rsplit("Flags: ", 1)[1].split()
@@ -257,6 +349,21 @@ class InstallerAssetTests(unittest.TestCase):
         embedded_manifest = stage / "app" / ".distribution" / assets.MANIFEST_NAME
         embedded_manifest.write_text("{}", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "manifest incorporato"):
+            assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
+
+    def test_precompile_rejects_altered_identity_include_or_profile(self):
+        stage = self.root / "stage"
+        with patch.object(assets.bundle, "require_python_archive"):
+            assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+        include = stage / assets.PROFILE_INCLUDE_NAME
+        original = include.read_text(encoding="utf-8")
+        include.write_text(original.replace("NIPAT-0.5-Preview", "NIPAT"), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "profilo Inno"):
+            assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
+        include.write_text(original, encoding="utf-8")
+        profile = stage / "app" / assets.PROFILE_PATH
+        profile.write_text("{}", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Profilo"):
             assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
 
     def test_precompile_cli_uses_downloaded_assets_without_python_download(self):

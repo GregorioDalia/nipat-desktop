@@ -24,7 +24,7 @@ e riavvio e resta una prova separata.
 
 ## Verifica dell'utilizzo
 
-La [guida per l'utilizzo](GUIDA_UTILIZZO.md) descrive il menu e i quattro workflow.
+La [guida per l'utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.1/docs/GUIDA_UTILIZZO.md) descrive il menu e i quattro workflow.
 La [prima prova Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop)
 comprende preparazione e una sequenza reale DNPcall → Contamination, con log,
 risultati attesi e osservati. Registrare gli esiti per il pacchetto effettivamente

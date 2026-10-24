@@ -1,5 +1,5 @@
-# Base and CRAN snapshot used by the verified 0.4.1 build (run 39686775980).
-# Upgrade these inputs deliberately, then run the scientific regression suite.
+# Scientific base and CRAN snapshot are pinned inputs. Changes require the
+# scientific regression suite against the resulting image.
 FROM rocker/r-ver:4.4.2@sha256:df26749182af64d5263bf64149d51a427b476ed28c4e046997143be3f97fdd7c
 
 ARG SAMTOOLS_VERSION=1.21
@@ -65,4 +65,18 @@ RUN Rscript /usr/local/lib/nipat/verify-packages.R \
     && samtools --version | head -n 1 \
     && R --version | head -n 1
 
+# Bundle only reviewed code and notices. Do not copy arbitrary local files or
+# mount the host project over this path in production.
+COPY LICENSE THIRD_PARTY_NOTICES.md /opt/nipat/
+COPY scientific/SHA256SUMS /opt/nipat/scientific/SHA256SUMS
+COPY scientific/vendor/DNPcall/DNPcall.R scientific/vendor/DNPcall/LICENSE /opt/nipat/scientific/vendor/DNPcall/
+COPY scientific/vendor/NEWPAT/LICENSE /opt/nipat/scientific/vendor/NEWPAT/LICENSE
+COPY scientific/vendor/NEWPAT/SNPcall/SNPcall.R /opt/nipat/scientific/vendor/NEWPAT/SNPcall/SNPcall.R
+COPY scientific/vendor/NEWPAT/contamination/detect_contamination.R /opt/nipat/scientific/vendor/NEWPAT/contamination/detect_contamination.R
+COPY scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R /opt/nipat/scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R
+COPY engine/main.py /opt/nipat/engine/main.py
+COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py /opt/nipat/lib/nipat_scientific/
+RUN python3 /opt/nipat/engine/main.py verify
+
+# The client explicitly selects the bundled workflow or an isolated runtime probe.
 WORKDIR /workspace/nipat-desktop

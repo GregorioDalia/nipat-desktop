@@ -1,0 +1,3 @@
+chr	pos	Reference	Alternative	N_Reference	N_Alternative	N_Altro	total_count	ratio
+chrSynthetic	50	A	G	4	2	1	7	0.6666666666666667
+chrSynthetic	120	C	T	2	3	1	6	0.4

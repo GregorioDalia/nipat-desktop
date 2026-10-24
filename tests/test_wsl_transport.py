@@ -19,14 +19,39 @@ from nipat.paths import ProjectLayout
 
 
 class WslTransportTests(unittest.TestCase):
-    def test_native_is_default_and_preserves_arguments_and_paths(self):
-        with patch.dict(os.environ, {}, clear=True):
+    def test_native_is_default_on_linux_and_preserves_arguments_and_paths(self):
+        with patch.dict(os.environ, {}, clear=True), patch("nipat.execution.transport.os.name", "posix"):
             transport = DockerTransport.from_environment()
         argv = ["docker", "compose", "-f", r"D:\NIPAT app\compose.yaml"]
         with patch("nipat.execution.transport.subprocess.run") as run:
             self.assertEqual(transport.command(argv, {}), argv)
             self.assertEqual(transport.host_path(argv[-1]), argv[-1])
             self.assertIsNone(transport.ensure_command())
+        run.assert_not_called()
+
+    def test_windows_rejects_native_default_and_dry_run_before_any_process(self):
+        for backend in (None, "", "native"):
+            for dry_run in (False, True):
+                environment = {} if backend is None else {"NIPAT_BACKEND": backend}
+                with self.subTest(backend=backend, dry_run=dry_run), patch.dict(
+                    os.environ, environment, clear=True,
+                ), patch("nipat.execution.transport.os.name", "nt"), patch(
+                    "nipat.execution.transport.subprocess.run",
+                ) as run:
+                    with self.assertRaisesRegex(ValidationError, "runtime WSL dedicato"):
+                        DockerTransport.from_environment(dry_run=dry_run)
+                    run.assert_not_called()
+
+    def test_windows_selects_its_explicit_wsl_identity_without_starting_a_process(self):
+        with patch.dict(os.environ, {
+            "NIPAT_BACKEND": "wsl", "NIPAT_WSL_DISTRO": "NIPAT-05-Preview-test",
+        }, clear=True), patch("nipat.execution.transport.os.name", "nt"), patch(
+            "nipat.execution.transport.subprocess.run",
+        ) as run:
+            transport = DockerTransport.from_environment(dry_run=True)
+        self.assertIsInstance(transport, WslDockerTransport)
+        self.assertEqual(transport.distro, "NIPAT-05-Preview-test")
+        self.assertTrue(transport.dry_run)
         run.assert_not_called()
 
     def test_configuration_selects_only_explicit_supported_backend_and_safe_distro(self):
@@ -40,6 +65,14 @@ class WslTransportTests(unittest.TestCase):
         for invalid in ("", "-name", "name space", "name;command", "a\n", "a" * 65):
             with self.subTest(invalid=invalid), self.assertRaises(ValidationError):
                 WslDockerTransport(invalid)
+
+    def test_wsl_requires_explicit_distribution_without_falling_back_to_stable(self):
+        with patch.dict(os.environ, {"NIPAT_BACKEND": "wsl"}, clear=True), patch(
+            "nipat.execution.transport.subprocess.run"
+        ) as run:
+            with self.assertRaisesRegex(ValidationError, "NIPAT_WSL_DISTRO"):
+                DockerTransport.from_environment()
+        run.assert_not_called()
 
     def test_live_path_uses_wslpath_once_and_preserves_special_characters(self):
         transport = WslDockerTransport("NIPAT-Runtime")
@@ -192,8 +225,9 @@ class WslRunnerTests(unittest.TestCase):
     def test_doctor_needs_only_wsl_and_ensures_engine_before_docker(self):
         with redirect_stdout(self.stdout), patch(
             "nipat.execution.runner.shutil.which", return_value="wsl.exe"
-        ) as which:
+        ) as which, patch.object(self.runner, "_describe_bundled_engine") as describe:
             self.runner.doctor(check_runtime=True)
+        describe.assert_called_once_with()
         which.assert_called_once_with("wsl.exe")
         self.assertEqual(len(self.ensure_calls()), 1)
         self.assertEqual(self.calls[0][0][-2:], ["/usr/local/bin/nipat-engine", "ensure"])

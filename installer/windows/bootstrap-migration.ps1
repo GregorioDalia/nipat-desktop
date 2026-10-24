@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 function Read-NipatOwnership([string] $Path, [string] $Distro) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     $record = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-NipatInstallationChannel $record 'Il registro di proprieta'
     if ($record.schema_version -ne 1 -or $record.distro -cne $Distro -or
         $record.owner_id -cnotmatch '^[a-f0-9]{32}$' -or
         $record.rootfs_sha256 -cnotmatch '^[a-f0-9]{64}$' -or
@@ -16,17 +17,9 @@ function Read-NipatOwnership([string] $Path, [string] $Distro) {
 
 function Get-NipatRuntimeTarget([string] $WslDirectory, [string] $RootfsSha256, [string[]] $Names) {
     if ($RootfsSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Identita rootfs non valida.' }
-    $legacy = Read-NipatOwnership (Join-Path $WslDirectory 'ownership.json') 'NIPAT-Runtime'
-    # A ready legacy installation can be reused, but its record is never rewritten.
-    if ($null -ne $legacy -and $legacy.status -ceq 'owned' -and
-        $legacy.rootfs_sha256 -ceq $RootfsSha256 -and $Names -contains 'NIPAT-Runtime') {
-        return [pscustomobject]@{
-            Distro = 'NIPAT-Runtime'; Directory = (Join-Path $WslDirectory 'NIPAT-Runtime')
-            OwnershipPath = (Join-Path $WslDirectory 'ownership.json'); Ownership = $legacy
-            Registered = $true; Legacy = $true; RootfsSha256 = $RootfsSha256
-        }
-    }
-    $distro = 'NIPAT-Runtime-' + $RootfsSha256.Substring(0, 40)
+    $profile = Get-NipatInstallationProfile
+    # Even an identical stable rootfs belongs to another installation channel.
+    $distro = $profile.distro_prefix + $RootfsSha256.Substring(0, 40)
     $recordPath = Join-Path (Join-Path $WslDirectory 'registrations') ($distro + '.json')
     $ownership = Read-NipatOwnership $recordPath $distro
     if ($null -ne $ownership -and $ownership.rootfs_sha256 -cne $RootfsSha256) {
@@ -71,7 +64,7 @@ function Initialize-NipatRuntimeTarget($Target, $RootfsAsset, [string] $CacheDir
         $rootfs = Get-NipatAsset $RootfsAsset $CacheDirectory $AssetDirectory
         if ($null -eq $Target.Ownership) {
             $Target.Ownership = [pscustomobject]@{
-                schema_version = 1; distro = $Target.Distro; owner_id = [Guid]::NewGuid().ToString('N')
+                schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; distro = $Target.Distro; owner_id = [Guid]::NewGuid().ToString('N')
                 rootfs_sha256 = $Target.RootfsSha256; status = 'importing'
             }
         } elseif ($Target.Ownership.status -ne 'importing') {
@@ -89,10 +82,17 @@ function Initialize-NipatRuntimeTarget($Target, $RootfsAsset, [string] $CacheDir
 }
 
 function Save-NipatRecoverySnapshot([string] $Project, $Manifest) {
+    foreach ($relative in @('.runtime/installer/state.json', '.runtime/backend.json')) {
+        $existing = Join-Path $Project $relative
+        if (Test-Path -LiteralPath $existing -PathType Leaf) {
+            Assert-NipatInstallationChannel (Get-Content -LiteralPath $existing -Raw -Encoding UTF8 | ConvertFrom-Json) $relative
+        }
+    }
     $name = $Manifest.source_commit + '-' + $Manifest.assets.rootfs.sha256.Substring(0, 16) + '.json'
     $path = Join-Path (Join-Path $Project '.runtime\installer\recovery') $name
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $snapshot = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+        Assert-NipatInstallationChannel $snapshot 'Il registro di recupero'
         if ($snapshot.schema_version -ne 1 -or $snapshot.target_source_commit -cne $Manifest.source_commit -or
             $snapshot.target_rootfs_sha256 -cne $Manifest.assets.rootfs.sha256) {
             throw 'Il registro di recupero esistente non corrisponde alla preparazione richiesta.'
@@ -110,7 +110,7 @@ function Save-NipatRecoverySnapshot([string] $Project, $Manifest) {
         }
     }
     Write-NipatJsonAtomic $path ([ordered]@{
-        schema_version = 1; target_source_commit = $Manifest.source_commit
+        schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; target_source_commit = $Manifest.source_commit
         target_rootfs_sha256 = $Manifest.assets.rootfs.sha256
         created_utc = [DateTime]::UtcNow.ToString('o'); previous_files = $files
     })
@@ -121,8 +121,10 @@ function Get-NipatPreviousDataRoots([string] $Project, [string] $BaseDirectory) 
     $path = Join-Path $Project '.runtime\backend.json'
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $configuration = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
+        Assert-NipatInstallationChannel $configuration 'La configurazione precedente'
+        $profile = Get-NipatInstallationProfile
         if ($configuration.schema_version -ne 1 -or $configuration.backend -cne 'wsl' -or
-            $configuration.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
+            $configuration.wsl_distro -cnotmatch ('^' + [regex]::Escape($profile.distro_prefix) + '[a-f0-9]{40}$') -or
             $configuration.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
             [string]::IsNullOrWhiteSpace($configuration.data_dir) -or
             [string]::IsNullOrWhiteSpace($configuration.runs_dir) -or
@@ -138,6 +140,10 @@ function Get-NipatPreviousDataRoots([string] $Project, [string] $BaseDirectory) 
 }
 
 function Complete-NipatRuntimeActivation([string] $Project, [string] $StatePath, $State, $Configuration, [scriptblock] $Verify) {
+    Assert-NipatInstallationChannel $State 'Lo stato candidato'
+    Assert-NipatInstallationChannel $Configuration 'La configurazione candidata'
+    Assert-NipatRuntimeNamespace $Configuration.wsl_distro $Configuration.rootfs_sha256
+    Assert-NipatRuntimeNamespace $State.wsl_distro $State.rootfs_sha256
     # Tests run with a candidate environment while backend.json still selects the old runtime.
     # Ready state is the final activation gate; an interrupted commit remains blocked and resumable.
     $candidate = [ordered]@{

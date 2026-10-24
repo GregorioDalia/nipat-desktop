@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "channel": "preview-0.5",
+  "display_name": "NIPAT 0.5 Preview",
+  "app_dir_name": "NIPAT-0.5-Preview",
+  "data_dir_name": "NIPAT-0.5-Preview",
+  "distro_prefix": "NIPAT-05-Preview-",
+  "resume_key": "NIPAT-05-Preview-ResumeSetup",
+  "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
+  "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05"
+}
