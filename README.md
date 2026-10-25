@@ -94,7 +94,11 @@ Ogni analisi permette di modificarli prima della conferma; campioni, coppie
 e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
 CLI diretti. **6 — Ultima esecuzione** riapre il run più recente della sessione;
 **7 — Guida e informazioni** e **8 — Verifica ambiente** separano consultazione
-e diagnostica. Per spostare applicazione, ambiente WSL o cache usare il setup.
+e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
+approvate su GitHub; download e installazione richiedono conferme distinte.
+In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
+all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
+Per spostare applicazione, ambiente WSL o cache usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
 cartella dell'applicazione; condivisioni UNC e unità di rete non sono supportate.

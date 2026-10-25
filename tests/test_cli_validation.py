@@ -274,6 +274,7 @@ class WizardTests(unittest.TestCase):
 class CliRoutingTests(unittest.TestCase):
     def setUp(self):
         self.layout = Mock()
+        self.layout.project_dir = Path(__file__).resolve().parents[1]
         self.runner = Mock()
         self.workflows = Mock()
 
@@ -297,6 +298,15 @@ class CliRoutingTests(unittest.TestCase):
             with redirect_stderr(stderr):
                 self.assertEqual(main(['doctor']), 2)
         self.assertIn('Percorsi errati', stderr.getvalue())
+
+    def test_installer_lease_prevents_cli_runtime_or_analysis_start(self):
+        stderr = io.StringIO()
+        with patch('nipat.cli.ProjectLayout.discover', return_value=self.layout), \
+                patch('nipat.cli.activity_session', side_effect=ValidationError('Aggiornamento in corso')), \
+                patch('nipat.cli.DockerComposeRunner') as runner, redirect_stderr(stderr):
+            self.assertEqual(main(['doctor', '--runtime']), 2)
+        runner.assert_not_called()
+        self.assertIn('Aggiornamento in corso', stderr.getvalue())
 
     def test_repeated_dnp_bams_are_routed(self):
         self.invoke(['dnp-call', '--bam', 'one.bam', '--bam', 'two.bam',

@@ -13,7 +13,7 @@ prima di modificare una release.
 | --- | --- | --- |
 | [CI](../.github/workflows/ci.yml) | Pull request, push su `main`, avvio manuale. | Test Linux/Windows, verifiche scientifiche quando richieste e controllo aggregato `required`. |
 | [Installers (review build)](../.github/workflows/windows-installer.yml) | Pull request sui percorsi di packaging/runtime indicati nel file, oppure avvio manuale. | Installatore WSL e pacchetto Ubuntu con lo stesso archivio scientifico, prove ed evidenze di costruzione. |
-| [Publish verified pre-release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica la coppia Windows/Ubuntu e l’accettazione dei file esatti, quindi pubblica una pre-release senza ricostruire gli asset. |
+| [Publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica la coppia Windows/Ubuntu e l’accettazione dei file esatti, quindi pubblica nel canale scelto senza ricostruire gli asset. |
 
 Una build di pull request serve alla revisione ed è rifiutata dal publisher.
 Per la 0.6, una build destinata alla pubblicazione deve essere avviata
@@ -37,7 +37,10 @@ e inventario verificano il backup selettivo, la gestione dei componenti
 sostituiti o obsoleti e la conservazione dei file estranei. I controlli relativi
 ai percorsi e alla rimozione devono verificare separazione delle destinazioni,
 identità delle risorse possedute e conservazione dei dati; non sostituiscono
-la prova dell'interfaccia del setup su Windows.
+la prova dell'interfaccia del setup su Windows. I controlli dell'aggiornatore
+comprendono selezione del canale, rifiuto dei metadati non coerenti, integrità
+del download, conferme esplicite e comportamento senza rete; le prove simulate
+non attestano l'installazione completa di una versione successiva.
 
 Il job `scientific` costruisce il motore e avvia:
 
@@ -136,6 +139,21 @@ Gli artefatti sono conservati per **14 giorni** dalla creazione e non
 equivalgono a una release pubblica. Conservare il riferimento al run per
 identificare la build usata nelle prove. La versione 0.6 non produce un
 installatore Docker Desktop.
+
+## Pubblicazione dei canali di aggiornamento
+
+**Publish verified release** richiede una scelta esplicita del canale:
+`testing` è il valore predefinito e pubblica una pre-release; `stable` pubblica
+una release stabile e richiede una versione numerica `MAJOR.MINOR.PATCH`.
+Entrambi richiedono avvio manuale da `main`, coppia verificata e accettazione
+dei medesimi pacchetti. Nessun canale consente di evitare questi controlli.
+
+Dopo le verifiche, il publisher genera `update-manifest.json`, lo include in
+`SHA256SUMS` e lo pubblica con gli installatori. Il manifest identifica prodotto,
+versione, tag, commit, canale e protocollo minimo dell'aggiornatore; elenca nome,
+piattaforma, dimensione, checksum e URL ufficiale di EXE e `.deb`. Il client
+propone soltanto release già pubblicate e compatibili. Una build di revisione
+non diventa un aggiornamento per il solo fatto di avere superato la CI.
 
 ## Dipendenze e riproducibilità
 

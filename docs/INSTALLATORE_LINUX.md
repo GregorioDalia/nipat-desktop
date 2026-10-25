@@ -143,12 +143,24 @@ nipat --runs-dir "$HOME/risultati-nipat" contamination \
 
 ## Aggiornamento e rimozione
 
-Installare un nuovo `.deb` dello stesso canale con `sudo apt install ./<file.deb>`.
+**9 — Verifica aggiornamenti** scarica e verifica il `.deb` completo di una
+release approvata. Dopo la conferma esplicita di installazione, la sessione
+corrente si chiude e viene aperto un terminale di sistema. L'installazione
+tramite APT richiede autorizzazione amministrativa attraverso Polkit.
+Al termine il launcher normale verifica o prepara il runtime prima del menu.
+Se terminale o Polkit non sono disponibili, il pacchetto verificato rimane
+sul disco e NIPAT mostra il comando APT completo da eseguire con l'amministratore.
+
+Si può anche installare il pacchetto con `sudo apt install ./<file.deb>`.
 APT sostituisce i file applicativi e conserva i dati dell'utente. Al primo
 avvio, NIPAT verifica la combinazione aggiornata di applicazione, manifest e
 immagine. Una configurazione incompleta non viene attivata. I file applicativi
 installati da APT non vengono ripristinati automaticamente se la preparazione
-successiva fallisce.
+successiva fallisce. Le preferenze e i percorsi dell'utente vengono conservati.
+Le sessioni NIPAT ancora attive impediscono la modifica del pacchetto; non
+vengono terminate per consentire l'aggiornamento. Se APT o dpkg si interrompono,
+completare la configurazione del pacchetto con l'amministratore prima di riaprire
+NIPAT. Non è previsto un rollback automatico completo.
 
 Per rimuovere l'applicazione:
 
@@ -172,6 +184,7 @@ e non elimina altre immagini o container. L'eventuale cancellazione dei dati
 | Preparazione già in corso | Attendere il completamento dell'altro avvio. |
 | Autotest fallito | Conservare log, stato e run generati; non considerare la preparazione completata. |
 | Immagine rimossa da Docker | Avviare nuovamente NIPAT per ripristinarla dall'archivio incluso. |
+| Aggiornamento interrotto | Conservare `${XDG_CACHE_HOME:-~/.cache}/nipat-desktop/updates/handoff-*/state.json` e i messaggi del terminale APT; se la transazione non è completa, riprendere la configurazione del pacchetto con l'amministratore. La preparazione del runtime usa il consueto `setup.log` nella cartella di stato XDG. |
 
 Per una segnalazione, registrare versione del sistema, versione NIPAT,
 provenienza del `.deb`, messaggio completo e log della preparazione.

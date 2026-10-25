@@ -29,7 +29,9 @@ try {
         Assert-NipatInstallLayout $layout
         $kind = Get-NipatApplicationKind $layout.app_dir
         if ($InfoFile) {
-            [IO.File]::WriteAllLines($InfoFile, [string[]] @('[NIPAT]', "kind=$kind"),
+            # A fresh, short-lived setup lease is created by Inno only after validation succeeds.
+            $setupNonce = [Guid]::NewGuid().ToString('N')
+            [IO.File]::WriteAllLines($InfoFile, [string[]] @('[NIPAT]', "kind=$kind", "setup_nonce=$setupNonce"),
                 [Text.Encoding]::Unicode)
         }
         Assert-NipatInstallLayout $layout -CheckExisting

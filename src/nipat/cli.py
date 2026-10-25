@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import sys
 from pathlib import Path
 
 from nipat import __version__
+from nipat.activity import activity_session
 from nipat.errors import NipatError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
@@ -109,8 +111,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("self-test richiede l'esecuzione reale; rimuovere --dry-run")
     completion_label = "Esecuzione pianificata" if args.dry_run else "Esecuzione completata"
 
+    activity = ExitStack()
     try:
         layout = ProjectLayout.discover(data_dir=args.data_dir, runs_dir=args.runs_dir)
+        activity.enter_context(activity_session(project_dir=layout.project_dir))
         runner = DockerComposeRunner(layout, dry_run=args.dry_run)
         workflows = Workflows(layout, runner)
         if args.command == "doctor":
@@ -180,6 +184,8 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nEsecuzione interrotta.", file=sys.stderr)
         return 130
+    finally:
+        activity.close()
     return 0
 
 

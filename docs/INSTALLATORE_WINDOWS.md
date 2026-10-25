@@ -154,6 +154,22 @@ disabilitato. Il launcher ne controlla il legame con il manifest installato.
 
 ## Aggiornamento e riparazione
 
+Dal menu **9 — Verifica aggiornamenti** è possibile scaricare l'installatore
+completo di una release approvata. Il download verifica dimensione e SHA-256;
+l'avvio del setup richiede una seconda conferma e la chiusura della sessione
+corrente. Un avviso automatico non modifica i file installati e non interrompe
+analisi. Il setup usa gli stessi controlli della prima installazione e
+l'applicazione viene riaperta soltanto dopo la preparazione verificata del runtime.
+Le preferenze del menu, i percorsi configurati, dati e risultati vengono conservati.
+La [guida per l'utilizzo](GUIDA_UTILIZZO.md#aggiornamenti) descrive canali e conferme.
+
+Se altre sessioni NIPAT sono aperte, l'aggiornamento viene fermato senza
+terminarle: chiuderle al termine del lavoro e riprovare. Il passaggio al setup
+conserva `handoff.log` e, in caso di errore, `error.txt` nella sottocartella
+`updates\handoff-*` della cache configurata. Se Windows richiede un riavvio,
+completare poi la preparazione dal collegamento nel menu Start; la sola
+conclusione della copia dei file non autorizza le analisi.
+
 Il setup riutilizza la cartella di NIPAT Desktop riconosciuta, conservando i
 percorsi selezionati. Un inventario dei file distribuiti distingue i componenti
 gestiti dall'installatore dai file aggiunti dall'utente. Prima di sovrascrivere

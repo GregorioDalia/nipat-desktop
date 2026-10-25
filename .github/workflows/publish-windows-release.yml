@@ -1,4 +1,4 @@
-name: Publish verified pre-release
+name: Publish verified release
 
 on:
   workflow_dispatch:
@@ -15,12 +15,20 @@ on:
         description: Existing draft release ID to resume (optional)
         required: false
         type: string
+      channel:
+        description: Update channel (testing for domain-validation releases)
+        required: true
+        default: testing
+        type: choice
+        options:
+          - testing
+          - stable
 
 permissions:
   contents: read
 
 concurrency:
-  group: publish-nipat-prerelease
+  group: publish-nipat-release
   cancel-in-progress: false
 
 jobs:
@@ -43,13 +51,14 @@ jobs:
           python-version: '3.12.10'
       - name: Test release guards
         run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
-      - name: Verify joint build and committed desktop acceptance, then publish pre-release
+      - name: Verify joint build and committed desktop acceptance, then publish selected channel
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN_ID: ${{ inputs.run_id }}
           BUILD_SOURCE_COMMIT: ${{ inputs.source_commit }}
           DRAFT_RELEASE_ID: ${{ inputs.draft_release_id }}
+          RELEASE_CHANNEL: ${{ inputs.channel }}
         run: |
           python .github/scripts/publish_windows_release.py \
             --run-id "$BUILD_RUN_ID" --source-commit "$BUILD_SOURCE_COMMIT" \
-            --draft-release-id "$DRAFT_RELEASE_ID"
+            --draft-release-id "$DRAFT_RELEASE_ID" --channel "$RELEASE_CHANNEL"

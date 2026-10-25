@@ -314,6 +314,18 @@ class LinuxLauncherTests(unittest.TestCase):
             self.assertEqual(launcher.main(["doctor"]), 1)
             prompt.assert_not_called()
 
+    def test_update_handoff_exits_without_desktop_pause(self):
+        with patch.object(launcher, "launch", return_value=85), \
+                patch.object(launcher.sys.stdin, "isatty", return_value=True), \
+                patch("builtins.input") as prompt:
+            self.assertEqual(launcher.main(["--desktop"]), 0)
+        prompt.assert_not_called()
+
+    def test_child_receives_real_launcher_pid_not_inherited_value(self):
+        environment = launcher.clean_environment(self.app, self.data, self.state,
+                                                   {"NIPAT_LAUNCHER_PID": "1"})
+        self.assertEqual(environment["NIPAT_LAUNCHER_PID"], str(os.getpid()))
+
     @unittest.skipUnless(sys.platform == "linux", "Linux file locking")
     def test_concurrent_setup_fails_without_modifying_existing_state(self):
         self.state.mkdir(parents=True)

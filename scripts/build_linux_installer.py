@@ -30,6 +30,7 @@ PACKAGE = "nipat-desktop"
 COMMAND = "nipat"
 APP_PATH = Path("opt") / PACKAGE
 LAUNCH_SOURCE = "installer/linux/launch.py"
+ACTIVITY_DIRECTORY = "/var/lib/nipat-desktop"
 ICON_SOURCE = "assets/branding/nipat-symbol.svg"
 BUILD_RECORD = "linux-installer-build.json"
 DEPENDENCIES = (
@@ -113,7 +114,11 @@ def generated_files(manifest: dict, manifest_bytes: bytes) -> dict[str, tuple[by
         "runtime": {"image_id": manifest["runtime_image"]},
         "distribution": "native-linux-deb",
     }
-    launcher = ("#!/bin/sh\nexec /usr/bin/python3.12 -I "
+    launcher = ("#!/bin/sh\n"
+                "exec 9</var/lib/nipat-desktop/activity.lock || { echo 'NIPAT: reinstallare il pacchetto.' >&2; exit 1; }\n"
+                "/usr/bin/flock --shared --nonblock 9 || { echo 'NIPAT: aggiornamento in corso.' >&2; exit 1; }\n"
+                "test ! -e /var/lib/nipat-desktop/update-in-progress || { echo 'NIPAT: aggiornamento incompleto; completare la configurazione del pacchetto.' >&2; exit 1; }\n"
+                "exec /usr/bin/python3.12 -I "
                 f"/{APP_PATH.as_posix()}/{LAUNCH_SOURCE} \"$@\"\n")
     desktop = (
         "[Desktop Entry]\nType=Application\nName=NIPAT Desktop\n"
@@ -144,13 +149,54 @@ def control_bytes(manifest: dict, installed_kib: int) -> bytes:
         f"Package: {PACKAGE}\nVersion: {debian_version(manifest['version'])}\n"
         "Section: science\nPriority: optional\nArchitecture: amd64\n"
         "Maintainer: NIPAT contributors\n"
-        f"Installed-Size: {installed_kib}\nDepends: {DEPENDENCIES}\n"
+        f"Installed-Size: {installed_kib}\nPre-Depends: util-linux\nDepends: {DEPENDENCIES}\n"
         "Homepage: https://github.com/GregorioDalia/nipat-desktop\n"
         "Description: NIPAT Desktop scientific CLI for Ubuntu 24.04 LTS\n"
         " Includes the verified scientific image for local Docker Engine execution.\n"
         " Requires explicit user access to a compatible local Docker daemon.\n"
         " This package does not configure Docker permissions or modify user data.\n"
     ).encode("utf-8")
+
+
+def maintainer_scripts() -> dict[str, bytes]:
+    """Coordinate dpkg transactions with all installed NIPAT sessions.
+
+    The root-owned marker bridges preinst/prerm and postinst: flock alone would
+    be released before dpkg unpacks files. The inode is intentionally retained
+    after removal so existing readers can never lock an obsolete replacement.
+    A failed transaction remains blocked until package configuration succeeds.
+    """
+    common = """#!/bin/sh
+set -eu
+umask 022
+state=/var/lib/nipat-desktop
+if [ -L "$state" ]; then echo 'NIPAT: unsafe package state directory.' >&2; exit 1; fi
+if [ ! -e "$state" ]; then mkdir -m 0755 "$state"; fi
+if [ ! -d "$state" ] || [ "$(stat -c %u "$state")" != 0 ] || [ "$(stat -c %a "$state")" != 755 ]; then
+    echo 'NIPAT: invalid package state ownership or permissions.' >&2; exit 1
+fi
+lock="$state/activity.lock"
+marker="$state/update-in-progress"
+if [ -L "$lock" ] || [ -L "$marker" ]; then echo 'NIPAT: unsafe package state file.' >&2; exit 1; fi
+if [ ! -e "$lock" ]; then (set -C; : > "$lock"); fi
+if [ ! -f "$lock" ] || [ "$(stat -c %u "$lock")" != 0 ] || [ "$(stat -c %a "$lock")" != 644 ]; then
+    echo 'NIPAT: invalid activity lock.' >&2; exit 1
+fi
+if [ -e "$marker" ] && { [ ! -f "$marker" ] || [ "$(stat -c %u "$marker")" != 0 ]; }; then
+    echo 'NIPAT: invalid update marker.' >&2; exit 1
+fi
+exec 9<"$lock"
+if ! /usr/bin/flock --exclusive --nonblock 9; then
+    echo 'NIPAT: close every NIPAT session and wait for analyses to finish, then retry the package operation.' >&2
+    exit 1
+fi
+"""
+    return {
+        "preinst": (common + "case \"$1\" in install|upgrade) : > \"$marker\";; esac\n").encode(),
+        "prerm": (common + "case \"$1\" in remove|upgrade|deconfigure) : > \"$marker\";; esac\n").encode(),
+        "postinst": (common + "case \"$1\" in configure) rm -f -- \"$marker\";; esac\n").encode(),
+        "postrm": (common + "case \"$1\" in remove|purge) rm -f -- \"$marker\";; esac\n").encode(),
+    }
 
 
 def stage_package(project: Path, stage: Path, manifest: dict, manifest_bytes: bytes,
@@ -173,6 +219,8 @@ def stage_package(project: Path, stage: Path, manifest: dict, manifest_bytes: by
         raise ValueError("Archivio scientifico cambiato durante la preparazione.")
     installed_kib = (sum(path.stat().st_size for path in stage.rglob("*") if path.is_file()) + 1023) // 1024
     write_file(stage / "DEBIAN/control", control_bytes(manifest, installed_kib))
+    for name, contents in maintainer_scripts().items():
+        write_file(stage / "DEBIAN" / name, contents, executable=True)
     # A restrictive builder umask must not produce unreadable installation paths.
     stage.chmod(0o755)
     for path in stage.rglob("*"):
@@ -250,9 +298,14 @@ def verify_package(package: Path, manifest_path: Path, project: Path) -> dict:
     verify_tar(package, "--fsys-tarfile", expected)
     installed_kib = (sum(size for _, size, _ in expected.values()) + 1023) // 1024
     control = control_bytes(manifest, installed_kib)
-    verify_tar(package, "--ctrl-tarfile", {
+    expected_controls = {
         "control": (hashlib.sha256(control).hexdigest(), len(control), 0o644),
+    }
+    expected_controls.update({
+        name: (hashlib.sha256(contents).hexdigest(), len(contents), 0o755)
+        for name, contents in maintainer_scripts().items()
     })
+    verify_tar(package, "--ctrl-tarfile", expected_controls)
     return {
         "schema_version": 1,
         "distribution": "native-linux-deb",

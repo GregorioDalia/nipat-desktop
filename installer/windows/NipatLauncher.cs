@@ -96,7 +96,7 @@ internal static class NipatLauncher
             Console.Error.WriteLine("Avvio NIPAT non riuscito: " + error.Message);
             code = 1;
         }
-        if (code != 0 && ownConsole) {
+        if (code != 0 && code != 85 && ownConsole) {
             Console.Error.WriteLine("NIPAT si e' chiuso con codice " + code + ". Consultare il messaggio precedente.");
             Console.WriteLine("Premere un tasto per chiudere questa finestra.");
             try { Console.ReadKey(true); } catch (InvalidOperationException) { }

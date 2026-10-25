@@ -169,8 +169,14 @@ class Preferences:
     data_dir: Path | None = None
     runs_dir: Path | None = None
     workflows: dict[str, dict[str, Any]] = field(default_factory=dict)
+    update_channel: str = "testing"
+    check_updates_on_startup: bool = False
 
     def __post_init__(self) -> None:
+        if not isinstance(self.update_channel, str) or self.update_channel not in {"stable", "testing"}:
+            raise ValidationError("Canale aggiornamenti non valido: scegliere stable o testing.")
+        if type(self.check_updates_on_startup) is not bool:
+            raise ValidationError("Il controllo aggiornamenti all'avvio deve essere attivo o disattivo.")
         for name in ("data_dir", "runs_dir"):
             value = getattr(self, name)
             if value is not None:
@@ -229,11 +235,13 @@ class Preferences:
         return {"schema_version": SCHEMA_VERSION,
                 "data_dir": str(self.data_dir) if self.data_dir is not None else None,
                 "runs_dir": str(self.runs_dir) if self.runs_dir is not None else None,
-                "workflows": workflows}
+                "workflows": workflows, "update_channel": self.update_channel,
+                "check_updates_on_startup": self.check_updates_on_startup}
 
     @classmethod
     def from_dict(cls, document: Any) -> "Preferences":
-        allowed = {"schema_version", "data_dir", "runs_dir", "workflows"}
+        allowed = {"schema_version", "data_dir", "runs_dir", "workflows",
+                   "update_channel", "check_updates_on_startup"}
         if (not isinstance(document, dict) or document.keys() - allowed
                 or type(document.get("schema_version")) is not int
                 or document["schema_version"] != SCHEMA_VERSION):
@@ -245,7 +253,9 @@ class Preferences:
                       for choice, values in workflows.items()}
         directories = {key: _path(value, key, stored=True) if value is not None else None
                        for key in ("data_dir", "runs_dir") if (value := document.get(key)) is not None}
-        return cls(**directories, workflows=normalized)
+        return cls(**directories, workflows=normalized,
+                   update_channel=document.get("update_channel", "testing"),
+                   check_updates_on_startup=document.get("check_updates_on_startup", False))
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

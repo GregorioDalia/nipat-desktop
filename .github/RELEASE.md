@@ -146,8 +146,11 @@ dalla conservazione degli artefatti Actions.
 
 ## Protezioni della pubblicazione
 
-Il workflow **Publish verified pre-release** è esclusivamente manuale e
-opera su `main`. Richiede l’ID della build e il suo commit completo. Per la
+Il workflow **Publish verified release** è esclusivamente manuale e
+opera su `main`. Richiede l'ID della build, il suo commit completo e il canale
+`testing` o `stable`. `testing` è predefinito e pubblica una pre-release;
+`stable` pubblica una release stabile e accetta soltanto versioni numeriche
+`MAJOR.MINOR.PATCH`. La scelta del canale non modifica i requisiti di accettazione. Per la
 0.6, avviare manualmente **Installers (review build)** su un commit
 revisionato di questo repository: può essere il branch di sviluppo, così
 che le prove e l’accettazione precedano l’integrazione in `main`.
@@ -170,15 +173,33 @@ La procedura:
 4. usa le note `docs/RELEASE_<versione>.md` del commit compilato;
 5. crea una bozza sul commit verificato e carica gli asset;
 6. verifica dimensioni e digest restituiti da GitHub;
-7. pubblica soltanto come **Pre-release**, senza indicare **Latest**.
+7. pubblica come pre-release per `testing` o release stabile per `stable`,
+   senza indicare **Latest**.
 
 La verifica comprende il contenuto del `.deb`, l’evidenza di compilazione
 dell’EXE, gli archivi incorporati e le prove Linux. Non ricompila
 applicazione o immagine. La release conserva i due installatori, il manifest
 comune, gli archivi runtime, le evidenze di costruzione e prova,
-`desktop-acceptance.json`, `release-provenance.json` e `SHA256SUMS`.
+`desktop-acceptance.json`, `release-provenance.json`, `update-manifest.json`
+e `SHA256SUMS`.
 Per l’installazione ordinaria l’utente scarica soltanto l’EXE o il `.deb`
 della propria piattaforma; gli altri file servono alla verifica e al recupero.
+
+### Manifest per l'aggiornatore
+
+`update-manifest.json` viene generato soltanto dopo la verifica degli installatori
+e dell'accettazione. Lo schema 1 identifica `product: nipat-desktop`, versione,
+tag, commit sorgente, canale e `minimum_updater_version: 1`. Contiene esattamente
+l'EXE Windows e il `.deb` Linux della coppia approvata, ciascuno con nome atteso,
+piattaforma, dimensione, SHA-256 e URL ufficiale della stessa release.
+Il suo digest viene incluso in `SHA256SUMS`.
+
+Il client confronta manifest, release e commit del tag prima di proporre il
+download, quindi verifica i byte scaricati. I canali dell'applicazione selezionano
+le sole release pubblicate: `testing` include pre-release e stabili, `stable`
+include soltanto le stabili. Bozze e artefatti Actions non vengono proposti.
+Questa procedura non firma i pacchetti: la fiducia nelle informazioni pubblicate
+si basa su HTTPS e sul repository ufficiale, distinta da Authenticode.
 
 L’esito automatico del set, con
 `publication_authorized: false`, resta distinto dall’accettazione umana;

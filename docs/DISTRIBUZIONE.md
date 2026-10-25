@@ -195,6 +195,29 @@ L'installazione Python non include l'immagine scientifica. Un archivio
 non un installatore autonomo. L'esecuzione da sorgenti richiede competenze
 nell'amministrazione di Python e Docker.
 
+## Aggiornamenti dall'applicazione
+
+Il menu **Verifica aggiornamenti** usa esclusivamente le release pubblicate
+del repository ufficiale, con manifest di aggiornamento coerente con il
+prodotto, la versione, il commit e la piattaforma. Il manifest viene prodotto
+dalla procedura di pubblicazione soltanto dopo la verifica della coppia di
+installatori e del record di accettazione. Le build Actions e le bozze non
+sono distribuite attraverso questo canale.
+
+`testing`, predefinito, comprende pre-release e release stabili approvate;
+`stable` comprende soltanto le stabili. Il numero della versione non sostituisce
+la scelta esplicita del canale. La verifica all'avvio è facoltativa, disattivata
+inizialmente e solo informativa. Download e installazione sono operazioni
+separate, ciascuna confermata dall'utente, e riguardano l'installatore completo.
+
+Il download controlla dimensione e SHA-256 prima dell'utilizzo. Queste verifiche
+si basano su HTTPS e sulle risorse del repository ufficiale; non costituiscono
+una firma digitale del software. L'aggiornamento riusa le procedure documentate
+di installazione, preserva percorsi, preferenze e dati e richiede la verifica
+del runtime prima di nuove analisi. Non è un aggiornamento automatico di Windows,
+WSL o Docker Engine di sistema. Le analisi già registrate conservano la versione
+utilizzata e l'installazione pronta resta utilizzabile senza connessione.
+
 ## Integrità e verifica del pacchetto
 
 Una distribuzione deve associare versione, commit, manifest degli asset e

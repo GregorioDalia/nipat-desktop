@@ -123,6 +123,12 @@ jobs:
       - name: Test executable and script launchers with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
+      - name: Test update handoff and active-session protection
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-update-handoff.ps1
+      - name: Test standalone setup and removal activity leases
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-activity-lock.ps1
       - name: Retain the tested shared launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

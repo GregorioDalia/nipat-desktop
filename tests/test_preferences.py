@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from contextlib import chdir, redirect_stdout
+from dataclasses import replace
 from unittest.mock import Mock, patch
 
 from nipat.cli import DEFAULT_ERR_CONST, main
@@ -48,6 +49,25 @@ class PreferencesTests(unittest.TestCase):
         self.assertFalse(self.store.path.parent.exists())
         self.assertFalse(self.layout.data_dir.exists())
         self.assertFalse(self.layout.runs_dir.exists())
+
+    def test_update_preferences_are_opt_in_and_backward_compatible(self):
+        self.write_document({"schema_version": 1, "workflows": {}})
+        initial = self.store.load()
+        self.assertEqual(initial.update_channel, "testing")
+        self.assertFalse(initial.check_updates_on_startup)
+        changed = replace(initial, update_channel="stable", check_updates_on_startup=True)
+        self.store.save(changed)
+        self.assertEqual(PreferencesStore(self.store.path).load(), changed)
+        self.store.reset()
+        self.assertFalse(self.store.load().check_updates_on_startup)
+
+    def test_invalid_update_preferences_are_not_silently_enabled(self):
+        for fields in ({"update_channel": "nightly"}, {"update_channel": None},
+                       {"check_updates_on_startup": 1}, {"check_updates_on_startup": "false"}):
+            with self.subTest(fields=fields):
+                self.write_document({"schema_version": 1, **fields})
+                with self.assertRaises(ValidationError):
+                    self.store.load()
 
     def test_preferences_survive_a_new_store_and_working_directory(self):
         panel = self.root / "pannello con spazi é.txt"

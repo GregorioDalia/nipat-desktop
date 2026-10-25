@@ -228,13 +228,45 @@ class ReleaseGuards(unittest.TestCase):
         self.assertIn("NIPAT-Setup.exe", digests)
         self.assertIn(parts[2]["linux"]["file"], digests)
         for name in ("installer-set-check.json", "desktop-acceptance.json", "linux-dependency-check.json",
-                     "linux-installation-check.json", "release-provenance.json"):
+                     "linux-installation-check.json", "release-provenance.json", "update-manifest.json"):
             self.assertIn(name, digests)
             self.assertEqual(publisher.sha256(self.root / "release" / name), digests[name])
         provenance = json.loads((self.root / "release/release-provenance.json").read_text())
         self.assertEqual(provenance["source_commit"], COMMIT)
         self.assertEqual(provenance["publication_commit"], "b" * 40)
         self.assertFalse(any("DockerDesktop" in name for name in digests))
+        update = json.loads((self.root / "release/update-manifest.json").read_text())
+        self.assertEqual(update["product"], "nipat-desktop")
+        self.assertEqual(update["channel"], "testing")
+        self.assertEqual(update["source_commit"], COMMIT)
+        self.assertEqual(update["minimum_updater_version"], 1)
+        self.assertEqual({asset["platform"] for asset in update["assets"]},
+                         {"windows-x86_64", "linux-x86_64"})
+        for asset in update["assets"]:
+            self.assertEqual(asset["sha256"], digests[asset["name"]])
+            self.assertEqual(asset["size"], (self.root / "release" / asset["name"]).stat().st_size)
+            self.assertEqual(asset["url"],
+                f"https://github.com/{publisher.REPO}/releases/download/v0.6.0/{asset['name']}")
+
+    def test_update_manifest_rejects_replaced_package_after_pair_verification(self):
+        parts = self.joint_fixture()
+        self.prepare_joint(*parts)
+        (self.root / "release/NIPAT-Setup.exe").write_bytes(b"different installer")
+        with self.assertRaisesRegex(ValueError, "differs from the accepted build"):
+            publisher.write_update_manifest(self.root / "release", self.manifest, parts[2], "testing")
+
+    def test_update_manifest_requires_both_matching_source_and_installer_name(self):
+        parts = self.joint_fixture()
+        self.prepare_joint(*parts)
+        for field, value in (("source_commit", "f" * 40), ("version", "0.7.0")):
+            altered = copy.deepcopy(parts[2])
+            altered[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "source differs"):
+                publisher.write_update_manifest(self.root / "release", self.manifest, altered, "testing")
+        altered = copy.deepcopy(parts[2])
+        altered["linux"]["file"] = "../foreign.deb"
+        with self.assertRaisesRegex(ValueError, "filename"):
+            publisher.write_update_manifest(self.root / "release", self.manifest, altered, "testing")
 
     def test_joint_assets_reject_changed_pair_record_before_staging(self):
         parts = self.joint_fixture()
@@ -784,6 +816,23 @@ class ReleaseGuards(unittest.TestCase):
         release["prerelease"] = False
         with self.assertRaisesRegex(ValueError, "draft pre-release"):
             publisher.verify_uploaded(release, {}, COMMIT, "v0.4.0", "Domain validation", complete=True)
+
+    def test_stable_channel_is_explicit_and_cannot_publish_a_prerelease_version(self):
+        payload = self.root / "create.json"
+        with patch.object(publisher, "command", return_value='{"id": 12345}') as command:
+            with self.assertRaisesRegex(ValueError, "pre-release version"):
+                publisher.create_draft("v0.6.0rc1", "0.6.0rc1", COMMIT, "notes", payload,
+                                       channel="stable")
+            command.assert_not_called()
+            publisher.create_draft("v0.6.0", "0.6.0", COMMIT, "notes", payload, channel="stable")
+        sent = json.loads(payload.read_text())
+        self.assertFalse(sent["prerelease"])
+        self.assertEqual(sent["make_latest"], "false")
+        publisher.verify_uploaded(dict(sent, assets=[]), {}, COMMIT, "v0.6.0", "notes",
+                                  complete=True, channel="stable")
+        with self.assertRaisesRegex(ValueError, "selected channel"):
+            publisher.verify_uploaded(dict(sent, assets=[]), {}, COMMIT, "v0.6.0", "notes",
+                                      complete=True, channel="testing")
 
 
 if __name__ == "__main__":

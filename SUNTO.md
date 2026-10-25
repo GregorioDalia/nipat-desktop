@@ -44,6 +44,12 @@ sono funzioni separate. Le preferenze non cambiano la CLI diretta. Gli input
 possono restare nelle cartelle originali e vengono letti senza modificarli.
 Su Windows sono supportati dischi locali fissi.
 
+**Verifica aggiornamenti** propone gli installatori completi delle versioni
+pubblicate e approvate su GitHub. Download e installazione sono scelte esplicite;
+si può rimandare e continuare a lavorare. Il canale iniziale è `testing`, che
+include pre-release e versioni stabili; `stable` considera solo le stabili.
+L'eventuale verifica all'avvio è disattivata inizialmente e mostra solo un avviso.
+
 Ogni analisi crea un nuovo run con risultati in `output`, intermedi conservati
 in `work`, metadati in `run.json` e messaggi in `execution.log`. Le cartelle
 esistenti non vengono sovrascritte. Per concatenare analisi si selezionano i

@@ -56,7 +56,10 @@ attivo. Conservare il run e usare un nuovo nome per ripetere l'analisi.
 `run.json` registra workflow, parametri, input, data e ora UTC, versione
 Python, sorgenti del client e informazioni Git o della release quando
 disponibili. `source.role = client` distingue l'identità applicativa da
-quella scientifica.
+quella scientifica. `source.nipat_version` registra la versione del client
+utilizzata per quel run. Un aggiornamento dell'applicazione non riscrive i
+record precedenti: confrontare versione, parametri e identità del motore prima
+di attribuire differenze tra analisi a un aggiornamento.
 
 `runtime.engine` identifica script R e moduli di preparazione presenti
 nell'immagine. NIPAT verifica il manifest incorporato e l'interfaccia del

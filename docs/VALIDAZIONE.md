@@ -28,6 +28,7 @@ e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
 | Esito di `doctor --runtime` | |
 | Esito finale di `self-test` | |
 | Apertura e interazione con il menu | |
+| Aggiornamenti: canale, verifica all'avvio e versione proposta, se presente | |
 | Preferenze salvate in Configura e valori effettivi nel riepilogo dell'analisi | |
 
 Nel pacchetto Windows verificare l'avvio con doppio clic di `NIPAT-Setup.exe`,
@@ -129,6 +130,19 @@ Un valore `NA` in assenza di siti informativi può essere corretto.
 Per DNPcall verificare anche gli output, poiché lo script R non propaga
 esplicitamente tutti gli errori della propria chiamata interna a samtools.
 Gli stati e i limiti dei record sono descritti in [ESECUZIONI.md](ESECUZIONI.md).
+
+## Verifica degli aggiornamenti
+
+Documentare separatamente ricerca, download, installazione e riapertura.
+Provare **Più tardi**, una connessione assente e un file scaricato non valido;
+l'installazione pronta e i run esistenti devono restare utilizzabili e invariati.
+La verifica facoltativa all'avvio deve essere soltanto informativa.
+
+Per un aggiornamento effettivo, conservare versioni iniziale e finale, checksum
+degli installatori e log. Verificare le preferenze e i percorsi dopo la riapertura,
+quindi eseguire un caso noto. I record dei run devono identificare le versioni
+con cui sono stati prodotti. Le prove tecniche complete sono nel
+[protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md#verifiche-degli-aggiornamenti).
 
 ## Conservazione e segnalazioni
 

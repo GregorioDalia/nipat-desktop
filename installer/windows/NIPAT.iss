@@ -36,7 +36,7 @@ WizardStyle=modern
 SetupIconFile={#StageDir}\app\assets\branding\nipat-icon.ico
 UninstallDisplayName={#NipatDisplayName} {#NipatVersion}
 UninstallDisplayIcon={app}\assets\branding\nipat-icon.ico
-CloseApplications=yes
+CloseApplications=no
 RestartApplications=no
 
 [Files]
@@ -101,9 +101,37 @@ var
   LayoutHelpersExtracted: Boolean;
   ApplicationKind: String;
   ProposedParent: String;
+  ActivityLock: THandle;
+  SetupLeaseEvent: THandle;
+  SetupNonce: String;
+  GuidedUpdateProject: String;
 
 function NipatGetDriveType(RootPath: String): Cardinal;
   external 'GetDriveTypeW@kernel32.dll stdcall';
+
+function NipatCreateFile(FileName: String; DesiredAccess, ShareMode: Cardinal;
+  SecurityAttributes: NativeUInt; CreationDisposition, Flags: Cardinal;
+  TemplateFile: THandle): THandle;
+  external 'CreateFileW@kernel32.dll stdcall';
+
+function NipatCloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function NipatCreateEvent(SecurityAttributes: NativeUInt; ManualReset, InitialState: Boolean;
+  Name: String): THandle;
+  external 'CreateEventW@kernel32.dll stdcall';
+
+function NipatGetLastError(): Cardinal;
+  external 'GetLastError@kernel32.dll stdcall';
+
+function NipatGetCurrentProcessId(): Cardinal;
+  external 'GetCurrentProcessId@kernel32.dll stdcall';
+
+function NipatSetEnvironmentVariable(Name, Value: String): Boolean;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
+
+function NipatDeleteEnvironmentVariable(Name: String; Value: NativeUInt): Boolean;
+  external 'SetEnvironmentVariableW@kernel32.dll stdcall';
 
 function NipatRememberedPath(Name, DefaultPath: String): String;
 begin
@@ -140,7 +168,8 @@ end;
 
 function CanLaunchNipat(): Boolean;
 begin
-  Result := BootstrapCompleted and (BootstrapResult = 0) and not WslRebootRequired;
+  Result := BootstrapCompleted and (BootstrapResult = 0) and not WslRebootRequired and
+    (ExpandConstant('{param:NIPATUPDATE|}') <> '1');
 end;
 
 function InitializeSetup(): Boolean;
@@ -172,6 +201,94 @@ begin
     if CompareText(Parent, Path) = 0 then Exit;
     Path := Parent;
   end;
+end;
+
+procedure ReleaseNipatChildLease;
+begin
+  NipatDeleteEnvironmentVariable('NIPAT_SETUP_ACTIVITY_TOKEN', 0);
+  if SetupLeaseEvent <> 0 then begin
+    NipatCloseHandle(SetupLeaseEvent);
+    SetupLeaseEvent := 0;
+  end;
+  SetupNonce := '';
+end;
+
+procedure ReleaseNipatActivityLock;
+begin
+  ReleaseNipatChildLease;
+  if ActivityLock <> 0 then begin
+    NipatCloseHandle(ActivityLock);
+    ActivityLock := 0;
+  end;
+end;
+
+function AcquireNipatActivityLock(): String;
+var
+  LockPath, LockDirectory: String;
+  ErrorCode: Cardinal;
+begin
+  Result := '';
+  if ActivityLock <> 0 then Exit;
+  LockPath := ExpandConstant('{localappdata}\NIPAT-Desktop\activity.lock');
+  LockDirectory := ExtractFileDir(LockPath);
+  if NipatPathHasReparsePoint(LockPath) or not ForceDirectories(LockDirectory) or
+    NipatPathHasReparsePoint(LockPath) then begin
+    Result := 'Impossibile verificare le sessioni NIPAT: la cartella di coordinamento non e accessibile o attraversa un collegamento.';
+    Exit;
+  end;
+  { No sharing and no inheritable handle: sessions hold compatible shared read handles. }
+  ActivityLock := NipatCreateFile(LockPath, $80000000, 0, 0, 4, $80, 0);
+  ErrorCode := NipatGetLastError;
+  if ActivityLock = NativeUInt(-1) then begin
+    ActivityLock := 0;
+    if (ErrorCode = 32) or (ErrorCode = 33) then
+      Result := 'NIPAT e ancora in uso. Attendere il termine delle analisi e chiudere tutte le finestre NIPAT, quindi riprovare. Nessuna sessione viene interrotta.'
+    else
+      Result := 'Impossibile ottenere l''accesso esclusivo a NIPAT (errore Windows ' + IntToStr(ErrorCode) + '). Nessun file viene modificato.';
+  end;
+end;
+
+function CreateNipatSetupLease(): String;
+var
+  I: Integer;
+  ErrorCode: Cardinal;
+begin
+  Result := '';
+  if ActivityLock = 0 then begin
+    Result := 'Il coordinamento delle sessioni NIPAT non e attivo.';
+    Exit;
+  end;
+  if SetupLeaseEvent <> 0 then begin
+    NipatCloseHandle(SetupLeaseEvent);
+    SetupLeaseEvent := 0;
+  end;
+  if Length(SetupNonce) <> 32 then begin
+    Result := 'Identificativo temporaneo della preparazione non valido.';
+    Exit;
+  end;
+  for I := 1 to Length(SetupNonce) do
+    if Pos(SetupNonce[I], '0123456789abcdef') = 0 then begin
+      Result := 'Identificativo temporaneo della preparazione non valido.';
+      Exit;
+    end;
+  SetupLeaseEvent := NipatCreateEvent(0, True, False,
+    'Local\NIPAT-Desktop-SetupLease-' + SetupNonce);
+  ErrorCode := NipatGetLastError;
+  if (SetupLeaseEvent = 0) or (ErrorCode = 183) then begin
+    if SetupLeaseEvent <> 0 then NipatCloseHandle(SetupLeaseEvent);
+    SetupLeaseEvent := 0;
+    Result := 'Impossibile creare il coordinamento temporaneo della preparazione NIPAT. Riprovare.';
+  end;
+end;
+
+procedure DeinitializeSetup;
+begin
+  ReleaseNipatActivityLock;
+end;
+
+procedure DeinitializeUninstall;
+begin
+  ReleaseNipatActivityLock;
 end;
 
 function NipatTreeHasReparsePoint(Path: String): Boolean;
@@ -249,7 +366,8 @@ begin
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\Programs\NIPAT-0.5-Preview')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-0.5-Preview')) or
-     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Desktop\preferences.json')) then begin
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Desktop\preferences.json')) or
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Desktop\activity.lock')) then begin
     Result := LabelText + ': scegliere una cartella separata da Windows, Program Files e dalle altre installazioni NIPAT.';
     Exit;
   end;
@@ -264,6 +382,11 @@ var
   I, J: Integer;
 begin
   Result := '';
+  if (GuidedUpdateProject <> '') and
+    (CompareText(RemoveBackslashUnlessRoot(ExpandFileName(WizardDirValue)), GuidedUpdateProject) <> 0) then begin
+    Result := 'L''aggiornamento deve mantenere la cartella dell''applicazione da cui e stato avviato: ' + GuidedUpdateProject;
+    Exit;
+  end;
   SetArrayLength(Paths, 5);
   SetArrayLength(Labels, 5);
   Paths[0] := WizardDirValue;
@@ -407,6 +530,7 @@ var
 begin
   Result := '';
   ApplicationKind := '';
+  SetupNonce := '';
   LayoutFile := ExpandConstant('{tmp}\nipat-layout-selection.json');
   ErrorFile := ExpandConstant('{tmp}\nipat-layout-error.txt');
   InfoFile := ExpandConstant('{tmp}\nipat-layout-info.ini');
@@ -424,6 +548,8 @@ begin
       Parameters, ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, ValidationResult) then
       ValidationResult := 1;
     ApplicationKind := GetIniString('NIPAT', 'kind', '', InfoFile);
+    if ValidationResult = 0 then
+      SetupNonce := GetIniString('NIPAT', 'setup_nonce', '', InfoFile);
     if ValidationResult <> 0 then
       Result := NipatReadValidationError(ErrorFile,
         'Impossibile verificare le cartelle selezionate. Nessun file viene copiato. ' +
@@ -467,7 +593,8 @@ begin
   ApplicationKind := '';
   MessageText := NipatValidateSelection;
   if MessageText = '' then MessageText := NipatValidateWithSharedRules;
-  if (MessageText <> '') and (ApplicationKind = 'unknown') and not WizardSilent then begin
+  if (GuidedUpdateProject = '') and (MessageText <> '') and
+    (ApplicationKind = 'unknown') and not WizardSilent then begin
     ParentPath := WizardDirValue;
     ChildPath := AddBackslash(ParentPath) + '{#NipatAppDirectory}';
     if (CompareText(ProposedParent, ParentPath) <> 0) and
@@ -488,6 +615,12 @@ begin
     MsgBox(MessageText + #13#10#13#10 + 'Usa Indietro per modificare la cartella applicativa.', mbError, MB_OK);
     Result := False;
   end;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  { The updater reopens this exact application after setup; it cannot relocate the app. }
+  Result := (GuidedUpdateProject <> '') and (PageID = wpSelectDir);
 end;
 
 function NipatPrepareApplication(): String;
@@ -533,11 +666,19 @@ end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
-  Result := NipatValidateSelection;
-  if (Result = '') and (CompareText(WizardGroupValue, '{#NipatDisplayName}') <> 0) then
-    Result := 'Il gruppo Start di NIPAT Desktop deve restare separato dalle altre installazioni. Riavviare senza /GROUP.';
-  if Result = '' then Result := NipatValidateWithSharedRules;
-  if Result = '' then Result := NipatPrepareApplication;
+  Result := AcquireNipatActivityLock;
+  if Result <> '' then Exit;
+  try
+    Result := NipatValidateSelection;
+    if (Result = '') and (CompareText(WizardGroupValue, '{#NipatDisplayName}') <> 0) then
+      Result := 'Il gruppo Start di NIPAT Desktop deve restare separato dalle altre installazioni. Riavviare senza /GROUP.';
+    if Result = '' then Result := NipatValidateWithSharedRules;
+    if Result = '' then Result := CreateNipatSetupLease;
+    if Result = '' then Result := NipatPrepareApplication;
+  except
+    Result := 'Preparazione NIPAT non completata: ' + GetExceptionMessage;
+  end;
+  if Result <> '' then ReleaseNipatActivityLock;
 end;
 
 procedure ReadNipatPreviousDefaults(Project, DefaultsFile: String);
@@ -567,7 +708,7 @@ var
   Base, Project, DefaultsFile, Stored: String;
   Names, Defaults: TArrayOfString;
   I: Integer;
-  NeedPrevious: Boolean;
+  NeedPrevious, GuidedUpdate: Boolean;
 begin
   Base := ExpandConstant('{localappdata}\{#NipatDataDirectory}');
   SetArrayLength(Names, 4);
@@ -576,18 +717,29 @@ begin
   Names[1] := 'cache_dir'; Defaults[1] := AddBackslash(Base) + 'cache';
   Names[2] := 'data_dir'; Defaults[2] := AddBackslash(Base) + 'data';
   Names[3] := 'runs_dir'; Defaults[3] := AddBackslash(Base) + 'runs';
+  GuidedUpdate := ExpandConstant('{param:NIPATUPDATE|}') = '1';
+  Project := WizardDirValue;
+  if GuidedUpdate then begin
+    GuidedUpdateProject := RemoveBackslashUnlessRoot(ExpandFileName(Project));
+    WizardForm.DirEdit.Enabled := False;
+  end;
+  if GuidedUpdate and not FileExists(AddBackslash(Project) + '.runtime\install-layout.json') then
+    RaiseException('Il layout dell''applicazione da aggiornare non e disponibile. Riaprire il setup NIPAT per riparare l''installazione.');
   NeedPrevious := False;
   for I := 0 to 3 do
     if not RegQueryStringValue(HKCU, 'Software\NIPAT\desktop', Names[I], Stored) then
       NeedPrevious := True
     else if Trim(Stored) = '' then NeedPrevious := True;
-  Project := WizardDirValue;
-  if NeedPrevious and
+  if GuidedUpdate or (NeedPrevious and
     (FileExists(AddBackslash(Project) + '.runtime\install-layout.json') or
-     FileExists(AddBackslash(Project) + '.runtime\backend.json')) then begin
+     FileExists(AddBackslash(Project) + '.runtime\backend.json'))) then begin
     DefaultsFile := ExpandConstant('{tmp}\nipat-previous-paths.ini');
     ReadNipatPreviousDefaults(Project, DefaultsFile);
-    for I := 0 to 3 do Defaults[I] := GetIniString('NIPAT', Names[I], Defaults[I], DefaultsFile);
+    for I := 0 to 3 do begin
+      Defaults[I] := GetIniString('NIPAT', Names[I], '', DefaultsFile);
+      if Trim(Defaults[I]) = '' then
+        RaiseException('La configurazione precedente non contiene tutte le destinazioni. Nessun aggiornamento e stato applicato.');
+    end;
   end;
   StoragePage := CreateInputDirPage(wpSelectDir,
     'Cartelle di NIPAT', 'Scegli dove conservare ambiente di calcolo e analisi.',
@@ -598,28 +750,57 @@ begin
   StoragePage.Add('Cache dei componenti di installazione:');
   StoragePage.Add('Cartella dati predefinita:');
   StoragePage.Add('Cartella risultati predefinita:');
-  for I := 0 to 3 do StoragePage.Values[I] := NipatRememberedPath(Names[I], Defaults[I]);
+  for I := 0 to 3 do
+    if GuidedUpdate then
+      StoragePage.Values[I] := Defaults[I]
+    else
+      StoragePage.Values[I] := NipatRememberedPath(Names[I], Defaults[I]);
 end;
 
 function InitializeUninstall(): Boolean;
+var
+  MessageText: String;
 begin
   Result := not IsAdmin;
   if not Result then
     MsgBox('Eseguire la disinstallazione dal proprio account senza elevazione. ' +
       'L''ambiente WSL appartiene all''utente che ha installato NIPAT.', mbError, MB_OK);
+  if Result then begin
+    MessageText := AcquireNipatActivityLock;
+    Result := MessageText = '';
+    if not Result then MsgBox(MessageText, mbError, MB_OK);
+  end;
 end;
 
 procedure RemoveNipatRuntimeBeforeUninstall;
 var
-  CleanupResult: Integer;
-  Parameters: String;
+  CleanupResult, NonceResult: Integer;
+  Parameters, MessageText: String;
+  NonceOutput: TExecOutput;
 begin
-  Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
-    QuoteNipatArgument(ExpandConstant('{app}\installer\windows\uninstall-runtime.ps1')) +
-    ' -Project ' + QuoteNipatArgument(ExpandConstant('{app}'));
-  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-    Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, CleanupResult) then
-    CleanupResult := 1;
+  try
+    { Cleanup borrows this uninstaller's live exclusive lease rather than acquiring it twice. }
+    if not ExecAndCaptureOutput(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      '-NoLogo -NoProfile -Command "[Guid]::NewGuid().ToString(''N'')"', ExpandConstant('{app}'),
+      SW_HIDE, ewWaitUntilTerminated, NonceResult, NonceOutput) then
+      RaiseException('Impossibile preparare il coordinamento della rimozione NIPAT.');
+    if (NonceResult <> 0) or NonceOutput.Error or (GetArrayLength(NonceOutput.StdOut) <> 1) then
+      RaiseException('Impossibile ottenere l''identificativo temporaneo della rimozione NIPAT.');
+    SetupNonce := Trim(NonceOutput.StdOut[0]);
+    MessageText := CreateNipatSetupLease;
+    if MessageText <> '' then RaiseException(MessageText);
+    if not NipatSetEnvironmentVariable('NIPAT_SETUP_ACTIVITY_TOKEN',
+      IntToStr(NipatGetCurrentProcessId) + ':' + SetupNonce) then
+      RaiseException('Impossibile autorizzare la rimozione del runtime NIPAT.');
+    Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
+      QuoteNipatArgument(ExpandConstant('{app}\installer\windows\uninstall-runtime.ps1')) +
+      ' -Project ' + QuoteNipatArgument(ExpandConstant('{app}'));
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, CleanupResult) then
+      CleanupResult := 1;
+  finally
+    ReleaseNipatChildLease;
+  end;
   if CleanupResult <> 0 then
     RaiseException('La pulizia dell''ambiente non e stata completata. L''applicazione non viene rimossa, ' +
       'Consulta i log in ' + ExpandConstant('{localappdata}\{#NipatDataDirectory}\installations\logs') + '. ' +
@@ -633,17 +814,28 @@ var
   Started: Boolean;
 begin
   if CurStep = ssPostInstall then begin
-    WriteNipatInstallLayoutAt(ExpandConstant('{app}\.runtime\install-layout.json'));
-    AssetDir := ExpandConstant('{param:ASSETDIR|}');
-    Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
-      QuoteNipatArgument(ExpandConstant('{app}\installer\windows\bootstrap.ps1'));
-    if AssetDir <> '' then
-      Parameters := Parameters + ' -AssetDirectory ' + QuoteNipatArgument(AssetDir);
-    Started := ExecAsOriginalUser(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
-      Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, BootstrapResult);
-    if not Started then BootstrapResult := 1;
-    BootstrapCompleted := True;
-    WslRebootRequired := BootstrapResult = 3010;
+    BootstrapResult := 1;
+    try
+      WriteNipatInstallLayoutAt(ExpandConstant('{app}\.runtime\install-layout.json'));
+      AssetDir := ExpandConstant('{param:ASSETDIR|}');
+      Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
+        QuoteNipatArgument(ExpandConstant('{app}\installer\windows\bootstrap.ps1'));
+      if AssetDir <> '' then
+        Parameters := Parameters + ' -AssetDirectory ' + QuoteNipatArgument(AssetDir);
+      if (ActivityLock = 0) or (SetupLeaseEvent = 0) then
+        RaiseException('Coordinamento della preparazione NIPAT non disponibile.');
+      if not NipatSetEnvironmentVariable('NIPAT_SETUP_ACTIVITY_TOKEN',
+        IntToStr(NipatGetCurrentProcessId) + ':' + SetupNonce) then
+        RaiseException('Impossibile autorizzare gli autotest della preparazione NIPAT.');
+      { Setup is non-elevated; Exec preserves the lease owner's environment and ancestry. }
+      Started := Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+        Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, BootstrapResult);
+      if not Started then BootstrapResult := 1;
+      BootstrapCompleted := True;
+      WslRebootRequired := BootstrapResult = 3010;
+    finally
+      ReleaseNipatActivityLock;
+    end;
     if (BootstrapResult <> 0) and not WslRebootRequired then
       MsgBox('I file NIPAT sono installati, ma la preparazione non e'' completata. ' +
         'Apri "{#NipatDisplayName} - completa preparazione" dal menu Start. ' +

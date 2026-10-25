@@ -125,6 +125,24 @@ del run. I risultati parziali rimangono disponibili per la diagnosi. Una prova
 `--dry-run` registra input, richiesta e comando previsto senza eseguire R e senza
 attestare la disponibilità dell'immagine.
 
+## Verifica degli aggiornamenti
+
+Il client consulta le release pubblicate del repository ufficiale e il relativo
+`update-manifest.json`. Verifica prodotto, versione, canale, piattaforma,
+commit del tag e URL degli asset previsti. Il manifest associa i due installatori
+completi a dimensione e SHA-256; è generato dopo l'accettazione della coppia
+Windows/Ubuntu. Il download viene verificato prima del passaggio all'installatore.
+La fiducia deriva da HTTPS e dal controllo del repository ufficiale; il manifest
+non è una firma digitale del pacchetto.
+
+Le preferenze distinguono `testing`, che comprende pre-release e stabili,
+da `stable`, limitato alle release stabili. La verifica facoltativa all'avvio
+è disattivata inizialmente e produce soltanto un avviso. La sessione guidata
+richiede conferme separate per download e installazione e viene chiusa prima
+della sostituzione dei componenti. Non vengono sostituiti client o motore
+durante un'analisi; i controlli dell'installazione regolano la riapertura.
+Un errore di rete non modifica il backend pronto o i record esistenti.
+
 ## Installazione Windows
 
 Il profilo `desktop` identifica applicazione, collegamenti e stato di

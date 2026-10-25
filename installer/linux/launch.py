@@ -80,6 +80,7 @@ def clean_environment(app: Path, data: Path, state: Path,
         "PATH": "/usr/bin:/bin",
         "PYTHONDONTWRITEBYTECODE": "1",
         "NIPAT_BACKEND": "native",
+        "NIPAT_LAUNCHER_PID": str(os.getpid()),
         "NIPAT_PROJECT_DIR": str(app),
         "NIPAT_WORKSPACE_DIR": str(data),
         "NIPAT_DATA_DIR": str(data / "data"),
@@ -349,12 +350,12 @@ def main(arguments: list[str] | None = None) -> int:
     if desktop:
         arguments.pop(0)
     code = launch(arguments)
-    if desktop and sys.stdin.isatty():
+    if desktop and code != 85 and sys.stdin.isatty():
         try:
             input("\nPremere Invio per chiudere questa finestra...")
         except (EOFError, KeyboardInterrupt):
             pass
-    return code
+    return 0 if code == 85 else code
 
 
 if __name__ == "__main__":

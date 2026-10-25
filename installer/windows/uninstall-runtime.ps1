@@ -8,6 +8,7 @@ param(
 # the application, only after the user explicitly chooses runtime cleanup.
 . (Join-Path $PSScriptRoot 'bootstrap-common.ps1')
 . (Join-Path $PSScriptRoot 'bootstrap-migration.ps1')
+. (Join-Path $PSScriptRoot 'activity-lock.ps1')
 if (-not (Get-Command Get-NipatKnownInstallLayouts -ErrorAction SilentlyContinue)) {
     . (Join-Path $PSScriptRoot 'install-layout.ps1')
 }
@@ -260,6 +261,7 @@ function Invoke-NipatRuntimeRemoval($Plan) {
 if (-not $LibraryOnly) {
     $mutex = $null
     $locked = $false
+    $activityLease = $null
     $result = 1
     $transcriptStarted = $false
     $logPath = $null
@@ -267,6 +269,7 @@ if (-not $LibraryOnly) {
         Assert-NipatWindowsUser
         if (-not $Project) { $Project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
         Assert-NipatInstallationLocation $Project
+        $activityLease = Enter-NipatInstallationActivity
         $profile = Get-NipatInstallationProfile
         $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
         $mutex = New-Object Threading.Mutex($false, ($profile.mutex_prefix + $sid))
@@ -286,13 +289,17 @@ if (-not $LibraryOnly) {
         Write-Host ('Rimozione del runtime interrotta: ' + $_.Exception.Message) -ForegroundColor Red
         Write-Host 'Gli elementi gia rimossi restano rimossi. Le analisi, Docker Desktop e le altre distribuzioni non vengono cancellati.'
     } finally {
-        if ($transcriptStarted) {
-            try { Stop-Transcript -ErrorAction Stop | Out-Null }
-            catch { Write-Host ('Impossibile completare il log di rimozione: ' + $_.Exception.Message) -ForegroundColor Yellow }
-            Write-Host "Log della rimozione: $logPath"
+        try {
+            if ($transcriptStarted) {
+                try { Stop-Transcript -ErrorAction Stop | Out-Null }
+                catch { Write-Host ('Impossibile completare il log di rimozione: ' + $_.Exception.Message) -ForegroundColor Yellow }
+                Write-Host "Log della rimozione: $logPath"
+            }
+            if ($locked) { $mutex.ReleaseMutex() }
+            if ($null -ne $mutex) { $mutex.Dispose() }
+        } finally {
+            Exit-NipatInstallationActivity $activityLease
         }
-        if ($locked) { $mutex.ReleaseMutex() }
-        if ($null -ne $mutex) { $mutex.Dispose() }
     }
     exit $result
 }

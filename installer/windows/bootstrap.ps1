@@ -5,11 +5,13 @@ param(
 
 . (Join-Path $PSScriptRoot 'bootstrap-common.ps1')
 . (Join-Path $PSScriptRoot 'bootstrap-migration.ps1')
+. (Join-Path $PSScriptRoot 'activity-lock.ps1')
 $project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 . (Join-Path $project 'scripts\windows\common.ps1')
 $transcriptStarted = $false
 $mutex = $null
 $lockHeld = $false
+$activityLease = $null
 $result = 1
 $state = $null
 $statePath = Join-Path $project '.runtime\installer\state.json'
@@ -37,6 +39,7 @@ function Request-NipatReboot {
 try {
     Assert-NipatWindowsUser
     Assert-NipatInstallationLocation $project
+    $activityLease = Enter-NipatInstallationActivity
     $profile = Get-NipatInstallationProfile
     $manifest = Read-NipatInstallerManifest (Join-Path $project '.distribution\installer-manifest.json')
     $layout = Read-NipatInstallLayout $project
@@ -163,8 +166,15 @@ try {
         try { Save-NipatPhase 'failed' } catch { Write-Host 'Impossibile aggiornare lo stato installer.' }
     }
 } finally {
-    if ($transcriptStarted) { Stop-Transcript | Out-Null }
-    if ($lockHeld) { $mutex.ReleaseMutex() }
-    if ($null -ne $mutex) { $mutex.Dispose() }
+    try {
+        if ($transcriptStarted) { Stop-Transcript | Out-Null }
+    } finally {
+        try {
+            if ($lockHeld) { $mutex.ReleaseMutex() }
+        } finally {
+            try { if ($null -ne $mutex) { $mutex.Dispose() } }
+            finally { Exit-NipatInstallationActivity $activityLease }
+        }
+    }
 }
 exit $result

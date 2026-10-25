@@ -215,6 +215,8 @@ class GuidedSettings:
         ui.heading("Configura / Riepilogo impostazioni")
         ui.message(f"Cartella dati in uso: {self.layout.data_dir}")
         ui.message(f"Cartella risultati in uso: {self.layout.runs_dir}")
+        ui.message("Canale aggiornamenti: " + ("Testing" if self.preferences.update_channel == "testing" else "Stabile"))
+        ui.message("Verifica aggiornamenti all'avvio: " + ("attivata" if self.preferences.check_updates_on_startup else "disattivata"))
         if self.store:
             ui.message(f"File delle preferenze: {self.store.path}", kind="muted")
         for choice in ("1", "2", "3", "4"):
@@ -225,6 +227,44 @@ class GuidedSettings:
                 ui.message(f"{field.label}: {form.display_value(field)}")
         self.explain(ui)
         ui.message("Cartella dell'applicazione, runtime e cache di installazione: per cambiarle eseguire nuovamente il programma di installazione. Configura non sposta questi componenti.", kind="muted")
+
+    def _updates(self, ui: Terminal) -> None:
+        channel = self.preferences.update_channel
+        startup = self.preferences.check_updates_on_startup
+        while True:
+            ui.message("La verifica consulta le release pubblicate su GitHub. Download e installazione richiedono sempre una scelta esplicita.", kind="muted")
+            ui.message("La verifica all'avvio mostra soltanto un avviso e non avvia download. Si puo' verificare in qualsiasi momento dal punto 9 del menu principale.", kind="muted")
+            action = ui.menu("Configura / Aggiornamenti", [
+                ("1", "Canale", "Testing" if channel == "testing" else "Stabile"),
+                ("2", "Verifica all'avvio", "Attivata" if startup else "Disattivata"),
+                ("9", "Salva modifiche", "Per i prossimi avvii della CLI guidata"),
+                ("0", "Annulla modifiche", "Torna a Configura"),
+            ], default="0")
+            if action in {"0", ":indietro", ":annulla"}:
+                return
+            if action == "9":
+                self._save(replace(self.preferences, update_channel=channel,
+                                   check_updates_on_startup=startup))
+                self._saved_message(ui)
+                return
+            if action == "1":
+                selected = ui.menu("Canale degli aggiornamenti", [
+                    ("1", "Testing", "Release di test e release stabili"),
+                    ("2", "Stabile", "Solo release pubblicate come stabili"),
+                    ("0", "Indietro", "Mantiene la scelta attuale"),
+                ], default="1" if channel == "testing" else "2")
+                if selected in {"1", "2"}:
+                    channel = "testing" if selected == "1" else "stable"
+            elif action == "2":
+                selected = ui.menu("Verificare gli aggiornamenti all'avvio?", [
+                    ("1", "Attiva", "Solo avviso; richiede una connessione a GitHub"),
+                    ("2", "Disattiva", "Verifica manuale dal menu principale"),
+                    ("0", "Indietro", "Mantiene la scelta attuale"),
+                ], default="1" if startup else "2")
+                if selected in {"1", "2"}:
+                    startup = selected == "1"
+            else:
+                ui.message("Scegliere 1 o 2 per modificare, 9 per salvare oppure 0 per annullare.", kind="muted")
 
     def _reset(self, ui: Terminal) -> None:
         ui.message("Il ripristino elimina solo le preferenze della CLI guidata. Dati, risultati e installazione restano disponibili; nessun file di analisi viene spostato o cancellato.", kind="muted")
@@ -255,6 +295,7 @@ class GuidedSettings:
                 ("5", "CPI", "Prefissi, frequenze, siti e costante di errore"),
                 ("6", "Riepilogo impostazioni", "Valori in uso e file delle preferenze"),
                 ("7", "Ripristina impostazioni", "Conferma richiesta; dati conservati"),
+                ("8", "Aggiornamenti", "Canale e verifica all'avvio"),
                 ("0", "Torna al menu", ""),
             ], default="0")
             if action in {"0", ":indietro", ":annulla"}:
@@ -266,11 +307,13 @@ class GuidedSettings:
                     self._reset(ui)
                 elif self.load_error:
                     ui.message("Impostazioni non leggibili: consultare il riepilogo o scegliere Ripristina impostazioni per correggerle.", kind="warning")
+                elif action == "8":
+                    self._updates(ui)
                 elif action == "1":
                     self._directories(ui)
                 elif action in {"2", "3", "4", "5"}:
                     self._workflow(ui, str(int(action) - 1), err_const)
                 else:
-                    ui.message("Scegliere una delle opzioni indicate (0-7).", kind="muted")
+                    ui.message("Scegliere una delle opzioni indicate (0-8).", kind="muted")
             except (NipatError, OSError, ValueError) as exc:
                 ui.message(str(exc), kind="error")

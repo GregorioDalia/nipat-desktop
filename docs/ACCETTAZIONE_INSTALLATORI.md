@@ -159,6 +159,30 @@ dell'inventario, conservazione dei dati, migrazione del runtime, interruzione
 e ripresa. Le prove con inventari controllati verificano le regole di gestione
 dei file, ma non sostituiscono questo collaudo dei pacchetti effettivi.
 
+## Verifiche degli aggiornamenti
+
+Registrare piattaforma, versione installata, canale scelto, release proposta,
+checksum del pacchetto scaricato e risultato di ciascun passaggio. Le prove
+con risposte GitHub simulate verificano i controlli del client; una prova
+completa di aggiornamento richiede due pacchetti identificati dello stesso
+prodotto e le rispettive evidenze di pubblicazione.
+
+| Controllo | Criterio |
+| --- | --- |
+| Canali | `testing` considera pre-release e stabili approvate; `stable` esclude le pre-release. Bozze, build Actions, versioni non successive e manifest non coerenti non sono proposti. |
+| Avviso all'avvio | Disattivato inizialmente; se attivato mostra soltanto un avviso e non avvia download, installazioni o interruzioni. |
+| Assenza di rete | La ricerca segnala il problema e l'installazione già pronta continua a funzionare con il runtime locale. |
+| Download | Nome, versione, piattaforma, dimensione e SHA-256 corrispondono alla release approvata; un file incompleto o alterato non può essere avviato come installatore. |
+| Conferme e rinvio | Invio mantiene la scelta di rimandare. Download e installazione richiedono conferme distinte; annullamento o rinvio non modificano i componenti installati. |
+| Installazione | La sessione corrente si chiude prima della sostituzione; un'analisi in altra sessione non viene terminata per consentire l'aggiornamento. Su Ubuntu verificare autorizzazione APT e comportamento senza terminale o Polkit. |
+| Conservazione e riapertura | Percorsi, preferenze, dati e run esistenti restano disponibili. Il nuovo client avvia analisi soltanto dopo la preparazione verificata; un errore non viene presentato come aggiornamento completato. |
+| Tracciabilità | Il run precedente conserva versione e runtime originari; il run successivo identifica la versione installata e il motore effettivamente utilizzati. |
+
+Conservare separatamente l'esito dei controlli simulati e quello dei pacchetti
+installati. Non attribuire a una reinstallazione della stessa build la verifica
+di un aggiornamento fra versioni, né trasformare una candidata di revisione
+in una release approvata per completare una prova.
+
 ## Record di accettazione
 
 Dalla radice del repository, generare una scheda associata alle evidenze

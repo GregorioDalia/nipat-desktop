@@ -45,6 +45,24 @@ Le preferenze sono conservate in
 `${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json` su Linux.
 Lo spostamento di applicazione, ambiente WSL o cache richiede il setup.
 
+## Aggiornamenti dall'applicazione
+
+**9 — Verifica aggiornamenti** consulta le release pubblicate e approvate su
+GitHub e permette di scaricare l'installatore completo con verifica di
+integrità. Download e installazione richiedono conferme distinte; è possibile
+annullare o rimandare. Il setup conserva percorsi, preferenze, dati e risultati.
+Su Ubuntu l'installazione del `.deb` richiede autorizzazione amministrativa APT.
+
+**Configura → Aggiornamenti** offre i canali `testing` e `stable`. Il primo,
+predefinito, include pre-release e release stabili approvate; il secondo
+considera soltanto le stabili. La verifica all'avvio è facoltativa e
+inizialmente disattivata: mostra un avviso senza scaricare o installare.
+Le analisi restano locali e l'installazione pronta è utilizzabile offline.
+
+Il controllo degli aggiornamenti non sostituisce l'accettazione dei pacchetti
+e non rende pubblica una build di revisione. Ogni run conserva la versione
+dell'applicazione e l'identità del motore effettivamente utilizzati.
+
 ## Motore e risultati
 
 Il motore scientifico è un'immagine autonoma con gli script R, samtools,

@@ -19,6 +19,7 @@ import zipfile
 PROJECT = Path(__file__).resolve().parents[2]
 REPO = "GregorioDalia/nipat-desktop"
 MANIFEST = "installer-manifest.json"
+UPDATE_MANIFEST = "update-manifest.json"
 MAX_ASSET_BYTES = 2 * 1024**3
 PYTHON_NAME = "python-3.12.10-embed-amd64.zip"
 PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
@@ -166,7 +167,8 @@ def extract_build_source(commit, destination):
 
 
 def prepare_installer_set(setup, runtime, linux, evidence, output, commit, acceptance,
-                          acceptance_bytes, run_id, publication_commit, source_project):
+                          acceptance_bytes, run_id, publication_commit, source_project,
+                          channel="testing"):
     """Re-verify both packages before staging an accepted, immutable pair."""
     validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
     reviewer = load_module("nipat_release_pair", PROJECT / ".github/scripts/verify_installer_set.py")
@@ -200,9 +202,51 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
         "acceptance_sha256": hashlib.sha256(acceptance_bytes).hexdigest(),
     }
     (output / "release-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+    if manifest.get("installation_profile") == DESKTOP_INSTALLATION_PROFILE:
+        write_update_manifest(output, manifest, actual, channel)
     digests = {path.name: sha256(path) for path in output.iterdir() if path.name != "SHA256SUMS"}
     (output / "SHA256SUMS").write_text("".join(f"{h}  {n}\n" for n, h in sorted(digests.items())), encoding="ascii")
     return manifest
+
+
+def publication_channel(version, channel):
+    """Release maturity is explicit; a numeric version is not proof of stability."""
+    require(channel in {"stable", "testing"}, "Unknown publication channel")
+    if channel == "stable":
+        require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version),
+                "A pre-release version cannot use the stable update channel")
+    return channel
+
+
+def write_update_manifest(output, manifest, verified_pair, channel):
+    """Advertise only the exact installers already checked and accepted for release."""
+    version = manifest["version"]
+    channel = publication_channel(version, channel)
+    tag = manifest["release_tag"]
+    require(tag == f"v{version}", "Update tag differs from the package version")
+    require(verified_pair["source_commit"] == manifest["source_commit"]
+            and verified_pair["version"] == version, "Update source differs from the installer pair")
+    deb_version = re.sub(r"(a|b|rc)([0-9]+)$", r"~\1\2", version)
+    expected = {"windows": ("windows-x86_64", "NIPAT-Setup.exe"),
+                "linux": ("linux-x86_64", f"nipat-desktop_{deb_version}_amd64.deb")}
+    entries = []
+    for system, (platform, filename) in expected.items():
+        record = verified_pair[system]
+        require(record["file"] == filename, "Unexpected update installer filename")
+        path = output / filename
+        require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
+                "Missing or invalid update installer")
+        digest = sha256(path)
+        require(digest == record["sha256"], "Update installer differs from the accepted build")
+        entries.append({"platform": platform, "name": filename, "size": path.stat().st_size,
+                        "sha256": digest,
+                        "url": f"https://github.com/{REPO}/releases/download/{tag}/{filename}"})
+    update = {"schema_version": 1, "product": "nipat-desktop", "version": version,
+              "release_tag": tag, "channel": channel, "source_commit": manifest["source_commit"],
+              "minimum_updater_version": 1, "assets": entries,
+              "release_notes_url": f"https://github.com/{REPO}/releases/tag/{tag}"}
+    (output / UPDATE_MANIFEST).write_text(json.dumps(update, indent=2) + "\n", encoding="utf-8")
+    return update
 
 
 def verify_installer_build(setup, manifest, manifest_bytes, commit):
@@ -401,8 +445,10 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     return manifest
 
 
-def verify_uploaded(release, files, commit, tag, notes, complete=False):
-    require(release["draft"] and release["prerelease"], "Existing release is not a draft pre-release")
+def verify_uploaded(release, files, commit, tag, notes, complete=False, channel="testing"):
+    require(channel in {"stable", "testing"}, "Unknown publication channel")
+    require(release["draft"] and release["prerelease"] == (channel == "testing"),
+            "Existing release is not a draft pre-release or stable draft for the selected channel")
     require(release["target_commitish"] == commit and release["tag_name"] == tag
             and release["body"].strip() == notes.strip(), "Existing draft belongs to different source or notes")
     assets = release["assets"]
@@ -436,13 +482,14 @@ def find_release(tag):
     return next((release for page in pages for release in page if release["tag_name"] == tag), None)
 
 
-def create_draft(tag, version, commit, notes, payload_path):
+def create_draft(tag, version, commit, notes, payload_path, channel="testing"):
+    publication_channel(version, channel)
     payload_path.write_text(json.dumps({
         "tag_name": tag, "target_commitish": commit,
         "name": f"NIPAT CLI {version} — Windows con " +
                 ("WSL2 e Docker Desktop" if requires_desktop_bundle(version) else
                  "WSL2 e Ubuntu" if requires_installation_profile(version) else "WSL2"), "body": notes,
-        "draft": True, "prerelease": True, "make_latest": "false",
+        "draft": True, "prerelease": channel == "testing", "make_latest": "false",
     }), encoding="utf-8")
     # The list endpoint may lag behind a successful creation. Retain the exact
     # resource returned by POST rather than rediscovering it through that list.
@@ -455,6 +502,7 @@ def main():
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--draft-release-id", default="")
+    parser.add_argument("--channel", choices=("testing", "stable"), default="testing")
     args = parser.parse_args()
     require(re.fullmatch(r"[1-9][0-9]*", args.run_id), "Invalid run ID")
     require(re.fullmatch(r"[0-9a-f]{40}", args.source_commit), "Full source SHA is required")
@@ -468,6 +516,7 @@ def main():
     require(re.fullmatch(r"[0-9a-f]{40}", publication_commit), "Invalid publication procedure commit")
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], check=True)
     version = committed_version(commit)
+    publication_channel(version, args.channel)
     acceptance = acceptance_bytes = None
     if requires_installation_profile(version):
         validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
@@ -503,7 +552,8 @@ def main():
             manifest = prepare_installer_set(
                 root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
                 root / "artifacts/nipat-linux-setup", root / "artifacts/nipat-installer-set-evidence",
-                output, commit, acceptance, acceptance_bytes, int(args.run_id), publication_commit, source_project)
+                output, commit, acceptance, acceptance_bytes, int(args.run_id), publication_commit, source_project,
+                channel=args.channel)
         else:
             manifest = prepare_assets(root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
                                       output, commit, desktop=desktop)
@@ -538,18 +588,21 @@ def main():
         check_tag(tag, commit)
         release = api(f"releases/{args.draft_release_id}") if args.draft_release_id else find_release(tag)
         if release is None:
-            release = create_draft(tag, manifest["version"], commit, notes, root / "create-release.json")
+            release = create_draft(tag, manifest["version"], commit, notes, root / "create-release.json",
+                                   channel=args.channel)
         require(release is not None, "Draft release not found")
-        present = verify_uploaded(release, files, commit, tag, notes)
+        present = verify_uploaded(release, files, commit, tag, notes, channel=args.channel)
         missing = [str(files[name]) for name in sorted(set(files) - present)]
         if missing:
             command("gh", "release", "upload", tag, *missing, "--repo", REPO)
         release = api(f"releases/{release['id']}")
-        verify_uploaded(release, files, commit, tag, notes, complete=True)
+        verify_uploaded(release, files, commit, tag, notes, complete=True, channel=args.channel)
         check_tag(tag, commit)
-        command("gh", "release", "edit", tag, "--repo", REPO, "--draft=false", "--prerelease", "--latest=false")
+        command("gh", "release", "edit", tag, "--repo", REPO, "--draft=false",
+                "--prerelease=" + str(args.channel == "testing").lower(), "--latest=false")
         published = api(f"releases/{release['id']}")
-        require(not published["draft"] and published["prerelease"], "Publication was not confirmed")
+        require(not published["draft"] and published["prerelease"] == (args.channel == "testing"),
+                "Publication was not confirmed for the selected channel")
         check_tag(tag, commit, required=True)
         print(published["html_url"])
         summary = os.environ.get("GITHUB_STEP_SUMMARY")

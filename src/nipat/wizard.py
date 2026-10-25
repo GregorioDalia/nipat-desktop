@@ -14,6 +14,7 @@ from nipat.paths import ProjectLayout
 from nipat.preferences import PreferencesStore
 from nipat.results import show_results
 from nipat.terminal import Terminal
+from nipat.update_ui import HANDOFF_EXIT_CODE, run_updates
 from nipat.wizard_forms import Back, Cancelled, WorkflowForm
 from nipat.wizard_settings import GuidedSettings
 
@@ -27,6 +28,7 @@ MAIN_MENU = [
     ("6", "Ultima esecuzione", "Risultati e log della sessione"),
     ("7", "Guida e informazioni", "Cosa fa NIPAT e come utilizzarlo"),
     ("8", "Verifica ambiente", "Controllo degli strumenti di analisi"),
+    ("9", "Verifica aggiornamenti", "Release disponibili, download e installazione"),
     ("0", "Esci", ""),
 ]
 
@@ -75,6 +77,7 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "I dati sono elaborati localmente. La distribuzione include gli script scientifici R e le loro dipendenze nell'immagine di analisi.",
             "Windows utilizza il runtime WSL dedicato; Linux utilizza Docker Engine locale.",
             "Verifica ambiente controlla gli strumenti senza analizzare campioni. E' separata dalla guida e non attesta la validita' scientifica di un risultato.",
+            "Verifica aggiornamenti consulta GitHub e propone download e installazione con conferme distinte. L'avviso all'avvio, attivabile in Configura, non scarica file.",
             "Per i comandi diretti: NIPAT.exe --help su Windows; nipat --help su Linux.",
             f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}",
         )),
@@ -142,12 +145,14 @@ def run_wizard(
         else:
             ui.message("Input in cartelle accessibili a Docker.", kind="muted")
         ui.message(":indietro corregge il campo precedente; :annulla torna al menu.", kind="muted")
+        if not settings.error and settings.preferences.check_updates_on_startup:
+            run_updates(ui, layout, settings.preferences, dry_run=dry_run, startup=True)
         while True:
             choice = ui.menu("Menu principale", MAIN_MENU)
             if choice in {"0", ":annulla", ":indietro"}:
                 return 2 if had_failure else 0
             if choice not in {item[0] for item in MAIN_MENU}:
-                ui.message("Scegliere una delle opzioni indicate (0-8).", kind="error")
+                ui.message("Scegliere una delle opzioni indicate (0-9).", kind="error")
                 continue
             try:
                 if choice == "5":
@@ -165,6 +170,10 @@ def run_wizard(
                     continue
                 if choice == "8":
                     _check_environment(ui, workflows, dry_run)
+                    continue
+                if choice == "9":
+                    if run_updates(ui, layout, settings.preferences, dry_run=dry_run):
+                        return HANDOFF_EXIT_CODE
                     continue
                 if settings.error:
                     settings.explain(ui)

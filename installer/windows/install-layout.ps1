@@ -232,7 +232,8 @@ function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $H
         $Layout.schema_version -ne 1) { throw 'Configurazione delle cartelle NIPAT non valida.' }
     Assert-NipatInstallationChannel $Layout 'Le cartelle selezionate'
     $protected = @((Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\installations'),
-        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'))
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\activity.lock'))
     $protected += @(Get-NipatForeignInstallationPaths)
     foreach ($name in @('WINDIR', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432')) {
         $value = [Environment]::GetEnvironmentVariable($name)

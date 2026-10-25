@@ -93,6 +93,7 @@ negli altri terminali è disponibile la scelta numerica in testo semplice.
 | 6 | Risultati e log dell'ultima esecuzione della sessione. |
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
+| 9 | Verifica aggiornamenti: ricerca, download verificato e avvio dell'installatore dopo conferma. |
 | 0 | Uscita dal programma. |
 
 Ogni campo presenta indicazioni sul formato richiesto e sul significato di
@@ -147,6 +148,7 @@ della categoria equivale ad annullare senza salvare.
 | CPI | Prefissi materno/paterno, frequenze di popolazione, modalità di selezione dei siti e relativi pannelli o mappe, costante d'errore. |
 | Riepilogo impostazioni | Consultazione dei valori salvati. |
 | Ripristina impostazioni | Ritorno ai valori iniziali del menu dopo conferma esplicita; non elimina campioni o risultati. |
+| Aggiornamenti | Canale `testing` o `stable` e verifica facoltativa all'avvio. |
 
 I valori salvati vengono riproposti anche dopo aver chiuso NIPAT. Si possono
 modificare durante la compilazione di una singola analisi senza cambiare le
@@ -176,6 +178,52 @@ campi dell'analisi; la presenza nelle preferenze non ne attesta la validità.
 Per cambiare la posizione dell'applicazione, dell'ambiente WSL o della cache,
 usare l'installatore. **Configura** non trasferisce questi componenti e non
 sposta i dati già presenti. La gestione delle cartelle è descritta di seguito.
+
+## Aggiornamenti
+
+**9 — Verifica aggiornamenti** consulta le release pubblicate del repository
+ufficiale. Sono proposte soltanto versioni successive, compatibili con la
+piattaforma e accompagnate dalle evidenze di pubblicazione e accettazione
+richieste. Le build di revisione di GitHub Actions e le bozze non sono aggiornamenti.
+L'assenza di una versione proposta non attesta una nuova pubblicazione.
+
+In **5 — Configura → 8 — Aggiornamenti** sono disponibili:
+
+| Impostazione | Comportamento |
+| --- | --- |
+| Canale `testing`, predefinito | Considera pre-release e release stabili approvate. |
+| Canale `stable` | Considera soltanto release stabili approvate. |
+| Verifica all'avvio, inizialmente disattivata | Se attivata, consulta le release e mostra un breve avviso; non scarica né installa automaticamente. |
+
+Quando è disponibile una versione:
+
+1. Controllare versione e dimensione dell'installatore e consultare il
+   collegamento alle note della release mostrato dal menu.
+2. Selezionare **1 — Scarica aggiornamento** oppure **0 — Più tardi**,
+   la scelta predefinita. Viene scaricato l'installatore completo della propria
+   piattaforma; NIPAT ne verifica dimensione e checksum prima dell'utilizzo.
+3. Al termine, scegliere esplicitamente **1 — Installa l'aggiornamento** o
+   rimandare. Il download da solo non cambia l'applicazione installata.
+4. Confermando l'installazione, il menu si chiude per consentire la sostituzione
+   dei componenti. Su Windows seguire il setup; su Ubuntu l'installazione del
+   `.deb` richiede autorizzazione amministrativa tramite APT.
+5. Riaprire NIPAT quando la preparazione del pacchetto è completata. L'avvio
+   delle analisi resta subordinato alla configurazione verificata del runtime.
+
+La verifica automatica è soltanto informativa e non interrompe le analisi.
+È possibile annullare o rimandare; una connessione assente o un errore di
+verifica non impediscono di usare l'installazione già pronta. La ricerca e
+il download richiedono Internet, mentre i calcoli continuano a usare il motore
+locale. In modalità `--dry-run` la voce aggiornamenti non esegue connessioni,
+download o installazioni.
+
+L'installatore dello stesso prodotto conserva percorsi configurati, preferenze,
+dati e risultati. Un aggiornamento non modifica i record delle analisi già
+eseguite: i nuovi run registrano la versione dell'applicazione e il motore
+utilizzati. Il backup di riparazione non costituisce un rollback completo
+automatico. In caso di errore conservare messaggi e log, quindi seguire la
+[guida Windows](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione) o la
+[guida Ubuntu](INSTALLATORE_LINUX.md#aggiornamento-e-rimozione).
 
 ## Percorsi e cartelle
 
