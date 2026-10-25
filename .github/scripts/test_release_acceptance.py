@@ -108,9 +108,24 @@ class AcceptanceTests(unittest.TestCase):
                     acceptance.validate(record, "0.5.0a1", COMMIT, 123)
 
     def test_future_distribution_contracts_are_not_implicitly_authorized(self):
-        for version in ("0.4.1", "0.6.0", "1.0.0", "../0.5.0a1"):
+        for version in ("0.4.1", "0.7.0", "1.0.0", "../0.5.0a1"):
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, "only for the 0.5"):
                 acceptance.acceptance_path(version)
+
+    def test_desktop_06_retains_all_acceptance_requirements(self):
+        current = dict(SET, version="0.6.0")
+        record = acceptance.template(current, 123)
+        self.assertEqual(acceptance.acceptance_path("0.6.0"),
+                         ".github/release-acceptance/v0.6.0.json")
+        with self.assertRaisesRegex(ValueError, "pending or rejected"):
+            acceptance.validate(record, "0.6.0", COMMIT, 123, current)
+        record = dict(accepted_record(), version="0.6.0")
+        acceptance.validate(record, "0.6.0", COMMIT, 123, current)
+        for name in acceptance.SCENARIOS:
+            incomplete = copy.deepcopy(record)
+            incomplete["tests"][name]["result"] = "pending"
+            with self.subTest(scenario=name), self.assertRaisesRegex(ValueError, "has not passed"):
+                acceptance.validate(incomplete, "0.6.0", COMMIT, 123, current)
 
     def test_template_command_never_overwrites_an_existing_record(self):
         with tempfile.TemporaryDirectory() as temporary:

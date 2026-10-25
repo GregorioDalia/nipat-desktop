@@ -18,13 +18,13 @@ class LinuxInstallationEvidenceTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.manifest = {
-            "version": "0.5.0a1", "source_commit": "1" * 40,
+            "version": "0.6.0", "source_commit": "1" * 40,
             "runtime_image": "sha256:" + "2" * 64,
             "assets": {"scientific_image": {"sha256": "3" * 64}},
         }
         self.state = {
-            "schema_version": 1, "phase": "ready", "channel": "preview-0.5",
-            "version": "0.5.0a1", "source_commit": "1" * 40,
+            "schema_version": 1, "phase": "ready", "channel": "desktop",
+            "version": "0.6.0", "source_commit": "1" * 40,
             "installer_manifest_sha256": "4" * 64,
             "runtime_archive_sha256": "3" * 64,
             "source_runtime_image": "sha256:" + "2" * 64,
@@ -36,7 +36,8 @@ class LinuxInstallationEvidenceTests(unittest.TestCase):
         self.assertEqual(check.check_state(self.state, self.manifest, "4" * 64),
                          "sha256:" + "5" * 64)
         for name, value in (
-            ("phase", "failed"), ("channel", "stable"), ("version", "0.4.1"),
+            ("phase", "failed"), ("channel", "stable"), ("channel", "preview-0.5"),
+            ("version", "0.4.1"),
             ("source_commit", "0" * 40), ("installer_manifest_sha256", "0" * 64),
             ("runtime_archive_sha256", "0" * 64),
             ("source_runtime_image", "sha256:" + "0" * 64),

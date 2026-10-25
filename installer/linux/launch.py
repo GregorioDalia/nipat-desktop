@@ -1,4 +1,4 @@
-"""User launcher and resumable preparation for the Ubuntu NIPAT Preview package.
+"""User launcher and resumable preparation for the Ubuntu NIPAT Desktop package.
 
 The package owns the application and archive; preparation owns only per-user state.
 No administrative commands, daemon configuration changes or image deletion occur here.
@@ -19,8 +19,8 @@ import tempfile
 from typing import Mapping
 
 
-CHANNEL = "preview-0.5"
-DIRECTORY = "nipat-05-preview"
+CHANNEL = "desktop"
+DIRECTORY = "nipat-desktop"
 SOCKET = "unix:///var/run/docker.sock"
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -97,7 +97,7 @@ def load_manifest(app: Path) -> tuple[dict, str]:
         manifest = json.loads(raw)
         valid = (
             type(manifest) is dict and manifest.get("schema_version") == 1
-            and re.fullmatch(r"0\.5\.\d+(?:(?:a|b|rc)\d+)?", manifest.get("version", ""))
+            and re.fullmatch(r"0\.6\.\d+(?:(?:a|b|rc)\d+)?", manifest.get("version", ""))
             and manifest.get("release_tag") == "v" + manifest["version"]
             and re.fullmatch(r"[0-9a-f]{40}", manifest.get("source_commit", ""))
             and IMAGE_ID.fullmatch(manifest.get("runtime_image", ""))

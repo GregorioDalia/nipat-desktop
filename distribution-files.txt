@@ -44,6 +44,7 @@ docs/INSTALLATORE_LINUX.md
 docs/INSTALLATORE_WINDOWS.md
 docs/FIRMA_WINDOWS.md
 docs/RELEASE_0.5.0a1.md
+docs/RELEASE_0.6.0.md
 docs/VALIDAZIONE.md
 engine/README.md
 engine/main.py
@@ -133,6 +134,7 @@ src/nipat/execution/tracking.py
 src/nipat/execution/transport.py
 src/nipat/execution/workflows.py
 src/nipat/paths.py
+src/nipat/preferences.py
 src/nipat/results.py
 src/nipat/terminal.py
 src/nipat/validation/__init__.py
@@ -141,6 +143,7 @@ src/nipat/validation/integrity.py
 src/nipat/validation/self_test.py
 src/nipat/wizard.py
 src/nipat/wizard_forms.py
+src/nipat/wizard_settings.py
 src/nipat_scientific/__init__.py
 src/nipat_scientific/contamination.py
 src/nipat_scientific/cpi.py
@@ -195,10 +198,12 @@ tests/test_linux_installer.py
 tests/test_linux_launcher.py
 tests/test_panels.py
 tests/test_paths.py
+tests/test_preferences.py
 tests/test_results.py
 tests/test_run_tracking.py
 tests/test_snp_engine.py
 tests/test_terminal.py
 tests/test_validation.py
 tests/test_wizard_guidance.py
+tests/test_wizard_settings.py
 tests/test_wsl_transport.py

@@ -43,7 +43,7 @@ function Invoke-NipatWsl([string[]] $Arguments, [switch] $AllowFailure, [int] $T
         }
         return [pscustomobject]@{ ExitCode = 0; Text = ''; ErrorText = '' }
     }
-    if ($Arguments.Count -eq 7 -and ($Arguments[0..4] -join '|') -cmatch '^--distribution\|NIPAT-05-Preview-[a-f0-9-]+\|--user\|root\|--exec$' -and
+    if ($Arguments.Count -eq 7 -and ($Arguments[0..4] -join '|') -cmatch '^--distribution\|NIPAT-Desktop-[a-f0-9-]+\|--user\|root\|--exec$' -and
         $Arguments[5] -ceq '/usr/bin/cat') {
         $distro = $Arguments[1]
         if (-not $script:TestOwners.ContainsKey($distro)) { throw 'Unexpected access to an unowned distribution.' }
@@ -60,7 +60,7 @@ function Invoke-NipatWsl([string[]] $Arguments, [switch] $AllowFailure, [int] $T
 function New-RemovalFixture([string] $Name, [string] $HashCharacter = 'a', [switch] $LocationBound) {
     $root = Join-Path $temporary $Name
     $layout = [pscustomobject]@{
-        schema_version = 1; installation_channel = 'preview-0.5'
+        schema_version = 1; installation_channel = 'desktop'
         app_dir = (Join-Path $root 'app'); runtime_dir = (Join-Path $root 'wsl')
         cache_dir = (Join-Path $root 'cache'); data_dir = (Join-Path $root 'data')
         runs_dir = (Join-Path $root 'results')
@@ -71,7 +71,7 @@ function New-RemovalFixture([string] $Name, [string] $HashCharacter = 'a', [swit
     foreach ($role in @('runtime', 'cache')) {
         $directory = if ($role -ceq 'runtime') { $layout.runtime_dir } else { $layout.cache_dir }
         [IO.File]::WriteAllText((Join-Path $directory '.nipat-storage.ini'),
-            "[NIPAT]`nschema_version=1`ninstallation_channel=preview-0.5`nrole=$role`n", [Text.Encoding]::ASCII)
+            "[NIPAT]`nschema_version=1`ninstallation_channel=desktop`nrole=$role`n", [Text.Encoding]::ASCII)
     }
     $hash = $HashCharacter * 64
     $distro = if ($LocationBound) { Get-NipatRuntimeDistroName $hash $layout.runtime_dir }
@@ -81,14 +81,14 @@ function New-RemovalFixture([string] $Name, [string] $HashCharacter = 'a', [swit
     [IO.Directory]::CreateDirectory($directory) | Out-Null
     $receipt = Join-Path (Join-Path $layout.runtime_dir 'registrations') ($distro + '.json')
     Write-NipatJsonAtomic $receipt ([ordered]@{
-        schema_version = 1; installation_channel = 'preview-0.5'; distro = $distro
+        schema_version = 1; installation_channel = 'desktop'; distro = $distro
         owner_id = $owner; rootfs_sha256 = $hash; status = 'owned'
     })
     $payload = [byte[]]@(1, 2, 3, 4, 5)
     $temporaryAsset = Join-Path $layout.cache_dir 'asset.tmp'
     [IO.File]::WriteAllBytes($temporaryAsset, $payload)
     $digest = (Get-FileHash -LiteralPath $temporaryAsset -Algorithm SHA256).Hash.ToLowerInvariant()
-    $cacheFile = Join-Path $layout.cache_dir ($digest + '-nipat-scientific-runtime-0.5.0a1-amd64.tar.gz')
+    $cacheFile = Join-Path $layout.cache_dir ($digest + '-nipat-scientific-runtime-0.6.0-amd64.tar.gz')
     [IO.File]::Move($temporaryAsset, $cacheFile)
     $unknownFile = Join-Path $layout.cache_dir 'research-notes.txt'
     [IO.File]::WriteAllText($unknownFile, 'Keep this file.')
@@ -108,7 +108,8 @@ function Reset-RemovalFixture {
     $script:TestLayouts = @()
     $script:TestRegistrations = @(
         [pscustomobject]@{ DistributionName = 'docker-desktop'; BasePath = (Join-Path $temporary 'unrelated-docker'); Version = 2 },
-        [pscustomobject]@{ DistributionName = 'NIPAT-Runtime'; BasePath = (Join-Path $temporary 'stable-runtime'); Version = 2 }
+        [pscustomobject]@{ DistributionName = 'NIPAT-Runtime'; BasePath = (Join-Path $temporary 'stable-runtime'); Version = 2 },
+        [pscustomobject]@{ DistributionName = ('NIPAT-05-Preview-' + ('a' * 40)); BasePath = (Join-Path $temporary 'preview-runtime'); Version = 2 }
     )
     $script:TestOwners = @{}
     $script:RemovalCalls = @()
@@ -123,12 +124,13 @@ try {
     Assert-Test ($plan.Targets.Count -eq 1 -and $plan.CacheFiles.Count -eq 1) 'plan selects the owned runtime and verified archive only'
     Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.CacheFile)) 'planning has no destructive operations'
     Invoke-NipatRuntimeRemoval $plan
-    Assert-Test ($script:RemovalCalls.Count -eq 1 -and $script:RemovalCalls[0] -ceq $fixture.Distro) 'only the selected Preview is unregistered'
+    Assert-Test ($script:RemovalCalls.Count -eq 1 -and $script:RemovalCalls[0] -ceq $fixture.Distro) 'only the selected Desktop is unregistered'
     Assert-Test (-not (Test-Path -LiteralPath $fixture.Receipt) -and -not (Test-Path -LiteralPath $fixture.CacheFile)) 'successful cleanup removes receipt and verified archive'
     Assert-Test ((Test-Path -LiteralPath $fixture.UnknownFile) -and
         (Test-Path -LiteralPath (Join-Path $fixture.Layout.data_dir 'input.txt')) -and
         (Test-Path -LiteralPath (Join-Path $fixture.Layout.runs_dir 'result.txt'))) 'unknown files, inputs and results survive cleanup'
     Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -in @('docker-desktop', 'NIPAT-Runtime') }).Count -eq 2) 'Docker Desktop and stable WSL registrations survive'
+    Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -ceq ('NIPAT-05-Preview-' + ('a' * 40)) }).Count -eq 1) 'the 0.5 Preview registration survives even when its rootfs hash matches'
     $retry = Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir
     Invoke-NipatRuntimeRemoval $retry
     Assert-Test ($retry.Targets.Count -eq 0 -and $retry.CacheFiles.Count -eq 0 -and $script:RemovalCalls.Count -eq 1) 'completed cleanup is idempotent'
@@ -139,12 +141,15 @@ try {
     Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'registered runtime without ownership receipt blocks cleanup'
     Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.CacheFile)) 'unowned runtime blocks all deletion, including cache'
 
-    Reset-RemovalFixture
-    $fixture = New-RemovalFixture 'foreign channel'
-    $record = Get-Content -LiteralPath $fixture.Receipt -Raw | ConvertFrom-Json
-    $record.installation_channel = 'stable'
-    Write-NipatJsonAtomic $fixture.Receipt $record
-    Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'foreign receipt channel is rejected'
+    foreach ($foreignChannel in @('stable', 'preview-0.5')) {
+        Reset-RemovalFixture
+        $fixture = New-RemovalFixture ('foreign channel ' + $foreignChannel)
+        $record = Get-Content -LiteralPath $fixture.Receipt -Raw | ConvertFrom-Json
+        $record.installation_channel = $foreignChannel
+        Write-NipatJsonAtomic $fixture.Receipt $record
+        Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'foreign receipt channel is rejected'
+        Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.CacheFile)) 'foreign ownership prevents unregister and cache removal'
+    }
 
     Reset-RemovalFixture
     $fixture = New-RemovalFixture 'different registered location'
@@ -181,16 +186,21 @@ try {
     Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'custom cache without storage marker is rejected'
 
     Reset-RemovalFixture
-    $fixture = New-RemovalFixture 'legacy cache compatibility'
-    $legacyCache = Join-Path (Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview') 'cache'
+    $fixture = New-RemovalFixture 'default cache ownership'
+    $legacyCache = Join-Path (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop') 'cache'
     [IO.Directory]::CreateDirectory((Split-Path -Parent $legacyCache)) | Out-Null
     Move-Item -LiteralPath $fixture.Layout.cache_dir -Destination $legacyCache
     $fixture.Layout.cache_dir = $legacyCache
     $fixture.CacheFile = Join-Path $legacyCache ([IO.Path]::GetFileName($fixture.CacheFile))
     [IO.File]::Delete((Join-Path $legacyCache '.nipat-storage.ini'))
+    Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'the default cache also requires an ownership marker'
+    Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.CacheFile) -and
+        (Test-Path -LiteralPath (Join-Path $legacyCache 'research-notes.txt'))) 'unmarked default cache stops removal before changing files or WSL'
+    [IO.File]::WriteAllText((Join-Path $legacyCache '.nipat-storage.ini'),
+        "[NIPAT]`nschema_version=1`ninstallation_channel=desktop`nrole=cache`n", [Text.Encoding]::ASCII)
     Invoke-NipatRuntimeRemoval (Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir)
     Assert-Test (-not (Test-Path -LiteralPath $fixture.CacheFile) -and
-        (Test-Path -LiteralPath (Join-Path $legacyCache 'research-notes.txt'))) 'legacy default cache needs no marker but only verified archives are removed'
+        (Test-Path -LiteralPath (Join-Path $legacyCache 'research-notes.txt'))) 'marked default cache removes verified archives and preserves research notes'
 
     Reset-RemovalFixture
     $fixture = New-RemovalFixture 'foreign cache marker'

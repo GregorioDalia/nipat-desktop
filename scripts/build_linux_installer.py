@@ -26,7 +26,8 @@ assets = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(assets)
 bundle = assets.bundle
 
-PACKAGE = "nipat-05-preview"
+PACKAGE = "nipat-desktop"
+COMMAND = "nipat"
 APP_PATH = Path("opt") / PACKAGE
 LAUNCH_SOURCE = "installer/linux/launch.py"
 ICON_SOURCE = "assets/branding/nipat-symbol.svg"
@@ -60,8 +61,8 @@ def verified_inputs(project: Path, manifest_path: Path, *, require_clean: bool =
         assets.validate_installation_profile(manifest.get("installation_profile"))
     except (TypeError, AttributeError, KeyError) as exc:
         raise ValueError("Struttura del manifest installer non valida.") from exc
-    if not manifest["version"].startswith("0.5."):
-        raise ValueError("Il pacchetto Preview richiede una versione 0.5.")
+    if not re.fullmatch(r"0\.6\.\d+(?:(?:a|b|rc)\d+)?", manifest["version"]):
+        raise ValueError("Il pacchetto NIPAT Desktop richiede una versione 0.6.")
     if assets.checked_version(project) != manifest["version"]:
         raise ValueError("Versione dei sorgenti diversa dal manifest runtime.")
     if assets.installation_profile(project) != manifest["installation_profile"]:
@@ -103,7 +104,7 @@ def generated_files(manifest: dict, manifest_bytes: bytes) -> dict[str, tuple[by
     release = {
         "schema_version": 1,
         "package_version": manifest["version"],
-        "status": "alpha-for-domain-validation",
+        "status": "for-domain-validation",
         "built_at_utc": manifest.get("built_at_utc"),
         "source_git": {"commit": manifest["source_commit"], "dirty": False, "available": True},
         "source_sha256": manifest["source_sha256"],
@@ -115,15 +116,15 @@ def generated_files(manifest: dict, manifest_bytes: bytes) -> dict[str, tuple[by
     launcher = ("#!/bin/sh\nexec /usr/bin/python3.12 -I "
                 f"/{APP_PATH.as_posix()}/{LAUNCH_SOURCE} \"$@\"\n")
     desktop = (
-        "[Desktop Entry]\nType=Application\nName=NIPAT 0.5 Preview\n"
+        "[Desktop Entry]\nType=Application\nName=NIPAT Desktop\n"
         "Comment=Scientific analysis with the NIPAT guided command line\n"
-        f"Exec=/usr/bin/{PACKAGE} --desktop\nTryExec=/usr/bin/{PACKAGE}\n"
+        f"Exec=/usr/bin/{COMMAND} --desktop\nTryExec=/usr/bin/{COMMAND}\n"
         f"Terminal=true\nIcon=/{APP_PATH.as_posix()}/{ICON_SOURCE}\nCategories=Science;Biology;\n"
     )
     return {
         f"{APP_PATH.as_posix()}/.distribution/{assets.MANIFEST_NAME}": (manifest_bytes, 0o644),
         f"{APP_PATH.as_posix()}/release.json": ((json.dumps(release, indent=2) + "\n").encode(), 0o644),
-        f"usr/bin/{PACKAGE}": (launcher.encode(), 0o755),
+        f"usr/bin/{COMMAND}": (launcher.encode(), 0o755),
         f"usr/share/applications/{PACKAGE}.desktop": (desktop.encode(), 0o644),
         f"usr/share/doc/{PACKAGE}/copyright": ((
             "NIPAT - https://github.com/GregorioDalia/nipat-desktop\n\n"
@@ -145,7 +146,7 @@ def control_bytes(manifest: dict, installed_kib: int) -> bytes:
         "Maintainer: NIPAT contributors\n"
         f"Installed-Size: {installed_kib}\nDepends: {DEPENDENCIES}\n"
         "Homepage: https://github.com/GregorioDalia/nipat-desktop\n"
-        "Description: NIPAT scientific CLI for Ubuntu 24.04 LTS\n"
+        "Description: NIPAT Desktop scientific CLI for Ubuntu 24.04 LTS\n"
         " Includes the verified scientific image for local Docker Engine execution.\n"
         " Requires explicit user access to a compatible local Docker daemon.\n"
         " This package does not configure Docker permissions or modify user data.\n"

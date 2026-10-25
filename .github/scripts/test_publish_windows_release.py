@@ -138,7 +138,7 @@ class ReleaseGuards(unittest.TestCase):
             evidence["installation_profile"] = self.manifest["installation_profile"]
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
-    def make_preview_package(self):
+    def make_desktop_package(self):
         profile_path = Path(__file__).resolve().parents[2] / publisher.INSTALLATION_PROFILE_SOURCE
         profile_bytes = profile_path.read_bytes()
         self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = profile_bytes
@@ -147,7 +147,7 @@ class ReleaseGuards(unittest.TestCase):
             name: hashlib.sha256(content).hexdigest() for name, content in self.sources.items()
         }
         self.manifest["installation_profile"] = json.loads(profile_bytes)
-        self.make_wsl_package("0.5.0a1")
+        self.make_wsl_package("0.6.0")
 
     def make_docker_installer(self):
         self.make_dual_package("0.4.1")
@@ -176,17 +176,17 @@ class ReleaseGuards(unittest.TestCase):
         (self.desktop / "docker-installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     def joint_fixture(self):
-        self.make_preview_package()
+        self.make_desktop_package()
         linux = self.root / "linux"
         evidence = self.root / "pair"
         linux.mkdir()
         evidence.mkdir()
-        package = linux / "nipat-05-preview_0.5.0~a1_amd64.deb"
+        package = linux / "nipat-desktop_0.6.0_amd64.deb"
         package.write_bytes(b"deb fixture; actual package validation is covered by builder tests")
         for name in ("linux-installer-build.json", "linux-installation-check.json", "linux-dependency-check.json"):
             (linux / name).write_text("{}")
         actual = {
-            "schema_version": 1, "version": "0.5.0a1", "source_commit": COMMIT,
+            "schema_version": 1, "version": "0.6.0", "source_commit": COMMIT,
             "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
             "scientific_archive": self.manifest["assets"]["scientific_image"],
             "windows": {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(self.setup / "NIPAT-Setup.exe")},
@@ -221,7 +221,7 @@ class ReleaseGuards(unittest.TestCase):
     def test_joint_assets_require_fresh_verification_and_publish_both_packages_and_evidence(self):
         parts = self.joint_fixture()
         result, calls = self.prepare_joint(*parts)
-        self.assertEqual(result["version"], "0.5.0a1")
+        self.assertEqual(result["version"], "0.6.0")
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][1], {"project": self.root / "exact-built-source"})
         digests = publisher.checksums(self.root / "release/SHA256SUMS")
@@ -264,7 +264,7 @@ class ReleaseGuards(unittest.TestCase):
                     patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
                                             "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
                     patch.object(publisher.subprocess, "run"), \
-                    patch.object(publisher, "committed_version", return_value="0.5.0a1"), \
+                    patch.object(publisher, "committed_version", return_value="0.6.0"), \
                     patch.object(publisher, "source_bytes", return_value=json.dumps(parts[-1]).encode()), \
                     patch.object(publisher, "api", side_effect=[run, jobs]), \
                     patch.object(publisher, "command", return_value="b" * 40) as command, \
@@ -276,7 +276,7 @@ class ReleaseGuards(unittest.TestCase):
 
     def test_invalid_pair_cannot_reach_tag_draft_or_upload_operations(self):
         parts = self.joint_fixture()
-        run = {"id": 123, "head_sha": COMMIT, "head_branch": "feature/0.5-foundation", "status": "completed",
+        run = {"id": 123, "head_sha": COMMIT, "head_branch": "feature/0.6-validation", "status": "completed",
                "conclusion": "success", "event": "workflow_dispatch",
                "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
                "head_repository": {"full_name": publisher.REPO}}
@@ -294,7 +294,7 @@ class ReleaseGuards(unittest.TestCase):
                 patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
                                         "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
                 patch.object(publisher.subprocess, "run"), \
-                patch.object(publisher, "committed_version", return_value="0.5.0a1"), \
+                patch.object(publisher, "committed_version", return_value="0.6.0"), \
                 patch.object(publisher, "source_bytes", return_value=json.dumps(parts[-1]).encode()), \
                 patch.object(publisher, "api", side_effect=[run, jobs]) as api, \
                 patch.object(publisher, "command", side_effect=command), \
@@ -408,33 +408,46 @@ class ReleaseGuards(unittest.TestCase):
         self.assertFalse((self.root / "release" / self.package_name).exists())
         self.assertFalse((self.root / "release/docker-installer-build.json").exists())
 
-    def test_preview_review_accepts_profile_bound_to_source_and_installer(self):
-        self.make_preview_package()
+    def test_desktop_review_accepts_profile_bound_to_source_and_installer(self):
+        self.make_desktop_package()
         result = self.prepare()
-        self.assertEqual(result["installation_profile"]["channel"], "preview-0.5")
+        self.assertEqual(result["installation_profile"]["channel"], "desktop")
         evidence = json.loads((self.setup / "installer-build.json").read_text())
         self.assertEqual(evidence["installation_profile"], result["installation_profile"])
         assets = publisher.checksums(self.root / "release/SHA256SUMS")
         self.assertEqual(set(assets), {
             "NIPAT-Setup.exe", publisher.MANIFEST,
-            "nipat-wsl-rootfs-0.5.0a1-amd64.tar.gz",
-            "nipat-scientific-runtime-0.5.0a1-amd64.tar.gz",
+            "nipat-wsl-rootfs-0.6.0-amd64.tar.gz",
+            "nipat-scientific-runtime-0.6.0-amd64.tar.gz",
         })
 
+    def test_desktop_rejects_preview_identity_even_when_source_matches(self):
+        self.make_desktop_package()
+        profile = dict(publisher.PREVIEW_INSTALLATION_PROFILE)
+        raw = json.dumps(profile).encode()
+        self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = raw
+        self.manifest["source_sha256"][publisher.INSTALLATION_PROFILE_SOURCE] = hashlib.sha256(raw).hexdigest()
+        self.manifest["installation_profile"] = profile
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "required isolated desktop namespace"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
     def test_05_requires_wsl_evidence_independently_of_desktop_delivery(self):
-        for version in ("0.5.0a1", "0.5.0", "1.0.0"):
+        for version in ("0.6.0", "0.5.0", "1.0.0"):
             with self.subTest(version=version):
                 self.assertTrue(publisher.requires_wsl_installer_evidence(version))
                 self.assertFalse(publisher.requires_desktop_bundle(version))
                 self.assertFalse(publisher.requires_desktop_installer(version))
-        self.make_preview_package()
+        self.make_desktop_package()
         (self.setup / "installer-build.json").unlink()
         with self.assertRaisesRegex(ValueError, "Missing self-contained installer build evidence"):
             self.prepare()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_rejects_mixed_wsl_build_inputs_without_desktop(self):
-        self.make_preview_package()
+    def test_desktop_rejects_mixed_wsl_build_inputs_without_desktop(self):
+        self.make_desktop_package()
         path = self.setup / "installer-build.json"
         original = json.loads(path.read_text())
         for field in original:
@@ -446,14 +459,14 @@ class ReleaseGuards(unittest.TestCase):
                     self.prepare()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_rejects_explicit_or_stray_desktop_deliverables(self):
-        self.make_preview_package()
+    def test_desktop_rejects_explicit_or_stray_desktop_deliverables(self):
+        self.make_desktop_package()
         desktop = self.root / "desktop"
         desktop.mkdir()
         with self.assertRaisesRegex(ValueError, "Docker Desktop deliverables are not supported"):
             self.prepare(desktop=desktop)
         for folder in (self.setup, self.runtime):
-            for name in ("NIPAT-DockerDesktop-Setup.exe", "NIPAT-DockerDesktop-0.5.0a1-windows-x64.zip",
+            for name in ("NIPAT-DockerDesktop-Setup.exe", "NIPAT-DockerDesktop-0.6.0-windows-x64.zip",
                          "package-build.json", "docker-installer-build.json"):
                 with self.subTest(folder=folder.name, name=name):
                     path = folder / name
@@ -463,8 +476,8 @@ class ReleaseGuards(unittest.TestCase):
                     path.unlink()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_rejects_missing_or_foreign_manifest_profile(self):
-        self.make_preview_package()
+    def test_desktop_rejects_missing_or_foreign_manifest_profile(self):
+        self.make_desktop_package()
         original = copy.deepcopy(self.manifest["installation_profile"])
         for key, value in (("channel", "stable"), ("app_dir_name", "NIPAT"),
                            ("data_dir_name", "NIPAT"), ("distro_prefix", "NIPAT-Runtime-"),
@@ -473,16 +486,16 @@ class ReleaseGuards(unittest.TestCase):
                 self.manifest["installation_profile"] = dict(original, **{key: value})
                 self.write_manifests()
                 self.write_installer_evidence()
-                with self.assertRaisesRegex(ValueError, "isolated 0.5 preview namespace"):
+                with self.assertRaisesRegex(ValueError, "required isolated desktop namespace"):
                     self.prepare()
         del self.manifest["installation_profile"]
         self.write_manifests()
-        with self.assertRaisesRegex(ValueError, "isolated 0.5 preview namespace"):
+        with self.assertRaisesRegex(ValueError, "required isolated desktop namespace"):
             self.prepare()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_rejects_profile_not_bound_to_verified_source(self):
-        self.make_preview_package()
+    def test_desktop_rejects_profile_not_bound_to_verified_source(self):
+        self.make_desktop_package()
         changed = dict(self.manifest["installation_profile"], display_name="Other channel")
         source = publisher.INSTALLATION_PROFILE_SOURCE
         self.sources[source] = json.dumps(changed).encode()
@@ -493,8 +506,8 @@ class ReleaseGuards(unittest.TestCase):
             self.prepare()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_rejects_profile_omitted_from_source_allowlist(self):
-        self.make_preview_package()
+    def test_desktop_rejects_profile_omitted_from_source_allowlist(self):
+        self.make_desktop_package()
         source = publisher.INSTALLATION_PROFILE_SOURCE
         del self.sources[source]
         self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
@@ -506,8 +519,8 @@ class ReleaseGuards(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "profile is missing from the verified source list"):
             self.prepare()
 
-    def test_preview_rejects_installer_evidence_missing_or_changing_profile(self):
-        self.make_preview_package()
+    def test_desktop_rejects_installer_evidence_missing_or_changing_profile(self):
+        self.make_desktop_package()
         path = self.setup / "installer-build.json"
         original = json.loads(path.read_text())
         for mutation in ("missing", "foreign"):
@@ -522,12 +535,12 @@ class ReleaseGuards(unittest.TestCase):
                     self.prepare()
         self.assertFalse((self.root / "release").exists())
 
-    def test_preview_publication_stops_before_api_without_committed_acceptance(self):
+    def test_desktop_publication_stops_before_api_without_committed_acceptance(self):
         with patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
                 patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
                                         "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
                 patch.object(publisher.subprocess, "run"), \
-                patch.object(publisher, "committed_version", return_value="0.5.0a1") as version, \
+                patch.object(publisher, "committed_version", return_value="0.6.0") as version, \
                 patch.object(publisher, "source_bytes", side_effect=subprocess.CalledProcessError(128, "git show")), \
                 patch.object(publisher, "api") as api, \
                 patch.object(publisher, "command", return_value="b" * 40) as command, \
@@ -544,7 +557,7 @@ class ReleaseGuards(unittest.TestCase):
 
     def test_manifest_cannot_downgrade_committed_version_to_desktop_protocol(self):
         self.make_docker_installer()
-        self.sources["pyproject.toml"] = b'[project]\nversion = "0.5.0a1"\n'
+        self.sources["pyproject.toml"] = b'[project]\nversion = "0.6.0"\n'
         self.manifest["source_sha256"]["pyproject.toml"] = hashlib.sha256(
             self.sources["pyproject.toml"]).hexdigest()
         self.write_manifests()

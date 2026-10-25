@@ -349,7 +349,7 @@ class BundledRunnerTests(unittest.TestCase):
         popen.assert_not_called()
         document = json.loads((run / "work/engine-compose.json").read_text(encoding="utf-8"))
         service = document["services"]["scientific"]
-        self.assertEqual(service["image"], "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.5.0a1}")
+        self.assertEqual(service["image"], "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.6.0}")
         for volume in service["volumes"]:
             self.assertTrue(volume["source"].startswith("/mnt/d/NIPAT test $$ENV, è/"))
         self.assertIn("$$VALUE", service["volumes"][0]["source"])

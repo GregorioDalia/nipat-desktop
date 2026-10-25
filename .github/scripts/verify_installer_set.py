@@ -82,7 +82,7 @@ def verify_dependency_check(evidence, manifest, manifest_bytes, package_record):
         "The dependency check must use a pinned Ubuntu 24.04 image")
     packages = evidence.get("dependency_packages")
     require(isinstance(packages, dict)
-            and set(packages) == {"python3.12", "docker.io", "docker-compose-v2", "nipat-05-preview"}
+            and set(packages) == {"python3.12", "docker.io", "docker-compose-v2", "nipat-desktop"}
             and all(isinstance(version, str) and version.strip() for version in packages.values()),
             "Missing dependency versions from the clean Ubuntu installation")
     checks = evidence.get("checks")
@@ -106,11 +106,11 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
     # to the exact commit. It does not publish, create tags or contact GitHub.
     with tempfile.TemporaryDirectory(prefix="nipat-review-") as temporary:
         manifest = publisher.prepare_assets(windows, assets, Path(temporary) / "verified", commit)
-    require(manifest["version"].startswith("0.5."), "This review contract is for NIPAT 0.5")
+    require(manifest["version"].startswith("0.6."), "This review contract is for NIPAT 0.6")
     record = read_json(linux / "linux-installer-build.json")
     name = record.get("file", "")
     require(isinstance(name, str) and re.fullmatch(
-        r"nipat-05-preview_[0-9]+\.[0-9]+\.[0-9]+(?:~(?:a|b|rc)[0-9]+)?_amd64\.deb", name),
+        r"nipat-desktop_[0-9]+\.[0-9]+\.[0-9]+(?:~(?:a|b|rc)[0-9]+)?_amd64\.deb", name),
         "Invalid Linux package name")
     package = linux / name
     require(record == builder.verify_package(package, manifest_path, project),

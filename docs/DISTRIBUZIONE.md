@@ -1,7 +1,6 @@
 # Distribuzione e requisiti
 
-Questo documento descrive **NIPAT 0.5.0a1 Preview**, destinata al collaudo
-interno. Consultare la pagina
+Questo documento descrive **NIPAT Desktop 0.6.0**, candidata alla validazione. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate, i pacchetti disponibili e le relative evidenze.
 Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
@@ -33,7 +32,7 @@ portabile, ambiente Linux e archivio dell'immagine scientifica. Il setup
 verifica gli archivi, prepara la distribuzione WSL, importa l'immagine ed
 esegue i controlli dell'ambiente e gli autotest. Non sono necessari download
 separati dei componenti NIPAT né spostamenti manuali degli archivi.
-Il setup crea il collegamento **NIPAT 0.5 Preview** nel menu Start e, se
+Il setup crea il collegamento **NIPAT Desktop** nel menu Start e, se
 selezionato, sul desktop. Il collegamento apre il menu guidato tramite
 `2_AVVIA.cmd`; per la CLI diretta è disponibile `nipat.cmd`. Entrambi
 controllano la configurazione installata prima di avviare il client Python.
@@ -47,42 +46,48 @@ proprio account: richiede l'elevazione soltanto per le operazioni di sistema
 che la necessitano. Le policy amministrative del computer possono impedire
 l'attivazione di WSL. L'installazione completa su un sistema privo di WSL e
 la ripresa dopo riavvio devono essere verificate separatamente dai test
-automatici del codice. La Preview non è firmata da NIPAT: la compatibilità
+automatici del codice. Il pacchetto non è firmato da NIPAT: la compatibilità
 con le protezioni del computer va verificata per ciascun dispositivo del
 collaudo. Il setup non modifica le policy di sicurezza per autorizzarsi
 all'esecuzione.
 
-La configurazione ha identità **NIPAT 0.5 Preview**. Il setup propone cinque
-cartelle modificabili separatamente:
+La configurazione ha identità **NIPAT Desktop**, indipendente dal numero di
+versione. Il setup propone cinque cartelle modificabili separatamente:
 
 | Contenuto | Percorso predefinito |
 | --- | --- |
-| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
-| Ambiente WSL e immagine scientifica | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
-| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
-| Dati di riferimento | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
-| Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
+| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-Desktop` |
+| Ambiente WSL e immagine scientifica | `%LOCALAPPDATA%\NIPAT-Desktop\wsl` |
+| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-Desktop\cache` |
+| Dati di riferimento | `%LOCALAPPDATA%\NIPAT-Desktop\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
 
 Le cartelle devono essere scrivibili dall'account e trovarsi su dischi locali
 fissi. Possono essere su dischi diversi, ma devono essere distinte e nessuna
 può contenerne un'altra. Il setup rifiuta cartelle di sistema, destinazioni
-della versione stabile, percorsi UNC, unità di rete, supporti rimovibili e
+delle altre installazioni NIPAT, percorsi UNC, unità di rete, supporti rimovibili e
 percorsi che attraversano junction o collegamenti. La cartella applicativa
-deve essere vuota o appartenere alla stessa Preview; dati già presenti nelle
+deve essere vuota o appartenere alla stessa installazione NIPAT Desktop; dati già presenti nelle
 cartelle dati e risultati vengono conservati. La cartella dati non limita
 la posizione degli input selezionati per le analisi.
 
-Il menu Start include **Cartella NIPAT 0.5 Preview**, che apre la destinazione applicativa.
+Le preferenze di **Configura** sono separate dall'installazione e risiedono
+in `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json`. Modificano i valori
+proposti nel menu, senza trasferire applicazione, ambiente WSL o cache.
+Le opzioni esplicite della CLI conservano il loro comportamento; i comandi
+diretti non usano queste preferenze.
+
+Il menu Start include **Cartella NIPAT Desktop**, che apre la destinazione applicativa.
 Le preferenze dei percorsi sono associate al canale e vengono riproposte nelle
 reinstallazioni, anche dopo la disinstallazione. La modalità **Aggiornamento
-e riparazione** riutilizza la stessa cartella di una Preview riconosciuta,
+e riparazione** riutilizza la stessa cartella di un’installazione NIPAT Desktop riconosciuta,
 anche quando contiene residui di disinstallazione. Una cartella estranea non
 vuota non viene svuotata: il setup propone, quando disponibile, una
 sottocartella vuota oppure richiede un'altra destinazione.
 
 L'esito finale della configurazione è `NIPAT: ready`. Se si interrompe,
 la nuova applicazione resta bloccata per le analisi. Il collegamento
-**NIPAT 0.5 Preview - completa preparazione** riprende il setup utilizzando
+**NIPAT Desktop - completa preparazione** riprende il setup utilizzando
 i componenti conservati. Stato e log si trovano nella sottocartella
 `.runtime\installer` dell'applicazione.
 
@@ -113,16 +118,16 @@ aggiornamento automatico generale di Windows o WSL.
 La disinstallazione rimuove i file applicativi e i collegamenti e conserva
 sempre dati e risultati. Per impostazione predefinita conserva anche ambiente
 WSL e cache; l'opzione di rimozione aggiuntiva elimina soltanto le distribuzioni
-verificate della Preview e gli archivi verificati della sua cache, nelle
+verificate di NIPAT Desktop e gli archivi verificati della sua cache, nelle
 destinazioni attuali e precedenti registrate. Non interviene su Docker
-Desktop, sulla versione stabile o su altre distribuzioni WSL. Le preferenze
+Desktop, sulle altre installazioni NIPAT o su altre distribuzioni WSL. Le preferenze
 e i piccoli registri dei percorsi restano disponibili per una reinstallazione.
 I dettagli tecnici e le prove richieste sono in
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
 
 ## Pacchetto Ubuntu
 
-Il file `.deb` installa **NIPAT 0.5 Preview**, la documentazione e l’archivio
+Il file `.deb` installa **NIPAT Desktop**, la documentazione e l’archivio
 scientifico già verificato dalla build. Windows e Ubuntu incorporano gli
 stessi byte di questo archivio, identificati da dimensione e SHA-256 nel
 manifest comune. Ubuntu non include né richiede il filesystem WSL.
@@ -146,12 +151,13 @@ poiché concede privilegi equivalenti a root.
 
 | Elemento | Posizione o identificativo |
 | --- | --- |
-| Pacchetto | `nipat-05-preview` |
-| Applicazione | `/opt/nipat-05-preview` |
-| Avvio | Collegamento **NIPAT 0.5 Preview** o `nipat-05-preview` |
-| Dati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/data` |
-| Risultati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/runs` |
-| Stato e log della preparazione | `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview` |
+| Pacchetto | `nipat-desktop` |
+| Applicazione | `/opt/nipat-desktop` |
+| Avvio | Collegamento **NIPAT Desktop** o `nipat` |
+| Dati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-desktop/data` |
+| Risultati predefiniti | `${XDG_DATA_HOME:-~/.local/share}/nipat-desktop/runs` |
+| Stato e log della preparazione | `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop` |
+| Preferenze del menu | `${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json` |
 
 Un aggiornamento del pacchetto conserva i dati dell’utente e richiede la
 verifica della nuova combinazione di applicazione e immagine. La rimozione

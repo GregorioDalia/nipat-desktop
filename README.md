@@ -3,15 +3,16 @@
   <img src="assets/branding/nipat-logo.svg" alt="NIPAT" width="335">
 </picture>
 
-# NIPAT
+# NIPAT Desktop
 
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione di questo documento: 0.5.0a1 Preview, per collaudo interno.**
-La documentazione descrive il contenuto di questa versione. Consultare la pagina
+**NIPAT Desktop 0.6.0 — candidata alla validazione.**
+Questa documentazione descrive la candidata prodotta dalle build di revisione;
+non attesta una pubblicazione o il completamento dell'accettazione. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e i relativi installatori. Gli artefatti GitHub Actions
 sono pacchetti di revisione tecnica e non equivalgono a una release.
@@ -30,7 +31,7 @@ alla validazione scientifica per uno specifico impiego.
 Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
 cartella distinta con risultati, intermedi conservati, metadati e log.
 I run esistenti non vengono sovrascritti. I quattro workflow sono disponibili
-sia nel menu sia nella CLI diretta; la GUI grafica non fa parte della 0.5.
+sia nel menu sia nella CLI diretta; la GUI grafica non fa parte della 0.6.
 
 ## Piattaforme e installazione
 
@@ -45,16 +46,16 @@ Docker Desktop. WSL2 e la virtualizzazione devono essere disponibili sul
 computer; la loro attivazione può richiedere Internet, autorizzazione
 amministrativa e riavvio.
 
-L'installazione Windows usa il nome **NIPAT 0.5 Preview**. Avviare
+L'installazione Windows usa il nome **NIPAT Desktop**. Avviare
 `NIPAT-Setup.exe` con doppio clic dal proprio account, senza scegliere
 «Esegui come amministratore»;
 la configurazione deve terminare con `NIPAT: ready`. Per ogni utilizzo
-successivo, aprire con doppio clic il collegamento **NIPAT 0.5 Preview**
+successivo, aprire con doppio clic il collegamento **NIPAT Desktop**
 sul desktop o selezionarlo dal menu Start. Non occorre spostare archivi o aprire
 manualmente PowerShell. Il setup permette di scegliere separatamente le
 cartelle dell'applicazione, dell'ambiente WSL, della cache, dei dati e dei
 risultati, anche su dischi locali fissi diversi. Le scelte vengono riproposte
-alla reinstallazione. Una Preview riconosciuta può essere aggiornata o riparata
+alla reinstallazione. Un’installazione NIPAT Desktop riconosciuta può essere aggiornata o riparata
 nella stessa cartella, conservando i file estranei ai componenti installati.
 La disinstallazione conserva sempre dati e risultati;
 la rimozione dell'ambiente NIPAT e della cache è facoltativa.
@@ -62,7 +63,7 @@ Requisiti, percorsi e gestione dell'installazione sono nella
 [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
 [documentazione di distribuzione](docs/DISTRIBUZIONE.md).
 
-La Preview Windows non dispone di una firma Authenticode NIPAT. Le protezioni
+Il pacchetto Windows non dispone di una firma Authenticode NIPAT. Le protezioni
 del computer possono impedirne il download, la preparazione o l'avvio;
 l'installazione va verificata sui dispositivi destinati al collaudo. La
 [guida Windows](docs/INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser)
@@ -73,7 +74,7 @@ del pacchetto Windows. APT installa anche Python, Docker Engine e Compose v2
 se mancano, scaricandoli dai repository configurati. Servono Internet e
 autorizzazione amministrativa per queste dipendenze; l’accesso dell’utente
 a Docker richiede una configurazione amministrativa distinta. Il collegamento
-**NIPAT 0.5 Preview** o il comando `nipat-05-preview` apre il menu.
+**NIPAT Desktop** o il comando `nipat` apre il menu.
 Requisiti, preparazione iniziale e rimozione
 sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 
@@ -87,9 +88,13 @@ sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 
 Le indicazioni contestuali spiegano ogni campo. `:indietro` corregge il campo
 precedente, `:annulla` torna al menu e `:vuoto` svuota un campo facoltativo.
-L'opzione **5 — Cartella risultati** cambia la destinazione per la sessione;
-**6 — Ultima esecuzione** riapre l'ultimo run della sessione. La
-**Guida all'uso** include la verifica degli strumenti di analisi.
+**5 — Configura** salva cartelle dati e risultati, riferimenti, modalità e
+parametri predefiniti dei workflow per gli avvii successivi del menu.
+Ogni analisi permette di modificarli prima della conferma; campioni, coppie
+e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
+CLI diretti. **6 — Ultima esecuzione** riapre il run più recente della sessione;
+**7 — Guida e informazioni** e **8 — Verifica ambiente** separano consultazione
+e diagnostica. Per spostare applicazione, ambiente WSL o cache usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
 cartella dell'applicazione; condivisioni UNC e unità di rete non sono supportate.
@@ -123,12 +128,12 @@ il motore scientifico. `nipat.cmd --help` e `nipat.cmd <workflow> --help`
 elencano le opzioni. La [guida](docs/GUIDA_UTILIZZO.md) documenta formati,
 modalità alternative e parametri.
 
-Su Ubuntu installato dal pacchetto `.deb`, usare `nipat-05-preview` al posto
+Su Ubuntu installato dal pacchetto `.deb`, usare `nipat` al posto
 di `.\nipat.cmd`, percorsi Linux e `\` per continuare un comando su più righe.
 Le opzioni e i workflow sono gli stessi. Per esempio:
 
 ```bash
-nipat-05-preview --runs-dir "$HOME/risultati-nipat" contamination \
+nipat --runs-dir "$HOME/risultati-nipat" contamination \
   --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
 ```
 
@@ -169,6 +174,7 @@ indipendenti e problemi riproducibili.
 ## Documentazione e licenza
 
 - [Sintesi del prodotto](SUNTO.md)
+- [Note della versione 0.6.0](docs/RELEASE_0.6.0.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)

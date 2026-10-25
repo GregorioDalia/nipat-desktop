@@ -1,6 +1,6 @@
 # Validazione tecnica e di dominio
 
-Questa scheda accompagna **NIPAT 0.5.0a1 Preview**.
+Questa scheda accompagna **NIPAT Desktop 0.6.0**.
 Consente di registrare separatamente installazione, esecuzione e concordanza
 scientifica. Un autotest superato verifica i casi inclusi; non attesta la
 validità per ogni campione o scenario d’impiego. Per l’autorizzazione alla
@@ -28,19 +28,21 @@ e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
 | Esito di `doctor --runtime` | |
 | Esito finale di `self-test` | |
 | Apertura e interazione con il menu | |
+| Preferenze salvate in Configura e valori effettivi nel riepilogo dell'analisi | |
 
 Nel pacchetto Windows verificare l'avvio con doppio clic di `NIPAT-Setup.exe`,
-il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT 0.5 Preview**.
+il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Desktop**.
 Annotare eventuali passaggi manuali non previsti. Conservare `setup.log` e
-`state.json` in `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview\.runtime\installer`.
+`state.json` nella sottocartella `.runtime\installer` dell'applicazione
+selezionata nel setup.
 L'attivazione iniziale di WSL, la ripresa dopo riavvio e un aggiornamento
 costituiscono prove distinte dall'installazione su WSL già funzionante.
 
 Nel pacchetto Ubuntu verificare installazione tramite APT, apertura del
-collegamento nel menu applicazioni e avvio con `nipat-05-preview`. Provare
+collegamento nel menu applicazioni e avvio con `nipat`. Provare
 la preparazione iniziale da un account non root, input privati e risultati
 leggibili e scrivibili dallo stesso utente. Conservare stato e log nella
-cartella `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview`. Registrare
+cartella `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`. Registrare
 se Docker era già installato e autorizzato: una prova su un sistema
 preparato non copre l’esperienza iniziale su Ubuntu Desktop pulito.
 
@@ -60,7 +62,7 @@ sul pacchetto effettivamente provato.
 
 1. Aprire NIPAT, verificare la versione e scegliere una cartella risultati
    dedicata alla prova.
-2. Eseguire **Verifica strumenti di analisi** dal menu **Guida all'uso**.
+2. Eseguire **8 — Verifica ambiente** dal menu principale.
 3. Selezionare **DNPcall** e utilizzare BAM, riferimento indicizzato e pannello
    di un caso con risultati attesi disponibili. Confermare il riepilogo.
 4. Verificare stato finale, numero di campioni, corrispondenza degli alias,
@@ -108,7 +110,13 @@ Documentare almeno le condizioni rilevanti per l'uso previsto:
 | Contamination | Singoli file e cartella con gli stessi input; presenza e assenza di `ratio_REF_ALT`; nessun sito informativo. |
 | CPI | Coppie appropriate; prefissi configurati; ALL, pannello singolo e più cutoff; nessun sito informativo. |
 | Robustezza | Percorsi con spazi, input fuori dal progetto, risultati in una destinazione scelta; file mancanti, intestazioni errate e nomi in conflitto. |
-| Utilizzo | Correzione degli input, annullamento, riepilogo prima dell'avvio, apertura dei risultati, ripresa dopo un errore. |
+| Utilizzo | Salvataggio e ripristino delle preferenze; persistenza dopo la riapertura; correzione per la singola analisi; campioni, coppie e run sempre selezionati esplicitamente; annullamento, riepilogo, apertura dei risultati e recupero dopo errore. |
+
+Verificare che un cambiamento in **Configura** venga riproposto nel menu dopo
+la riapertura e non alteri un comando CLI diretto. Ripetere un caso con gli
+stessi parametri espliciti, confrontando i valori effettivi in `run.json`.
+Provare l'annullamento senza salvataggio, il ripristino e un riferimento
+salvato non più disponibile. Dati e risultati devono restare invariati.
 
 Per modalità equivalenti, verificare gli stessi risultati usando lo stesso
 insieme di dati. Nei confronti numerici stabilire prima quali colonne,

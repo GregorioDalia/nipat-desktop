@@ -3,7 +3,7 @@ param(
     [switch] $LibraryOnly
 )
 
-# Optional removal of this Preview's owned compute environments. Analysis data
+# Optional removal of this installation's owned compute environments. Analysis data
 # and unknown files are never removal targets. Inno calls this before removing
 # the application, only after the user explicitly chooses runtime cleanup.
 . (Join-Path $PSScriptRoot 'bootstrap-common.ps1')
@@ -138,18 +138,17 @@ function Get-NipatRuntimeRemovalPlan([string] $Project) {
     $registrations = @(Get-NipatRemovalRegistrations)
     $targets = @()
     $knownTargets = @{}
-    $legacyRuntime = Get-NipatRemovalPath (Join-Path (Join-Path $env:LOCALAPPDATA $profile.data_dir_name) 'wsl')
     foreach ($runtime in $runtimeRoots.Values) {
         if ((Test-Path -LiteralPath $runtime -PathType Container) -and
-            -not (Test-NipatStorageMarker $runtime 'runtime') -and $runtime -ine $legacyRuntime) {
-            throw "Ambiente personalizzato privo del marcatore NIPAT: $runtime."
+            -not (Test-NipatStorageMarker $runtime 'runtime')) {
+            throw "Ambiente di calcolo privo del marcatore NIPAT: $runtime."
         }
         $receiptDirectory = Join-Path $runtime 'registrations'
         if (Test-Path -LiteralPath $receiptDirectory -PathType Container) {
             foreach ($file in @(Get-ChildItem -LiteralPath $receiptDirectory -Filter '*.json' -File)) {
                 $distro = [IO.Path]::GetFileNameWithoutExtension($file.Name)
                 if (-not $distro.StartsWith($profile.distro_prefix, [StringComparison]::Ordinal)) {
-                    throw "Registro di una distribuzione estranea nella cartella Preview: $($file.FullName)."
+                    throw "Registro di una distribuzione estranea nella cartella NIPAT Desktop: $($file.FullName)."
                 }
                 $receipt = Read-NipatOwnership $file.FullName $distro
                 Assert-NipatRuntimeNamespace $distro $receipt.rootfs_sha256 $runtime
@@ -175,7 +174,7 @@ function Get-NipatRuntimeRemovalPlan([string] $Project) {
     # the entire plan, independently of the order of layout discovery.
     foreach ($runtime in $runtimeRoots.Values) {
         foreach ($registration in $registrations) {
-            # Unrelated registrations can use a path syntax this Preview does
+            # Unrelated registrations can use a path syntax this application does
             # not support. They are never candidates; selected targets have
             # already undergone the strict location check above.
             try { $registeredPath = Get-NipatRemovalRegistrationPath $registration.BasePath }
@@ -188,12 +187,11 @@ function Get-NipatRuntimeRemovalPlan([string] $Project) {
         }
     }
     $cacheFiles = @()
-    $legacyCache = Get-NipatRemovalPath (Join-Path (Join-Path $env:LOCALAPPDATA $profile.data_dir_name) 'cache')
     foreach ($cache in $cacheRoots.Values) {
         if (-not (Test-Path -LiteralPath $cache -PathType Container)) { continue }
         $hasMarker = Test-NipatStorageMarker $cache 'cache'
-        if (-not $hasMarker -and $cache -ine $legacyCache) {
-            throw "Cache personalizzata priva del marcatore NIPAT: $cache."
+        if (-not $hasMarker) {
+            throw "Cache priva del marcatore NIPAT: $cache."
         }
         foreach ($file in @(Get-ChildItem -LiteralPath $cache -File -Force)) {
             if ($file.Name -cnotmatch '^([a-f0-9]{64})-(nipat-wsl-rootfs|nipat-scientific-runtime)-[A-Za-z0-9._-]+\.tar\.gz$') { continue }

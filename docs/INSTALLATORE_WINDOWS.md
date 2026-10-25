@@ -1,11 +1,11 @@
 # Installatore Windows
 
-Il pacchetto Windows di NIPAT 0.5 contiene l'applicazione, Python portabile,
+Il pacchetto Windows di NIPAT Desktop contiene l'applicazione, Python portabile,
 i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-La versione 0.5.0a1 appartiene al canale Preview per collaudo interno.
+Questo documento descrive NIPAT Desktop 0.6.0, candidata alla validazione.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti degli
@@ -29,7 +29,7 @@ di sistema non sono necessari.
 
 I checksum identificano i file distribuiti; non costituiscono una firma
 Authenticode né attestano il riconoscimento del distributore da parte di Windows.
-La Preview non dispone di una firma Authenticode NIPAT. Smart App Control
+Il pacchetto non dispone di una firma Authenticode NIPAT. Smart App Control
 può bloccare il setup, un eseguibile o gli script usati dalla preparazione
 e dall'avvio.
 Un'installazione riuscita non dimostra che tutti i componenti siano autorizzati
@@ -50,13 +50,13 @@ La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifich
 2. Scegliere la cartella applicativa nella pagina di destinazione, quindi
    le cartelle di ambiente WSL, cache, dati e risultati. Verificare la modalità
    indicata dal setup: **Installazione** per una cartella vuota oppure
-   **Aggiornamento e riparazione** per una Preview riconosciuta. Se richiesto,
+   **Aggiornamento e riparazione** per un’installazione NIPAT Desktop riconosciuta. Se richiesto,
    autorizzare l'abilitazione dei componenti Windows. Dopo un riavvio,
    accedere allo stesso account per riprendere.
 3. Attendere la verifica degli archivi, la preparazione del runtime e gli
    autotest. La configurazione è completa quando compare `NIPAT: ready`.
 4. Se la preparazione è completa e non serve un riavvio, il setup propone
-   **Avvia NIPAT 0.5 Preview**. Per gli utilizzi successivi aprire il
+   **Avvia NIPAT Desktop**. Per gli utilizzi successivi aprire il
    collegamento dal menu Start o dal desktop, creato se selezionato nel setup.
 
 I collegamenti avviano `2_AVVIA.cmd` con la cartella dati come directory
@@ -65,7 +65,7 @@ per l'uso nei terminali. Entrambi passano attraverso `scripts/windows/run.ps1`,
 che verifica stato `ready`, manifest e associazione al runtime prima di
 preparare l'ambiente del client. Il launcher `NIPAT.exe` resta incluso come
 componente aggiuntivo, ma non è il destinatario dei collegamenti ordinari.
-Il collegamento **Cartella NIPAT 0.5 Preview** nel menu Start apre la cartella applicativa
+Il collegamento **Cartella NIPAT Desktop** nel menu Start apre la cartella applicativa
 selezionata, con documentazione e comandi disponibili.
 
 Lo spazio disponibile deve contenere applicazione, cache degli archivi,
@@ -83,37 +83,38 @@ istruzioni Inno Setup e le verifica rispetto al manifest.
 
 | Risorsa | Valore o percorso predefinito |
 | --- | --- |
-| Canale | `preview-0.5` |
-| Nome applicazione | `NIPAT 0.5 Preview` |
-| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
-| Ambiente WSL | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
-| Cache | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
-| Dati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
-| Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
-| Registri delle destinazioni | `%LOCALAPPDATA%\NIPAT-0.5-Preview\installations` |
-| Distribuzione WSL2 | Nome con prefisso `NIPAT-05-Preview-`, associato al filesystem Linux e alla posizione scelta. |
-| Ripresa al successivo accesso | Valore RunOnce `NIPAT-05-Preview-ResumeSetup` |
+| Canale | `desktop` |
+| Nome applicazione | `NIPAT Desktop` |
+| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-Desktop` |
+| Ambiente WSL | `%LOCALAPPDATA%\NIPAT-Desktop\wsl` |
+| Cache | `%LOCALAPPDATA%\NIPAT-Desktop\cache` |
+| Dati | `%LOCALAPPDATA%\NIPAT-Desktop\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
+| Registri delle destinazioni | `%LOCALAPPDATA%\NIPAT-Desktop\installations` |
+| Preferenze del menu | `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json` |
+| Distribuzione WSL2 | Nome con prefisso `NIPAT-Desktop-`, associato al filesystem Linux e alla posizione scelta. |
+| Ripresa al successivo accesso | Valore RunOnce `NIPAT-Desktop-ResumeSetup` |
 
 AppId, mutex, collegamenti e voce di disinstallazione appartengono al medesimo
 canale. Le cinque radici di applicazione, ambiente WSL, cache, dati e risultati
 sono configurabili; i registri centrali restano nel profilo dell'utente.
 Le preferenze salvate in `HKCU` ripropongono le scelte nelle reinstallazioni,
-anche dopo la rimozione dell'applicazione. Un aggiornamento della Preview
-installata deve usare la stessa cartella applicativa.
+anche dopo la rimozione dell'applicazione. L'aggiornamento di un'installazione
+NIPAT Desktop deve usare la stessa cartella applicativa.
 
 Il setup verifica percorsi assoluti su dischi locali fissi, scrivibili
 dall'account e privi di junction o collegamenti. Le cinque radici non possono
 coincidere né essere annidate tra loro; non sono ammesse sovrapposizioni con
 cartelle di sistema, `Windows`, `Program Files` o destinazioni predefinite
-della versione stabile. Sono rifiutati percorsi UNC, unità di rete e supporti
+delle altre installazioni NIPAT. Sono rifiutati percorsi UNC, unità di rete e supporti
 rimovibili. La cartella applicativa deve essere vuota o riconosciuta come
-appartenente alla Preview. Una configurazione di stato e backend valida può
+appartenente a NIPAT Desktop. Una configurazione di stato e backend valida può
 identificare anche i residui di una disinstallazione, senza richiedere che
 la cartella contenga soltanto `.runtime`. La presenza di altri file non ne
 autorizza la cancellazione.
 
 Per una cartella estranea non vuota, il setup può proporre la sottocartella
-vuota `NIPAT-0.5-Preview`, previa conferma. Questa scelta cambia soltanto la
+vuota `NIPAT-Desktop`, previa conferma. Questa scelta cambia soltanto la
 destinazione. Se anche la sottocartella contiene file, occorre scegliere
 un'altra cartella vuota: il setup non svuota il contenuto né crea una catena
 di sottocartelle. Dati e risultati possono contenere file preesistenti, che
@@ -121,11 +122,16 @@ non vengono trasferiti o cancellati dal setup.
 
 Manifest, backend, stato, proprietà del runtime e registri di recupero devono
 indicare il canale previsto. Il setup non adotta ambienti o configurazioni
-di altri canali. Il componente Windows WSL rimane una risorsa del sistema.
+di altri canali. NIPAT Desktop dispone di identità e cartelle proprie:
+le installazioni NIPAT 0.4 e 0.5 non vengono adottate o aggiornate da questo
+setup. Il componente Windows WSL rimane una risorsa del sistema.
 
 Il launcher installato usa la propria configurazione e non eredita le variabili
-NIPAT di percorso/backend di una shell esterna. L'utente può selezionare
-esplicitamente dati e risultati con `--data-dir` e `--runs-dir`.
+NIPAT di percorso/backend di una shell esterna. Nel menu, **Configura** applica
+le preferenze salvate alle cartelle e ai parametri delle analisi, senza cambiare
+posizione dell'applicazione, cache o runtime. Le opzioni `--data-dir` e
+`--runs-dir` selezionano esplicitamente le destinazioni; nella sessione guidata
+prevalgono sulle preferenze. I comandi diretti non leggono queste preferenze.
 
 ## Preparazione e identità dell'immagine
 
@@ -148,11 +154,11 @@ disabilitato. Il launcher ne controlla il legame con il manifest installato.
 
 ## Aggiornamento e riparazione
 
-Il setup riutilizza la cartella della Preview riconosciuta, conservando i
+Il setup riutilizza la cartella di NIPAT Desktop riconosciuta, conservando i
 percorsi selezionati. Un inventario dei file distribuiti distingue i componenti
 gestiti dall'installatore dai file aggiunti dall'utente. Prima di sovrascrivere
 un componente differente, il setup ne salva la copia in
-`%LOCALAPPDATA%\NIPAT-0.5-Preview\installations\backups\<UTC-guid>`.
+`%LOCALAPPDATA%\NIPAT-Desktop\installations\backups\<UTC-guid>`.
 Il backup include anche l'inventario precedente, la configurazione dei percorsi,
 lo stato dell'installatore, il backend, il marcatore applicativo e il Python
 portabile generato sotto `.runtime\python`. I componenti applicativi identici
@@ -182,10 +188,10 @@ Una distribuzione può essere riutilizzata soltanto se digest completo,
 registrazione WSL, proprietà del canale e posizione effettiva sono coerenti.
 I nuovi nomi combinano il prefisso del canale, 32 cifre del digest del
 filesystem Linux e 12 cifre del digest della posizione. Un ambiente già
-posseduto dalla Preview con un nome precedente può essere riutilizzato nella
+posseduto da NIPAT Desktop con un nome precedente può essere riutilizzato nella
 stessa destinazione, dopo le medesime verifiche di proprietà. Un nome occupato
 da un ambiente non riconosciuto interrompe la preparazione senza sostituirlo.
-Se una distribuzione posseduta dalla Preview è stata rimossa manualmente da
+Se una distribuzione posseduta da NIPAT Desktop è stata rimossa manualmente da
 WSL, il setup può ricrearla soltanto quando la destinazione precedente è vuota.
 La ricevuta precedente viene conservata nello storico delle registrazioni;
 una cartella ancora contenente file non viene cancellata per forzare l'importazione.
@@ -206,7 +212,7 @@ dell'attivazione del backend; lo stato `ready` viene scritto per ultimo.
 Ogni ripresa verifica e ricarica l'archivio. L'avvio ordinario riusa invece
 l'ID locale registrato e avvia autonomamente il motore se è fermo.
 
-Dopo un errore, aprire **NIPAT 0.5 Preview - completa preparazione** dal menu
+Dopo un errore, aprire **NIPAT Desktop - completa preparazione** dal menu
 Start. Conservare questi file della cartella applicativa:
 
 - `.runtime\installer\setup.log`: dettagli della preparazione;
@@ -227,18 +233,18 @@ e la ripresa automatica. Conserva sempre dati e risultati, comprese le
 destinazioni precedenti registrate. Dopo la conferma di disinstallazione,
 una seconda richiesta propone la rimozione dell'ambiente WSL e della cache,
 con **No** come scelta predefinita. **Annulla** interrompe prima della pulizia.
-Con **Sì**, il programma verifica le risorse della Preview nelle destinazioni
+Con **Sì**, il programma verifica le risorse di NIPAT Desktop nelle destinazioni
 correnti e nello storico registrato prima di rimuoverle.
 
 La rimozione riguarda soltanto distribuzioni WSL con proprietà e registrazione
 coerenti e archivi della cache riconosciuti e verificati. Non consiste nella
 cancellazione ricorsiva delle radici selezionate: file estranei, Docker Desktop,
-altre distribuzioni WSL e risorse della versione stabile non sono destinazioni
+altre distribuzioni WSL e risorse delle altre installazioni NIPAT non sono destinazioni
 di rimozione. Una verifica fallita interrompe la pulizia e viene segnalata;
 un errore durante le operazioni può lasciare risorse da rimuovere. In entrambi
 i casi la disinstallazione dei file applicativi viene interrotta. Conservare
 l'esito e il log persistente in
-`%LOCALAPPDATA%\NIPAT-0.5-Preview\installations\logs\uninstall-*.log`
+`%LOCALAPPDATA%\NIPAT-Desktop\installations\logs\uninstall-*.log`
 prima di riprovare.
 
 Preferenze dei percorsi e registri centrali delle installazioni sopravvivono
@@ -257,12 +263,12 @@ Questo percorso è destinato allo sviluppo. `1_SETUP.cmd` prepara il Python
 locale e verifica un runtime WSL già configurato; non crea il filesystem WSL
 e non costruisce o scarica l'immagine scientifica.
 
-Per usare il runtime di una Preview già preparata, leggere il suo backend e
+Per usare il runtime di un’installazione NIPAT Desktop già preparata, leggere il suo backend e
 selezionarlo esplicitamente nella sessione PowerShell del checkout:
 
 ```powershell
 # Indicare la cartella applicativa scelta nel setup.
-$nipatApp = Read-Host "Cartella applicativa NIPAT 0.5 Preview"
+$nipatApp = Read-Host "Cartella applicativa NIPAT Desktop"
 $nipatBackend = Get-Content -Raw -LiteralPath `
     (Join-Path $nipatApp ".runtime\backend.json") | ConvertFrom-Json
 $env:NIPAT_BACKEND = "wsl"
@@ -302,7 +308,7 @@ un'installazione autonoma.
 
 Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede
 prima installazione, riavvio del runtime, analisi di un caso noto,
-coesistenza con l'installazione stabile, percorsi personalizzati,
+coesistenza con altre installazioni NIPAT, percorsi personalizzati,
 reinstallazione e disinstallazione con entrambe le scelte di conservazione
 dell'ambiente. Include interruzioni e riprese, destinazioni su dischi fissi
 diversi, spazi e caratteri non ASCII, conservazione dei dati e protezione

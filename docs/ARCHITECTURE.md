@@ -1,6 +1,6 @@
 # Architettura di NIPAT
 
-NIPAT 0.5 è un'applicazione locale con interfaccia a riga di comando e menu
+NIPAT Desktop è un'applicazione locale con interfaccia a riga di comando e menu
 guidato. Il client Python gestisce l'interazione, i percorsi, la configurazione
 e i registri delle esecuzioni. Un'immagine Linux autosufficiente contiene R,
 samtools, le dipendenze, gli script scientifici e il codice necessario alla
@@ -74,7 +74,9 @@ Input, applicazione e risultati possono avere radici distinte. Le opzioni global
 `--data-dir` e `--runs-dir` selezionano le cartelle richieste dall'utente.
 I percorsi relativi dei comandi sono risolti rispetto alla directory corrente;
 le voci di una lista BAM sono relative alla directory della lista.
-L'opzione 5 del menu cambia la cartella dei risultati per la sessione corrente.
+La voce **Configura** del menu conserva cartelle e valori predefiniti del
+workflow fra gli avvii; un'opzione CLI esplicita di percorso ha precedenza
+nella sessione guidata.
 
 Il client Windows accetta file su dischi locali fissi; condivisioni UNC, unità
 di rete e dispositivi rimovibili non sono supportati dal trasporto WSL.
@@ -87,6 +89,22 @@ interne dello script. `run.json` conserva l'associazione con i BAM originali.
 Contamination e CPI mantengono i nomi dei campioni nelle copie preparate;
 collisioni di nome, incluse quelle che differiscono soltanto per maiuscole,
 vengono rifiutate prima della scrittura.
+
+## Preferenze del menu guidato
+
+Le preferenze dell'utente sono separate dal backend installato e dai record
+delle analisi. Su Windows risiedono in
+`%LOCALAPPDATA%\NIPAT-Desktop\preferences.json`; su Linux in
+`${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json`. Comprendono
+cartelle dati e risultati, modalità, riferimenti e parametri proposti per i
+workflow. Non comprendono campioni, coppie CPI o nomi dei run.
+
+Il menu carica questi valori e li sottopone alla convalida degli input prima
+dell'esecuzione. Le modifiche effettuate per una singola analisi non aggiornano
+le preferenze; **Configura** richiede un salvataggio esplicito. I comandi diretti
+non leggono questi valori e mantengono il proprio contratto di argomenti,
+ambiente e valori iniziali. La configurazione di installazione resta responsabile
+della posizione dell'applicazione, della cache e dell'ambiente WSL.
 
 ## Esecuzioni, risultati e tracciabilità
 
@@ -109,7 +127,7 @@ attestare la disponibilità dell'immagine.
 
 ## Installazione Windows
 
-Il profilo `preview-0.5` identifica applicazione, collegamenti e stato di
+Il profilo `desktop` identifica applicazione, collegamenti e stato di
 configurazione. Il setup gestisce cinque radici configurabili per applicazione,
 ambiente WSL, cache, dati e risultati. Le radici devono essere locali, fisse,
 scrivibili e indipendenti, senza sovrapposizioni o collegamenti nel percorso.
@@ -142,8 +160,8 @@ sono descritti nel [riferimento dell'installatore](INSTALLATORE_WINDOWS.md).
 
 ## Installazione Ubuntu
 
-Il pacchetto `nipat-05-preview` installa i file applicativi in
-`/opt/nipat-05-preview`. Il launcher usa Python 3.12 del sistema in modalità
+Il pacchetto `nipat-desktop` installa i file applicativi in
+`/opt/nipat-desktop`. Il launcher usa Python 3.12 del sistema in modalità
 isolata e seleziona l’applicazione installata, il backend locale e le cartelle
 XDG dell’utente. Le variabili ereditate non possono sostituire il backend,
 il progetto o l’immagine verificata; le opzioni CLI restano disponibili

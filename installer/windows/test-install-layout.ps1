@@ -12,7 +12,7 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
     Assert-Test $rejected $Message
 }
 function Copy-Layout($Layout) { return ($Layout | ConvertTo-Json -Depth 8 | ConvertFrom-Json) }
-function Write-StorageMarker([string] $Path, [string] $Role, [string] $Channel = 'preview-0.5') {
+function Write-StorageMarker([string] $Path, [string] $Role, [string] $Channel = 'desktop') {
     [IO.Directory]::CreateDirectory($Path) | Out-Null
     $markerName = if ($Role -ceq 'application') { '.nipat-app.ini' } else { '.nipat-storage.ini' }
     @('[NIPAT]', 'schema_version=1', ('installation_channel=' + $Channel), ('role=' + $Role)) |
@@ -25,7 +25,7 @@ try {
     [IO.Directory]::CreateDirectory($temporary) | Out-Null
     $env:LOCALAPPDATA = Join-Path $temporary 'isolated user profile'
     $layout = [pscustomobject]@{
-        schema_version = 1; installation_channel = 'preview-0.5'
+        schema_version = 1; installation_channel = 'desktop'
         app_dir = (Join-Path $temporary ('application & [literal] ' + [char]0x00E8))
         runtime_dir = (Join-Path $temporary 'runtime on selected volume')
         cache_dir = (Join-Path $temporary 'selected cache')
@@ -65,9 +65,11 @@ try {
         $invalid.schema_version = $badSchema
         Assert-Rejected { Assert-NipatInstallLayout $invalid } 'schema version is validated without coercion'
     }
-    $invalid = Copy-Layout $layout
-    $invalid.installation_channel = 'stable'
-    Assert-Rejected { Assert-NipatInstallLayout $invalid } 'a stable channel cannot authorize Preview storage'
+    foreach ($foreignChannel in @('stable', 'preview-0.5')) {
+        $invalid = Copy-Layout $layout
+        $invalid.installation_channel = $foreignChannel
+        Assert-Rejected { Assert-NipatInstallLayout $invalid } 'another channel cannot authorize Desktop storage'
+    }
     $invalid = Copy-Layout $layout
     $invalid.PSObject.Properties.Remove('cache_dir')
     Assert-Rejected { Assert-NipatInstallLayout $invalid } 'a missing destination is not silently replaced'
@@ -88,12 +90,47 @@ try {
     foreach ($protected in @(
         (Join-Path $env:LOCALAPPDATA 'Programs\NIPAT'),
         (Join-Path $env:LOCALAPPDATA 'NIPAT'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\NIPAT-0.5-Preview'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\installations'),
         $env:WINDIR,
         $env:ProgramFiles
     )) {
         $invalid = Copy-Layout $layout
         $invalid.app_dir = $protected
         Assert-Rejected { Assert-NipatInstallLayout $invalid } ("protected system or stable installation location is rejected: $protected")
+    }
+    # Prior Preview custom locations must remain protected even if its
+    # application has been removed and only its history remains.
+    $previewLayout = Copy-Layout $layout
+    $previewLayout.installation_channel = 'preview-0.5'
+    $previewRoot = Join-Path $temporary 'retained Preview custom roots'
+    $previewSentinels = @{}
+    foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        $previewLayout.$field = Join-Path $previewRoot $field
+        [IO.Directory]::CreateDirectory($previewLayout.$field) | Out-Null
+        $sentinel = Join-Path $previewLayout.$field 'preserve.txt'
+        [IO.File]::WriteAllText($sentinel, ('Preview ' + $field + ' contents'))
+        $previewSentinels[$sentinel] = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
+    }
+    $previewHistory = Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview\installations\retained-layout.json'
+    Write-NipatJsonAtomic $previewHistory $previewLayout
+    $previewSentinels[$previewHistory] = (Get-FileHash -LiteralPath $previewHistory -Algorithm SHA256).Hash
+    Assert-NipatInstallLayout $layout -CheckExisting
+    foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        $invalid = Copy-Layout $layout
+        $invalid.$field = $previewLayout.$field
+        Assert-Rejected { Assert-NipatInstallLayout $invalid } 'Desktop cannot adopt a custom root recorded by the Preview'
+        $invalid.$field = Join-Path $previewLayout.$field 'new Desktop child'
+        Assert-Rejected { Assert-NipatInstallLayout $invalid } 'Desktop cannot nest a selected root inside retained Preview storage'
+        Assert-Test (-not (Test-Path -LiteralPath $invalid.$field)) 'foreign-root validation creates no destination'
+    }
+    $invalid = Copy-Layout $layout
+    $invalid.runtime_dir = $previewRoot
+    Assert-Rejected { Assert-NipatInstallLayout $invalid } 'Desktop removable storage cannot contain retained Preview roots'
+    foreach ($file in $previewSentinels.Keys) {
+        Assert-Test ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ceq $previewSentinels[$file]) 'reading prior Preview history preserves all prior files and metadata'
     }
     foreach ($badPair in @(
         @('data_dir', 'app_dir'), @('runs_dir', 'data_dir'), @('runtime_dir', 'cache_dir')
@@ -118,9 +155,27 @@ try {
     Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'a nonempty custom managed folder requires an ownership marker'
     Write-StorageMarker $unownedCache 'runtime'
     Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'a runtime marker cannot authorize a cache directory'
-    Write-StorageMarker $unownedCache 'cache' 'stable'
-    Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'another channel storage marker is not adopted'
+    foreach ($foreignChannel in @('stable', 'preview-0.5')) {
+        Write-StorageMarker $unownedCache 'cache' $foreignChannel
+        Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'another channel storage marker is not adopted'
+    }
     Assert-Test ([IO.File]::ReadAllText($unownedSentinel) -ceq 'unrelated contents') 'rejected managed locations preserve unrelated contents'
+    $defaults = Get-NipatDefaultInstallLayout
+    foreach ($field in @('runtime_dir', 'cache_dir')) {
+        $defaultPath = $defaults.$field
+        [IO.Directory]::CreateDirectory($defaultPath) | Out-Null
+        $defaultSentinel = Join-Path $defaultPath 'keep.txt'
+        [IO.File]::WriteAllText($defaultSentinel, 'unowned default location')
+        try {
+            $invalid = Copy-Layout $layout
+            $invalid.$field = $defaultPath
+            Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'a nonempty default managed folder also requires its ownership marker'
+            Assert-Test ([IO.File]::ReadAllText($defaultSentinel) -ceq 'unowned default location') 'rejection preserves unowned files in the default destination'
+        } finally {
+            [IO.File]::Delete($defaultSentinel)
+            [IO.Directory]::Delete($defaultPath)
+        }
+    }
     $unownedApp = Join-Path $temporary 'nonempty unrelated application'
     [IO.Directory]::CreateDirectory($unownedApp) | Out-Null
     [IO.File]::WriteAllText((Join-Path $unownedApp 'keep.txt'), 'application sentinel')
@@ -159,7 +214,7 @@ try {
 
     Save-NipatInstallLayoutHistory $layout | Out-Null
     Save-NipatInstallLayoutHistory $layout | Out-Null
-    $historyDirectory = Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview\installations'
+    $historyDirectory = Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\installations'
     $absentDrive = @(65..90 | ForEach-Object { ('{0}:\' -f [char]$_) } |
         Where-Object { -not (Test-Path -LiteralPath $_) })[0]
     $offlineLayout = Copy-Layout $layout
@@ -213,18 +268,18 @@ try {
     $legacyProject = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') (Get-NipatInstallationProfile).app_dir_name
     [IO.Directory]::CreateDirectory($legacyProject) | Out-Null
     $legacyLayout = Read-NipatInstallLayout $legacyProject
-    Assert-Test ($legacyLayout.runtime_dir -ieq (Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview\wsl') -and
-        $legacyLayout.cache_dir -ieq (Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview\cache')) 'earlier Preview installations retain their original runtime and cache locations'
+    Assert-Test ($legacyLayout.runtime_dir -ieq (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\wsl') -and
+        $legacyLayout.cache_dir -ieq (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\cache')) 'earlier Desktop installations retain their original runtime and cache locations'
     $legacyBackend = [ordered]@{
-        schema_version = 1; installation_channel = 'preview-0.5'; backend = 'wsl'
+        schema_version = 1; installation_channel = 'desktop'; backend = 'wsl'
         wsl_distro = $legacyDistro; rootfs_sha256 = $rootfsHash; runtime_image = ('sha256:' + ('b' * 64))
         data_dir = $layout.data_dir; runs_dir = $layout.runs_dir
     }
     Write-NipatJsonAtomic (Join-Path $legacyProject '.runtime\backend.json') $legacyBackend
     $legacyLayout = Read-NipatInstallLayout $legacyProject
-    Assert-Test ($legacyLayout.data_dir -ieq $layout.data_dir -and $legacyLayout.runs_dir -ieq $layout.runs_dir) 'an earlier Preview keeps its configured research data and result locations'
+    Assert-Test ($legacyLayout.data_dir -ieq $layout.data_dir -and $legacyLayout.runs_dir -ieq $layout.runs_dir) 'an earlier Desktop keeps its configured research data and result locations'
     Assert-NipatExistingApplication $legacyProject
-    Assert-Test ((Get-NipatApplicationKind $legacyProject) -ceq 'residual') 'previously uninstalled Preview is identified from valid retained metadata'
+    Assert-Test ((Get-NipatApplicationKind $legacyProject) -ceq 'residual') 'previously uninstalled Desktop is identified from valid retained metadata'
     $leftoverSentinel = Join-Path $legacyProject 'unrelated.txt'
     [IO.File]::WriteAllText($leftoverSentinel, 'unrelated leftover')
     $bytecode = Join-Path $legacyProject 'src\nipat\__pycache__\wizard.cpython-312.pyc'
@@ -236,18 +291,18 @@ try {
         [IO.File]::ReadAllText($bytecode) -ceq 'old generated bytecode') 'recognition accepts residual metadata with bytecode and unrelated neighbors without modifying either'
     $legacyBackend.installation_channel = 'stable'
     Write-NipatJsonAtomic (Join-Path $legacyProject '.runtime\backend.json') $legacyBackend
-    Assert-Rejected { Assert-NipatExistingApplication $legacyProject } 'foreign residual metadata cannot authorize a Preview reinstall'
-    $legacyBackend.installation_channel = 'preview-0.5'
+    Assert-Rejected { Assert-NipatExistingApplication $legacyProject } 'foreign residual metadata cannot authorize a Desktop reinstall'
+    $legacyBackend.installation_channel = 'desktop'
     Write-NipatJsonAtomic (Join-Path $legacyProject '.runtime\backend.json') $legacyBackend
     $legacyBackendPath = Join-Path $legacyProject '.runtime\backend.json'
     [IO.File]::Delete($legacyBackendPath)
     $legacyStatePath = Join-Path $legacyProject '.runtime\installer\state.json'
     Write-NipatJsonAtomic $legacyStatePath ([ordered]@{
-        schema_version = 1; installation_channel = 'preview-0.5'
+        schema_version = 1; installation_channel = 'desktop'
         source_commit = ('a' * 40); rootfs_sha256 = $rootfsHash; phase = 'failed'
     })
     Assert-Test ((Get-NipatApplicationKind $legacyProject) -ceq 'residual') 'an interrupted legacy setup is recognized from its channel and source/runtime identities'
-    Write-NipatJsonAtomic $legacyStatePath ([ordered]@{ schema_version = 1; installation_channel = 'preview-0.5' })
+    Write-NipatJsonAtomic $legacyStatePath ([ordered]@{ schema_version = 1; installation_channel = 'desktop' })
     Assert-Test ((Get-NipatApplicationKind $legacyProject) -ceq 'unknown') 'a bare channel label cannot adopt an arbitrary legacy folder'
     [IO.File]::Delete($legacyStatePath)
     Write-NipatJsonAtomic $legacyBackendPath $legacyBackend

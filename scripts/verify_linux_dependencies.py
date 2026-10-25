@@ -28,7 +28,7 @@ CHECKS = (
     "installed_cli_help_and_version", "no_automatic_docker_access",
     "no_runtime_preparation", "apt_sources_unchanged", "embedded_manifest_matches",
 )
-PACKAGES = ("python3.12", "docker.io", "docker-compose-v2", "nipat-05-preview")
+PACKAGES = ("python3.12", "docker.io", "docker-compose-v2", "nipat-desktop")
 
 # Fixed paths keep untrusted filenames and manifest strings out of shell code.
 # policy-rc.d suppresses service startup in this dependency-only test container.
@@ -37,7 +37,7 @@ CONTAINER_SCRIPT = r'''set -euo pipefail
 test "$ID" = ubuntu && test "$VERSION_ID" = 24.04
 test "$(dpkg --print-architecture)" = amd64
 test ! -e /var/run/docker.sock
-for package in python3.12 docker.io docker-ce docker-compose-v2 docker-compose-plugin nipat-05-preview; do
+for package in python3.12 docker.io docker-ce docker-compose-v2 docker-compose-plugin nipat-desktop; do
     status=$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null || true)
     if test "$status" = installed; then
         echo "Dependency unexpectedly present before APT: $package" >&2
@@ -64,12 +64,12 @@ if id -Gn nipat-validation | tr ' ' '\n' | grep -qx docker; then
 fi
 docker --version
 docker compose version
-runuser -u nipat-validation -- /usr/bin/nipat-05-preview --version > /tmp/nipat-version
-runuser -u nipat-validation -- /usr/bin/nipat-05-preview --help > /tmp/nipat-help
+runuser -u nipat-validation -- /usr/bin/nipat --version > /tmp/nipat-version
+runuser -u nipat-validation -- /usr/bin/nipat --help > /tmp/nipat-help
 test -s /tmp/nipat-help
 test ! -e /var/run/docker.sock
-test ! -e /home/nipat-validation/.local/share/nipat-05-preview
-test ! -e /home/nipat-validation/.local/state/nipat-05-preview
+test ! -e /home/nipat-validation/.local/share/nipat-desktop
+test ! -e /home/nipat-validation/.local/state/nipat-desktop
 python3.12 -I - <<'PY'
 import hashlib
 import json
@@ -78,10 +78,10 @@ import subprocess
 
 manifest_bytes = Path('/input/installer-manifest.json').read_bytes()
 manifest = json.loads(manifest_bytes)
-assert Path('/opt/nipat-05-preview/.distribution/installer-manifest.json').read_bytes() == manifest_bytes
+assert Path('/opt/nipat-desktop/.distribution/installer-manifest.json').read_bytes() == manifest_bytes
 assert Path('/tmp/nipat-version').read_text().strip().endswith(manifest['version'])
 packages = {}
-for package in ('python3.12', 'docker.io', 'docker-compose-v2', 'nipat-05-preview'):
+for package in ('python3.12', 'docker.io', 'docker-compose-v2', 'nipat-desktop'):
     fields = subprocess.check_output(
         ['dpkg-query', '-W', '-f=${Status}\t${Version}', package], text=True,
     ).split('\t')

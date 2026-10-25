@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: Successful installer build run ID (Windows and Ubuntu for 0.5)
+        description: Successful installer build run ID (Windows and Ubuntu for 0.6)
         required: true
         type: string
       source_commit:

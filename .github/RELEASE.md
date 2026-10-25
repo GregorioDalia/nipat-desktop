@@ -4,7 +4,7 @@ NIPAT distribuisce artefatti costruiti e verificati da GitHub Actions. La
 pubblicazione non ricompila applicazione o runtime e non richiede al manutentore
 di trasferire manualmente gli archivi dal proprio computer.
 
-La versione 0.5 richiede installatori Windows e Ubuntu dello stesso commit
+La versione 0.6 richiede installatori Windows e Ubuntu dello stesso commit
 e con lo stesso archivio scientifico. La procedura verifica entrambi i
 pacchetti e richiede un’accettazione revisionata dei file esatti. Le versioni
 pubblicate e le relative evidenze sono disponibili nella pagina
@@ -48,7 +48,7 @@ Gli artefatti da conservare per la verifica dei pacchetti sono:
 
 Il manifest identifica versione, tag previsto, commit, piattaforma, archivio
 scientifico, filesystem WSL e profilo di installazione. Il profilo deve
-corrispondere al sorgente del commit e al canale `preview-0.5`.
+corrispondere al sorgente del commit e al canale `desktop`.
 La versione del manifest deve coincidere con quella del `pyproject.toml`
 committato: un manifest non può scegliere un protocollo di distribuzione diverso.
 
@@ -128,7 +128,7 @@ I risultati devono essere osservati sugli stessi EXE e `.deb` della build
 che si intende pubblicare.
 
 Il record viene sottoposto a revisione in
-`.github/release-acceptance/v0.5.0a1.json` e integrato in `main` prima della
+`.github/release-acceptance/v0.6.0.json` e integrato in `main` prima della
 pubblicazione, insieme al sorgente accettato. Può essere preparato e
 revisionato sul branch di sviluppo dopo le prove. È separato dai file
 incorporati negli installatori e dal commit della build provata. Collega versione,
@@ -148,7 +148,7 @@ dalla conservazione degli artefatti Actions.
 
 Il workflow **Publish verified pre-release** è esclusivamente manuale e
 opera su `main`. Richiede l’ID della build e il suo commit completo. Per la
-0.5, avviare manualmente **Installers (review build)** su un commit
+0.6, avviare manualmente **Installers (review build)** su un commit
 revisionato di questo repository: può essere il branch di sviluppo, così
 che le prove e l’accettazione precedano l’integrazione in `main`.
 

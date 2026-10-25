@@ -37,6 +37,17 @@ PREVIEW_INSTALLATION_PROFILE = {
     "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
     "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05",
 }
+DESKTOP_INSTALLATION_PROFILE = {
+    "schema_version": 1,
+    "channel": "desktop",
+    "display_name": "NIPAT Desktop",
+    "app_dir_name": "NIPAT-Desktop",
+    "data_dir_name": "NIPAT-Desktop",
+    "distro_prefix": "NIPAT-Desktop-",
+    "resume_key": "NIPAT-Desktop-ResumeSetup",
+    "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
+    "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45",
+}
 
 
 def require(condition, message):
@@ -120,9 +131,11 @@ def verify_installation_profile(manifest, commit, read_source):
     require(INSTALLATION_PROFILE_SOURCE in manifest["source_sha256"],
             "Installation profile is missing from the verified source list")
     profile = manifest.get("installation_profile")
+    expected = (PREVIEW_INSTALLATION_PROFILE if manifest["version"].startswith("0.5.")
+                else DESKTOP_INSTALLATION_PROFILE)
     require(isinstance(profile, dict) and type(profile.get("schema_version")) is int
-            and profile == PREVIEW_INSTALLATION_PROFILE,
-            "Installation profile does not use the isolated 0.5 preview namespace")
+            and profile == expected,
+            "Installation profile does not use the required isolated desktop namespace")
     trusted = json.loads(read_source(commit, INSTALLATION_PROFILE_SOURCE))
     require(trusted == profile and type(trusted.get("schema_version")) is int,
             "Installation profile differs from the built commit")
@@ -137,7 +150,7 @@ def load_module(name, path):
 
 def require_publication_supported(version, acceptance=None, commit=None, run_id=None):
     if requires_installation_profile(version):
-        require(acceptance is not None, "0.5 publication requires committed desktop acceptance")
+        require(acceptance is not None, "Publication requires committed desktop acceptance")
         validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
         validator.validate(acceptance, version, commit, run_id)
 
@@ -369,12 +382,12 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     if requires_wsl_installer_evidence(version):
         verify_installer_build(setup, manifest, manifest_bytes, commit)
     if requires_installation_profile(version):
-        require(desktop is None, "Docker Desktop deliverables are not supported in 0.5")
+        require(desktop is None, "Docker Desktop deliverables are not supported by this release")
         for folder in (setup, runtime):
             require(not any(path.name.casefold().startswith("nipat-dockerdesktop-")
                             or path.name.casefold() in ("package-build.json", "docker-installer-build.json")
                             for path in folder.rglob("*")),
-                    "Docker Desktop deliverables are not supported in 0.5")
+                    "Docker Desktop deliverables are not supported by this release")
     if requires_desktop_bundle(version) or desktop is not None:
         portable, staged_hashes = verify_desktop_bundle(desktop, setup, manifest, manifest_bytes, commit)
         delivery = (verify_desktop_installer(desktop, setup, portable, staged_hashes, manifest, manifest_bytes, commit)
@@ -516,7 +529,7 @@ def main():
             notes += "Gli archivi runtime separati sono conservati come asset di recupero e verifica.\n"
         if requires_installation_profile(manifest["version"]):
             notes += ("\nPer Windows scaricare **NIPAT-Setup.exe**; per Ubuntu 24.04 x86_64 scaricare "
-                      "il pacchetto **nipat-05-preview_*.deb** e installarlo tramite APT. "
+                      "il pacchetto **nipat-desktop_*.deb** e installarlo tramite APT. "
                       "Entrambi contengono lo stesso archivio scientifico verificato. "
                       "I risultati dell'accettazione dei pacchetti sono in `desktop-acceptance.json`; "
                       "non costituiscono una validazione clinica o di dominio.\n")

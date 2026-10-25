@@ -1,11 +1,13 @@
 # Risultati e registrazione delle esecuzioni
 
-In NIPAT 0.5 ogni analisi crea un nuovo **run** nella cartella risultati.
+In NIPAT Desktop ogni analisi crea un nuovo **run** nella cartella risultati.
 La destinazione predefinita Windows è
-`%LOCALAPPDATA%\NIPAT-0.5-Preview\runs`; nel pacchetto Ubuntu è
-`${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview/runs`. Nel checkout
+`%LOCALAPPDATA%\NIPAT-Desktop\runs`; nel pacchetto Ubuntu è
+`${XDG_DATA_HOME:-~/.local/share}/nipat-desktop/runs`. Nel checkout
 da sorgenti è `runs` accanto al progetto. Si può impostare una destinazione con `--runs-dir`
-prima del sottocomando o con **5 — Cartella risultati** per la sessione corrente.
+prima del sottocomando oppure, nel menu guidato, salvando la destinazione
+in **5 — Configura → Cartelle dati e risultati**. La preferenza del menu
+non modifica i comandi CLI diretti.
 Un run esistente non viene sovrascritto.
 
 ## Contenuto del run

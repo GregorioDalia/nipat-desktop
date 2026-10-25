@@ -25,8 +25,8 @@ def require(condition, message):
 
 
 def acceptance_path(version):
-    require(isinstance(version, str) and re.fullmatch(r"0\.5\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
-            "Joint publication is supported only for the 0.5 preview contract")
+    require(isinstance(version, str) and re.fullmatch(r"0\.[56]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+            "Joint publication is supported only for the 0.5 and 0.6 desktop contracts")
     return f".github/release-acceptance/v{version}.json"
 
 

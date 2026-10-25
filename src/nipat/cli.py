@@ -9,6 +9,7 @@ from nipat.errors import NipatError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
+from nipat.preferences import PreferencesStore
 from nipat.validation.self_test import run_self_tests
 from nipat.wizard import run_wizard
 
@@ -121,6 +122,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "wizard":
             return run_wizard(
                 workflows, layout, err_const=DEFAULT_ERR_CONST, dry_run=args.dry_run,
+                preferences_store=PreferencesStore(),
+                directory_overrides={
+                    key: getattr(args, key) for key in ("data_dir", "runs_dir")
+                    if getattr(args, key) is not None
+                },
             )
         elif args.command == "self-test":
             run_self_tests(layout)

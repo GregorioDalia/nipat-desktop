@@ -159,6 +159,70 @@ function Assert-NipatExistingApplication([string] $Path) {
     }
 }
 
+function Read-NipatForeignLayoutPaths([string] $File, [string] $Channel) {
+    if (-not (Test-Path -LiteralPath $File)) { return @() }
+    Assert-NipatInstallPathWithoutLinks ([IO.Path]::GetDirectoryName($File))
+    $item = Get-Item -LiteralPath $File -Force
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Metadati di una precedente installazione non leggibili in sicurezza: $File"
+    }
+    $record = Get-Content -LiteralPath $File -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($null -eq $record -or $null -eq $record.PSObject.Properties['schema_version'] -or
+        -not (($record.schema_version -is [int]) -or ($record.schema_version -is [long])) -or
+        $record.schema_version -ne 1) { throw "Metadati di una precedente installazione non validi: $File" }
+    $hasChannel = $null -ne $record.PSObject.Properties['installation_channel']
+    if (($Channel -ceq 'preview-0.5' -and (-not $hasChannel -or $record.installation_channel -cne $Channel)) -or
+        ($Channel -ceq 'stable' -and $hasChannel -and $record.installation_channel -cne 'stable')) {
+        throw "Identita della precedente installazione non riconosciuta: $File"
+    }
+    $paths = @()
+    foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        if ($null -ne $record.PSObject.Properties[$field]) {
+            if (-not ($record.$field -is [string])) { throw "Destinazione precedente non valida: $File ($field)" }
+            $paths += Resolve-NipatInstallPath $record.$field -AllowUnavailable
+        }
+    }
+    return $paths
+}
+
+function Get-NipatForeignInstallationPaths {
+    # Read-only protection for published 0.4/0.5 installations. These paths never
+    # become defaults, ownership receipts or runtime targets of NIPAT Desktop.
+    $stableApp = Join-Path $env:LOCALAPPDATA 'Programs\NIPAT'
+    $previewApp = Join-Path $env:LOCALAPPDATA 'Programs\NIPAT-0.5-Preview'
+    $previewBase = Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview'
+    $paths = @($stableApp, (Join-Path $env:LOCALAPPDATA 'NIPAT'), $previewApp, $previewBase)
+    $previewProjects = @($previewApp)
+    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\NIPAT\preview-0.5')
+    if ($null -ne $key) {
+        try {
+            foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+                $value = $key.GetValue($field, $null)
+                if ($null -ne $value) {
+                    if (-not ($value -is [string])) { throw 'Le preferenze della precedente Preview contengono una destinazione non valida.' }
+                    $resolved = Resolve-NipatInstallPath $value -AllowUnavailable
+                    $paths += $resolved
+                    if ($field -ceq 'app_dir') { $previewProjects += $resolved }
+                }
+            }
+        } finally { $key.Dispose() }
+    }
+    $history = Join-Path $previewBase 'installations'
+    Assert-NipatInstallPathWithoutLinks $history
+    if (Test-Path -LiteralPath $history -PathType Container) {
+        foreach ($file in Get-ChildItem -LiteralPath $history -Filter '*.json' -File) {
+            $paths += Read-NipatForeignLayoutPaths $file.FullName 'preview-0.5'
+        }
+    }
+    foreach ($project in $previewProjects | Select-Object -Unique) {
+        foreach ($relative in @('.runtime\install-layout.json', '.runtime\backend.json')) {
+            $paths += Read-NipatForeignLayoutPaths (Join-Path $project $relative) 'preview-0.5'
+        }
+    }
+    $paths += Read-NipatForeignLayoutPaths (Join-Path $stableApp '.runtime\backend.json') 'stable'
+    return @($paths | Select-Object -Unique)
+}
+
 function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $Historical) {
     if ($Historical -and $CheckExisting) { throw 'Le destinazioni storiche non possono autorizzare una nuova installazione.' }
     if ($Layout -is [Collections.IDictionary]) { $Layout = [pscustomobject]$Layout }
@@ -167,8 +231,9 @@ function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $H
         -not (($Layout.schema_version -is [int]) -or ($Layout.schema_version -is [long])) -or
         $Layout.schema_version -ne 1) { throw 'Configurazione delle cartelle NIPAT non valida.' }
     Assert-NipatInstallationChannel $Layout 'Le cartelle selezionate'
-    $protected = @((Join-Path $env:LOCALAPPDATA 'Programs\NIPAT'), (Join-Path $env:LOCALAPPDATA 'NIPAT'),
-        (Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview\installations'))
+    $protected = @((Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\installations'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'))
+    $protected += @(Get-NipatForeignInstallationPaths)
     foreach ($name in @('WINDIR', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432')) {
         $value = [Environment]::GetEnvironmentVariable($name)
         if ($value) { $protected += $value }
@@ -195,7 +260,6 @@ function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $H
     }
     if ($CheckExisting) {
         Assert-NipatExistingApplication $Layout.app_dir
-        $defaults = Get-NipatDefaultInstallLayout
         # Retained analysis folders remain protected when the user changes the
         # destinations of an installation or reinstalls after removing the app.
         foreach ($known in @(Get-NipatKnownInstallLayouts '')) {
@@ -219,7 +283,7 @@ function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $H
             $role = if ($field -ceq 'runtime_dir') { 'runtime' } else { 'cache' }
             if (Test-Path -LiteralPath $path -PathType Container) {
                 $marked = Test-NipatStorageMarker $path $role
-                if (-not $marked -and $path -ine $defaults.$field -and @(Get-ChildItem -LiteralPath $path -Force).Count -gt 0) {
+                if (-not $marked -and @(Get-ChildItem -LiteralPath $path -Force).Count -gt 0) {
                     throw "La cartella $role contiene file non riconosciuti. Scegliere una cartella vuota: $path"
                 }
             }

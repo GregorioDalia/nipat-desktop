@@ -19,7 +19,7 @@ LicenseFile={#StageDir}\app\LICENSE
 DefaultDirName={code:GetNipatDefaultAppDir}
 DisableDirPage=no
 UsePreviousAppDir=yes
-SetupMutex=Local\NIPAT-05-Preview-Installer
+SetupMutex=Local\NIPAT-Desktop-Installer
 DefaultGroupName={#NipatDisplayName}
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
@@ -61,22 +61,22 @@ Name: "{code:GetNipatCacheDir}"; Flags: uninsneveruninstall
 [INI]
 ; Ownership markers persist so a later setup can reuse deliberately retained directories.
 Filename: "{app}\.nipat-app.ini"; Section: "NIPAT"; Key: "schema_version"; String: "1"
-Filename: "{app}\.nipat-app.ini"; Section: "NIPAT"; Key: "installation_channel"; String: "preview-0.5"
+Filename: "{app}\.nipat-app.ini"; Section: "NIPAT"; Key: "installation_channel"; String: "desktop"
 Filename: "{app}\.nipat-app.ini"; Section: "NIPAT"; Key: "role"; String: "application"
 Filename: "{code:GetNipatRuntimeDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "schema_version"; String: "1"
-Filename: "{code:GetNipatRuntimeDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "installation_channel"; String: "preview-0.5"
+Filename: "{code:GetNipatRuntimeDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "installation_channel"; String: "desktop"
 Filename: "{code:GetNipatRuntimeDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "role"; String: "runtime"
 Filename: "{code:GetNipatCacheDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "schema_version"; String: "1"
-Filename: "{code:GetNipatCacheDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "installation_channel"; String: "preview-0.5"
+Filename: "{code:GetNipatCacheDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "installation_channel"; String: "desktop"
 Filename: "{code:GetNipatCacheDir}\.nipat-storage.ini"; Section: "NIPAT"; Key: "role"; String: "cache"
 
 [Registry]
 ; Preferences survive app removal; no analysis directory is deleted by Uninstall.
-Root: HKCU; Subkey: "Software\NIPAT\preview-0.5"; ValueType: string; ValueName: "app_dir"; ValueData: "{app}"
-Root: HKCU; Subkey: "Software\NIPAT\preview-0.5"; ValueType: string; ValueName: "runtime_dir"; ValueData: "{code:GetNipatRuntimeDir}"
-Root: HKCU; Subkey: "Software\NIPAT\preview-0.5"; ValueType: string; ValueName: "cache_dir"; ValueData: "{code:GetNipatCacheDir}"
-Root: HKCU; Subkey: "Software\NIPAT\preview-0.5"; ValueType: string; ValueName: "data_dir"; ValueData: "{code:GetNipatDataDir}"
-Root: HKCU; Subkey: "Software\NIPAT\preview-0.5"; ValueType: string; ValueName: "runs_dir"; ValueData: "{code:GetNipatRunsDir}"
+Root: HKCU; Subkey: "Software\NIPAT\desktop"; ValueType: string; ValueName: "app_dir"; ValueData: "{app}"
+Root: HKCU; Subkey: "Software\NIPAT\desktop"; ValueType: string; ValueName: "runtime_dir"; ValueData: "{code:GetNipatRuntimeDir}"
+Root: HKCU; Subkey: "Software\NIPAT\desktop"; ValueType: string; ValueName: "cache_dir"; ValueData: "{code:GetNipatCacheDir}"
+Root: HKCU; Subkey: "Software\NIPAT\desktop"; ValueType: string; ValueName: "data_dir"; ValueData: "{code:GetNipatDataDir}"
+Root: HKCU; Subkey: "Software\NIPAT\desktop"; ValueType: string; ValueName: "runs_dir"; ValueData: "{code:GetNipatRunsDir}"
 
 [Tasks]
 Name: "desktopicon"; Description: "Crea un collegamento {#NipatDisplayName} sul desktop"
@@ -108,7 +108,7 @@ function NipatGetDriveType(RootPath: String): Cardinal;
 function NipatRememberedPath(Name, DefaultPath: String): String;
 begin
   Result := DefaultPath;
-  RegQueryStringValue(HKCU, 'Software\NIPAT\preview-0.5', Name, Result);
+  RegQueryStringValue(HKCU, 'Software\NIPAT\desktop', Name, Result);
   if Trim(Result) = '' then Result := DefaultPath;
 end;
 
@@ -246,8 +246,11 @@ begin
      NipatPathsOverlap(Path, ExpandConstant('{commonpf32}')) or
      NipatPathsOverlap(Path, ExpandConstant('{commonpf64}')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\Programs\NIPAT')) or
-     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT')) then begin
-    Result := LabelText + ': scegliere una cartella separata da Windows, Program Files e NIPAT stabile.';
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT')) or
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\Programs\NIPAT-0.5-Preview')) or
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-0.5-Preview')) or
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Desktop\preferences.json')) then begin
+    Result := LabelText + ': scegliere una cartella separata da Windows, Program Files e dalle altre installazioni NIPAT.';
     Exit;
   end;
   if NipatPathHasReparsePoint(Path) then
@@ -338,7 +341,7 @@ begin
   SetArrayLength(Lines, 9);
   Lines[0] := '{';
   Lines[1] := '  "schema_version": 1,';
-  Lines[2] := '  "installation_channel": "preview-0.5",';
+  Lines[2] := '  "installation_channel": "desktop",';
   Lines[3] := '  "app_dir": ' + NipatJsonString(ExpandConstant('{app}')) + ',';
   Lines[4] := '  "runtime_dir": ' + NipatJsonString(GetNipatRuntimeDir('')) + ',';
   Lines[5] := '  "cache_dir": ' + NipatJsonString(GetNipatCacheDir('')) + ',';
@@ -532,7 +535,7 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   Result := NipatValidateSelection;
   if (Result = '') and (CompareText(WizardGroupValue, '{#NipatDisplayName}') <> 0) then
-    Result := 'Il gruppo Start di questa Preview deve restare separato da NIPAT stabile. Riavviare senza /GROUP.';
+    Result := 'Il gruppo Start di NIPAT Desktop deve restare separato dalle altre installazioni. Riavviare senza /GROUP.';
   if Result = '' then Result := NipatValidateWithSharedRules;
   if Result = '' then Result := NipatPrepareApplication;
 end;
@@ -575,7 +578,7 @@ begin
   Names[3] := 'runs_dir'; Defaults[3] := AddBackslash(Base) + 'runs';
   NeedPrevious := False;
   for I := 0 to 3 do
-    if not RegQueryStringValue(HKCU, 'Software\NIPAT\preview-0.5', Names[I], Stored) then
+    if not RegQueryStringValue(HKCU, 'Software\NIPAT\desktop', Names[I], Stored) then
       NeedPrevious := True
     else if Trim(Stored) = '' then NeedPrevious := True;
   Project := WizardDirValue;
@@ -667,8 +670,8 @@ begin
     { This point is after Inno's confirmation and before any installed file is removed. }
     { Silent removal conserves runtime and data; interactive cleanup is opt-in. }
     if not UninstallSilent then begin
-      Choice := MsgBox('Rimuovere anche gli ambienti WSL e la cache appartenenti a NIPAT 0.5 Preview?'#13#10#13#10 +
-        'Si: elimina definitivamente le distribuzioni Preview riconosciute, tutti i file al loro interno e gli archivi della cache.'#13#10 +
+      Choice := MsgBox('Rimuovere anche gli ambienti WSL e la cache appartenenti a NIPAT Desktop?'#13#10#13#10 +
+        'Si: elimina definitivamente le distribuzioni NIPAT Desktop riconosciute, tutti i file al loro interno e gli archivi della cache.'#13#10 +
         'No: conserva questi componenti per una reinstallazione.'#13#10#13#10 +
         'Dati e risultati delle analisi su Windows, Docker Desktop e altre distribuzioni Linux vengono conservati.',
         mbConfirmation, MB_YESNOCANCEL or MB_DEFBUTTON2);

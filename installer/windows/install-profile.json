@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "channel": "preview-0.5",
-  "display_name": "NIPAT 0.5 Preview",
-  "app_dir_name": "NIPAT-0.5-Preview",
-  "data_dir_name": "NIPAT-0.5-Preview",
-  "distro_prefix": "NIPAT-05-Preview-",
-  "resume_key": "NIPAT-05-Preview-ResumeSetup",
-  "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
-  "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05"
+  "channel": "desktop",
+  "display_name": "NIPAT Desktop",
+  "app_dir_name": "NIPAT-Desktop",
+  "data_dir_name": "NIPAT-Desktop",
+  "distro_prefix": "NIPAT-Desktop-",
+  "resume_key": "NIPAT-Desktop-ResumeSetup",
+  "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
+  "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45"
 }

@@ -431,10 +431,10 @@ jobs:
           path: |
             build/linux-output/linux-dependency-check.json
             build/linux-output/linux-installation-check.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-05-preview/setup.log
-            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-05-preview/state.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-05-preview/runs/**/run.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-05-preview/runs/**/execution.log
+            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/setup.log
+            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/state.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/run.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/execution.log
           retention-days: 14
           if-no-files-found: ignore
 

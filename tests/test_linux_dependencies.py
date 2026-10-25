@@ -46,6 +46,12 @@ class LinuxDependencyTests(unittest.TestCase):
             with self.subTest(package=package), self.assertRaises(ValueError):
                 CHECK.parse_result(self.result_text(changed))
 
+    def test_preview_package_does_not_satisfy_desktop_installation(self):
+        changed = copy.deepcopy(self.result)
+        changed["dependency_packages"]["nipat-05-preview"] = changed["dependency_packages"].pop("nipat-desktop")
+        with self.assertRaisesRegex(ValueError, "Missing installed dependency versions"):
+            CHECK.parse_result(self.result_text(changed))
+
     def test_container_result_cannot_replace_host_measured_identity(self):
         changed = copy.deepcopy(self.result)
         changed["source_commit"] = "0" * 40

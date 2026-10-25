@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 
 function Read-NipatInstallerManifest([string] $Path) {
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.5.0a1' -or
+    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.6.0' -or
         $manifest.release_tag -cne ('v' + $manifest.version) -or
         $manifest.source_commit -cnotmatch '^[a-f0-9]{40}$' -or
         $manifest.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$') {

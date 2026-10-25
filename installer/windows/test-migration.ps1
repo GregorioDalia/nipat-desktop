@@ -87,21 +87,21 @@ try {
     Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($target.OwnershipPath)) -ceq $targetReceiptBefore) 'preparing another destination preserves the earlier ownership receipt'
     Assert-Rejected { Assert-NipatRuntimeNamespace $relocated.Distro $hash $wsl } 'a location-bound name cannot authorize another runtime directory'
 
-    $previousPreviewHash = '7' * 64
-    $previousPreviewName = (Get-NipatInstallationProfile).distro_prefix + $previousPreviewHash.Substring(0, 40)
-    $previousPreviewReceipt = Join-Path (Join-Path $wsl 'registrations') ($previousPreviewName + '.json')
-    $previousPreviewOwner = New-Ownership $previousPreviewName $previousPreviewHash
-    Write-NipatJsonAtomic $previousPreviewReceipt $previousPreviewOwner
-    $registrations[$previousPreviewName] = @{ directory = (Join-Path $wsl $previousPreviewName); product = 'nipat-runtime-v1'; owner = $previousPreviewOwner.owner_id }
-    $previousPreviewBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($previousPreviewReceipt))
+    $previousDesktopHash = '7' * 64
+    $previousDesktopName = (Get-NipatInstallationProfile).distro_prefix + $previousDesktopHash.Substring(0, 40)
+    $previousDesktopReceipt = Join-Path (Join-Path $wsl 'registrations') ($previousDesktopName + '.json')
+    $previousDesktopOwner = New-Ownership $previousDesktopName $previousDesktopHash
+    Write-NipatJsonAtomic $previousDesktopReceipt $previousDesktopOwner
+    $registrations[$previousDesktopName] = @{ directory = (Join-Path $wsl $previousDesktopName); product = 'nipat-runtime-v1'; owner = $previousDesktopOwner.owner_id }
+    $previousDesktopBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($previousDesktopReceipt))
     $beforeLegacyImports = @($calls | Where-Object { $_[0] -ceq '--import' }).Count
-    $existingPreview = Get-NipatRuntimeTarget $wsl $previousPreviewHash @($registrations.Keys)
-    Initialize-NipatRuntimeTarget $existingPreview ([pscustomobject]@{ sha256 = $previousPreviewHash }) '' ''
-    Assert-Test ($existingPreview.Distro -ceq $previousPreviewName -and
-        @($calls | Where-Object { $_[0] -ceq '--import' }).Count -eq $beforeLegacyImports) 'an owned earlier Preview remains reusable at its original selected directory'
-    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($previousPreviewReceipt)) -ceq $previousPreviewBefore) 'reusing an owned earlier Preview does not rewrite its receipt'
-    $differentLegacyLocation = Get-NipatRuntimeTarget $relocatedWsl $previousPreviewHash @($registrations.Keys)
-    Assert-Test ($differentLegacyLocation.Distro -cne $previousPreviewName -and -not $differentLegacyLocation.Registered) 'a legacy Preview elsewhere is not adopted when its receipt is absent from the selected directory'
+    $existingDesktop = Get-NipatRuntimeTarget $wsl $previousDesktopHash @($registrations.Keys)
+    Initialize-NipatRuntimeTarget $existingDesktop ([pscustomobject]@{ sha256 = $previousDesktopHash }) '' ''
+    Assert-Test ($existingDesktop.Distro -ceq $previousDesktopName -and
+        @($calls | Where-Object { $_[0] -ceq '--import' }).Count -eq $beforeLegacyImports) 'an owned earlier Desktop remains reusable at its original selected directory'
+    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($previousDesktopReceipt)) -ceq $previousDesktopBefore) 'reusing an owned earlier Desktop does not rewrite its receipt'
+    $differentLegacyLocation = Get-NipatRuntimeTarget $relocatedWsl $previousDesktopHash @($registrations.Keys)
+    Assert-Test ($differentLegacyLocation.Distro -cne $previousDesktopName -and -not $differentLegacyLocation.Registered) 'a legacy Desktop elsewhere is not adopted when its receipt is absent from the selected directory'
 
     $legacyPath = Join-Path $wsl 'ownership.json'
     $oldHash = 'c' * 64
@@ -126,6 +126,20 @@ try {
     $stableQualifiedTarget = Get-NipatRuntimeTarget $wsl ('9' * 64) @($registrations.Keys)
     Initialize-NipatRuntimeTarget $stableQualifiedTarget ([pscustomobject]@{ sha256 = ('9' * 64) }) '' ''
     Assert-Test ($stableQualifiedTarget.Distro -cne $stableQualified -and $registrations[$stableQualified].owner -ceq 'stable owner') 'digest-qualified stable name is isolated even for identical rootfs'
+    $previewQualified = 'NIPAT-05-Preview-' + ('9' * 40)
+    $previewOwnership = New-Ownership $previewQualified ('9' * 64)
+    $previewOwnership.installation_channel = 'preview-0.5'
+    $previewReceipt = Join-Path (Join-Path $wsl 'registrations') ($previewQualified + '.json')
+    Write-NipatJsonAtomic $previewReceipt $previewOwnership
+    $previewReceiptBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($previewReceipt))
+    $registrations[$previewQualified] = @{ directory = (Join-Path $wsl $previewQualified); product = 'nipat-runtime-v1'; owner = $previewOwnership.owner_id }
+    $calls.Clear()
+    $previewQualifiedTarget = Get-NipatRuntimeTarget $wsl ('9' * 64) @($registrations.Keys)
+    Initialize-NipatRuntimeTarget $previewQualifiedTarget ([pscustomobject]@{ sha256 = ('9' * 64) }) '' ''
+    Assert-Test ($previewQualifiedTarget.Distro -cne $previewQualified -and
+        $registrations[$previewQualified].owner -ceq $previewOwnership.owner_id -and
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($previewReceipt)) -ceq $previewReceiptBefore) 'Desktop preparation preserves the Preview registration and receipt with an identical rootfs'
+    Assert-Test (@($calls | Where-Object { $_[0] -ceq '--distribution' -and $_[1] -ceq $previewQualified }).Count -eq 0) 'Desktop preparation never executes commands in the Preview runtime'
     $badOwnership = $sameLegacy.Ownership | ConvertTo-Json | ConvertFrom-Json
     $badOwnership.installation_channel = 'stable'
     Write-NipatJsonAtomic $sameLegacy.OwnershipPath $badOwnership
@@ -166,7 +180,7 @@ try {
     Assert-Rejected { Initialize-NipatRuntimeTarget $occupied ([pscustomobject]@{ sha256 = $occupiedHash }) '' '' } 'unregistered nonempty directory is never overwritten'
     Assert-Test ([IO.File]::ReadAllText((Join-Path $occupied.Directory 'keep.txt')) -ceq 'preserve') 'existing directory content preserved'
 
-    # Reinstallation after a user manually unregisters an owned Preview is safe
+    # Reinstallation after a user manually unregisters an owned Desktop is safe
     # only when its disk directory is absent or empty. Keep the previous receipt.
     $repairHash = '2' * 64
     $repairAsset = [pscustomobject]@{ sha256 = $repairHash }
@@ -212,16 +226,16 @@ try {
     Assert-Test ($pendingRepair.Ownership.status -ceq 'owned' -and $pendingRepair.Ownership.owner_id -ceq $pendingOwner -and
         @(Get-ChildItem -LiteralPath $receiptHistory -Filter ($repair.Distro + '-*.json') -File).Count -eq 2) 'retry completes the pending import without replacing its owner or duplicating recovery history'
 
-    # The earlier, path-independent Preview namespace is also repairable with
+    # The earlier, path-independent Desktop namespace is also repairable with
     # its own valid receipt; the stable namespace is never accepted.
-    $registrations.Remove($previousPreviewName)
-    $missingEarlierPreview = Get-NipatRuntimeTarget $wsl $previousPreviewHash @($registrations.Keys)
-    Initialize-NipatRuntimeTarget $missingEarlierPreview ([pscustomobject]@{ sha256 = $previousPreviewHash }) '' ''
-    $earlierBackups = @(Get-ChildItem -LiteralPath $receiptHistory -Filter ($previousPreviewName + '-*.json') -File)
-    Assert-Test ($missingEarlierPreview.Distro -ceq $previousPreviewName -and $earlierBackups.Count -eq 1 -and
-        [Convert]::ToBase64String([IO.File]::ReadAllBytes($earlierBackups[0].FullName)) -ceq $previousPreviewBefore) 'repair preserves an owned earlier Preview receipt and namespace'
+    $registrations.Remove($previousDesktopName)
+    $missingEarlierDesktop = Get-NipatRuntimeTarget $wsl $previousDesktopHash @($registrations.Keys)
+    Initialize-NipatRuntimeTarget $missingEarlierDesktop ([pscustomobject]@{ sha256 = $previousDesktopHash }) '' ''
+    $earlierBackups = @(Get-ChildItem -LiteralPath $receiptHistory -Filter ($previousDesktopName + '-*.json') -File)
+    Assert-Test ($missingEarlierDesktop.Distro -ceq $previousDesktopName -and $earlierBackups.Count -eq 1 -and
+        [Convert]::ToBase64String([IO.File]::ReadAllBytes($earlierBackups[0].FullName)) -ceq $previousDesktopBefore) 'repair preserves an owned earlier Desktop receipt and namespace'
 
-    foreach ($foreignName in @('NIPAT-Runtime', 'NIPAT-Unknown')) {
+    foreach ($foreignName in @('NIPAT-Runtime', 'NIPAT-Unknown', ('NIPAT-05-Preview-' + ('6' * 40)))) {
         $foreignReceiptPath = Join-Path (Join-Path $wsl 'registrations') ($foreignName + '.json')
         $foreignReceipt = New-Ownership $foreignName ('6' * 64)
         Write-NipatJsonAtomic $foreignReceiptPath $foreignReceipt
@@ -231,7 +245,7 @@ try {
         }
         $foreignBytes = [Convert]::ToBase64String([IO.File]::ReadAllBytes($foreignReceiptPath))
         $beforeForeignImports = @($calls | Where-Object { $_[0] -ceq '--import' }).Count
-        Assert-Rejected { Initialize-NipatRuntimeTarget $foreignTarget ([pscustomobject]@{ sha256 = ('6' * 64) }) '' '' } 'repair rejects stable and unknown namespaces despite a forged Preview channel field'
+        Assert-Rejected { Initialize-NipatRuntimeTarget $foreignTarget ([pscustomobject]@{ sha256 = ('6' * 64) }) '' '' } 'repair rejects stable and unknown namespaces despite a forged Desktop channel field'
         Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($foreignReceiptPath)) -ceq $foreignBytes -and
             @($calls | Where-Object { $_[0] -ceq '--import' }).Count -eq $beforeForeignImports) 'foreign namespaces remain unchanged before any import'
     }
@@ -309,12 +323,12 @@ try {
     $roots = Get-NipatPreviousDataRoots $project (Join-Path $temporary 'default')
     Assert-Test ($roots.data_dir -ceq $data -and $roots.runs_dir -ceq $runs) 'custom data and result roots survive update'
     $earlierMetadata = $previous | ConvertTo-Json | ConvertFrom-Json
-    $earlierMetadata.wsl_distro = $previousPreviewName
+    $earlierMetadata.wsl_distro = $previousDesktopName
     $earlierMetadata.PSObject.Properties.Remove('rootfs_sha256')
     $earlierMetadata.PSObject.Properties.Remove('runtime_dir')
     Write-NipatJsonAtomic $backendPath $earlierMetadata
     $earlierRoots = Get-NipatPreviousDataRoots $project (Join-Path $temporary 'default')
-    Assert-Test ($earlierRoots.data_dir -ceq $data -and $earlierRoots.runs_dir -ceq $runs) 'earlier Preview metadata without destination fields remains readable'
+    Assert-Test ($earlierRoots.data_dir -ceq $data -and $earlierRoots.runs_dir -ceq $runs) 'earlier Desktop metadata without destination fields remains readable'
     Write-NipatJsonAtomic $backendPath $previous
     $configuration = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_dir = $wsl; runtime_image = ('sha256:' + ('5' * 64)); data_dir = $roots.data_dir; runs_dir = $roots.runs_dir }
     $foreignConfiguration = [pscustomobject]@{

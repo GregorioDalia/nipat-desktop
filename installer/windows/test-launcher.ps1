@@ -246,7 +246,7 @@ class FixturePython {
         LOCALAPPDATA = $localAppData; NIPAT_WORKSPACE_DIR = $null; NIPAT_DATA_DIR = $null; NIPAT_RUNS_DIR = $null
         NIPAT_BACKEND = 'wsl'; NIPAT_WSL_DISTRO = 'Unrelated-WSL'; NIPAT_RUNTIME_IMAGE = $null
     }
-    # Exercise the ready WSL Preview through the compiled executable and real
+    # Exercise the ready WSL Desktop through the compiled executable and real
     # launch scripts. Scientific execution remains at the fake Python boundary.
     foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json', 'install-layout.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $app "installer\windows\$name")
@@ -310,12 +310,12 @@ class FixturePython {
     $environment.NIPAT_WSL_DISTRO = 'NIPAT-Runtime'
     $environment.NIPAT_RUNTIME_IMAGE = 'sha256:' + ('c' * 64)
     $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -eq 0) ('ready Preview launches from a stable configured shell: ' + $result.Output)
+    Assert-Test ($result.ExitCode -eq 0) ('ready Desktop launches from a stable configured shell: ' + $result.Output)
     $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
-    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq $distro -and $capture[6] -ceq $backend.runtime_image) 'Preview selects only its verified WSL distribution and image'
+    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq $distro -and $capture[6] -ceq $backend.runtime_image) 'Desktop selects only its verified WSL distribution and image'
     Assert-Test ((Test-SamePath $capture[2] $candidateData) -and (Test-SamePath $capture[3] $candidateRuns) -and
-        (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'installed Preview resets inherited stable project, workspace, data and runs'
-    Assert-Test ($capture[8] -ceq '-m' -and $capture[9] -ceq 'nipat' -and $capture[10] -ceq 'wizard') 'ready Preview opens the guided CLI without preparation'
+        (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'installed Desktop resets inherited stable project, workspace, data and runs'
+    Assert-Test ($capture[8] -ceq '-m' -and $capture[9] -ceq 'nipat' -and $capture[10] -ceq 'wizard') 'ready Desktop opens the guided CLI without preparation'
 
     # A researcher may launch from a data folder containing executables. The
     # command must use Windows PowerShell itself, not a same-named local file.
@@ -326,18 +326,18 @@ class FixturePython {
     } finally {
         Remove-Item -LiteralPath $decoyShell
     }
-    Assert-Test ($result.ExitCode -eq 0) ('ready Preview opens through the installer guided command: ' + $result.Output)
+    Assert-Test ($result.ExitCode -eq 0) ('ready Desktop opens through the installer guided command: ' + $result.Output)
     Assert-Test (-not (@(Get-Content -LiteralPath $events) -contains 'decoy:powershell')) 'guided command does not execute PowerShell from the caller data directory'
     $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
-    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq $distro -and $capture[6] -ceq $backend.runtime_image) 'guided command selects the verified Preview distribution and image'
+    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq $distro -and $capture[6] -ceq $backend.runtime_image) 'guided command selects the verified Desktop distribution and image'
     Assert-Test ((Test-SamePath $capture[0] $script:CallerDirectory) -and
         (Test-SamePath $capture[2] $candidateData) -and (Test-SamePath $capture[3] $candidateRuns) -and
-        (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'guided command preserves cwd while isolating Preview paths from inherited stable settings'
+        (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'guided command preserves cwd while isolating Desktop paths from inherited stable settings'
     Assert-Test ($capture[8] -ceq '-m' -and $capture[9] -ceq 'nipat' -and $capture[10] -ceq 'wizard') 'guided command reaches the same Python CLI'
 
     $explicitRuns = Join-Path $temporary 'explicit user results'
     $result = Invoke-TestLauncher -Executable $executable -Arguments @('--runs-dir', $explicitRuns, 'wizard') -Environment $environment
-    Assert-Test ($result.ExitCode -eq 0) ('Preview preserves explicit output override: ' + $result.Output)
+    Assert-Test ($result.ExitCode -eq 0) ('Desktop preserves explicit output override: ' + $result.Output)
     $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
     Assert-Test ($capture[10] -ceq '--runs-dir' -and $capture[11] -ceq $explicitRuns -and $capture[12] -ceq 'wizard') 'explicit CLI output directory reaches Python unchanged'
 
@@ -416,23 +416,27 @@ class FixturePython {
     $state = $oldStateJson | ConvertFrom-Json
 
     $beforeRejected = @(Get-Content -LiteralPath $events).Count
-    foreach ($foreignChannel in @('stable', $null)) {
+    foreach ($foreignChannel in @('stable', 'preview-0.5', $null)) {
         $backend.installation_channel = $foreignChannel
         $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
         $result = Invoke-TestLauncher -Executable $executable -Environment $environment
         Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'foreign or markerless backend never reaches Python'
     }
     $backend.installation_channel = $profile.channel
-    $backend.wsl_distro = 'NIPAT-Runtime'
-    $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
-    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'candidate backend cannot select the stable WSL distribution'
+    foreach ($foreignDistro in @('NIPAT-Runtime', ('NIPAT-05-Preview-' + $rootfsHash.Substring(0, 40)))) {
+        $backend.wsl_distro = $foreignDistro
+        $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+        $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'Desktop backend cannot select a stable or Preview WSL distribution'
+    }
     $backend.wsl_distro = $distro
     $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
-    $state.installation_channel = 'stable'
-    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
-    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
-    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'stable readiness state cannot authorize a Preview launch'
+    foreach ($foreignChannel in @('stable', 'preview-0.5')) {
+        $state.installation_channel = $foreignChannel
+        $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+        $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'a foreign readiness state cannot authorize a Desktop launch'
+    }
     $state.installation_channel = $profile.channel
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
     $manifest.installation_profile.channel = 'stable'

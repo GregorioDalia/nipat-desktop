@@ -1,16 +1,16 @@
-# Fixed candidate identity: never infer it from a previous stable installation.
+# Permanent Desktop identity: never infer it from another installation channel.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 function Assert-NipatInstallationProfile($Profile) {
     $expected = [ordered]@{
-        schema_version = 1; channel = 'preview-0.5'; display_name = 'NIPAT 0.5 Preview'
-        app_dir_name = 'NIPAT-0.5-Preview'; data_dir_name = 'NIPAT-0.5-Preview'
-        distro_prefix = 'NIPAT-05-Preview-'; resume_key = 'NIPAT-05-Preview-ResumeSetup'
-        mutex_prefix = 'Local\NIPAT-05-Preview-Setup-'; app_id = '9E27D451-67B5-4D28-B388-A41CFE2F7D05'
+        schema_version = 1; channel = 'desktop'; display_name = 'NIPAT Desktop'
+        app_dir_name = 'NIPAT-Desktop'; data_dir_name = 'NIPAT-Desktop'
+        distro_prefix = 'NIPAT-Desktop-'; resume_key = 'NIPAT-Desktop-ResumeSetup'
+        mutex_prefix = 'Local\NIPAT-Desktop-Setup-'; app_id = '6B1702B6-F75C-4F8C-956F-86626C60AF45'
     }
     if ($null -eq $Profile -or @($Profile.PSObject.Properties).Count -ne $expected.Count) {
-        throw 'Profilo di installazione NIPAT Preview mancante o non valido.'
+        throw 'Profilo di installazione NIPAT Desktop mancante o non valido.'
     }
     foreach ($name in $expected.Keys) {
         $typeMatches = $false
@@ -20,7 +20,7 @@ function Assert-NipatInstallationProfile($Profile) {
             } else { $typeMatches = $Profile.$name -is [string] }
         }
         if (-not $typeMatches -or $Profile.$name -cne $expected[$name]) {
-            throw "Identita di installazione non supportata: $name. La versione stabile non viene modificata."
+            throw "Identita di installazione non supportata: $name. Le altre installazioni non vengono modificate."
         }
     }
 }
@@ -38,7 +38,7 @@ function Assert-NipatInstallationChannel($Value, [string] $Description) {
         else { $present = $null -ne $Value.PSObject.Properties['installation_channel'] }
     }
     if (-not $present -or $Value.installation_channel -cne (Get-NipatInstallationProfile).channel) {
-        throw "$Description appartiene a un altro canale di installazione. NIPAT Preview non adotta configurazioni della versione stabile."
+        throw "$Description appartiene a un altro canale di installazione. NIPAT Desktop non adotta configurazioni delle installazioni 0.4 o 0.5."
     }
 }
 
@@ -48,7 +48,7 @@ function Assert-NipatRuntimeNamespace([string] $Distro, [string] $RootfsSha256, 
     $allowed = @($profile.distro_prefix + $RootfsSha256.Substring(0, 40))
     if ($RuntimeDirectory) { $allowed += Get-NipatRuntimeDistroName $RootfsSha256 $RuntimeDirectory }
     if ($Distro -cnotin $allowed) {
-        throw 'La distribuzione richiesta non appartiene a questa installazione NIPAT Preview.'
+        throw 'La distribuzione richiesta non appartiene a questa installazione NIPAT Desktop.'
     }
 }
 
@@ -61,9 +61,9 @@ function Assert-NipatInstallationLocation([string] $Project) {
         return
     }
     if ([IO.Path]::GetFullPath($Project).TrimEnd('\') -ine [IO.Path]::GetFullPath($expected).TrimEnd('\')) {
-        throw 'NIPAT Preview deve essere installato nella propria cartella dedicata. Avviare il relativo installer normalmente.'
+        throw 'NIPAT Desktop deve essere installato nella propria cartella dedicata. Avviare il relativo installer normalmente.'
     }
-    # Reject junctions/symlinks in existing candidate-specific paths before writes.
+    # Reject junctions/symlinks in existing installation-specific paths before writes.
     $base = Join-Path $env:LOCALAPPDATA $profile.data_dir_name
     $paths = @($Project, $base)
     foreach ($relative in @('.runtime', '.runtime\installer', '.runtime\installer\recovery', '.distribution')) {

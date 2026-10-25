@@ -30,7 +30,7 @@ class LinuxInstallerTests(unittest.TestCase):
         self.project = self.root / "project"
         self.project.mkdir()
         files = {
-            "pyproject.toml": '[project]\nversion = "0.5.0a1"\n',
+            "pyproject.toml": '[project]\nversion = "0.6.0"\n',
             "README.md": "Approved documentation\n",
             "LICENSE": "License fixture\n",
             "THIRD_PARTY_NOTICES.md": "Third-party notices fixture\n",
@@ -104,15 +104,26 @@ class LinuxInstallerTests(unittest.TestCase):
 
     def test_rejects_foreign_channel_and_wrong_provenance(self):
         for field, value in (("installation_profile", {"channel": "stable"}),
+                             ("installation_profile", {"channel": "preview-0.5"}),
                              ("rootfs_provenance", {"schema_version": 1, "vendor": "nipat-desktop", "source_commit": "e" * 40})):
             manifest = dict(self.manifest, **{field: value})
             self.write_manifest(manifest)
             with self.subTest(field=field), self.assertRaises(ValueError):
                 self.inputs()
 
+    def test_rejects_other_release_families_before_packaging(self):
+        for version in ("0.4.1", "0.5.0a1", "0.7.0"):
+            manifest = copy.deepcopy(self.manifest)
+            manifest.update(version=version, release_tag="v" + version)
+            for asset in manifest["assets"].values():
+                asset["url"] = asset["url"].replace("/v0.6.0/", "/v" + version + "/")
+            self.write_manifest(manifest)
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "versione 0.6|Preview 0.5"):
+                self.inputs()
+
     def test_rejects_malformed_manifest_and_unsafe_asset_names(self):
         for value in ([], None, {"schema_version": True}, dict(self.manifest, assets=[]),
-                      dict(self.manifest, version=["0.5.0a1"])):
+                      dict(self.manifest, version=["0.6.0"])):
             self.write_manifest(value)
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.inputs()
@@ -141,7 +152,7 @@ class LinuxInstallerTests(unittest.TestCase):
     def test_build_extract_and_verify_exact_single_package(self):
         self.rootfs.unlink()
         package = linux.build_installer(self.project, self.manifest_path, self.output)
-        self.assertEqual(package.name, "nipat-05-preview_0.5.0~a1_amd64.deb")
+        self.assertEqual(package.name, "nipat-desktop_0.6.0_amd64.deb")
         self.assertEqual({path.name for path in self.output.iterdir()}, {
             package.name, "installer-manifest.json", "linux-installer-build.json", "SHA256SUMS",
         })
@@ -153,16 +164,25 @@ class LinuxInstallerTests(unittest.TestCase):
         extracted = self.root / "extracted"
         subprocess.run(["dpkg-deb", "-x", str(package), str(extracted)], check=True)
         app = extracted / linux.APP_PATH
+        self.assertEqual(json.loads((app / "release.json").read_text())["status"], "for-domain-validation")
         self.assertEqual((app / ".distribution" / self.archive.name).read_bytes(), self.archive.read_bytes())
         self.assertFalse((app / "private.txt").exists())
         self.assertFalse((app / ".distribution" / self.rootfs.name).exists())
-        self.assertEqual((extracted / "usr/bin" / linux.PACKAGE).stat().st_mode & 0o777, 0o755)
-        self.assertIn("Terminal=true", (extracted / "usr/share/applications/nipat-05-preview.desktop").read_text())
-        desktop = (extracted / "usr/share/applications/nipat-05-preview.desktop").read_text()
+        self.assertEqual((extracted / "usr/bin" / linux.COMMAND).stat().st_mode & 0o777, 0o755)
+        self.assertIn("Terminal=true", (extracted / "usr/share/applications/nipat-desktop.desktop").read_text())
+        desktop = (extracted / "usr/share/applications/nipat-desktop.desktop").read_text()
+        self.assertIn("Name=NIPAT Desktop\n", desktop)
+        self.assertIn("Exec=/usr/bin/nipat --desktop\nTryExec=/usr/bin/nipat\n", desktop)
         self.assertIn(f"Icon=/{linux.APP_PATH.as_posix()}/{linux.ICON_SOURCE}\n", desktop)
         self.assertEqual((app / linux.ICON_SOURCE).read_bytes(), (self.project / linux.ICON_SOURCE).read_bytes())
         dependencies = subprocess.check_output(["dpkg-deb", "-f", str(package), "Depends"], text=True).strip()
         self.assertEqual(dependencies, linux.DEPENDENCIES)
+        self.assertEqual(linux.APP_PATH.as_posix(), "opt/nipat-desktop")
+        self.assertFalse((extracted / "opt/nipat-05-preview").exists())
+        self.assertFalse((extracted / "usr/bin/nipat-05-preview").exists())
+        controls = subprocess.check_output(["dpkg-deb", "-f", str(package)], text=True)
+        self.assertNotIn("Replaces:", controls)
+        self.assertNotIn("Conflicts:", controls)
 
     @unittest.skipUnless(HAS_DPKG, "Requires the Linux dpkg-deb tool")
     def test_verifier_rejects_unexpected_payload_privileges_and_contents(self):
@@ -178,13 +198,13 @@ class LinuxInstallerTests(unittest.TestCase):
                 elif scenario == "extra":
                     (stage / linux.APP_PATH / "private.txt").write_text("unlisted", encoding="utf-8")
                 elif scenario == "permissions":
-                    (stage / "usr/bin" / linux.PACKAGE).chmod(0o4755)
+                    (stage / "usr/bin" / linux.COMMAND).chmod(0o4755)
                 elif scenario == "maintainer":
                     path = stage / "DEBIAN/postinst"
                     path.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
                     path.chmod(0o755)
                 elif scenario == "launcher":
-                    (stage / "usr/bin" / linux.PACKAGE).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                    (stage / "usr/bin" / linux.COMMAND).write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
                 else:
                     path = stage / linux.APP_PATH / "README.md"
                     path.unlink()

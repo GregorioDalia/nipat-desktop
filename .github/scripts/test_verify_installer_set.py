@@ -80,7 +80,7 @@ class DependencyEvidenceTests(unittest.TestCase):
             "package_sha256": "c" * 64, "runtime_archive_sha256": "b" * 64,
             "base_image": "ubuntu:24.04@sha256:" + "d" * 64,
             "dependency_packages": dict.fromkeys(
-                ("python3.12", "docker.io", "docker-compose-v2", "nipat-05-preview"), "1.2.3"),
+                ("python3.12", "docker.io", "docker-compose-v2", "nipat-desktop"), "1.2.3"),
             "checks": dict.fromkeys(VERIFY.DEPENDENCY_CHECKS, True),
         }
 

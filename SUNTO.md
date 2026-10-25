@@ -1,9 +1,8 @@
 # NIPAT in sintesi
 
-**NIPAT 0.5.0a1** è un'applicazione locale per eseguire quattro workflow
-scientifici da un menu testuale guidato o dalla riga di comando. È una
-Preview destinata al collaudo interno e alla validazione; non include
-una GUI grafica.
+**NIPAT Desktop 0.6.0** è un'applicazione locale per eseguire quattro workflow
+scientifici da un menu testuale guidato o dalla riga di comando. La candidata
+0.6.0 è destinata alla validazione e non include una GUI grafica.
 
 | Workflow | Funzione |
 | --- | --- |
@@ -19,16 +18,16 @@ viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
 nativo. I calcoli e i dati rimangono sul computer.
 
 Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
-installazione con doppio clic e avvio dal collegamento **NIPAT 0.5 Preview**
+installazione con doppio clic e avvio dal collegamento **NIPAT Desktop**
 sul desktop o nel menu Start. Il setup consente di scegliere cinque cartelle
 separate per applicazione, ambiente WSL, cache, dati e risultati e ricorda le
 scelte nelle reinstallazioni. L'aggiornamento e la riparazione riutilizzano
-la cartella della Preview riconosciuta. La rimozione dell'applicazione conserva
+la cartella di NIPAT Desktop riconosciuta. La rimozione dell'applicazione conserva
 dati e risultati; eliminare l'ambiente NIPAT e la cache è facoltativo. Non richiede
 l'installazione separata degli strumenti scientifici.
 Ubuntu 24.04 x86_64 utilizza un singolo
 pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
-**NIPAT 0.5 Preview** o dal comando `nipat-05-preview`. APT installa
+**NIPAT Desktop** o dal comando `nipat`. APT installa
 automaticamente le dipendenze mancanti, inclusi Docker Engine e Compose v2;
 l’accesso dell’utente a Docker richiede autorizzazione amministrativa.
 Le versioni pubblicate e i relativi pacchetti sono elencati nella pagina
@@ -37,7 +36,11 @@ artefatti GitHub Actions sono invece destinati alla revisione tecnica.
 
 Per utilizzare NIPAT si sceglie il workflow, si indicano file e parametri e
 si conferma il riepilogo con **Avvia analisi**. Le indicazioni nei campi
-spiegano formati, valori predefiniti e comandi di navigazione. Gli input
+spiegano formati, valori predefiniti e comandi di navigazione. **Configura**
+conserva cartelle e impostazioni del menu fra gli avvii; ogni analisi consente
+di correggere i valori proposti. Campioni, coppie e nome del run si scelgono
+sempre per la singola analisi. **Guida e informazioni** e **Verifica ambiente**
+sono funzioni separate. Le preferenze non cambiano la CLI diretta. Gli input
 possono restare nelle cartelle originali e vengono letti senza modificarli.
 Su Windows sono supportati dischi locali fissi.
 

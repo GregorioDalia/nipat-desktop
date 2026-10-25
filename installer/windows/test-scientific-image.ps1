@@ -51,7 +51,7 @@ try {
         sha256 = (Get-FileHash -LiteralPath $assetPath -Algorithm SHA256).Hash.ToLowerInvariant()
     }
     $manifest = [pscustomobject]@{
-        runtime_image = $sourceId; source_commit = ('c' * 40); release_tag = 'v0.5.0a1'; installation_profile = (Get-NipatInstallationProfile)
+        runtime_image = $sourceId; source_commit = ('c' * 40); release_tag = 'v0.6.0'; installation_profile = (Get-NipatInstallationProfile)
         assets = [pscustomobject]@{ scientific_image = $asset; rootfs = [pscustomobject]@{ sha256 = ('d' * 64) } }
     }
     $failLoad = $false

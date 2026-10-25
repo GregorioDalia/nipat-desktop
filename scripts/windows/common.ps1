@@ -23,10 +23,10 @@ function Set-NipatEnvironment([string] $Project) {
         $installerManifest = Read-NipatInstallerManifest $installerManifestPath
         $profile = Get-NipatInstallationProfile
         if (-not (Test-Path -LiteralPath $backendFile -PathType Leaf)) {
-            throw 'Installazione Preview da completare: riaprire il setup della stessa versione.'
+            throw 'Installazione NIPAT Desktop da completare: riaprire il setup della stessa versione.'
         }
     } elseif (Test-Path -LiteralPath $backendFile -PathType Leaf) {
-        throw 'Configurazione WSL priva del manifest della stessa installazione. Ripristinare il pacchetto Preview.'
+        throw 'Configurazione WSL priva del manifest della stessa installazione. Ripristinare il pacchetto NIPAT Desktop.'
     }
     if (Test-Path -LiteralPath $backendFile -PathType Leaf) {
         $installed = Get-Content -LiteralPath $backendFile -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -34,14 +34,14 @@ function Set-NipatEnvironment([string] $Project) {
             $null -ne $installed.PSObject.Properties['runtime_dir'] -or
             $null -ne $installed.PSObject.Properties['cache_dir']) -and
             -not (Test-Path -LiteralPath (Join-Path $Project '.runtime\install-layout.json') -PathType Leaf)) {
-            throw 'Configurazione delle cartelle mancante: riaprire il setup della stessa Preview.'
+            throw 'Configurazione delle cartelle mancante: riaprire il setup della stessa versione di NIPAT Desktop.'
         }
         if ($installed.schema_version -ne 1 -or $installed.backend -ne 'wsl' -or
             $installed.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
             $installed.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
             -not [IO.Path]::IsPathRooted($installed.data_dir) -or
             -not [IO.Path]::IsPathRooted($installed.runs_dir)) {
-            throw 'Configurazione dell installer non valida: riaprire NIPAT 0.5 Preview - completa preparazione dal menu Start.'
+            throw 'Configurazione dell installer non valida: riaprire NIPAT Desktop - completa preparazione dal menu Start.'
         }
         Assert-NipatInstallationChannel $installed 'configurazione di avvio'
         $runtimeDirectory = ''
@@ -59,8 +59,8 @@ function Set-NipatEnvironment([string] $Project) {
             }
         }
         # An installed application owns its defaults. An inherited shell may
-        # belong to the stable application; only explicit CLI flags may override
-        # the candidate data/result paths after this boundary.
+        # belong to another installation. The application subsequently applies
+        # its saved user preferences and explicit CLI flags to data/result paths.
         foreach ($name in @('NIPAT_WORKSPACE_DIR', 'NIPAT_DATA_DIR', 'NIPAT_RUNS_DIR',
             'NIPAT_BACKEND', 'NIPAT_WSL_DISTRO', 'NIPAT_RUNTIME_IMAGE')) {
             Remove-Item -LiteralPath ('Env:' + $name) -ErrorAction SilentlyContinue

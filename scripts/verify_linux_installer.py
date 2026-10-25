@@ -21,9 +21,9 @@ import tarfile
 import uuid
 
 
-APP = Path("/opt/nipat-05-preview")
-COMMAND = "/usr/bin/nipat-05-preview"
-PACKAGE = "nipat-05-preview"
+APP = Path("/opt/nipat-desktop")
+COMMAND = "/usr/bin/nipat"
+PACKAGE = "nipat-desktop"
 DOCKER = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
 CHECKS = (
     "package_installation", "initial_setup", "immutable_runtime_binding",
@@ -80,7 +80,7 @@ def check_state(state: dict, manifest: dict, manifest_hash: str) -> str:
     require(state.get("schema_version") == 1 and state.get("phase") == "ready",
             "Installed launcher did not save a ready state.")
     expected = {
-        "channel": "preview-0.5", "version": manifest["version"],
+        "channel": "desktop", "version": manifest["version"],
         "source_commit": manifest["source_commit"],
         "installer_manifest_sha256": manifest_hash,
         "runtime_archive_sha256": manifest["assets"]["scientific_image"]["sha256"],
@@ -161,7 +161,7 @@ def verify(package: Path, manifest_path: Path, work: Path, output: Path) -> None
     try:
         status = subprocess.run(["dpkg-query", "-W", "-f=${db:Status-Status}", PACKAGE],
                                 capture_output=True, text=True, check=False)
-        require(status.stdout.strip() != "installed", "The Preview package is already installed.")
+        require(status.stdout.strip() != "installed", "The NIPAT Desktop package is already installed.")
         run([*DOCKER, "info", "--format", "{{json .}}"], environment=environment, cwd=work)
         preexisting = subprocess.run([*DOCKER, "image", "inspect", manifest["runtime_image"]],
                                      cwd=work, env=environment, capture_output=True, check=False)
@@ -290,7 +290,7 @@ def main() -> None:
     parser.add_argument("--work-dir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--system-package-test", action="store_true",
-                        help="authorize install/reinstall/remove of the Preview package on this CI host")
+                        help="authorize install/reinstall/remove of NIPAT Desktop on this CI host")
     args = parser.parse_args()
     if not args.system_package_test:
         parser.error("This check changes system packages; --system-package-test is required.")

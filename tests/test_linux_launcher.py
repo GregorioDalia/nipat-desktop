@@ -36,8 +36,8 @@ class LinuxLauncherTests(unittest.TestCase):
         self.archive = self.distribution / "scientific.tar.gz"
         self.archive.write_bytes(b"verified-export")
         self.manifest = {
-            "schema_version": 1, "version": "0.5.0a1", "release_tag": "v0.5.0a1",
-            "installation_profile": {"channel": "preview-0.5"},
+            "schema_version": 1, "version": "0.6.0", "release_tag": "v0.6.0",
+            "installation_profile": {"channel": "desktop"},
             "source_commit": "a" * 40, "runtime_image": SOURCE_ID,
             "source_sha256": {"source.txt": launcher.digest(self.source)},
             "assets": {"scientific_image": {
@@ -84,6 +84,34 @@ class LinuxLauncherTests(unittest.TestCase):
         _, load, cli = self.preparation()
         load.assert_not_called()
         cli.assert_not_called()
+
+    def test_desktop_state_and_data_are_separate_from_preview(self):
+        inherited = {"XDG_DATA_HOME": str(self.root / "private data"),
+                     "XDG_STATE_HOME": str(self.root / "private state")}
+        previous = []
+        for base in inherited.values():
+            marker = Path(base) / "nipat-05-preview" / "preserved.txt"
+            marker.parent.mkdir(parents=True)
+            marker.write_bytes(b"previous installation")
+            previous.append(marker)
+        data, state = launcher.user_paths(inherited)
+        self.assertEqual(data, self.data)
+        self.assertEqual(state, self.state)
+        self.assertEqual(data.name, "nipat-desktop")
+        self.preparation()
+        self.assertTrue(all(marker.read_bytes() == b"previous installation" for marker in previous))
+        self.assertEqual(json.loads((state / "state.json").read_text())["channel"], "desktop")
+
+    def test_preview_ready_record_cannot_be_reused_by_desktop(self):
+        self.preparation()
+        state_path = self.state / "state.json"
+        record = json.loads(state_path.read_text())
+        record["channel"] = "preview-0.5"
+        state_path.write_text(json.dumps(record))
+        _, load, cli = self.preparation()
+        self.assertEqual(load.call_count, 1)
+        self.assertEqual(cli.call_count, 2)
+        self.assertEqual(json.loads(state_path.read_text())["channel"], "desktop")
 
     def test_removed_cached_image_is_loaded_and_verified_again(self):
         self.preparation()
@@ -183,7 +211,7 @@ class LinuxLauncherTests(unittest.TestCase):
         cases = [
             ("asset", "../outside.tar.gz"), ("source", "../outside"),
             ("source", "/outside"), ("source", "foo/../outside"),
-            ("source", "foo\\outside"), ("channel", "stable"),
+            ("source", "foo\\outside"), ("channel", "stable"), ("channel", "preview-0.5"),
         ]
         original = json.dumps(self.manifest)
         for kind, value in cases:
@@ -196,6 +224,13 @@ class LinuxLauncherTests(unittest.TestCase):
                 self.manifest["installation_profile"]["channel"] = value
             self.write_manifest()
             with self.subTest(kind=kind, value=value), self.assertRaises(launcher.SetupError):
+                launcher.load_manifest(self.app)
+
+    def test_manifest_rejects_other_release_families(self):
+        for version in ("0.4.1", "0.5.0a1", "0.7.0"):
+            self.manifest.update(version=version, release_tag="v" + version)
+            self.write_manifest()
+            with self.subTest(version=version), self.assertRaises(launcher.SetupError):
                 launcher.load_manifest(self.app)
 
     def test_receipt_requires_one_untagged_loaded_id(self):

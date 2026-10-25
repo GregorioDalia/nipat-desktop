@@ -40,6 +40,9 @@ try {
     $profile = Get-NipatInstallationProfile
     $manifest = Read-NipatInstallerManifest (Join-Path $project '.distribution\installer-manifest.json')
     $layout = Read-NipatInstallLayout $project
+    # Inno writes ownership markers before invoking bootstrap. Resume must obey
+    # the same destination checks; a missing marker never adopts existing files.
+    Assert-NipatInstallLayout $layout -CheckExisting
     # Reject a foreign state before even creating the log or recovery directory.
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
         Assert-NipatInstallationChannel (Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json) 'Lo stato precedente'

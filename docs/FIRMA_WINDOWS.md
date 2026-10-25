@@ -7,7 +7,7 @@ un'analisi antivirus e non garantisce l'assenza di avvisi di reputazione.
 
 ## Stato e requisiti
 
-La Preview per collaudo interno non dispone di un servizio di firma attivo:
+NIPAT Desktop non dispone di un servizio di firma attivo:
 i componenti Windows di NIPAT sono privi di firma Authenticode NIPAT.
 La verifica della firma del compilatore Inno Setup in CI riguarda il
 compilatore scaricato, non gli eseguibili prodotti.

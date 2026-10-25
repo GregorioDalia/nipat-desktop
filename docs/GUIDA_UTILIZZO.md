@@ -1,6 +1,6 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT 0.5.0a1 Preview**, destinata al collaudo interno,
+Questa guida descrive **NIPAT Desktop 0.6.0**, destinata al collaudo interno,
 con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
@@ -33,11 +33,11 @@ Installare e avviare NIPAT:
 2. Scegliere la cartella dell'applicazione e le quattro cartelle per ambiente
    WSL, cache, dati e risultati, oppure mantenere i valori proposti. Il setup
    indica **Installazione** oppure **Aggiornamento e riparazione** quando
-   riconosce una Preview esistente. Se richiesta, autorizzare l'attivazione
+   riconosce un’installazione NIPAT Desktop esistente. Se richiesta, autorizzare l'attivazione
    di WSL e completare il riavvio.
 3. Attendere il completamento della preparazione e degli autotest, indicato
    da **`NIPAT: ready`**.
-4. Selezionare **Avvia NIPAT 0.5 Preview** nella schermata finale del setup,
+4. Selezionare **Avvia NIPAT Desktop** nella schermata finale del setup,
    oppure aprire il collegamento dal menu Start o dal desktop. L'opzione
    di avvio immediato è disponibile quando la preparazione è completata
    e non è richiesto un riavvio.
@@ -48,12 +48,12 @@ spostare componenti o aprire PowerShell. L'ambiente WSL dedicato
 viene avviato automaticamente quando serve.
 
 Se la preparazione si interrompe, conservare il messaggio e il log, risolvere
-la causa indicata e aprire **NIPAT 0.5 Preview - completa preparazione** dal
+la causa indicata e aprire **NIPAT Desktop - completa preparazione** dal
 menu Start. L'applicazione non avvia analisi finché il setup non è completato.
 I dettagli dell'installazione e dei suoi limiti sono in
 [DISTRIBUZIONE.md](DISTRIBUZIONE.md).
 
-La Preview Windows non è firmata da NIPAT. Se Windows o il browser ne impediscono
+Il pacchetto Windows non è firmato da NIPAT. Se Windows o il browser ne impediscono
 l'uso, conservare il messaggio completo e il nome del file bloccato e comunicarli
 al referente del collaudo insieme alla versione del pacchetto. Le indicazioni
 per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser).
@@ -68,14 +68,14 @@ rimappatura degli UID.
 L’installazione e l’autorizzazione a usare Docker sono descritte nella
 [guida dell’installatore Linux](INSTALLATORE_LINUX.md).
 
-Dopo l’installazione, aprire **NIPAT 0.5 Preview** dal menu delle applicazioni,
-oppure eseguire `nipat-05-preview` nel terminale. Il primo avvio importa
+Dopo l’installazione, aprire **NIPAT Desktop** dal menu delle applicazioni,
+oppure eseguire `nipat` nel terminale. Il primo avvio importa
 l’immagine inclusa e completa diagnostica e autotest; il menu appare solo
 dopo la riuscita della preparazione. NIPAT non va eseguito con `sudo`.
 
 Per riprendere una preparazione interrotta, risolvere la causa segnalata e
-riaprire NIPAT oppure eseguire `nipat-05-preview --setup`. Il launcher
-conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-05-preview`.
+riaprire NIPAT oppure eseguire `nipat --setup`. Il launcher
+conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`.
 
 ## Menu guidato
 
@@ -89,9 +89,10 @@ negli altri terminali è disponibile la scelta numerica in testo semplice.
 | 2 | SNPcall: SNP da BAM o pileup esistente. |
 | 3 | Contamination: stime da tabelle compatibili. |
 | 4 | CPI: frazione fetale e indice di paternità. |
-| 5 | Cartella risultati per le analisi successive della sessione. |
+| 5 | Configura: cartelle e impostazioni predefinite del menu, conservate fra gli avvii. |
 | 6 | Risultati e log dell'ultima esecuzione della sessione. |
-| 7 | Guida all'uso e verifica degli strumenti di analisi. |
+| 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
+| 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
 | 0 | Uscita dal programma. |
 
 Ogni campo presenta indicazioni sul formato richiesto e sul significato di
@@ -113,24 +114,75 @@ dei percorsi con Tab non è disponibile.
 
 Al termine della compilazione, controllare input, parametri e destinazione
 nel riepilogo. È possibile correggere i campi prima di scegliere
-**Avvia analisi**. Questa conferma esegue il motore scientifico, inclusi gli
-script R e samtools quando il workflow lo richiede.
+**1 — Avvia analisi**. La scelta predefinita è **0 — Annulla**: il solo Invio
+non avvia il calcolo. La conferma esplicita esegue il motore scientifico,
+inclusi gli script R e samtools quando il workflow lo richiede.
 
 La schermata finale consente di aprire risultati, cartella del run e log,
 o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file
 e metadati; non interpreta il significato scientifico dei risultati.
-La scelta della cartella risultati e il richiamo dell'ultima esecuzione
-valgono per la sessione corrente. Non sono presenti una cronologia tra
-sessioni o il concatenamento automatico delle analisi.
+Il richiamo dell'ultima esecuzione vale per la sessione corrente. I run
+precedenti restano sul disco; non sono presenti una cronologia tra sessioni
+o il concatenamento automatico delle analisi.
 
-**7 — Guida all'uso** contiene **Come usare NIPAT** e **Verifica strumenti
-di analisi**. La seconda voce avvia un controllo dell'ambiente senza
-elaborare campioni. Aprire la guida non avvia automaticamente il controllo.
+**7 — Guida e informazioni** è dedicata alla consultazione. **8 — Verifica
+ambiente** controlla il motore e gli strumenti senza elaborare campioni.
+Aprire la guida non avvia questo controllo né modifica la configurazione.
+
+## Configurazione del menu
+
+**5 — Configura** conserva le impostazioni utilizzate come valori proposti
+nelle analisi guidate. Scegliere una categoria e poi il campo da modificare;
+le indicazioni spiegano il valore richiesto. **9 — Salva modifiche** registra
+la categoria, mentre **0 — Annulla modifiche** la chiude senza salvare.
+Invio mantiene il valore mostrato durante la modifica di un campo; nel menu
+della categoria equivale ad annullare senza salvare.
+
+| Categoria | Impostazioni |
+| --- | --- |
+| Cartelle dati e risultati | Cartella proposta per organizzare i dati e destinazione predefinita dei run. |
+| DNPcall | Modalità di selezione dei BAM, FASTA, pannello e modalità seriale/parallela. |
+| SNPcall | Modalità BAM o pileup, FASTA e pannello SNP. |
+| Contamination | Modalità singoli file o cartella e pannello. |
+| CPI | Prefissi materno/paterno, frequenze di popolazione, modalità di selezione dei siti e relativi pannelli o mappe, costante d'errore. |
+| Riepilogo impostazioni | Consultazione dei valori salvati. |
+| Ripristina impostazioni | Ritorno ai valori iniziali del menu dopo conferma esplicita; non elimina campioni o risultati. |
+
+I valori salvati vengono riproposti anche dopo aver chiuso NIPAT. Si possono
+modificare durante la compilazione di una singola analisi senza cambiare le
+preferenze salvate. Campioni, coppie CPI e nome del run devono essere indicati
+ogni volta: non vengono memorizzati come valori predefiniti. Verificare sempre
+riferimenti, pannelli, parametri e destinazione nel riepilogo prima dell'avvio.
+
+Le preferenze del menu sono conservate in:
+
+| Sistema | File |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json` |
+| Ubuntu | `${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json` |
+
+Questa configurazione riguarda esclusivamente il menu guidato. I comandi CLI
+diretti usano le proprie opzioni esplicite e i normali valori predefiniti,
+indipendentemente da `preferences.json`. Se il menu viene avviato con
+`--data-dir` o `--runs-dir`, quei percorsi prevalgono nella sessione; le
+cartelle salvate saranno utilizzate alla riapertura senza le opzioni esplicite.
+
+Se il file delle preferenze non è leggibile o valido, NIPAT lo segnala, non
+lo sovrascrive e blocca le analisi guidate fino alla correzione o al ripristino.
+Usare **Configura → Ripristina impostazioni** solo dopo aver verificato il
+messaggio: il ripristino elimina le preferenze, non i dati o i risultati. Un riferimento salvato che non esiste più può essere corretto nei
+campi dell'analisi; la presenza nelle preferenze non ne attesta la validità.
+
+Per cambiare la posizione dell'applicazione, dell'ambiente WSL o della cache,
+usare l'installatore. **Configura** non trasferisce questi componenti e non
+sposta i dati già presenti. La gestione delle cartelle è descritta di seguito.
 
 ## Percorsi e cartelle
 
 Gli input possono restare nelle cartelle originali. Non occorre copiare BAM
-e FASTA dentro NIPAT. Su Windows sono supportati dischi locali fissi;
+e FASTA dentro NIPAT. La cartella dati configurata non modifica la base dei
+percorsi relativi: questi restano riferiti alla cartella corrente mostrata
+dal programma. Su Windows sono supportati dischi locali fissi;
 condivisioni UNC, unità di rete e unità rimovibili non sono supportate dal
 backend WSL. Su Linux i file devono essere accessibili al motore Docker locale.
 
@@ -143,26 +195,26 @@ Il setup Windows permette di scegliere separatamente queste destinazioni:
 
 | Contenuto | Percorso predefinito Windows |
 | --- | --- |
-| Applicazione e documentazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
-| Ambiente WSL e strumenti scientifici | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
-| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
-| Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
-| Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
+| Applicazione e documentazione | `%LOCALAPPDATA%\Programs\NIPAT-Desktop` |
+| Ambiente WSL e strumenti scientifici | `%LOCALAPPDATA%\NIPAT-Desktop\wsl` |
+| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-Desktop\cache` |
+| Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-Desktop\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
 
 Si possono usare dischi locali fissi diversi. Le cinque cartelle devono essere
 scrivibili, distinte e non contenersi tra loro; il setup controlla le
 destinazioni prima di installare. Non sono accettate cartelle di sistema,
-cartelle della versione stabile o percorsi che attraversano collegamenti.
-Per l'applicazione scegliere una cartella vuota o della stessa Preview.
+cartelle delle altre installazioni NIPAT o percorsi che attraversano collegamenti.
+Per l'applicazione scegliere una cartella vuota o della stessa installazione NIPAT Desktop.
 Se una cartella non vuota non viene riconosciuta, il setup può proporre una
 sottocartella vuota: accettarla cambia la destinazione senza spostare o
 cancellare il contenuto della cartella iniziale. In alternativa, scegliere
 un'altra cartella vuota. Le cartelle dati e risultati possono già contenere
 file, che vengono conservati.
-Il collegamento **Cartella NIPAT 0.5 Preview** nel menu Start apre la cartella applicativa.
+Il collegamento **Cartella NIPAT Desktop** nel menu Start apre la cartella applicativa.
 
 Le scelte vengono riproposte alla reinstallazione. Per aggiornare o riparare
-una Preview riconosciuta, usare la stessa cartella applicativa, anche se
+un’installazione NIPAT Desktop riconosciuta, usare la stessa cartella applicativa, anche se
 contiene residui di una disinstallazione. Il setup sostituisce i propri
 componenti e conserva i file estranei; prima di sovrascrivere file differenti,
 ne salva una copia. Il backup è selettivo e non ripristina automaticamente
@@ -175,8 +227,8 @@ dell'ambiente WSL prepara un ambiente dedicato nella nuova posizione e
 conserva quello precedente.
 
 Su Ubuntu installato dal pacchetto, l’applicazione si trova in
-`/opt/nipat-05-preview`; dati e risultati predefiniti sono nelle sottocartelle
-`data` e `runs` di `${XDG_DATA_HOME:-~/.local/share}/nipat-05-preview`.
+`/opt/nipat-desktop`; dati e risultati predefiniti sono nelle sottocartelle
+`data` e `runs` di `${XDG_DATA_HOME:-~/.local/share}/nipat-desktop`.
 Le variabili XDG, se definite, devono indicare percorsi assoluti.
 
 Per il checkout da sorgenti, `data` e `runs` si trovano accanto alla cartella
@@ -184,25 +236,26 @@ del progetto. `data` è una cartella di comodità e non limita la selezione
 degli input. La cartella dei risultati deve essere scrivibile e separata
 dalla cartella applicativa e da `data`, senza annidamenti tra queste tre radici.
 
-**5 — Cartella risultati** imposta la destinazione per il resto della
-sessione e crea la cartella se necessario. Ogni analisi genera una propria
-sottocartella; un nome di run già esistente viene rifiutato. È possibile
-lasciare vuoto il nome per ottenere quello automatico.
+**5 — Configura → Cartelle dati e risultati** salva le destinazioni proposte
+per il menu. Cambiare percorso non trasferisce i file esistenti. Ogni analisi
+genera una propria sottocartella dei risultati; un nome di run già esistente
+viene rifiutato. È possibile lasciare vuoto il nome per ottenere quello automatico.
 
 Nella CLI, `--data-dir` e `--runs-dir` impostano esplicitamente i percorsi.
 Il checkout da sorgenti accetta anche `NIPAT_DATA_DIR` e `NIPAT_RUNS_DIR`.
 I launcher dei pacchetti installati utilizzano la propria configurazione e
-ignorano eventuali variabili NIPAT ereditate per questi percorsi; usare le opzioni
-CLI o il menu per selezionare una destinazione diversa.
+ignorano eventuali variabili NIPAT ereditate per questi percorsi. Le preferenze
+del menu si applicano soltanto all'uso guidato; per cambiare una destinazione
+in un comando diretto usare le opzioni CLI.
 
 ## Disinstallazione su Windows
 
-Da **Impostazioni → App → App installate**, disinstallare **NIPAT 0.5 Preview**.
+Da **Impostazioni → App → App installate**, disinstallare **NIPAT Desktop**.
 Dati e risultati vengono sempre conservati. La rimozione dell'ambiente WSL e
 della cache NIPAT è facoltativa e non è selezionata per impostazione predefinita.
-Se richiesta, riguarda soltanto le risorse verificate della Preview nelle
+Se richiesta, riguarda soltanto le risorse verificate di NIPAT Desktop nelle
 cartelle registrate; non elimina Docker Desktop, altre distribuzioni WSL o
-la versione stabile di NIPAT.
+altre installazioni NIPAT.
 
 Le preferenze dei percorsi restano disponibili per una reinstallazione.
 Conservando ambiente e cache si possono riutilizzare i componenti compatibili;
@@ -230,8 +283,9 @@ adiacenti (`pos2 = pos1 + 1`); gli alleli sono dinucleotidi composti da A, C,
 G e T. Non sono ammesse coordinate duplicate. NIPAT prepara una copia con
 alleli maiuscoli senza modificare l'originale.
 
-L'esecuzione è seriale per impostazione predefinita; il menu e `--parallel`
-consentono quella parallela. I BAM ricevono alias `sample_0001`, ecc.; la
+Il valore iniziale dell'esecuzione è seriale; il menu e `--parallel`
+consentono quella parallela. Il menu propone il valore salvato in **Configura**,
+se presente. I BAM ricevono alias `sample_0001`, ecc.; la
 corrispondenza con i nomi originali è registrata nel run. Con un solo campione
 non viene prodotto il grafico UpSet.
 
@@ -298,7 +352,7 @@ Le etichette devono essere uniche, senza virgole o `=`. `--cutoff` evita le
 ambiguità della mappa quando i percorsi contengono tali delimitatori.
 
 La costante d'errore `--err-const` è modificabile anche nel menu. Il valore
-predefinito è `0.0000892303778101497`; è richiesto un numero finito non negativo,
+iniziale distribuito è `0.0000892303778101497`; è richiesto un numero finito non negativo,
 con il punto come separatore decimale. I parametri configurabili sono quelli
 esposti nel menu e in `cpi --help`; le costanti interne degli algoritmi R
 sono parte del motore scientifico distribuito.
@@ -308,7 +362,8 @@ sono parte del motore scientifico distribuito.
 Su Windows, aprire PowerShell nella cartella applicativa:
 
 ```powershell
-Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-0.5-Preview")
+# Esempio per la cartella predefinita; usare quella scelta nel setup.
+Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-Desktop")
 .\nipat.cmd --help
 .\nipat.cmd dnp-call --help
 .\nipat.cmd wizard
@@ -316,14 +371,14 @@ Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-0.5-Preview")
 
 `nipat.cmd wizard` apre il menu; `nipat.cmd` senza argomenti mostra la guida
 dei comandi. Per l'uso ordinario è sufficiente l'icona NIPAT.
-Su Ubuntu installato dal pacchetto, usare `nipat-05-preview` al posto di
+Su Ubuntu installato dal pacchetto, usare `nipat` al posto di
 `.\nipat.cmd` e la sintassi dei percorsi Linux. Nel checkout da sorgenti
 il comando è `nipat`. Per esempio:
 
 ```bash
-nipat-05-preview --help
-nipat-05-preview dnp-call --help
-nipat-05-preview --runs-dir "$HOME/risultati-nipat" contamination \
+nipat --help
+nipat dnp-call --help
+nipat --runs-dir "$HOME/risultati-nipat" contamination \
   --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
 ```
 
@@ -394,8 +449,8 @@ Una cartella di output parziale non dimostra il completamento del workflow.
 
 | Problema | Verifica da effettuare |
 | --- | --- |
-| Setup Windows incompleto | Conservare `setup.log` e `state.json` in `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview\.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
-| Preparazione Ubuntu incompleta | Conservare `setup.log` e `state.json` nella cartella di stato XDG; verificare servizio e accesso a Docker, quindi ripetere `nipat-05-preview --setup`. Consultare [Installatore Linux](INSTALLATORE_LINUX.md). |
+| Setup Windows incompleto | Conservare `setup.log` e `state.json` in `%LOCALAPPDATA%\Programs\NIPAT-Desktop\.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
+| Preparazione Ubuntu incompleta | Conservare `setup.log` e `state.json` nella cartella di stato XDG; verificare servizio e accesso a Docker, quindi ripetere `nipat --setup`. Consultare [Installatore Linux](INSTALLATORE_LINUX.md). |
 | File non accessibile | Controllare percorso, permessi e disponibilità del disco; su Windows usare un disco locale fisso. |
 | Indice FASTA assente | Fornire il `.fai` del riferimento selezionato e, per BGZF, il `.gzi`. |
 | Nome di run già presente | Scegliere un nome nuovo o lasciare il nome automatico. |

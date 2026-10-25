@@ -1,7 +1,7 @@
 # Integrazione continua e distribuzione
 
 NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
-pubblicazione. La versione 0.5.0a1 appartiene al canale Preview. La pipeline
+pubblicazione. La versione 0.6.0 appartiene al canale desktop. La pipeline
 produce installatori Windows WSL e Ubuntu per revisione. La pubblicazione
 richiede una coppia di pacchetti verificata e un record di accettazione
 revisionato, riferito agli stessi file. Il publisher verifica il record
@@ -16,7 +16,7 @@ prima di modificare una release.
 | [Publish verified pre-release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica la coppia Windows/Ubuntu e l’accettazione dei file esatti, quindi pubblica una pre-release senza ricostruire gli asset. |
 
 Una build di pull request serve alla revisione ed è rifiutata dal publisher.
-Per la 0.5, una build destinata alla pubblicazione deve essere avviata
+Per la 0.6, una build destinata alla pubblicazione deve essere avviata
 manualmente su un commit revisionato di questo repository; può provenire
 dal branch di sviluppo prima dell’integrazione. I pacchetti vengono provati
 e accettati su quel commit. Prima della pubblicazione, sorgenti e record di
@@ -28,7 +28,9 @@ artefatti verificati senza ricostruirli; non modifica release già pubblicate.
 
 I job `linux-checks` e `windows-checks` eseguono la suite Python su entrambi
 i sistemi. Il primo comprende i test della selezione CI, del publisher e la
-verifica sintattica dell'helper del motore. Il secondo comprende parsing con
+verifica sintattica dell'helper del motore. I test del menu e delle preferenze
+controllano persistenza, annullamento e ripristino, priorità dei percorsi e
+separazione dai comandi diretti. Il secondo comprende parsing con
 PowerShell 5.1, protezioni del bootstrap, identità delle immagini, configurazione
 WSL riprendibile e compilazione/prova del launcher. I controlli di riparazione
 e inventario verificano il backup selettivo, la gestione dei componenti
@@ -85,7 +87,7 @@ La verifica finale Windows confronta manifest, sorgenti, EXE ed evidenze
 di costruzione.
 
 Il job `linux-installer` riceve il medesimo archivio esportato, senza
-ricostruirlo, e prepara il pacchetto `nipat-05-preview` per Ubuntu 24.04 amd64.
+ricostruirlo, e prepara il pacchetto `nipat-desktop` per Ubuntu 24.04 amd64.
 Il builder verifica versione, commit, sorgenti e checksum, quindi produce
 il `.deb`, il manifest e le evidenze. La prova installa il pacchetto con APT
 su un runner con Docker configurato e avvia preparazione e analisi da
@@ -132,7 +134,7 @@ associate alla coppia Windows/Ubuntu.
 
 Gli artefatti sono conservati per **14 giorni** dalla creazione e non
 equivalgono a una release pubblica. Conservare il riferimento al run per
-identificare la build usata nelle prove. La versione 0.5 non produce un
+identificare la build usata nelle prove. La versione 0.6 non produce un
 installatore Docker Desktop.
 
 ## Dipendenze e riproducibilità
@@ -170,7 +172,7 @@ in un desktop reale.
 
 Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede prove
 degli installatori effettivi su Windows e Ubuntu Desktop: prima installazione,
-riavvio e analisi, coesistenza della Preview con NIPAT stabile su Windows,
+riavvio e analisi, coesistenza di NIPAT Desktop con le installazioni 0.4 e 0.5 su Windows,
 Docker già presente su Ubuntu, reinstallazione dello stesso pacchetto e
 rimozione con conservazione dei dati. Su Windows comprende cinque percorsi
 personalizzati, anche su dischi fissi diversi e con spazi o caratteri non ASCII,

@@ -51,7 +51,7 @@ class InstallerAssetTests(unittest.TestCase):
         self.assertIn('#include StageDir + "\\install-profile.iss"', setup)
         definition = assets.installation_profile_include(dict(
             self.manifest, version=version, release_tag=f"v{version}",
-            assets={key: dict(value, url=value["url"].replace("v0.5.0a1", f"v{version}"))
+            assets={key: dict(value, url=value["url"].replace("v0.6.0", f"v{version}"))
                     for key, value in self.manifest["assets"].items()},
         ))
         self.assertIn(f'#define NipatVersion "{version}"', definition)
@@ -64,7 +64,7 @@ class InstallerAssetTests(unittest.TestCase):
         self.project = self.root / "project"
         self.project.mkdir()
         (self.project / "pyproject.toml").write_text(
-            '[project]\nversion = "0.5.0a1"\n', encoding="utf-8",
+            '[project]\nversion = "0.6.0"\n', encoding="utf-8",
         )
         (self.project / "README.md").write_text("Approved source\n", encoding="utf-8")
         (self.project / "distribution-files.txt").write_text(
@@ -106,7 +106,7 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(entry["size"], path.stat().st_size)
             self.assertEqual(entry["url"],
                              "https://github.com/GregorioDalia/nipat-desktop/releases/"
-                             f"download/v0.5.0a1/{path.name}")
+                             f"download/v0.6.0/{path.name}")
 
     def test_manifest_rejects_foreign_or_ambiguous_installation_profile(self):
         mutations = {
@@ -135,7 +135,7 @@ class InstallerAssetTests(unittest.TestCase):
         historical["version"] = "0.4.1"
         historical["release_tag"] = "v0.4.1"
         for entry in historical["assets"].values():
-            entry["url"] = entry["url"].replace("v0.5.0a1", "v0.4.1")
+            entry["url"] = entry["url"].replace("v0.6.0", "v0.4.1")
         assets.validate_manifest(historical)
         assets.verify_runtime_assets(historical, self.root)
         for builder in (assets.runtime_assets_include, assets.installation_profile_include):
@@ -161,16 +161,55 @@ class InstallerAssetTests(unittest.TestCase):
                 rootfs_provenance=self.provenance,
             )
 
+    def test_desktop_installers_cannot_adopt_the_complete_preview_profile(self):
+        preview = {
+            "schema_version": 1,
+            "channel": "preview-0.5",
+            "display_name": "NIPAT 0.5 Preview",
+            "app_dir_name": "NIPAT-0.5-Preview",
+            "data_dir_name": "NIPAT-0.5-Preview",
+            "distro_prefix": "NIPAT-05-Preview-",
+            "resume_key": "NIPAT-05-Preview-ResumeSetup",
+            "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
+            "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05",
+        }
+        for field, value in preview.items():
+            if field == "schema_version":
+                continue
+            manifest = copy.deepcopy(self.manifest)
+            manifest["installation_profile"][field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "Profilo"):
+                assets.validate_manifest(manifest)
+        with self.assertRaisesRegex(ValueError, "Profilo"):
+            assets.installation_profile_include(dict(self.manifest, installation_profile=preview))
+        (self.project / assets.PROFILE_PATH).write_text(json.dumps(preview), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Profilo"):
+            assets.stage_app(self.project, self.manifest_path, self.root / "stage", self.python_archive)
+        self.assertFalse((self.root / "stage").exists())
+
+    def test_preview_version_cannot_claim_the_desktop_installation_identity(self):
+        manifest = copy.deepcopy(self.manifest)
+        manifest["version"] = "0.5.0a1"
+        manifest["release_tag"] = "v0.5.0a1"
+        for entry in manifest["assets"].values():
+            entry["url"] = entry["url"].replace("v0.6.0", "v0.5.0a1")
+        with self.assertRaisesRegex(ValueError, "Preview 0.5"):
+            assets.validate_manifest(manifest)
+        self.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Preview 0.5"):
+            assets.stage_app(self.project, self.manifest_path, self.root / "stage", self.python_archive)
+        self.assertFalse((self.root / "stage").exists())
+
     def test_profile_include_carries_only_verified_candidate_identity(self):
         include = assets.installation_profile_include(self.manifest)
         definitions = dict(re.findall(r'^#define (\w+) "([^\"]+)"$', include, re.MULTILINE))
         self.assertEqual(definitions, {
-            "NipatVersion": "0.5.0a1",
-            "NipatAppId": "{{9E27D451-67B5-4D28-B388-A41CFE2F7D05}",
-            "NipatDisplayName": "NIPAT 0.5 Preview",
-            "NipatAppDirectory": "NIPAT-0.5-Preview",
-            "NipatDataDirectory": "NIPAT-0.5-Preview",
-            "NipatResumeKey": "NIPAT-05-Preview-ResumeSetup",
+            "NipatVersion": "0.6.0",
+            "NipatAppId": "{{6B1702B6-F75C-4F8C-956F-86626C60AF45}",
+            "NipatDisplayName": "NIPAT Desktop",
+            "NipatAppDirectory": "NIPAT-Desktop",
+            "NipatDataDirectory": "NIPAT-Desktop",
+            "NipatResumeKey": "NIPAT-Desktop-ResumeSetup",
         })
         bad = copy.deepcopy(self.manifest)
         bad["installation_profile"]["display_name"] += '\"\n#define Injected "1'
@@ -267,7 +306,7 @@ class InstallerAssetTests(unittest.TestCase):
             with self.subTest(key=key, value=value), self.assertRaises(ValueError):
                 assets.validate_manifest(manifest)
         for key, value in [("source_commit", "main"), ("runtime_image", "latest"),
-                           ("release_tag", "v0.5.0")]:
+                           ("release_tag", "v0.6.1")]:
             manifest = dict(self.manifest, **{key: value})
             with self.subTest(key=key), self.assertRaises(ValueError):
                 assets.validate_manifest(manifest)
@@ -300,7 +339,7 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(assets.verify_application_payload(stage), inventory)
         record = json.loads(inventory.read_text())
         self.assertEqual(record["source_commit"], COMMIT)
-        self.assertEqual(record["installation_channel"], "preview-0.5")
+        self.assertEqual(record["installation_channel"], "desktop")
         entries = {entry["path"]: entry["sha256"] for entry in record["files"]}
         self.assertEqual(set(entries), {p.relative_to(app).as_posix() for p in app.rglob("*")
                                        if p.is_file() and p != inventory})
@@ -423,7 +462,7 @@ class InstallerAssetTests(unittest.TestCase):
             assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
         include = stage / assets.PROFILE_INCLUDE_NAME
         original = include.read_text(encoding="utf-8")
-        include.write_text(original.replace("NIPAT-0.5-Preview", "NIPAT"), encoding="utf-8")
+        include.write_text(original.replace("NIPAT-Desktop", "NIPAT"), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "profilo Inno"):
             assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
         include.write_text(original, encoding="utf-8")

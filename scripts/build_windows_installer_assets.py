@@ -27,25 +27,25 @@ APPLICATION_FILES_NAME = "application-files.json"
 RUNTIME_INCLUDE_NAME = "runtime-assets.iss"
 PROFILE_INCLUDE_NAME = "install-profile.iss"
 PROFILE_PATH = Path("installer/windows/install-profile.json")
-# This guard deliberately excludes the published stable installation identity.
+# This guard excludes the published 0.4 and 0.5 installation identities.
 # The JSON is the shared input for PowerShell, generated Inno directives and metadata.
 EXPECTED_INSTALLATION_PROFILE = {
     "schema_version": 1,
-    "channel": "preview-0.5",
-    "display_name": "NIPAT 0.5 Preview",
-    "app_dir_name": "NIPAT-0.5-Preview",
-    "data_dir_name": "NIPAT-0.5-Preview",
-    "distro_prefix": "NIPAT-05-Preview-",
-    "resume_key": "NIPAT-05-Preview-ResumeSetup",
-    "mutex_prefix": "Local\\NIPAT-05-Preview-Setup-",
-    "app_id": "9E27D451-67B5-4D28-B388-A41CFE2F7D05",
+    "channel": "desktop",
+    "display_name": "NIPAT Desktop",
+    "app_dir_name": "NIPAT-Desktop",
+    "data_dir_name": "NIPAT-Desktop",
+    "distro_prefix": "NIPAT-Desktop-",
+    "resume_key": "NIPAT-Desktop-ResumeSetup",
+    "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
+    "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45",
 }
 
 
 def validate_installation_profile(profile: dict) -> None:
     if (type(profile) is not dict or profile != EXPECTED_INSTALLATION_PROFILE
             or type(profile.get("schema_version")) is not int):
-        raise ValueError("Profilo di installazione diverso dal canale Preview isolato.")
+        raise ValueError("Profilo di installazione diverso dal canale NIPAT Desktop.")
 
 
 def installation_profile(project: Path) -> dict:
@@ -210,8 +210,10 @@ def validate_manifest(manifest: dict) -> None:
     if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:a[0-9]+|b[0-9]+|rc[0-9]+)?", version):
         raise ValueError("Versione nel manifest non valida.")
     # Published pre-0.5 archives remain verifiable. This compatibility is read-only:
-    # every WSL staging/include writer below independently requires the Preview profile.
+    # every WSL staging/include writer below independently requires the NIPAT Desktop profile.
     major_minor = tuple(int(part) for part in version.split(".")[:2])
+    if major_minor == (0, 5):
+        raise ValueError("Gli installer Preview 0.5 non appartengono al canale NIPAT Desktop.")
     if major_minor >= (0, 5) or "installation_profile" in manifest:
         validate_installation_profile(manifest.get("installation_profile"))
     tag = manifest.get("release_tag")
@@ -332,7 +334,7 @@ def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path)
     release = {
         "schema_version": 1,
         "package_version": manifest["version"],
-        "status": "alpha-for-domain-validation",
+        "status": "for-domain-validation",
         "built_at_utc": manifest.get("built_at_utc"),
         "source_git": {"commit": manifest["source_commit"], "dirty": False, "available": True},
         "source_sha256": hashes,
@@ -384,7 +386,7 @@ def application_payload(stage: Path) -> dict:
     if {entry["path"] for entry in files} != set(source_hashes) | generated:
         raise ValueError("Il payload non corrisponde ai sorgenti e ai componenti generati previsti.")
     bundle.require_python_archive(app / ".distribution" / bundle.PYTHON_NAME)
-    return {"schema_version": 1, "installation_channel": "preview-0.5",
+    return {"schema_version": 1, "installation_channel": "desktop",
             "source_commit": manifest["source_commit"], "files": files}
 
 

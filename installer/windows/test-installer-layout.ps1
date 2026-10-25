@@ -39,7 +39,7 @@ try {
     )
     $inventory = [ordered]@{
         schema_version = 1
-        installation_channel = 'preview-0.5'
+        installation_channel = 'desktop'
         source_commit = ('0' * 40)
         files = $applicationFiles
     }
@@ -48,7 +48,7 @@ try {
     $profile = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'install-profile.json') -Raw -Encoding UTF8 |
         ConvertFrom-Json
     $definitions = [ordered]@{
-        NipatVersion = '0.5.0a1'
+        NipatVersion = '0.6.0'
         NipatAppId = ('{{' + $profile.app_id + '}')
         NipatDisplayName = $profile.display_name
         NipatAppDirectory = $profile.app_dir_name

@@ -18,7 +18,7 @@ function Read-NipatOwnership([string] $Path, [string] $Distro) {
 function Get-NipatRuntimeTarget([string] $WslDirectory, [string] $RootfsSha256, [string[]] $Names) {
     if ($RootfsSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Identita rootfs non valida.' }
     $profile = Get-NipatInstallationProfile
-    # Reuse an earlier Preview only when its receipt is in this selected runtime
+    # Reuse an earlier Desktop runtime only when its receipt is in this selected runtime
     # directory. A different destination gets a distinct name and a fresh import;
     # the existing distribution and its disk are never moved or unregistered.
     $legacyDistro = $profile.distro_prefix + $RootfsSha256.Substring(0, 40)
@@ -124,7 +124,7 @@ function Initialize-NipatRuntimeTarget($Target, $RootfsAsset, [string] $CacheDir
         }
         $ownership = $Target.Ownership
         if ($null -ne $ownership -and $ownership.status -ceq 'owned') {
-            # A user may have unregistered this owned Preview manually. Only an
+            # A user may have unregistered this owned Desktop runtime manually. Only an
             # absent registration plus an empty destination permits recreation.
             # Preserve the exact old receipt outside the active registrations.
             $history = Join-Path (Split-Path -Parent $Target.Directory) 'registration-history'
@@ -231,10 +231,10 @@ function Get-NipatPreviousDataRoots([string] $Project, [string] $BaseDirectory) 
         if ($null -ne $configuration.PSObject.Properties['rootfs_sha256']) {
             Assert-NipatRuntimeNamespace $configuration.wsl_distro $configuration.rootfs_sha256 $runtimeDirectory
         } else {
-            # Older Preview metadata did not always persist the full rootfs hash.
+            # Earlier installation metadata did not always persist the full rootfs hash.
             $profile = Get-NipatInstallationProfile
             if ($configuration.wsl_distro -cnotmatch ('^' + [regex]::Escape($profile.distro_prefix) + '[a-f0-9]{40}$')) {
-                throw 'Il runtime della configurazione precedente non appartiene a NIPAT Preview.'
+                throw 'Il runtime della configurazione precedente non appartiene a NIPAT Desktop.'
             }
         }
         return [pscustomobject]@{ data_dir = $configuration.data_dir; runs_dir = $configuration.runs_dir }

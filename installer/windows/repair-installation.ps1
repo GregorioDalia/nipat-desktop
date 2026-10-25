@@ -6,7 +6,7 @@ param(
     [switch] $LibraryOnly
 )
 
-# Pre-copy repair of an existing Preview. Importing this file has no effects.
+# Pre-copy repair of an existing NIPAT Desktop installation. Importing this file has no effects.
 # The setup supplies its embedded inventory; existing inventory is evidence
 # only for removing an unchanged obsolete file, never a blanket ownership grant.
 . (Join-Path $PSScriptRoot 'install-profile.ps1')

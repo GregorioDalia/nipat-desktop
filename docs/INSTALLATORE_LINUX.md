@@ -1,12 +1,12 @@
 # Installazione di NIPAT su Ubuntu
 
-Il pacchetto Linux di **NIPAT 0.5.0a1** è un unico file
-`nipat-05-preview_0.5.0~a1_amd64.deb`. Contiene applicazione, documentazione
+Il pacchetto Linux di **NIPAT Desktop 0.6.0** è un unico file
+`nipat-desktop_0.6.0_amd64.deb`. Contiene applicazione, documentazione
 e immagine scientifica con R, samtools, dipendenze e preparazione dei workflow.
 Il motore è lo stesso archivio verificato incluso nel pacchetto Windows.
 Non è necessario scaricare o spostare separatamente l'immagine.
 
-La versione appartiene al canale Preview. Le versioni pubblicate e i
+La versione appartiene al canale desktop. Le versioni pubblicate e i
 relativi pacchetti sono elencati nella pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
 I pacchetti degli artefatti GitHub Actions servono alla revisione tecnica.
@@ -52,7 +52,7 @@ analisi con percorsi o proprietari dei risultati differenti da quelli attesi.
 Dalla cartella che contiene il file ricevuto da una build verificata:
 
 ```bash
-sudo apt install ./nipat-05-preview_0.5.0~a1_amd64.deb
+sudo apt install ./nipat-desktop_0.6.0_amd64.deb
 ```
 
 APT mostra anche le dipendenze da scaricare e installare. Esaminare il
@@ -69,8 +69,8 @@ non aggiunge automaticamente l’utente al gruppo `docker`.
 
 Dopo l'installazione:
 
-1. Aprire **NIPAT 0.5 Preview** dal menu delle applicazioni, oppure eseguire
-   `nipat-05-preview` nel terminale.
+1. Aprire **NIPAT Desktop** dal menu delle applicazioni, oppure eseguire
+   `nipat` nel terminale.
 2. Attendere la verifica dell'archivio incluso e l'importazione dell'immagine.
 3. Attendere la diagnostica del motore e gli autotest.
 4. Nel menu, scegliere il workflow e compilare gli input. Confermare
@@ -88,7 +88,7 @@ Per eseguire o ripetere esplicitamente la verifica dell’archivio,
 la diagnostica e gli autotest, senza aprire il menu:
 
 ```bash
-nipat-05-preview --setup
+nipat --setup
 ```
 
 Se la preparazione fallisce, le analisi restano bloccate. Risolvere la causa
@@ -97,12 +97,12 @@ indicata e ripetere il comando: i dati e i risultati già presenti sono conserva
 ## Comandi e percorsi
 
 ```bash
-nipat-05-preview --version
-nipat-05-preview --help
-nipat-05-preview dnp-call --help
-nipat-05-preview doctor --runtime
-nipat-05-preview self-test
-nipat-05-preview
+nipat --version
+nipat --help
+nipat dnp-call --help
+nipat doctor --runtime
+nipat self-test
+nipat
 ```
 
 `--help` e `--version` sono disponibili anche se Docker non è accessibile.
@@ -116,24 +116,28 @@ risultati sono descritti nella [guida per l'utilizzo](GUIDA_UTILIZZO.md).
 
 | Contenuto | Posizione predefinita |
 | --- | --- |
-| Applicazione e archivio scientifico | `/opt/nipat-05-preview` |
-| Comando | `/usr/bin/nipat-05-preview` |
-| Dati | `~/.local/share/nipat-05-preview/data` |
-| Risultati | `~/.local/share/nipat-05-preview/runs` |
-| Stato della preparazione | `~/.local/state/nipat-05-preview/state.json` |
-| Log della preparazione | `~/.local/state/nipat-05-preview/setup.log` |
+| Applicazione e archivio scientifico | `/opt/nipat-desktop` |
+| Comando | `/usr/bin/nipat` |
+| Dati | `~/.local/share/nipat-desktop/data` |
+| Risultati | `~/.local/share/nipat-desktop/runs` |
+| Stato della preparazione | `~/.local/state/nipat-desktop/state.json` |
+| Log della preparazione | `~/.local/state/nipat-desktop/setup.log` |
+| Preferenze del menu | `~/.config/nipat-desktop/preferences.json` |
 
 Se `XDG_DATA_HOME` o `XDG_STATE_HOME` sono definiti, sostituiscono
 rispettivamente `~/.local/share` e `~/.local/state`; devono essere percorsi
-assoluti. I dati appartengono all'utente e restano separati dall'applicazione.
-Non usare la directory `/opt/nipat-05-preview` per campioni o risultati.
+assoluti. `XDG_CONFIG_HOME`, se definito, sostituisce `~/.config` per le
+preferenze del menu. I dati appartengono all'utente e restano separati dall'applicazione.
+Non usare la directory `/opt/nipat-desktop` per campioni o risultati.
 
 Gli input possono trovarsi in altre cartelle locali accessibili. Per scegliere
-una destinazione dei risultati usare l'opzione 5 del menu oppure `--runs-dir`
-prima del sottocomando:
+una destinazione dei risultati usare **5 — Configura → Cartelle dati e
+risultati** nel menu oppure `--runs-dir` prima del sottocomando. Le preferenze
+salvate si applicano soltanto al menu; i comandi diretti rimangono espliciti:
+
 
 ```bash
-nipat-05-preview --runs-dir "$HOME/risultati-nipat" contamination \
+nipat --runs-dir "$HOME/risultati-nipat" contamination \
   --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
 ```
 
@@ -149,11 +153,11 @@ successiva fallisce.
 Per rimuovere l'applicazione:
 
 ```bash
-sudo apt remove nipat-05-preview
+sudo apt remove nipat-desktop
 ```
 
 La rimozione elimina applicazione e collegamento. Conserva dati, risultati,
-stato e immagini Docker. Non rimuove il daemon, non cambia i gruppi utenti
+stato, preferenze del menu e immagini Docker. Non rimuove il daemon, non cambia i gruppi utenti
 e non elimina altre immagini o container. L'eventuale cancellazione dei dati
 è un'operazione separata da pianificare dopo averne verificato la conservazione.
 
