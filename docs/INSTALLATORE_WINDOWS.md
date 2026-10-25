@@ -1,11 +1,12 @@
 # Installatore Windows
 
 Il pacchetto Windows di NIPAT 0.5 contiene l'applicazione, Python portabile,
-il launcher `NIPAT.exe`, il filesystem WSL e l'immagine scientifica. Il file
+i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-La versione 0.5.0a1 appartiene al canale Preview. Consultare la pagina
+La versione 0.5.0a1 appartiene al canale Preview per collaudo interno.
+Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti degli
 artefatti GitHub Actions servono alla revisione tecnica; la loro costruzione non
@@ -28,15 +29,18 @@ di sistema non sono necessari.
 
 I checksum identificano i file distribuiti; non costituiscono una firma
 Authenticode né attestano il riconoscimento del distributore da parte di Windows.
-Le build di revisione non firmate possono essere bloccate da Smart App Control.
+La Preview non dispone di una firma Authenticode NIPAT. Smart App Control
+può bloccare il setup, un eseguibile o gli script usati dalla preparazione
+e dall'avvio.
 Un'installazione riuscita non dimostra che tutti i componenti siano autorizzati
 all'esecuzione sul dispositivo.
 
 In presenza di un blocco, conservare il testo completo dell'avviso, il nome del
 file indicato e il riferimento alla build scaricata. Distinguere Smart App
 Control, SmartScreen e un rilevamento antivirus: richiedono verifiche diverse.
-Non disattivare le protezioni né introdurre esclusioni antivirus per completare
-il collaudo. Segnalare il blocco e attendere una candidata verificata per quel caso.
+Il setup non disattiva le protezioni né introduce esclusioni antivirus.
+Il referente del collaudo deve verificare l'errore sul componente indicato
+prima di considerare utilizzabile il pacchetto su quel dispositivo.
 La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifiche.
 
 ### Procedura
@@ -47,7 +51,16 @@ La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifich
    Windows. Dopo un riavvio, accedere allo stesso account per riprendere.
 3. Attendere la verifica degli archivi, la preparazione del runtime e gli
    autotest. La configurazione è completa quando compare `NIPAT: ready`.
-4. Aprire **NIPAT 0.5 Preview** dal menu Start o dal collegamento sul desktop.
+4. Se la preparazione è completa e non serve un riavvio, il setup propone
+   **Avvia NIPAT 0.5 Preview**. Per gli utilizzi successivi aprire il
+   collegamento dal menu Start o dal desktop, creato se selezionato nel setup.
+
+I collegamenti avviano `2_AVVIA.cmd` con la cartella dati come directory
+corrente e il logo NIPAT come icona. `nipat.cmd` espone gli stessi workflow
+per l'uso nei terminali. Entrambi passano attraverso `scripts/windows/run.ps1`,
+che verifica stato `ready`, manifest e associazione al runtime prima di
+preparare l'ambiente del client. Il launcher `NIPAT.exe` resta incluso come
+componente aggiuntivo, ma non è il destinatario dei collegamenti ordinari.
 
 Lo spazio disponibile deve contenere applicazione, cache degli archivi,
 filesystem WSL importato e immagine scientifica, oltre a input e risultati.

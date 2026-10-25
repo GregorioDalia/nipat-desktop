@@ -1,8 +1,9 @@
 # SignPath Foundation application preparation
 
-This document contains project information for an application to the
-[SignPath Foundation program](https://signpath.org/apply.html). It does not
-represent an application already submitted or approval by the Foundation.
+This reference contains project information relevant to the
+[SignPath Foundation program](https://signpath.org/apply.html). No signing
+service is active for NIPAT. This document does not establish eligibility,
+approval or an integration commitment.
 
 ## Project information
 

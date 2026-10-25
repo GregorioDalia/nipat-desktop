@@ -34,7 +34,7 @@ DiskSpanning=no
 WizardStyle=modern
 SetupIconFile={#StageDir}\app\assets\branding\nipat-icon.ico
 UninstallDisplayName={#NipatDisplayName} {#NipatVersion}
-UninstallDisplayIcon={app}\NIPAT.exe
+UninstallDisplayIcon={app}\assets\branding\nipat-icon.ico
 CloseApplications=yes
 RestartApplications=no
 
@@ -52,16 +52,25 @@ Name: "{localappdata}\{#NipatDataDirectory}\runs"; Flags: uninsneveruninstall
 Name: "desktopicon"; Description: "Crea un collegamento {#NipatDisplayName} sul desktop"
 
 [Icons]
-Name: "{autodesktop}\{#NipatDisplayName}"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"; Tasks: desktopicon
-Name: "{group}\{#NipatDisplayName}"; Filename: "{app}\NIPAT.exe"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"
-Name: "{group}\{#NipatDisplayName} - completa preparazione"; Filename: "{app}\1_SETUP.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\NIPAT.exe"
+Name: "{autodesktop}\{#NipatDisplayName}"; Filename: "{app}\2_AVVIA.cmd"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"; IconFilename: "{app}\assets\branding\nipat-icon.ico"; Tasks: desktopicon
+Name: "{group}\{#NipatDisplayName}"; Filename: "{app}\2_AVVIA.cmd"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"; IconFilename: "{app}\assets\branding\nipat-icon.ico"
+Name: "{group}\{#NipatDisplayName} - completa preparazione"; Filename: "{app}\1_SETUP.cmd"; WorkingDir: "{app}"; IconFilename: "{app}\assets\branding\nipat-icon.ico"
 Name: "{group}\Guida {#NipatDisplayName}"; Filename: "{app}\docs\GUIDA_UTILIZZO.md"
 Name: "{group}\Disinstalla {#NipatDisplayName}"; Filename: "{uninstallexe}"
+
+[Run]
+Filename: "{app}\2_AVVIA.cmd"; Description: "Avvia {#NipatDisplayName}"; WorkingDir: "{localappdata}\{#NipatDataDirectory}\data"; Flags: postinstall nowait skipifsilent; Check: CanLaunchNipat
 
 [Code]
 var
   BootstrapResult: Integer;
+  BootstrapCompleted: Boolean;
   WslRebootRequired: Boolean;
+
+function CanLaunchNipat(): Boolean;
+begin
+  Result := BootstrapCompleted and (BootstrapResult = 0) and not WslRebootRequired;
+end;
 
 function InitializeSetup(): Boolean;
 begin
@@ -181,6 +190,7 @@ begin
     Started := ExecAsOriginalUser(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters, ExpandConstant('{app}'), SW_SHOW, ewWaitUntilTerminated, BootstrapResult);
     if not Started then BootstrapResult := 1;
+    BootstrapCompleted := True;
     WslRebootRequired := BootstrapResult = 3010;
     if (BootstrapResult <> 0) and not WslRebootRequired then
       MsgBox('I file NIPAT sono installati, ma la preparazione non e'' completata. ' +

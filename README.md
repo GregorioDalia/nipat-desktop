@@ -10,8 +10,8 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione di questo documento: 0.5.0a1 Preview.** La documentazione
-descrive il contenuto di questa versione. Consultare la pagina
+**Versione di questo documento: 0.5.0a1 Preview, per collaudo interno.**
+La documentazione descrive il contenuto di questa versione. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e i relativi installatori. Gli artefatti GitHub Actions
 sono pacchetti di revisione tecnica e non equivalgono a una release.
@@ -45,13 +45,21 @@ Docker Desktop. WSL2 e la virtualizzazione devono essere disponibili sul
 computer; la loro attivazione può richiedere Internet, autorizzazione
 amministrativa e riavvio.
 
-L'installazione Windows usa il nome **NIPAT 0.5 Preview**. L'EXE si avvia con
-doppio clic dal proprio account, senza scegliere «Esegui come amministratore»;
-la configurazione deve terminare con `NIPAT: ready`. Il collegamento **NIPAT
-0.5 Preview** apre quindi la CLI guidata. Non occorre spostare archivi o aprire
+L'installazione Windows usa il nome **NIPAT 0.5 Preview**. Avviare
+`NIPAT-Setup.exe` con doppio clic dal proprio account, senza scegliere
+«Esegui come amministratore»;
+la configurazione deve terminare con `NIPAT: ready`. Per ogni utilizzo
+successivo, aprire con doppio clic il collegamento **NIPAT 0.5 Preview**
+sul desktop o selezionarlo dal menu Start. Non occorre spostare archivi o aprire
 manualmente PowerShell. Requisiti, percorsi e gestione dell'installazione sono
 nella [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
 [documentazione di distribuzione](docs/DISTRIBUZIONE.md).
+
+La Preview Windows non dispone di una firma Authenticode NIPAT. Le protezioni
+del computer possono impedirne il download, la preparazione o l'avvio;
+l'installazione va verificata sui dispositivi destinati al collaudo. La
+[guida Windows](docs/INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser)
+descrive come documentare un blocco.
 
 Il pacchetto Ubuntu incorpora l’applicazione e lo stesso archivio scientifico
 del pacchetto Windows. APT installa anche Python, Docker Engine e Compose v2
@@ -83,33 +91,33 @@ selezionando gli output compatibili di un run come input del successivo.
 
 ### CLI diretta
 
-Nella cartella dell'applicazione Windows, `NIPAT.exe` accetta gli stessi
+Nella cartella dell'applicazione Windows, `nipat.cmd` accetta gli stessi
 workflow del menu. Sostituire i percorsi relativi di esempio con i propri:
 
 ```powershell
-.\NIPAT.exe --runs-dir "..\risultati" dnp-call `
+.\nipat.cmd --runs-dir "..\risultati" dnp-call `
   --bam "..\campioni\campione.bam" `
   --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt"
 
-.\NIPAT.exe snp-call `
+.\nipat.cmd snp-call `
   --pileup "..\campioni\campione.pileup" --panel "..\pannelli\SNPlist.txt"
 
-.\NIPAT.exe contamination `
+.\nipat.cmd contamination `
   --input-dir "..\risultati\run-dnp\output\individual_outputs" `
   --panel "..\pannelli\DNP_list.txt"
 
-.\NIPAT.exe cpi --input-dir "..\campioni\cpi" --pairs "A1:A1" `
+.\nipat.cmd cpi --input-dir "..\campioni\cpi" --pairs "A1:A1" `
   --popfreq "..\pannelli\pop_allFreq.txt" --panel "..\pannelli\DNP_list.txt"
 ```
 
 Le opzioni globali, come `--runs-dir` e `--dry-run`, precedono il sottocomando.
 `--dry-run` valida gli input e registra un'esecuzione `planned`, senza eseguire
-il motore scientifico. `NIPAT.exe --help` e `NIPAT.exe <workflow> --help`
+il motore scientifico. `nipat.cmd --help` e `nipat.cmd <workflow> --help`
 elencano le opzioni. La [guida](docs/GUIDA_UTILIZZO.md) documenta formati,
 modalità alternative e parametri.
 
 Su Ubuntu installato dal pacchetto `.deb`, usare `nipat-05-preview` al posto
-di `.\NIPAT.exe`, percorsi Linux e `\` per continuare un comando su più righe.
+di `.\nipat.cmd`, percorsi Linux e `\` per continuare un comando su più righe.
 Le opzioni e i workflow sono gli stessi. Per esempio:
 
 ```bash

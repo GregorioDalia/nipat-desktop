@@ -69,11 +69,18 @@ function ConvertTo-WindowsArgument([AllowEmptyString()][string] $Value) {
     return $result.ToString()
 }
 
-function Invoke-TestLauncher([string] $Executable, [string[]] $Arguments = @(), [int] $ExitCode = 0, [hashtable] $Environment = @{}) {
+function Invoke-TestLauncher([string] $Executable, [string[]] $Arguments = @(), [int] $ExitCode = 0, [hashtable] $Environment = @{}, [switch] $BatchFile) {
     if (Test-Path -LiteralPath $script:CapturePath) { Remove-Item -LiteralPath $script:CapturePath }
     $start = New-Object Diagnostics.ProcessStartInfo
-    $start.FileName = $Executable
-    $start.Arguments = (($Arguments | ForEach-Object { ConvertTo-WindowsArgument $_ }) -join ' ')
+    if ($BatchFile) {
+        if ($Arguments.Count -ne 0) { throw 'The guided batch entry point takes no arguments.' }
+        $start.FileName = Join-Path $env:WINDIR 'System32\cmd.exe'
+        # cmd /s removes the outer pair; the inner quotes protect spaces and &.
+        $start.Arguments = '/d /s /c ""' + $Executable + '""'
+    } else {
+        $start.FileName = $Executable
+        $start.Arguments = (($Arguments | ForEach-Object { ConvertTo-WindowsArgument $_ }) -join ' ')
+    }
     $start.WorkingDirectory = $script:CallerDirectory
     $start.UseShellExecute = $false
     $start.RedirectStandardInput = $true
@@ -121,6 +128,9 @@ try {
     [IO.Directory]::CreateDirectory((Join-Path $app 'scripts\windows')) | Out-Null
     $executable = Join-Path $app 'NIPAT.exe'
     Copy-Item -LiteralPath $source -Destination $executable
+    $project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+    $guidedCommand = Join-Path $app '2_AVVIA.cmd'
+    Copy-Item -LiteralPath (Join-Path $project '2_AVVIA.cmd') -Destination $guidedCommand
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'launch.ps1') -Destination (Join-Path $app 'installer\windows\launch.ps1')
     $runner = Join-Path $app 'scripts\windows\run.ps1'
     @'
@@ -142,6 +152,15 @@ exit ([int]$env:NIPAT_LAUNCH_TEST_EXIT)
     Assert-Test (Test-SamePath $record.working_directory $script:CallerDirectory) 'caller working directory preserved'
     Assert-Test (Test-SamePath $record.script_path $runner) 'runner is relative to the executable, not the current directory'
     Assert-Test ($record.bridge_arguments_removed -and $record.bridge_count_removed) 'temporary launch data removed before running NIPAT'
+
+    # The installer shortcut opens this exact batch file. Closed stdin lets its
+    # final pause return in CI without replacing the command or its runner.
+    $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -ExitCode 23
+    Assert-Test ($result.ExitCode -eq 23) ('guided command preserves failure through its final pause: ' + $result.Output)
+    $record = Get-Content -LiteralPath $script:CapturePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-Test ($record.arguments.Count -eq 1 -and $record.arguments[0] -ceq 'wizard') 'guided command opens wizard with a fixed argument'
+    Assert-Test (Test-SamePath $record.working_directory $script:CallerDirectory) 'guided command preserves caller working directory'
+    Assert-Test (Test-SamePath $record.script_path $runner) 'guided command finds its runner in a path containing spaces, ampersand and Unicode'
 
     $argumentList = @(
         '--runs-dir', 'C:\folder with spaces\', '--dry-run', 'wizard', '',
@@ -171,7 +190,6 @@ exit ([int]$env:NIPAT_LAUNCH_TEST_EXIT)
 
     # Exercise the actual bridge, runner and installed readiness checks. Python
     # is an offline process fixture; no WSL or scientific analysis is simulated.
-    $project = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
     foreach ($name in @('common.ps1', 'setup.ps1', 'run.ps1')) {
         Copy-Item -LiteralPath (Join-Path $project "scripts\windows\$name") -Destination (Join-Path $app "scripts\windows\$name")
     }
@@ -189,6 +207,10 @@ using System.Text;
 class FixturePython {
     static string Encode(string value) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? "")); }
     static int Main(string[] args) {
+        if (String.Equals(Path.GetFileName(Environment.GetCommandLineArgs()[0]), "powershell.exe", StringComparison.OrdinalIgnoreCase)) {
+            File.AppendAllText(Environment.GetEnvironmentVariable("NIPAT_FIXTURE_EVENTS"), "decoy:powershell\n");
+            return 91;
+        }
         string command = args.Contains("wizard") ? "wizard" : (args.Length > 2 ? args[2] : "other");
         File.AppendAllText(Environment.GetEnvironmentVariable("NIPAT_FIXTURE_EVENTS"), "python:" + command + "\n");
         if (command == "self-test" && File.Exists(Environment.GetEnvironmentVariable("NIPAT_FIXTURE_FAIL"))) return 17;
@@ -292,6 +314,24 @@ class FixturePython {
         (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'installed Preview resets inherited stable project, workspace, data and runs'
     Assert-Test ($capture[8] -ceq '-m' -and $capture[9] -ceq 'nipat' -and $capture[10] -ceq 'wizard') 'ready Preview opens the guided CLI without preparation'
 
+    # A researcher may launch from a data folder containing executables. The
+    # command must use Windows PowerShell itself, not a same-named local file.
+    $decoyShell = Join-Path $script:CallerDirectory 'powershell.exe'
+    Copy-Item -LiteralPath $fakePython -Destination $decoyShell
+    try {
+        $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -Environment $environment
+    } finally {
+        Remove-Item -LiteralPath $decoyShell
+    }
+    Assert-Test ($result.ExitCode -eq 0) ('ready Preview opens through the installer guided command: ' + $result.Output)
+    Assert-Test (-not (@(Get-Content -LiteralPath $events) -contains 'decoy:powershell')) 'guided command does not execute PowerShell from the caller data directory'
+    $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
+    Assert-Test ($capture[1] -ceq 'wsl' -and $capture[5] -ceq $distro -and $capture[6] -ceq $backend.runtime_image) 'guided command selects the verified Preview distribution and image'
+    Assert-Test ((Test-SamePath $capture[0] $script:CallerDirectory) -and
+        (Test-SamePath $capture[2] $candidateData) -and (Test-SamePath $capture[3] $candidateRuns) -and
+        (Test-SamePath $capture[4] $candidateBase) -and (Test-SamePath $capture[7] $app)) 'guided command preserves cwd while isolating Preview paths from inherited stable settings'
+    Assert-Test ($capture[8] -ceq '-m' -and $capture[9] -ceq 'nipat' -and $capture[10] -ceq 'wizard') 'guided command reaches the same Python CLI'
+
     $explicitRuns = Join-Path $temporary 'explicit user results'
     $result = Invoke-TestLauncher -Executable $executable -Arguments @('--runs-dir', $explicitRuns, 'wizard') -Environment $environment
     Assert-Test ($result.ExitCode -eq 0) ('Preview preserves explicit output override: ' + $result.Output)
@@ -334,6 +374,9 @@ class FixturePython {
         $result = Invoke-TestLauncher -Executable $executable -Environment $environment
         Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) ("phase $phase does not authorize an analysis")
         Assert-Test ($result.Output -match 'completa preparazione') 'incomplete installation directs the user to the setup shortcut'
+        $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) ("guided command rejects phase $phase before Python")
+        Assert-Test ($result.Output -match 'completa preparazione') 'guided command preserves setup recovery guidance'
     }
     $state.phase = 'ready'
     $state.source_commit = '1' * 40
@@ -345,6 +388,8 @@ class FixturePython {
     $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
     $result = Invoke-TestLauncher -Executable $executable -Environment $environment
     Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'state for another scientific archive is rejected'
+    $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'guided command rejects a state bound to another scientific archive'
     Remove-Item -LiteralPath $statePath
     $result = Invoke-TestLauncher -Executable $executable -Environment $environment
     Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'missing readiness state is rejected'

@@ -5,18 +5,18 @@ e consente di controllarne l'integrità. I checksum SHA-256 identificano una
 build, ma non sostituiscono il certificato del distributore. La firma non è
 un'analisi antivirus e non garantisce l'assenza di avvisi di reputazione.
 
-## Servizio e stato dell'integrazione
+## Stato e requisiti
 
-Il percorso previsto è SignPath Foundation, soggetto all'ammissione del progetto
-al programma open source. Il certificato del programma è intestato a SignPath
-Foundation. Non è ancora attivo un servizio di firma per NIPAT: le build di
-revisione sono prive della firma NIPAT. La verifica della firma del compilatore
-Inno Setup in CI riguarda il compilatore scaricato, non gli eseguibili prodotti.
+La Preview per collaudo interno non dispone di un servizio di firma attivo:
+i componenti Windows di NIPAT sono privi di firma Authenticode NIPAT.
+La verifica della firma del compilatore Inno Setup in CI riguarda il
+compilatore scaricato, non gli eseguibili prodotti.
 
-L'attivazione richiede ammissione, configurazione del progetto e delle policy,
-identificazione dei responsabili e autorizzazione delle richieste di firma.
-Le chiavi private rimangono nel servizio. Token e credenziali non appartengono
-al repository, ai pacchetti o ai log.
+L'integrazione di un servizio richiede un certificato di code signing
+attendibile, configurazione delle policy, identificazione dei responsabili
+e autorizzazione delle richieste di firma. Le chiavi private devono rimanere
+nel sistema di firma; token e credenziali non appartengono al repository,
+ai pacchetti o ai log.
 
 ## Copertura
 
@@ -41,7 +41,7 @@ la loro identità resta verificata dai manifest e dai checksum del runtime.
 3. Configurare Inno Setup per il disinstallatore firmato e costruire il setup
    con i componenti già firmati. Firmare infine `NIPAT-Setup.exe`.
 4. Verificare nuovamente le firme sui file finali e conservare l'identità della
-   richiesta SignPath, il commit e le evidenze di provenienza della build.
+   richiesta al servizio di firma, il commit e le evidenze di provenienza della build.
 5. Calcolare i checksum dei file firmati e le evidenze Windows/Ubuntu;
    eseguire il collaudo desktop su questi stessi file.
 6. Pubblicare soltanto i byte verificati, senza firmare o ricostruire dopo
@@ -51,8 +51,8 @@ La firma degli script PowerShell cambia i loro byte. L'integrazione deve quindi
 distinguere gli hash dei sorgenti revisionati dagli hash del payload firmato,
 verificando la corrispondenza prima e dopo la firma. Non rimuovere i controlli
 del manifest né sostituire arbitrariamente gli hash per accettare uno script.
-Questa trasformazione del payload e l'integrazione SignPath non sono ancora
-implementate dalla build di revisione.
+La trasformazione del payload firmato e l'integrazione con un servizio di
+firma non sono implementate dalla build di revisione.
 
 ## Verificatore degli eseguibili
 
@@ -95,8 +95,8 @@ iniziale. Chrome distingue download pericolosi, sospetti e non verificati:
 il testo preciso dell'avviso è necessario per individuare il caso.
 
 Conservare build, checksum, nome del file, messaggio e nome dell'eventuale
-rilevamento. Verificare il componente indicato e sottoporre un eventuale falso
-positivo al produttore della protezione. Non assumere che un blocco sia un
+rilevamento. Il referente del collaudo verifica il componente indicato e
+la corrispondenza con il pacchetto identificato. Non assumere che un blocco sia un
 falso positivo soltanto perché il programma proviene dal repository ufficiale.
 La preparazione completata del runtime non dimostra che ogni componente
 Windows abbia superato questi controlli.
@@ -107,5 +107,3 @@ Windows abbia superato questi controlli.
 - [Microsoft: firma per Smart App Control](https://learn.microsoft.com/en-us/windows/apps/develop/smart-app-control/code-signing-for-smart-app-control)
 - [Microsoft: reputazione SmartScreen](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation)
 - [Chrome: blocchi dei download](https://support.google.com/chrome/answer/6261569)
-- [SignPath Foundation: condizioni](https://signpath.org/terms.html)
-- [SignPath: integrazione GitHub](https://docs.signpath.io/trusted-build-systems/github)

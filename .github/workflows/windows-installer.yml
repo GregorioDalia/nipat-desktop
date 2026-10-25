@@ -21,6 +21,9 @@ on:
       - 'tests/fixtures/**'
       - 'tests/test_input_modes.py'
       - 'scripts/windows/**'
+      - '1_SETUP.cmd'
+      - '2_AVVIA.cmd'
+      - 'nipat.cmd'
       - 'scripts/build_*'
       - 'scripts/distribution_support.py'
       - 'tests/test_distribution.py'
@@ -102,7 +105,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/launcher/NIPAT.exe')
           if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
-      - name: Test the shared executable with Windows PowerShell 5.1
+      - name: Test executable and script launchers with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
       - name: Retain the tested shared launcher

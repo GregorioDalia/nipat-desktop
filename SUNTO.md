@@ -2,7 +2,8 @@
 
 **NIPAT 0.5.0a1** è un'applicazione locale per eseguire quattro workflow
 scientifici da un menu testuale guidato o dalla riga di comando. È una
-Preview destinata alla validazione e non include una GUI grafica.
+Preview destinata al collaudo interno e alla validazione; non include
+una GUI grafica.
 
 | Workflow | Funzione |
 | --- | --- |
@@ -18,7 +19,8 @@ viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
 nativo. I calcoli e i dati rimangono sul computer.
 
 Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
-avvio tramite l'icona **NIPAT 0.5 Preview**. Non richiede l'installazione
+installazione con doppio clic e avvio dal collegamento **NIPAT 0.5 Preview**
+sul desktop o nel menu Start. Non richiede l'installazione
 separata degli strumenti scientifici. Ubuntu 24.04 x86_64 utilizza un singolo
 pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
 **NIPAT 0.5 Preview** o dal comando `nipat-05-preview`. APT installa

@@ -1,6 +1,7 @@
 # Distribuzione e requisiti
 
-Questo documento descrive **NIPAT 0.5.0a1 Preview**. Consultare la pagina
+Questo documento descrive **NIPAT 0.5.0a1 Preview**, destinata al collaudo
+interno. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate, i pacchetti disponibili e le relative evidenze.
 Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
@@ -21,11 +22,17 @@ l'integrità del motore prima dell'esecuzione.
 
 ## Pacchetto Windows
 
-`NIPAT-Setup.exe` incorpora applicazione, launcher `NIPAT.exe`, Python
+`NIPAT-Setup.exe` incorpora applicazione, componenti di avvio, Python
 portabile, ambiente Linux e archivio dell'immagine scientifica. Il setup
 verifica gli archivi, prepara la distribuzione WSL, importa l'immagine ed
 esegue i controlli dell'ambiente e gli autotest. Non sono necessari download
 separati dei componenti NIPAT né spostamenti manuali degli archivi.
+Il setup crea il collegamento **NIPAT 0.5 Preview** nel menu Start e, se
+selezionato, sul desktop. Il collegamento apre il menu guidato tramite
+`2_AVVIA.cmd`; per la CLI diretta è disponibile `nipat.cmd`. Entrambi
+controllano la configurazione installata prima di avviare il client Python.
+La schermata finale del setup propone anche l'avvio immediato, quando la
+preparazione è completata e non richiede un riavvio.
 
 Sono richiesti Windows 11 x64, disponibilità della virtualizzazione e WSL2.
 L'attivazione dei componenti Windows può richiedere Internet, consenso
@@ -34,7 +41,10 @@ proprio account: richiede l'elevazione soltanto per le operazioni di sistema
 che la necessitano. Le policy amministrative del computer possono impedire
 l'attivazione di WSL. L'installazione completa su un sistema privo di WSL e
 la ripresa dopo riavvio devono essere verificate separatamente dai test
-automatici del codice.
+automatici del codice. La Preview non è firmata da NIPAT: la compatibilità
+con le protezioni del computer va verificata per ciascun dispositivo del
+collaudo. Il setup non modifica le policy di sicurezza per autorizzarsi
+all'esecuzione.
 
 La configurazione ha identità **NIPAT 0.5 Preview**:
 

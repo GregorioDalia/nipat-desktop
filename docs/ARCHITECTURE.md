@@ -25,7 +25,7 @@ negli script R; gli adattatori Python preparano le loro interfacce di file.
 
 ## Ambienti di esecuzione
 
-Su Windows, Python e il launcher `NIPAT.exe` operano nell'account dell'utente.
+Su Windows, Python e gli script di avvio operano nell'account dell'utente.
 Il client esegue `wsl.exe` nella distribuzione dedicata indicata dalla propria
 configurazione. Il comando `nipat-engine ensure` avvia il Docker Engine interno
 quando necessario. Le operazioni di controllo, analisi e interruzione usano

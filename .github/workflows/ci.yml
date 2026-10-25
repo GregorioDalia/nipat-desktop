@@ -105,7 +105,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/launcher/NIPAT.exe')
           if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
-      - name: Test the shared executable with Windows PowerShell 5.1
+      - name: Test executable and script launchers with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
 

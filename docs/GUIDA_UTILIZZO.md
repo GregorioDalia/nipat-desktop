@@ -1,7 +1,8 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT 0.5.0a1 Preview**, con interfaccia testuale
-guidata e CLI diretta, per i pacchetti Windows e Ubuntu. Consultare la pagina
+Questa guida descrive **NIPAT 0.5.0a1 Preview**, destinata al collaudo interno,
+con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
+Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
 artefatti GitHub Actions sono destinati alla revisione tecnica.
@@ -27,10 +28,14 @@ Il pacchetto Windows si presenta come un solo file `NIPAT-Setup.exe`:
    e completare il riavvio.
 3. Attendere il completamento della preparazione e degli autotest, indicato
    da **`NIPAT: ready`**.
-4. Aprire **NIPAT 0.5 Preview** dal menu Start o dal collegamento sul desktop.
+4. Selezionare **Avvia NIPAT 0.5 Preview** nella schermata finale del setup,
+   oppure aprire il collegamento dal menu Start o dal desktop. L'opzione
+   di avvio immediato è disponibile quando la preparazione è completata
+   e non è richiesto un riavvio.
 
-Il collegamento avvia `NIPAT.exe` e apre il menu. Non occorre organizzare
-archivi, spostare componenti o aprire PowerShell. L'ambiente WSL dedicato
+Il collegamento apre il menu guidato. Per gli utilizzi successivi è sufficiente
+aprire la stessa icona: non occorre rieseguire il setup, organizzare archivi,
+spostare componenti o aprire PowerShell. L'ambiente WSL dedicato
 viene avviato automaticamente quando serve.
 
 Se la preparazione si interrompe, conservare il messaggio e il log, risolvere
@@ -38,6 +43,11 @@ la causa indicata e aprire **NIPAT 0.5 Preview - completa preparazione** dal
 menu Start. L'applicazione non avvia analisi finché il setup non è completato.
 I dettagli dell'installazione e dei suoi limiti sono in
 [DISTRIBUZIONE.md](DISTRIBUZIONE.md).
+
+La Preview Windows non è firmata da NIPAT. Se Windows o il browser ne impediscono
+l'uso, conservare il messaggio completo e il nome del file bloccato e comunicarli
+al referente del collaudo insieme alla versione del pacchetto. Le indicazioni
+per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser).
 
 ## Requisiti e avvio su Ubuntu
 
@@ -245,15 +255,15 @@ Su Windows, aprire PowerShell nella cartella applicativa:
 
 ```powershell
 Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-0.5-Preview")
-.\NIPAT.exe --help
-.\NIPAT.exe dnp-call --help
-.\NIPAT.exe wizard
+.\nipat.cmd --help
+.\nipat.cmd dnp-call --help
+.\nipat.cmd wizard
 ```
 
-`NIPAT.exe` senza argomenti apre il menu; accetta anche gli argomenti CLI.
-`nipat.cmd` offre gli stessi comandi per l'uso nei terminali e negli script.
+`nipat.cmd wizard` apre il menu; `nipat.cmd` senza argomenti mostra la guida
+dei comandi. Per l'uso ordinario è sufficiente l'icona NIPAT.
 Su Ubuntu installato dal pacchetto, usare `nipat-05-preview` al posto di
-`.\NIPAT.exe` e la sintassi dei percorsi Linux. Nel checkout da sorgenti
+`.\nipat.cmd` e la sintassi dei percorsi Linux. Nel checkout da sorgenti
 il comando è `nipat`. Per esempio:
 
 ```bash
@@ -270,14 +280,14 @@ gli autotest senza aprire il menu.
 Le opzioni globali precedono il sottocomando. Esempio di simulazione:
 
 ```powershell
-.\NIPAT.exe --runs-dir "..\risultati-prova" --dry-run contamination `
+.\nipat.cmd --runs-dir "..\risultati-prova" --dry-run contamination `
   --input "..\campioni\sample.txt" --panel "..\pannelli\DNPpanel.txt"
 ```
 
 `--dry-run` controlla gli input e prepara la richiesta senza eseguire il
 motore scientifico. Registra uno stato `planned`, non produce risultati
 scientifici e non sostituisce una verifica del runtime. La prova reale richiede
-un nuovo nome di run. Per simulare il menu usare `NIPAT.exe --dry-run wizard`;
+un nuovo nome di run. Per simulare il menu usare `nipat.cmd --dry-run wizard`;
 per effettuare analisi reali aprire normalmente NIPAT. Nel pacchetto Ubuntu,
 `--dry-run` non importa l’immagine e non avvia la preparazione o gli autotest;
 non attesta quindi che l’ambiente scientifico sia disponibile.
@@ -285,8 +295,8 @@ non attesta quindi che l’ambiente scientifico sia disponibile.
 Per verificare strumenti e casi di prova:
 
 ```powershell
-.\NIPAT.exe doctor --runtime
-.\NIPAT.exe self-test
+.\nipat.cmd doctor --runtime
+.\nipat.cmd self-test
 ```
 
 `doctor --runtime` verifica il motore incorporato e le sue interfacce, R,
