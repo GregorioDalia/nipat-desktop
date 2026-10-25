@@ -1,121 +1,157 @@
-# Scheda per le prove di validazione di dominio
+# Validazione tecnica e di dominio
 
-Il successo degli autotest verifica la riproduzione dei casi inclusi. Questa
-scheda serve a valutare il comportamento con altri input e a distinguere
-problemi di utilizzo, problemi tecnici e discrepanze scientifiche.
+Questa scheda accompagna **NIPAT Desktop 0.6.0**.
+Consente di registrare separatamente installazione, esecuzione e concordanza
+scientifica. Un autotest superato verifica i casi inclusi; non attesta la
+validità per ogni campione o scenario d’impiego. Per l’autorizzazione alla
+pubblicazione degli installatori, applicare anche il
+[protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md): questa scheda
+non sostituisce il record associato ai pacchetti esatti.
 
-La pre-release **0.4.1** è destinata alle prove di dominio su Windows 11 x64.
-Il percorso WSL assume WSL2 già funzionante; l’installatore alternativo
-richiede Docker Desktop installato e avviato con container Linux.
-Registrare separatamente installazione e analisi per ciascun pacchetto,
-riportando il comportamento osservato.
+## Ambiente e preparazione
 
-Prima delle analisi registrare una sola volta:
+Compilare una scheda per ciascuna combinazione di sistema e pacchetto.
+Per Windows il perimetro è Windows 11 x64 con WSL2. Il pacchetto Linux
+richiede Ubuntu 24.04 LTS x86_64, Docker Engine locale con Compose v2
+e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
 
-| Ambiente e preparazione | Da compilare |
+| Campo | Valore da registrare |
 | --- | --- |
-| Versione Windows; versione WSL o Docker Desktop, secondo il pacchetto scelto | |
-| Versione NIPAT, pacchetto e pagina della release | |
-| Prima installazione o aggiornamento di una copia esistente | |
-| Per Docker Desktop: runtime NIPAT già presente oppure assente prima della prova | |
-| Configurazione e autotest completati senza errori | |
-| Apertura del menu NIPAT e cartella risultati scelta | |
+| Sistema operativo, versione e architettura | |
+| Versione NIPAT e commit o identificativo del pacchetto | |
+| Origine del pacchetto e checksum, se disponibile | |
+| Windows: versione e disponibilità iniziale di WSL2 | |
+| Linux: versioni Docker Engine e Compose, origine dei pacchetti e accesso utente | |
+| Prima installazione o aggiornamento dello stesso canale | |
+| Cartelle dati e risultati configurate | |
+| Esito del setup, eventuali autorizzazioni o riavvii | |
+| Esito di `doctor --runtime` | |
+| Esito finale di `self-test` | |
+| Apertura e interazione con il menu | |
+| Aggiornamenti: canale, verifica all'avvio e versione proposta, se presente | |
+| Preferenze salvate in Configura e valori effettivi nel riepilogo dell'analisi | |
 
-Per il setup WSL, lo stato e il log si trovano in
-`%LOCALAPPDATA%\Programs\NIPAT\.runtime\installer` (`state.json` e `setup.log`).
-Per Docker Desktop, conservare `setup.log` (riepilogo della preparazione) e
-`setup-checks.log` (dettagli di `doctor` e autotest) nella cartella
-`%LOCALAPPDATA%\Programs\NIPAT-DockerDesktop\.runtime`.
-In caso di errore conservare entrambi e registrare l'impedimento prima
-di passare ai test scientifici. L'abilitazione iniziale di WSL e la ripresa
-dopo riavvio Windows sono prove separate, ancora aperte.
+Nel pacchetto Windows verificare l'avvio con doppio clic di `NIPAT-Setup.exe`,
+il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Desktop**.
+Annotare eventuali passaggi manuali non previsti. Conservare `setup.log` e
+`state.json` nella sottocartella `.runtime\installer` dell'applicazione
+selezionata nel setup.
+L'attivazione iniziale di WSL, la ripresa dopo riavvio e un aggiornamento
+costituiscono prove distinte dall'installazione su WSL già funzionante.
 
-## Prima prova con Docker Desktop
+Nel pacchetto Ubuntu verificare installazione tramite APT, apertura del
+collegamento nel menu applicazioni e avvio con `nipat`. Provare
+la preparazione iniziale da un account non root, input privati e risultati
+leggibili e scrivibili dallo stesso utente. Conservare stato e log nella
+cartella `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`. Registrare
+se Docker era già installato e autorizzato: una prova su un sistema
+preparato non copre l’esperienza iniziale su Ubuntu Desktop pulito.
 
-**Non è necessario che Docker Desktop contenga già immagini o container.**
-L'EXE `0.4.1` include l'archivio scientifico e NIPAT lo importa automaticamente
-durante la preparazione. Non occorrono `docker pull`, build o download separati
-del runtime. Registrare lo stato iniziale; non eliminare immagini o container
-di altri progetti per effettuare questa prova.
+Per entrambi i pacchetti, verificare reinstallazione della stessa build,
+ripresa dopo un errore, nuova apertura e rimozione con conservazione dei
+dati. Documentare separatamente un aggiornamento tra versioni differenti
+quando esiste un pacchetto precedente dello stesso canale: una
+reinstallazione non costituisce una prova di aggiornamento. Su Ubuntu controllare anche che installazione e rimozione non
+modifichino configurazioni o immagini Docker estranee a NIPAT.
 
-1. Avviare Docker Desktop in modalità **container Linux**. Scaricare
-   [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe)
-   ed eseguirlo con doppio clic. La copia WSL già installata può restare presente.
-2. Aprire **NIPAT (Docker Desktop)** dal desktop o dal menu Start. Attendere la
-   verifica e importazione del runtime incluso, la preparazione automatica e
-   gli autotest, dopo i quali compare il menu. Non
-   occorre eseguire script separati. In caso di errore conservare
-   `setup.log` e `setup-checks.log`,
-   verificare Docker Desktop e riaprire la stessa icona per riprovare.
-3. Verificare versione `0.4.1` e menu; con **5 — Cartella risultati** scegliere
-   una destinazione per questa prova. Usare l'icona Docker Desktop, non quella
-   dell'installazione WSL; l'avvio normale esegue analisi reali, senza `--dry-run`.
-4. Scegliere **1 — DNPcall** e inserire un BAM di un caso noto, il FASTA con
-   indice `.fai` e il pannello DNP appropriati. Controllare il riepilogo e
-   confermare **Avvia analisi**. Attendere il completamento, aprire i risultati
-   e confrontare conteggi/genotipi con il riferimento disponibile per quel caso.
-5. Tornare al menu e scegliere **3 — Contamination**. Come input selezionare
-   la tabella `full_output_*.txt` in `output\individual_outputs` del run DNPcall
-   appena concluso, usando il pannello corrispondente. Confermare l'analisi e
-   verificare riepilogo e risultati per sito, registrando valori attesi e osservati.
+I controlli automatici del repository sono descritti in
+[CI_CD.md](CI_CD.md). Una build riuscita non dimostra il completamento
+dell'installazione sul sistema dell'utilizzatore: registrare l'esito osservato
+sul pacchetto effettivamente provato.
 
-Questa sequenza esegue calcoli reali. Ogni analisi ha una propria cartella del
-run con `output`, `work`, `run.json` ed `execution.log`; si possono aprire dalla
-schermata finale. Annotare separatamente il successo tecnico e la concordanza
-scientifica. Per SNPcall e CPI proseguire con casi appropriati secondo la
-[guida per l'utilizzo](GUIDA_UTILIZZO.md#input-dei-quattro-workflow).
+## Prima sequenza operativa
 
-Se il runtime era assente, annotare esplicitamente che l'importazione e gli
-autotest sono terminati senza comandi Docker manuali. La prova reale su Windows
-va registrata separatamente dai controlli automatici di importazione in ambiente isolato;
-la [CI](CI_CD.md) non sostituisce questa verifica del pacchetto installato.
+1. Aprire NIPAT, verificare la versione e scegliere una cartella risultati
+   dedicata alla prova.
+2. Eseguire **8 — Verifica ambiente** dal menu principale.
+3. Selezionare **DNPcall** e utilizzare BAM, riferimento indicizzato e pannello
+   di un caso con risultati attesi disponibili. Confermare il riepilogo.
+4. Verificare stato finale, numero di campioni, corrispondenza degli alias,
+   siti analizzati, conteggi e genotipi.
+5. Eseguire **Contamination** sulle tabelle individuali compatibili del run,
+   utilizzando il pannello appropriato. Confrontare riepilogo e risultati per sito.
+6. Eseguire **SNPcall** e **CPI** con casi e riferimenti adeguati ai rispettivi
+   workflow, secondo la [guida per l'utilizzo](GUIDA_UTILIZZO.md).
 
-## Registrazione delle analisi
+Le conferme di avvio eseguono calcoli reali. Per una prova della sola
+compilazione utilizzare esplicitamente `--dry-run`; tale prova deve essere
+registrata come simulazione e non come analisi riuscita.
 
-Per ciascuna prova registrare:
+## Scheda per ciascuna analisi
 
-| Campo | Da compilare |
+| Campo | Valore da registrare |
 | --- | --- |
-| Identificativo del caso, senza dati identificativi personali | |
-| Versione del pacchetto e nome del run | |
-| Workflow | |
-| Modalità di input: BAM/lista, pileup, file/cartella, pannello/cutoff/ALL | |
-| Tipologia e provenienza degli input; pannello e riferimento | |
-| Percorsi esterni al progetto e destinazione dei risultati utilizzati | |
-| Parametri modificati rispetto ai valori predefiniti | |
-| Risultato atteso e sua fonte: analisi indipendente, caso noto, altro | |
-| Risultato osservato: conteggi, stime, grafici pertinenti | |
-| Esito: concordante, discordante, non valutabile | |
+| Identificativo del caso, privo di dati identificativi personali | |
+| Versione NIPAT, identificativo dell'immagine e nome del run | |
+| Workflow e modalità di input | |
+| Provenienza degli input; pannello e riferimento genomico | |
+| Parametri configurati | |
+| Percorsi e destinazione dei risultati | |
+| Risultato atteso e fonte del riferimento | |
+| Risultato osservato: conteggi, stime e grafici pertinenti | |
+| Criterio di confronto e tolleranza numerica applicata | |
+| Esito tecnico: riuscito, fallito o interrotto | |
+| Esito scientifico: concordante, discordante o non valutabile | |
 | Difficoltà di utilizzo o messaggi poco chiari | |
-| File condivisibili per riprodurre la prova | |
+| Materiali condivisibili per riprodurre la prova | |
 
-La selezione dei casi richiede competenze di dominio. Sono particolarmente utili campioni
-con risultati noti, coperture differenti, siti con letture inattese, casi
-senza siti informativi e input con intestazioni o percorsi non validi.
-Per CPI servono coppie e frequenze appropriate; per DNPcall/SNPcall un confronto
-indipendente dei conteggi consente di andare oltre la verifica dell'esecuzione.
+Preferire un riferimento indipendente quando disponibile. Un confronto
+con un'altra esecuzione dello stesso programma verifica la ripetibilità,
+ma non dimostra da solo l'accuratezza del metodo.
 
-Verificare anche l'utilizzo di input nelle loro cartelle originali,
-percorsi con spazi e una destinazione dei risultati diversa da quella predefinita.
-Per DNPcall controllare la corrispondenza fra gli alias e i BAM originali nelle
-prove con più campioni. Quando possibile, confrontare modalità equivalenti:
-elenco BAM e singoli argomenti; SNPcall da BAM e dal relativo pileup; singoli
-input Contamination e una cartella contenente gli stessi file; un pannello CPI
-e lo stesso pannello passato come cutoff. I casi con più cutoff devono riportare
-risultati distinti per le etichette selezionate.
+## Copertura dei casi
 
-Le verifiche Windows di `0.2.0a2`, incluso `scripts/verify_input_modes.py` e
-un confronto DNPcall da BAM reale con un run precedente, sono descritte in
-[DISTRIBUZIONE.md](DISTRIBUZIONE.md). Coprono i casi riportati sul PC di sviluppo.
-Le ulteriori prove sul candidato WSL del 21 ottobre sono riportate in
-[INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md). Le prove di dominio devono estendere la copertura e valutare i risultati
-scientifici su riferimenti indipendenti quando disponibili.
+La scelta dei dati e dei criteri di accettazione richiede competenze di dominio.
+Documentare almeno le condizioni rilevanti per l'uso previsto:
 
-Annotare separatamente un errore del programma e un risultato scientifico
-inatteso. Per esempio, una stima `NA` in assenza di siti informativi può essere
-l'esito previsto. Un run che termina correttamente non implica, da solo,
-che il risultato sia scientificamente corretto per quel caso.
+| Area | Casi utili |
+| --- | --- |
+| DNPcall | Uno e più BAM; lista e argomenti ripetuti; modalità seriale e parallela; corrispondenza tra alias, conteggi e genotipi. |
+| SNPcall | BAM e pileup compatibile dello stesso caso; conteggi REF, ALT e altre letture; formato QNAME richiesto. |
+| Contamination | Singoli file e cartella con gli stessi input; presenza e assenza di `ratio_REF_ALT`; nessun sito informativo. |
+| CPI | Coppie appropriate; prefissi configurati; ALL, pannello singolo e più cutoff; nessun sito informativo. |
+| Robustezza | Percorsi con spazi, input fuori dal progetto, risultati in una destinazione scelta; file mancanti, intestazioni errate e nomi in conflitto. |
+| Utilizzo | Salvataggio e ripristino delle preferenze; persistenza dopo la riapertura; correzione per la singola analisi; campioni, coppie e run sempre selezionati esplicitamente; annullamento, riepilogo, apertura dei risultati e recupero dopo errore. |
 
-Conservare `run.json`, `execution.log` e `work/input-mounts.json` insieme ai risultati. Condividere
-input o risultati solo tramite un canale appropriato al contenuto; i nomi
-dei campioni nei metadati non sono anonimizzati automaticamente.
+Verificare che un cambiamento in **Configura** venga riproposto nel menu dopo
+la riapertura e non alteri un comando CLI diretto. Ripetere un caso con gli
+stessi parametri espliciti, confrontando i valori effettivi in `run.json`.
+Provare l'annullamento senza salvataggio, il ripristino e un riferimento
+salvato non più disponibile. Dati e risultati devono restare invariati.
+
+Per modalità equivalenti, verificare gli stessi risultati usando lo stesso
+insieme di dati. Nei confronti numerici stabilire prima quali colonne,
+ordinamenti e tolleranze considerare; non usare il solo confronto dei nomi
+o delle dimensioni dei file. I casi CPI con più cutoff devono mantenere
+distinti i risultati delle etichette selezionate.
+
+Distinguere un errore del programma da un risultato scientifico inatteso.
+Un valore `NA` in assenza di siti informativi può essere corretto.
+Per DNPcall verificare anche gli output, poiché lo script R non propaga
+esplicitamente tutti gli errori della propria chiamata interna a samtools.
+Gli stati e i limiti dei record sono descritti in [ESECUZIONI.md](ESECUZIONI.md).
+
+## Verifica degli aggiornamenti
+
+Documentare separatamente ricerca, download, installazione e riapertura.
+Provare **Più tardi**, una connessione assente e un file scaricato non valido;
+l'installazione pronta e i run esistenti devono restare utilizzabili e invariati.
+La verifica facoltativa all'avvio deve essere soltanto informativa.
+
+Per un aggiornamento effettivo, conservare versioni iniziale e finale, checksum
+degli installatori e log. Verificare le preferenze e i percorsi dopo la riapertura,
+quindi eseguire un caso noto. I record dei run devono identificare le versioni
+con cui sono stati prodotti. Le prove tecniche complete sono nel
+[protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md#verifiche-degli-aggiornamenti).
+
+## Conservazione e segnalazioni
+
+Conservare l'intero run, inclusi `run.json`, `execution.log` e `work`, insieme
+ai risultati e agli input necessari alla riproduzione. Per file maggiori di
+16 MiB, NIPAT registra dimensione e data di modifica senza calcolare l'hash:
+aggiungere un inventario dei checksum se richiesto dal protocollo di prova.
+
+Una segnalazione utile riporta versione, piattaforma, sequenza di operazioni,
+atteso, osservato e messaggio d'errore completo. Nomi e percorsi dei campioni
+non sono anonimizzati automaticamente. Verificare gli allegati e usare un
+canale appropriato al contenuto dei dati.

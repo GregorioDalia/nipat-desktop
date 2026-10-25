@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nipat-desktop"
-version = "0.4.1"
+version = "0.6.0"
 description = "Local desktop orchestration layer for the NIPAT scientific workflows"
 readme = "README.md"
 license = {file = "LICENSE"}

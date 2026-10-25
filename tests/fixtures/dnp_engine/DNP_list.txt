@@ -1,0 +1,3 @@
+chrDnpSynthetic	50	51	ac	gt
+chrDnpSynthetic	140	141	ta	cg
+chrDnpSynthetic	230	231	gc	at

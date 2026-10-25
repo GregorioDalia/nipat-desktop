@@ -1,352 +1,334 @@
-# Installatore Windows: compilazione e verifica
+# Installatore Windows
 
-La pre-release **0.4.1** fornisce `NIPAT-Setup.exe` per **Windows 11 x64**:
-un unico file con i componenti NIPAT incorporati, il launcher `NIPAT.exe` e
-l'ambiente scientifico. L'alternativa `NIPAT-DockerDesktop-Setup.exe` installa
-la stessa applicazione per l'uso con Docker Desktop già disponibile. Questo documento distingue costruzione e verifica tecnica
-dei pacchetti dalla validazione scientifica; il rilascio è destinato al testing
-di dominio, non ne dichiara il completamento.
+Il pacchetto Windows di NIPAT Desktop contiene l'applicazione, Python portabile,
+i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
+`NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
+scaricare archivi runtime separati o creare una cartella `assets`.
 
-**Perimetro della prima consegna per le prove di dominio (21 ottobre 2026):**
-Windows 11 x64 con WSL2 già funzionante. Il percorso di attivazione iniziale
-di WSL, UAC e ripresa dopo riavvio resta da verificare separatamente e non
-blocca questa consegna. Su ogni PC il setup deve comunque completare gli
-autotest e riportare `NIPAT: ready` prima delle analisi.
+Questo documento descrive NIPAT Desktop 0.6.0.
+Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni pubblicate e gli installatori disponibili. I pacchetti degli
+artefatti GitHub Actions servono alla revisione tecnica; la loro costruzione non
+attesta il completamento delle prove di installazione o della validazione di
+dominio. Questo documento descrive struttura, preparazione e verifica del
+pacchetto Windows. L'uso delle analisi è trattato nella
+[guida per l'utilizzo](GUIDA_UTILIZZO.md).
 
-## Flusso previsto per l’utilizzo
+## Requisiti e installazione
 
-1. Scaricare il solo [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe)
-   dalla [pre-release v0.4.1](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1).
-2. Avviare il file dal proprio account Windows, senza “Esegui come amministratore”.
-3. Il setup prepara l’applicazione e i componenti incorporati. Se WSL non è
-   disponibile, richiede l’autorizzazione amministrativa per abilitarne i prerequisiti.
-4. Se serve riavviare Windows, la configurazione riprende al successivo accesso
-   allo stesso account. Il collegamento per la configurazione consente anche
-   una ripresa manuale dopo un errore.
-5. Il setup prepara l’ambiente Linux interno di NIPAT e lancia gli autotest.
-   Attendere `NIPAT: ready`, poi aprire l'icona **NIPAT** sul desktop o nel
-   menu Start. Il collegamento richiama `NIPAT.exe`, senza richiedere
-   un terminale già aperto.
+Il target è Windows 11 x64 con virtualizzazione hardware disponibile e WSL2.
+Il setup opera nell'account dell'utente e richiede autorizzazione amministrativa
+soltanto per abilitare i prerequisiti Windows mancanti. L'abilitazione o
+l'aggiornamento dei componenti WSL può richiedere Internet e un riavvio.
+Le politiche di un dispositivo gestito possono richiedere l'intervento
+dell'amministratore. Docker Desktop, R, samtools e Python installati a livello
+di sistema non sono necessari.
 
-Il setup non richiede download separati dei componenti NIPAT né cartelle
-di archivi da preparare. WSL permette di eseguire l'ambiente Linux interno su
-Windows: la sua eventuale attivazione può richiedere Internet. Le analisi si
-svolgono localmente.
-Virtualizzazione disabilitata o restrizioni dell’ente possono impedire WSL e
-richiedere intervento IT. L’installatore non modifica tali policy.
+### Controlli di sicurezza di Windows e del browser
 
-## Installatore per Docker Desktop
+I checksum identificano i file distribuiti; non costituiscono una firma
+Authenticode né attestano il riconoscimento del distributore da parte di Windows.
+Il pacchetto non dispone di una firma Authenticode NIPAT. Smart App Control
+può bloccare il setup, un eseguibile o gli script usati dalla preparazione
+e dall'avvio.
+Un'installazione riuscita non dimostra che tutti i componenti siano autorizzati
+all'esecuzione sul dispositivo.
 
-Scaricare [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe),
-avviare Docker Desktop con container Linux e installare con doppio clic.
-Il setup avvia automaticamente la preparazione degli strumenti, `doctor`
-e gli autotest. Aprire **NIPAT (Docker Desktop)** per usare il menu: se la
-preparazione non è terminata, l'icona la riprende automaticamente.
-Dopo un errore si riprova dalla stessa icona. La normale procedura non
-richiede estrazione di ZIP o avvio di `1_SETUP.cmd`.
+In presenza di un blocco, conservare il testo completo dell'avviso, il nome del
+file indicato e il riferimento alla build scaricata. Distinguere Smart App
+Control, SmartScreen e un rilevamento antivirus: richiedono verifiche diverse.
+Il setup non disattiva le protezioni né introduce esclusioni antivirus.
+Il referente del collaudo deve verificare l'errore sul componente indicato
+prima di considerare utilizzabile il pacchetto su quel dispositivo.
 
-La copia Docker Desktop usa `%LOCALAPPDATA%\Programs\NIPAT-DockerDesktop`
-per l'applicazione e `%LOCALAPPDATA%\NIPAT-DockerDesktop\data` e `runs`
-per dati e risultati predefiniti. Nella cartella applicativa,
-`.runtime\setup.log` riepiloga la preparazione e `.runtime\setup-checks.log`
-contiene i dettagli di `doctor` e degli autotest; conservarli entrambi. Queste cartelle sono separate
-da quelle WSL. La [procedura di prova](VALIDAZIONE.md#prima-prova-con-docker-desktop)
-registra preparazione e analisi sul pacchetto effettivamente usato.
+### Procedura
 
-## Componenti e confini del percorso WSL
+1. Avviare `NIPAT-Setup.exe` con doppio clic dal proprio account Windows,
+   senza scegliere «Esegui come amministratore».
+2. Scegliere la cartella applicativa nella pagina di destinazione, quindi
+   le cartelle di ambiente WSL, cache, dati e risultati. Verificare la modalità
+   indicata dal setup: **Installazione** per una cartella vuota oppure
+   **Aggiornamento e riparazione** per un’installazione NIPAT Desktop riconosciuta. Se richiesto,
+   autorizzare l'abilitazione dei componenti Windows. Dopo un riavvio,
+   accedere allo stesso account per riprendere.
+3. Attendere la verifica degli archivi, la preparazione del runtime e gli
+   autotest. La configurazione è completa quando compare `NIPAT: ready`.
+4. Se la preparazione è completa e non serve un riavvio, il setup propone
+   **Avvia NIPAT Desktop**. Per gli utilizzi successivi aprire il
+   collegamento dal menu Start o dal desktop, creato se selezionato nel setup.
 
-- Applicazione per utente: `%LOCALAPPDATA%\Programs\NIPAT`.
-- Dati e risultati predefiniti: `%LOCALAPPDATA%\NIPAT\data` e `runs`.
-- Distribuzione WSL2 dedicata: per i nuovi ambienti,
-  `NIPAT-Runtime-<prime 40 cifre dello SHA-256 del rootfs>`; il nome effettivo
-  è registrato in `.runtime\backend.json`. La distribuzione delle versioni
-  precedenti può chiamarsi `NIPAT-Runtime`.
-- Python portabile 3.12.10, senza modificare il PATH del sistema.
-- Docker Engine e Compose nel solo ambiente dedicato; Docker Desktop non serve.
-- Runtime scientifico precompilato: archivio verificato con SHA-256 e immagine
-  fissata all'ID restituito dal motore locale durante il caricamento.
+I collegamenti avviano `2_AVVIA.cmd` con la cartella dati come directory
+corrente e il logo NIPAT come icona. `nipat.cmd` espone gli stessi workflow
+per l'uso nei terminali. Entrambi passano attraverso `scripts/windows/run.ps1`,
+che verifica stato `ready`, manifest e associazione al runtime prima di
+preparare l'ambiente del client. Il launcher `NIPAT.exe` resta incluso come
+componente aggiuntivo, ma non è il destinatario dei collegamenti ordinari.
+Il collegamento **Cartella NIPAT Desktop** nel menu Start apre la cartella applicativa
+selezionata, con documentazione e comandi disponibili.
 
-Gli input rimangono nelle cartelle scelte dall’utente e vengono montati in
-sola lettura. Il backend WSL inizialmente supporta percorsi su dischi locali fissi
-Windows; condivisioni UNC e unità di rete non sono incluse. La GUI non fa parte
-di questa revisione. Non vengono modificati gli algoritmi R.
+Lo spazio disponibile deve contenere applicazione, cache degli archivi,
+filesystem WSL importato e immagine scientifica, oltre a input e risultati.
+Un aggiornamento del filesystem WSL richiede spazio anche per conservare
+l'ambiente precedente. I file scientifici selezionati possono risiedere su
+qualsiasi disco locale fisso accessibile all'account; il trasporto WSL non
+supporta condivisioni UNC, unità di rete o dischi rimovibili.
 
-La disinstallazione rimuove i file applicativi e la ripresa automatica, ma
-conserva dati, risultati, cache e distribuzioni WSL. Il setup aggiorna
-l'ambiente scientifico affiancandone uno nuovo quando cambia il rootfs, anche
-se la modifica applicativa riguarda soltanto l'interfaccia.
+## Identità e percorsi
 
-### Aggiornamento dell'ambiente interno e ripresa
+Il file [`install-profile.json`](../installer/windows/install-profile.json)
+definisce l'identità del canale. Il builder genera da questo profilo le
+istruzioni Inno Setup e le verifica rispetto al manifest.
 
-L'aggiornamento descritto riguarda l'ambiente Linux usato da NIPAT per le
-analisi. È gestito dal setup dell'applicazione; non richiede di seguire una
-procedura manuale di manutenzione di Windows o WSL.
+| Risorsa | Valore o percorso predefinito |
+| --- | --- |
+| Canale | `desktop` |
+| Nome applicazione | `NIPAT Desktop` |
+| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-Desktop` |
+| Ambiente WSL | `%LOCALAPPDATA%\NIPAT-Desktop\wsl` |
+| Cache | `%LOCALAPPDATA%\NIPAT-Desktop\cache` |
+| Dati | `%LOCALAPPDATA%\NIPAT-Desktop\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
+| Registri delle destinazioni | `%LOCALAPPDATA%\NIPAT-Desktop\installations` |
+| Preferenze del menu | `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json` |
+| Distribuzione WSL2 | Nome con prefisso `NIPAT-Desktop-`, associato al filesystem Linux e alla posizione scelta. |
+| Ripresa al successivo accesso | Valore RunOnce `NIPAT-Desktop-ResumeSetup` |
 
-Il nome del nuovo ambiente deriva dal digest del rootfs. Il setup registra la
-proprietà di ciascun target in
-`%LOCALAPPDATA%\NIPAT\wsl\registrations\<nome-distribuzione>.json`.
-La precedente distribuzione e il vecchio `wsl\ownership.json` vengono
-conservati. Un ambiente legacy può essere riutilizzato solo se corrisponde
-allo stesso hash completo e supera i controlli di registrazione, prodotto e
-proprietà. Un nome occupato da un ambiente non riconosciuto causa l'arresto
-della preparazione, senza sostituzioni automatiche.
+AppId, mutex, collegamenti e voce di disinstallazione appartengono al medesimo
+canale. Le cinque radici di applicazione, ambiente WSL, cache, dati e risultati
+sono configurabili; i registri centrali restano nel profilo dell'utente.
+Le preferenze salvate in `HKCU` ripropongono le scelte nelle reinstallazioni,
+anche dopo la rimozione dell'applicazione. L'aggiornamento di un'installazione
+NIPAT Desktop deve usare la stessa cartella applicativa.
 
-Prima di modificare lo stato del setup, viene salvata una sola copia delle
-informazioni precedenti per il target in
-`.runtime\installer\recovery\<commit>-<prime 16 cifre dello SHA-256 del rootfs>.json`.
-La ripetizione della preparazione per lo stesso target conserva questa copia.
-Si tratta di evidenze di configurazione, non di un backup dell'applicazione.
-Le cartelle dati e risultati della configurazione precedente valida vengono
-mantenute; gli input e i risultati non vengono trasferiti nel nuovo rootfs.
+Il setup verifica percorsi assoluti su dischi locali fissi, scrivibili
+dall'account e privi di junction o collegamenti. Le cinque radici non possono
+coincidere né essere annidate tra loro; non sono ammesse sovrapposizioni con
+cartelle di sistema, `Windows`, `Program Files` o destinazioni predefinite
+delle altre installazioni NIPAT. Sono rifiutati percorsi UNC, unità di rete e supporti
+rimovibili. La cartella applicativa deve essere vuota o riconosciuta come
+appartenente a NIPAT Desktop. Una configurazione di stato e backend valida può
+identificare anche i residui di una disinstallazione, senza richiedere che
+la cartella contenga soltanto `.runtime`. La presenza di altri file non ne
+autorizza la cancellazione.
 
-La preparazione carica l'immagine nell'ambiente candidato e vi esegue
-`doctor --runtime` e `self-test`. Solo dopo il loro successo pubblica la nuova
-configurazione del backend; lo stato `ready` è scritto per ultimo. La
-configurazione e lo stato finale registrano il nome WSL e lo SHA-256 del rootfs.
-Una ripetizione del setup riconosce il proprio target e riprende la preparazione.
+Per una cartella estranea non vuota, il setup può proporre la sottocartella
+vuota `NIPAT-Desktop`, previa conferma. Questa scelta cambia soltanto la
+destinazione. Se anche la sottocartella contiene file, occorre scegliere
+un'altra cartella vuota: il setup non svuota il contenuto né crea una catena
+di sottocartelle. Dati e risultati possono contenere file preesistenti, che
+non vengono trasferiti o cancellati dal setup.
 
-In caso di errore, conservare `setup.log` e `state.json` e riaprire
-**NIPAT - completa preparazione** oppure `1_SETUP.cmd` nell'installazione.
-La distribuzione precedente, gli input e i risultati restano presenti.
-L'applicazione appena installata rimane bloccata finché la configurazione
-non termina: Inno Setup ha già sostituito i file applicativi prima di avviare
-la preparazione, quindi non si tratta di un ripristino completo della versione
-precedente. I file di recupero documentano lo stato precedente e non devono
-essere copiati alla cieca sopra la configurazione corrente.
+Manifest, backend, stato, proprietà del runtime e registri di recupero devono
+indicare il canale previsto. Il setup non adotta ambienti o configurazioni
+di altri canali. NIPAT Desktop dispone di identità e cartelle proprie:
+le installazioni NIPAT 0.4 e 0.5 non vengono adottate o aggiornate da questo
+setup. Il componente Windows WSL rimane una risorsa del sistema.
 
-Non vengono eliminate automaticamente le vecchie distribuzioni. L'applicazione
-è per utente: avviare il setup dal proprio account Windows, senza cambiare
-account amministratore. Il comportamento descritto deve essere verificato sul
-pacchetto finale con una prima installazione, un aggiornamento e una ripresa
-reali su Windows; i test automatici della logica di migrazione sono evidenze
-separate.
+Il launcher installato usa la propria configurazione e non eredita le variabili
+NIPAT di percorso/backend di una shell esterna. Nel menu, **Configura** applica
+le preferenze salvate alle cartelle e ai parametri delle analisi, senza cambiare
+posizione dell'applicazione, cache o runtime. Le opzioni `--data-dir` e
+`--runs-dir` selezionano esplicitamente le destinazioni; nella sessione guidata
+prevalgono sulle preferenze. I comandi diretti non leggono queste preferenze.
 
-## Costruzione su GitHub
+## Preparazione e identità dell'immagine
 
-Il workflow `.github/workflows/windows-installer.yml`:
+Il manifest incorporato contiene commit sorgente, versione, profilo e identità
+degli archivi. Il setup verifica i rispettivi SHA-256 prima dell'utilizzo.
+Gli archivi incorporati vengono estratti nella cache dell'utente con nomi
+comprendenti il digest; la cache permette la ripresa senza una nuova estrazione
+manuale. Il setup non scarica un manifest sostitutivo.
 
-1. Su Windows esegue la suite Python e i controlli PowerShell 5.1, inclusi
-   quelli della migrazione, poi compila e verifica `NIPAT.exe`. Conserva
-   questo stesso eseguibile per i due pacchetti.
-2. Solo dopo questi controlli costruisce l’immagine scientifica Linux ed
-   esegue `doctor --runtime` e `self-test`. Esporta l’immagine verificata e
-   costruisce l’archivio dell’ambiente WSL.
-3. Registra commit, versioni dei pacchetti, dimensioni, ID immagine e SHA-256
-   nel materiale di distribuzione. Ogni asset deve rientrare nel limite
-   imposto dal builder per GitHub Releases.
-   Carica inoltre l'archivio esportato in un motore nuovo del rootfs distribuito,
-   esegue R e samtools e ripete il caricamento per verificare la ripresa del setup.
-4. Prepara solo i sorgenti presenti in `distribution-files.txt`, il Python
-   verificato e il manifest dell’installatore.
-5. Su Windows recupera l'eseguibile già verificato, compila l'helper per WSL
-   e l'installatore Inno Setup. Quest'ultimo incorpora anche i due archivi
-   verificati dell'ambiente Linux e del runtime scientifico.
-6. Prepara il pacchetto Docker Desktop con lo stesso launcher, gli stessi
-   sorgenti e l'archivio scientifico già esportato, poi lo incorpora
-   nell'installatore Docker Desktop. Lo ZIP viene conservato come artefatto
-   di costruzione e verifica; per l'utilizzo si distribuisce il relativo EXE.
+Il filesystem WSL include Docker Engine e Compose dedicati. Dopo l'importazione,
+`nipat-engine ensure` avvia il motore interno. Il setup carica l'archivio
+scientifico verificato e acquisisce l'unico ID immutabile restituito da
+`docker load`, verificando che l'immagine sia Linux amd64.
 
-Il manifest fidato e i due archivi sono incorporati nell’EXE. Il setup estrae
-automaticamente gli archivi nella cache dell'utente
-`%LOCALAPPDATA%\NIPAT\cache`, con nomi che includono il relativo SHA-256.
-La cache viene conservata per riprendere la preparazione dopo un'interruzione
-o un riavvio; non occorre affiancare una cartella `assets` all'EXE.
-Il setup verifica gli hash prima dell’importazione. Dopo `docker load`
-acquisisce l'unico ID immutabile riportato per quell'archivio, verifica Linux
-amd64 e lo usa per
-le esecuzioni. L'ID della build viene conservato separatamente: il motore
-classico identifica la configurazione dell'immagine, mentre containerd usa il
-manifest/index. I due ID non sono quindi necessariamente uguali.
-Non scarica un manifest sostitutivo dalla rete.
+L'ID locale può differire dall'ID della build perché i motori Docker possono
+identificare configurazioni o manifest delle immagini in modo diverso.
+Stato e backend conservano separatamente ID della build, ID risolto localmente
+e SHA-256 dell'archivio. Le esecuzioni usano l'ID locale verificato, con pull
+disabilitato. Il launcher ne controlla il legame con il manifest installato.
 
-Il setup registra ID della build, ID locale e SHA-256 dell'archivio nello stato
-e nella configurazione. Il launcher ne verifica la corrispondenza con la release.
-Ogni ripresa del setup riverifica e ricarica l'archivio; l'avvio ordinario usa
-direttamente l'ID locale registrato. Gli archivi esportati devono contenere una
-sola immagine senza tag: risposte assenti, ambigue o con errori vengono rifiutate.
+## Aggiornamento e riparazione
 
-Il workflow **non pubblica automaticamente** una release. Conservare il log
-e gli artefatti della compilazione utilizzata per le prove. Non ricostruire
-un runtime diverso fra verifica e distribuzione.
+Dal menu **9 — Verifica aggiornamenti** è possibile scaricare l'installatore
+completo di una release approvata. Il download verifica dimensione e SHA-256;
+l'avvio del setup richiede una seconda conferma e la chiusura della sessione
+corrente. Un avviso automatico non modifica i file installati e non interrompe
+analisi. Il setup usa gli stessi controlli della prima installazione e
+l'applicazione viene riaperta soltanto dopo la preparazione verificata del runtime.
+Le preferenze del menu, i percorsi configurati, dati e risultati vengono conservati.
+La [guida per l'utilizzo](GUIDA_UTILIZZO.md#aggiornamenti) descrive canali e conferme.
 
-## Prova prima della pubblicazione
+Se altre sessioni NIPAT sono aperte, l'aggiornamento viene fermato senza
+terminarle: chiuderle al termine del lavoro e riprovare. Il passaggio al setup
+conserva `handoff.log` e, in caso di errore, `error.txt` nella sottocartella
+`updates\handoff-*` della cache configurata. Se Windows richiede un riavvio,
+completare poi la preparazione dal collegamento nel menu Start; la sola
+conclusione della copia dei file non autorizza le analisi.
 
-Per la verifica tecnica prima di una futura pubblicazione usare gli artefatti
-GitHub Actions di una sola build riuscita del workflow **Windows installer
-(review build)**, identificata dal commit da verificare. Per provare `0.4.1`
-già confezionato, utilizzare direttamente il pacchetto della
-[release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1).
+Il setup riutilizza la cartella di NIPAT Desktop riconosciuta, conservando i
+percorsi selezionati. Un inventario dei file distribuiti distingue i componenti
+gestiti dall'installatore dai file aggiunti dall'utente. Prima di sovrascrivere
+un componente differente, il setup ne salva la copia in
+`%LOCALAPPDATA%\NIPAT-Desktop\installations\backups\<UTC-guid>`.
+Il backup include anche l'inventario precedente, la configurazione dei percorsi,
+lo stato dell'installatore, il backend, il marcatore applicativo e il Python
+portabile generato sotto `.runtime\python`. I componenti applicativi identici
+non richiedono una copia.
+Solo quando `.distribution\application-files.json` è assente, il setup può
+usare la mappa `source_sha256` di `.distribution\installer-manifest.json`
+come inventario precedente, dopo averne verificato schema, profilo, commit e
+corrispondenze fra percorsi e hash; un inventario presente ma non valido non
+abilita questo recupero alternativo.
 
-Per aggiornare una copia NIPAT WSL già installata:
+I file estranei ai componenti distribuiti rimangono nella loro posizione;
+un file con lo stesso nome di un componente da installare viene salvato prima
+della sovrascrittura. Un componente presente nell'inventario precedente ma non
+più distribuito viene rimosso soltanto se il suo hash coincide con quello
+registrato; se è stato modificato, rimane nella propria posizione e viene
+anche copiato nel backup. I file estranei non elencati negli inventari e non
+coinvolti nelle sostituzioni rimangono in posizione, senza una copia nel backup.
+Un inventario precedente danneggiato viene salvato, ma non autorizza la rimozione di componenti obsoleti.
+Un inventario del nuovo pacchetto non valido interrompe invece la preparazione.
+Non viene svuotata l'intera cartella applicativa. Il backup selettivo non
+comprende tutti i dati o il filesystem WSL e non realizza un ripristino
+automatico completo in caso di errore.
 
-1. Terminare le analisi e chiudere NIPAT. Annotare il nome della distribuzione,
-   le cartelle dati/risultati e lo stato della versione installata leggendo
-   `.runtime\backend.json` e `.runtime\installer\state.json`. Conservare una
-   copia di questi piccoli file come evidenza della prova, senza modificarli.
-2. Dalla stessa esecuzione GitHub scaricare **`nipat-windows-setup`** ed estrarre
-   l'archivio fornito da GitHub Actions per ottenere **`NIPAT-Setup.exe`**.
-   Questo solo EXE contiene tutto il necessario a NIPAT; non scaricare o
-   sistemare gli archivi runtime separatamente. L'eventuale `NIPAT.exe`
-   separato è un'evidenza della compilazione e non è l'installatore.
-3. Fare doppio clic su `NIPAT-Setup.exe` dal proprio account Windows. Il setup
-   estrae e verifica automaticamente i componenti incorporati.
-   Se l'ambiente Linux interno cambia, ne prepara uno affiancato; non occorre
-   disinstallare la versione precedente o modificare
-   manualmente la configurazione. La presenza del vecchio ambiente e del nuovo
-   richiede spazio per entrambi durante questa prova.
-4. Attendere `NIPAT: ready`, poi aprire **NIPAT** dal menu Start. Verificare il
-   banner, la presenza dell'interfaccia attesa e le cartelle dati/risultati.
-   Confrontare nome della distribuzione e percorsi con quelli annotati prima:
-   il nome può cambiare, mentre le radici configurate devono restare le stesse.
-5. Controllare che i risultati precedenti siano ancora consultabili. Verificare
-   il riavvio autonomo del nuovo ambiente e completare un'analisi reale con un
-   caso noto. Registrare gli esiti nella scheda di validazione.
+### Preparazione del runtime e ripresa
 
-Per una prima installazione si usa lo stesso EXE, senza una configurazione
-precedente da confrontare. Se la preparazione fallisce, registrare
-l'errore e riprenderla con il collegamento di completamento; non modificare
-`backend.json`, `ownership.json` o le registrazioni WSL per forzarne l'esito.
-L'EXE dell'applicazione viene collocato dal setup nella cartella installata e
-si avvia da lì, con tutti i suoi file di supporto.
+Una distribuzione può essere riutilizzata soltanto se digest completo,
+registrazione WSL, proprietà del canale e posizione effettiva sono coerenti.
+I nuovi nomi combinano il prefisso del canale, 32 cifre del digest del
+filesystem Linux e 12 cifre del digest della posizione. Un ambiente già
+posseduto da NIPAT Desktop con un nome precedente può essere riutilizzato nella
+stessa destinazione, dopo le medesime verifiche di proprietà. Un nome occupato
+da un ambiente non riconosciuto interrompe la preparazione senza sostituirlo.
+Se una distribuzione posseduta da NIPAT Desktop è stata rimossa manualmente da
+WSL, il setup può ricrearla soltanto quando la destinazione precedente è vuota.
+La ricevuta precedente viene conservata nello storico delle registrazioni;
+una cartella ancora contenente file non viene cancellata per forzare l'importazione.
 
-Per la sola verifica tecnica del riavvio autonomo, leggere il nome dalla
-configurazione della copia installata. Nei nuovi pacchetti non è necessariamente
-`NIPAT-Runtime`:
+Un digest Linux diverso o una diversa cartella dell'ambiente WSL produce una
+distribuzione affiancata: il setup non copia né elimina quella precedente.
+Le cartelle dati e risultati scelte diventano i valori predefiniti del client;
+modificarle non trasferisce i file esistenti. I run precedenti rimangono nella
+loro destinazione e i dati dell'utente non vengono importati nel filesystem Linux.
+
+Il setup conserva una copia dello stato e del backend precedenti per ogni
+combinazione di commit e filesystem in `.runtime\installer\recovery`.
+I piccoli registri centrali delle installazioni conservano le destinazioni
+attuali e precedenti necessarie per la verifica delle risorse del canale.
+
+Il candidato viene verificato con `doctor --runtime` e `self-test` prima
+dell'attivazione del backend; lo stato `ready` viene scritto per ultimo.
+Ogni ripresa verifica e ricarica l'archivio. L'avvio ordinario riusa invece
+l'ID locale registrato e avvia autonomamente il motore se è fermo.
+
+Dopo un errore, aprire **NIPAT Desktop - completa preparazione** dal menu
+Start. Conservare questi file della cartella applicativa:
+
+- `.runtime\installer\setup.log`: dettagli della preparazione;
+- `.runtime\installer\state.json`: fase ed errore registrati;
+- `.runtime\backend.json`: configurazione attivata, se presente.
+
+Non modificare questi file per forzare lo stato `ready`. I registri di recupero
+e il backup selettivo hanno scopi distinti; nessuno costituisce una copia
+completa dell'installazione. Inno Setup copia i file applicativi prima della
+preparazione del runtime:
+un errore lascia l'applicazione bloccata fino al completamento del setup,
+anche se la distribuzione precedente è ancora presente.
+
+## Disinstallazione
+
+La disinstallazione rimuove i file applicativi gestiti dal setup, i collegamenti
+e la ripresa automatica. Conserva sempre dati e risultati, comprese le
+destinazioni precedenti registrate. Dopo la conferma di disinstallazione,
+una seconda richiesta propone la rimozione dell'ambiente WSL e della cache,
+con **No** come scelta predefinita. **Annulla** interrompe prima della pulizia.
+Con **Sì**, il programma verifica le risorse di NIPAT Desktop nelle destinazioni
+correnti e nello storico registrato prima di rimuoverle.
+
+La rimozione riguarda soltanto distribuzioni WSL con proprietà e registrazione
+coerenti e archivi della cache riconosciuti e verificati. Non consiste nella
+cancellazione ricorsiva delle radici selezionate: file estranei, Docker Desktop,
+altre distribuzioni WSL e risorse delle altre installazioni NIPAT non sono destinazioni
+di rimozione. Una verifica fallita interrompe la pulizia e viene segnalata;
+un errore durante le operazioni può lasciare risorse da rimuovere. In entrambi
+i casi la disinstallazione dei file applicativi viene interrotta. Conservare
+l'esito e il log persistente in
+`%LOCALAPPDATA%\NIPAT-Desktop\installations\logs\uninstall-*.log`
+prima di riprovare.
+
+Preferenze dei percorsi e registri centrali delle installazioni sopravvivono
+alla disinstallazione. Servono a riproporre le destinazioni e a identificare
+le risorse conservate; non sono copie di sicurezza dei dati o del filesystem WSL.
+Nella cartella applicativa possono restare i marcatori di proprietà, la
+configurazione dei percorsi e file generati non gestiti da Inno Setup, come
+Python portabile in `.runtime\python`. La disinstallazione non garantisce
+quindi una cartella applicativa vuota; la configurazione conservata consente
+la verifica della successiva reinstallazione. La rimozione dell'ambiente
+NIPAT non disinstalla il componente WSL di Windows.
+
+## Client Windows da sorgenti
+
+Questo percorso è destinato allo sviluppo. `1_SETUP.cmd` prepara il Python
+locale e verifica un runtime WSL già configurato; non crea il filesystem WSL
+e non costruisce o scarica l'immagine scientifica.
+
+Per usare il runtime di un’installazione NIPAT Desktop già preparata, leggere il suo backend e
+selezionarlo esplicitamente nella sessione PowerShell del checkout:
 
 ```powershell
-& {
-    $ErrorActionPreference = 'Stop'
-    $nipatApp = Join-Path $env:LOCALAPPDATA 'Programs\NIPAT'
-    $nipatConfig = Get-Content -LiteralPath (Join-Path $nipatApp '.runtime\backend.json') -Raw |
-        ConvertFrom-Json
-    if ($nipatConfig.backend -ne 'wsl' -or
-        $nipatConfig.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$') {
-        throw 'Configurazione WSL NIPAT non valida: interrompere la prova.'
-    }
-    & "$env:WINDIR\System32\wsl.exe" --terminate $nipatConfig.wsl_distro
-    if ($LASTEXITCODE -ne 0) { throw 'Arresto del runtime non riuscito.' }
-    & (Join-Path $nipatApp 'NIPAT.exe') doctor --runtime
-    if ($LASTEXITCODE -ne 0) { throw 'Riavvio autonomo del runtime non riuscito.' }
-}
+# Indicare la cartella applicativa scelta nel setup.
+$nipatApp = Read-Host "Cartella applicativa NIPAT Desktop"
+$nipatBackend = Get-Content -Raw -LiteralPath `
+    (Join-Path $nipatApp ".runtime\backend.json") | ConvertFrom-Json
+$env:NIPAT_BACKEND = "wsl"
+$env:NIPAT_WSL_DISTRO = $nipatBackend.wsl_distro
+$env:NIPAT_RUNTIME_IMAGE = $nipatBackend.runtime_image
+
+# Eseguire dalla radice del checkout NIPAT.
+& ".\1_SETUP.cmd"
+if ($LASTEXITCODE -ne 0) { throw "Preparazione del client non riuscita." }
+& ".\2_AVVIA.cmd"
 ```
 
-Questo controllo va eseguito senza analisi in corso. I comandi con il nome
-fisso `NIPAT-Runtime` nella sezione storica sottostante descrivono soltanto il
-candidato precedente. Per Docker Desktop usare il relativo installatore
-della stessa build e seguire la preparazione descritta nella [guida](GUIDA_UTILIZZO.md).
+Il pacchetto installato deve aver già completato la preparazione. Il client
+verifica nuovamente l'immagine e le sue interfacce; un runtime incompatibile
+viene rifiutato. Il setup da sorgenti richiede un nome WSL esplicito e un ID
+immagine `sha256:<64 cifre esadecimali>`. Le variabili hanno effetto nella
+sessione corrente e non modificano la configurazione del pacchetto installato.
+Per un ambiente di sviluppo indipendente, usare una distribuzione WSL dedicata
+con `nipat-engine`, Docker Engine e Compose e importarvi l'archivio verificato
+della stessa build; non riutilizzare nomi di distribuzioni gestite da altri canali.
 
-Registrare versione di Windows, versione WSL, commit, ID del workflow e ID
-immagine insieme agli esiti. La matrice completa di verifica dell'installatore
-comprende i casi seguenti; i casi senza WSL funzionante rimangono fuori dal
-perimetro della prima consegna per le prove di dominio:
+## Costruzione e accettazione del pacchetto
 
-| Caso | Esito da osservare |
-| --- | --- |
-| PC Windows senza WSL e senza Docker Desktop | Prerequisiti, eventuale riavvio, ripresa, importazione e autotest completi. |
-| PC con WSL già disponibile | Ambiente NIPAT separato; distribuzioni preesistenti utilizzabili. |
-| Riavvio successivo all’installazione | Il collegamento NIPAT avvia il motore senza operazioni manuali. |
-| Configurazione fallita o interrotta | Errore leggibile, log e componenti incorporati conservati, ripresa senza preparare archivi manualmente. |
-| Archivio alterato | Rifiuto prima dell’importazione. |
-| Nome distribuzione già occupato da ambiente non NIPAT | Arresto con messaggio, nessuna sostituzione automatica. |
-| Input su più unità locali, spazi e caratteri speciali | Tutti i workflow operativi, originali invariati, risultati nella cartella scelta. |
-| Interruzione di un’analisi | Stato del run registrato e container dell’analisi fermato. |
-| Aggiornamento da una versione NIPAT WSL precedente | Nuovo ambiente validato prima dell'attivazione; distribuzione precedente e cartelle dati/risultati conservate. |
-| Interruzione o errore nell'aggiornamento | Applicazione bloccata senza falso `ready`; evidenze conservate e ripresa sullo stesso target. |
-| Riesecuzione del setup e disinstallazione | Nessuna perdita di dati o risultati; indicazioni esplicite per gli ambienti conservati. |
+Il workflow [Installers (review build)](../.github/workflows/windows-installer.yml)
+compila e prova il launcher, verifica il motore scientifico, esporta gli archivi,
+prepara i sorgenti ammessi da `distribution-files.txt` e compila l'EXE con
+Inno Setup. `installer-build.json` lega l'eseguibile a commit, versione,
+manifest, launcher, profilo e archivi incorporati. I dettagli e gli artefatti
+sono descritti in [CI/CD](CI_CD.md).
 
-La compilazione su GitHub non copre l’avvio di WSL e l’interazione con UAC
-su un PC fisico. Gli autotest numerici non coprono tutti i casi DNPcall da BAM:
-proseguire con la [scheda di validazione](VALIDAZIONE.md).
+Per una prova tecnica scaricare il file diretto **NIPAT-Setup.exe** dalla
+sezione **Artifacts** di una build riuscita e identificata dal commit.
+Serve l'accesso a GitHub e il download resta disponibile per 14 giorni.
+L'artefatto `nipat-windows-setup` conserva lo stesso installatore e le evidenze;
+il launcher separato al suo interno è un'evidenza di compilazione, non
+un'installazione autonoma.
 
-### Correzione e prova locale del setup (21 ottobre 2026)
-
-Il candidato compilato dal commit `19507bb3991d636fef3e594b9636c5ae2ee656e4`
-ha superato l'importazione WSL e il caricamento dell'archivio su un PC Windows.
-Il controllo successivo cercava l'ID della build (`bbc352...`) mentre Docker
-29.9.1 con containerd riportava `dc9773...`; il setup si arrestava correttamente
-senza dichiarare l'installazione pronta. La correzione descritta sopra elimina
-l'assunzione di identita' degli ID fra i due motori.
-
-Sul PC di prova la correzione locale `image-id-v1`, applicata al candidato
-di quel commit, ha poi permesso al setup di terminare con `NIPAT: ready`.
-Il log fornito dall'utilizzatore documenta:
-
-- 29 controlli dell'installer e 34 controlli dell'identita' dell'immagine
-  superati da `powershell.exe` prima della sostituzione dei tre script.
-- Caricamento dell'archivio verificato, risoluzione dell'ID locale `dc9773...`
-  e preparazione di Python portabile 3.12.10.
-- `doctor --runtime` superato nel backend `NIPAT-Runtime`, con R 4.4.2,
-  pacchetti richiesti disponibili e samtools 1.21.
-- Regressioni SNPcall (9 righe), CPI (valori CSV e tre PDF) e Contamination
-  (riepilogo e valori per sito) superate.
-- Quattro prove su input esterni superate: SNPcall da pileup, Contamination
-  da directory ricorsiva, CPI con due pannelli e CPI ALL. I percorsi di prova
-  includono spazi e caratteri speciali; gli input sono rimasti invariati.
-- Avvio ordinario verificato dopo `wsl --terminate NIPAT-Runtime`:
-  `nipat.cmd doctor --runtime` ha riavviato il motore dedicato, verificato
-  l'immagine locale e le dipendenze; `2_AVVIA.cmd` ha aperto il menu CLI
-  e si e' chiuso regolarmente con l'opzione 0.
-- DNPcall da BAM reale nel run `ionxpress_008_wsl_20261021-121741-605`:
-  11 siti corrispondenti al precedente run Docker Desktop. Il confronto ha
-  incluso `chr`, `pos1`, `pos2`, `REF`, `ALT`, `N_REF`, `N_ALT`, `N_Other`,
-  `GT`, `total_count` e `reads_discarded_for_indels` (11 colonne).
-
-Questa evidenza riguarda il candidato con tre script corretti localmente,
-non l'installazione completa di un nuovo EXE compilato dalla revisione corretta.
-Il confronto BAM riguarda un solo campione e un risultato precedente dello
-stesso programma: non è un riferimento scientifico indipendente. Restano da
-verificare la prima installazione del nuovo EXE su un altro PC e il percorso
-su Windows pulito, inclusi abilitazione WSL e riavvio Windows.
-
-La prima esecuzione di questo nuovo controllo (`39580501326`) ha rilevato
-un errore di estrazione dei whiteout nel container Linux del test. Il motore
-annidato usava il filesystem overlay del container esterno come archivio.
-Il test ora assegna volumi anonimi separati a `/var/lib/docker` e
-`/var/lib/containerd`, registra il filesystem e rimuove quei volumi alla fine.
-Questo adeguamento riguarda l'ambiente CI; il setup WSL continua a usare
-il disco della propria distribuzione. Il controllo sugli errori di caricamento
-rimane attivo, cosi' come l'esecuzione e il secondo caricamento dell'immagine.
-
-La successiva [compilazione 39581854492](https://github.com/GregorioDalia/nipat-desktop/actions/runs/39581854492),
-dal commit `0595c47179f93cf4426f66162875ae1e1035f5c8`, è terminata con successo:
-suite Python su Linux e Windows (129 test ciascuna), 63 controlli PowerShell
-su Windows PowerShell 5.1, regressioni scientifiche, caricamento/esecuzione/
-ricaricamento dell'archivio nel motore Docker 29.9.2 con containerd distribuito
-e compilazione dell'EXE. È evidenza di build e integrazione del runtime,
-distinta dalle prove sul PC descritte sopra. Una modifica dei sorgenti inclusi,
-anche della documentazione, richiede una nuova build coerente di EXE e asset.
-
-## Pubblicazione della versione verificata
-
-Dopo la revisione dei pacchetti, seguire
-[.github/RELEASE.md](../.github/RELEASE.md) per pubblicare una **pre-release**
-dal commit esatto compilato e integrato. La procedura trasferisce gli asset di
-una build ammessa e riuscita, controllando manifest, sorgenti e checksum; una
-build di pull request non è direttamente pubblicabile. Per la
-doppia distribuzione vengono verificati anche il contenuto Docker incorporato
-nell'EXE, il launcher comune e l'identità dell'archivio scientifico. Lo ZIP
-resta un artefatto intermedio di verifica. Il file `SHA256SUMS`
-della release comprende tutti gli asset pubblicati.
-
-Riportare nelle note della release i controlli effettivamente superati e le
-prove ancora aperte. Condividere il link alla versione con l'interfaccia
-verificata. Il percorso principale richiede soltanto `NIPAT-Setup.exe`, con
-gli archivi già incorporati; chi dispone di Docker Desktop può scaricare
-`NIPAT-DockerDesktop-Setup.exe`.
-`NIPAT.exe` è contenuto in entrambi i pacchetti e richiede i relativi file di
-supporto: non distribuirlo isolatamente.
-
-Verificare la firma del codice se disponibile; gli eseguibili compilati senza
-certificato sono privi di firma e Windows può mostrare l'avviso per autore non
-riconosciuto. Non sostituire gli asset di una versione già consegnata: usare
-una nuova versione. Il codice originale NIPAT è GPL-3.0-or-later; conservare
-[licenze e attribuzioni](../THIRD_PARTY_NOTICES.md) dei componenti inclusi e
-rendere disponibili i materiali richiesti dalle rispettive licenze.
-
-## Riferimenti tecnici
-
-- [Installazione WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
-- [Importazione e comandi WSL](https://learn.microsoft.com/en-us/windows/wsl/basic-commands).
-- [Docker Engine su Debian](https://docs.docker.com/engine/install/debian/).
-- [Identificativi delle immagini con graphdriver e containerd](https://github.com/moby/moby/issues/51934).
-- [Inno Setup: privilegi](https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm).
+Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede
+prima installazione, riavvio del runtime, analisi di un caso noto,
+coesistenza con altre installazioni NIPAT, percorsi personalizzati,
+reinstallazione e disinstallazione con entrambe le scelte di conservazione
+dell'ambiente. Include interruzioni e riprese, destinazioni su dischi fissi
+diversi, spazi e caratteri non ASCII, conservazione dei dati e protezione
+delle risorse estranee. I test automatici dei confini Windows/WSL non
+sostituiscono queste prove del pacchetto reale.
+Un aggiornamento fra versioni differenti richiede una prova distinta;
+la reinstallazione della stessa build non la dimostra. La
+[scheda di validazione](VALIDAZIONE.md) registra le analisi di dominio.

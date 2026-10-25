@@ -1,207 +1,195 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/branding/nipat-logo-dark.svg">
+  <img src="assets/branding/nipat-logo.svg" alt="NIPAT" width="335">
+</picture>
+
 # NIPAT Desktop
 
-**CLI 0.4.1 — pre-release for domain testing on Windows 11 x64.**
-This version provides the guided terminal interface, a common Windows launcher
-and two distribution options. It is ready to be evaluated with domain data;
-it is not a completed scientific validation.
-See the [v0.4.1 release](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.4.1),
-[release notes](docs/RELEASE_0.4.1.md), Italian [overview](SUNTO.md) and
-[usage guide](docs/GUIDA_UTILIZZO.md).
+NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
+un'interfaccia testuale guidata o comandi riproducibili. Il client Python
+raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
+contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-| Package | Preparation | Start |
+**Versione documentata: NIPAT Desktop 0.6.0.** Consultare la pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
+versioni effettivamente pubblicate, gli installatori e le rispettive note.
+Gli artefatti GitHub Actions sono pacchetti di verifica tecnica, distinti dalle
+release. NIPAT è software per la ricerca: gli autotest verificano casi noti,
+mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
+
+## Analisi disponibili
+
+| Workflow | Input | Risultati principali |
 | --- | --- | --- |
-| [NIPAT-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-Setup.exe) | Double-click the single installer and wait for `NIPAT: ready`. The initial testing scope assumes working WSL2. | Open the **NIPAT** desktop or Start-menu icon. |
-| [NIPAT-DockerDesktop-Setup.exe](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/NIPAT-DockerDesktop-Setup.exe) | Start Docker Desktop with Linux containers, then double-click the installer. Preparation and self-tests run automatically before the menu. | Open the **NIPAT (Docker Desktop)** icon. |
+| DNPcall | Uno o più BAM, FASTA indicizzato e pannello DNP | Conteggi, genotipi, riepiloghi e grafici. |
+| SNPcall | BAM e FASTA indicizzato, oppure pileup con QNAME; pannello SNP | Tabella dei conteggi SNP. |
+| Contamination | Tabelle individuali compatibili con DNPcall e pannello di coordinate | Stime per sito e riepilogo per campione. |
+| CPI | Tabelle cfDNA materne e paterne, coppie, frequenze di popolazione ed eventuali pannelli | Frazione fetale, CPI e grafici. |
 
-Both single-file installers include portable Python, **`NIPAT.exe`** and the
-same verified scientific runtime. The WSL installer also includes NIPAT's internal Linux
-environment; users do not need to arrange archives or install Docker Desktop
-for that option. Initial Windows WSL activation may require Internet,
-administrator consent and a restart. Activation and restart on a clean PC
-remain outside the initial domain-testing scope.
+Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
+cartella distinta con risultati, intermedi conservati, metadati e log.
+I run esistenti non vengono sovrascritti. I quattro workflow sono disponibili
+sia nel menu sia nella CLI diretta. Ogni avvio esegue una singola analisi;
+le sequenze si compongono selezionando gli output compatibili del run precedente.
+L'interfaccia della 0.6 è testuale.
 
-The Docker Desktop application prepares its environment automatically when
-needed, then opens the guided CLI. **Docker Desktop may initially contain no
-images or containers.** The `0.4.1` EXE includes the scientific runtime archive:
-preparation verifies and imports it automatically before running the self-tests.
-No manual `docker pull`, image build, separate archive download or setup script
-is required. Docker Desktop must already be installed and running with Linux
-containers. After a failed preparation, reopen the same icon to retry.
-Confirming **Avvia analisi**
-runs the R scripts and the other tools required by the workflow. No manual
-PowerShell session is required. Follow the [Docker Desktop test procedure](docs/VALIDAZIONE.md#prima-prova-con-docker-desktop)
-to record setup, a real analysis and its outputs. Record installation and
-analysis outcomes separately for each package.
+## Piattaforme e installazione
 
-When updating the WSL installation, setup manages its internal Linux environment, preserves
-the previous environment and data locations, and activates a new backend only
-after runtime checks and scientific self-tests. An interrupted setup can be
-resumed. The updated application remains blocked until setup succeeds; old
-application files are not automatically restored. See the
-[installer checks](docs/INSTALLATORE_WINDOWS.md).
+| Piattaforma | Ambiente di esecuzione | Installatore |
+| --- | --- | --- |
+| Windows 11 x64 | WSL2 con distribuzione NIPAT dedicata e Docker Engine gestito dall'applicazione | Unico file `NIPAT-Setup.exe`. |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale e Compose v2, accessibili all’utente | Unico pacchetto `.deb`. |
 
-Python handles input validation, mechanical format adaptation and execution;
-the scientific calculations remain in the DNPcall and NEWPAT R scripts.
-The desktop GUI will use the same application layer after CLI validation.
-Previous releases and their evidence are retained in the
-[distribution history](docs/DISTRIBUZIONE.md).
+Il pacchetto Windows contiene Python portabile, l'ambiente Linux e l'immagine
+scientifica. Non richiede installazioni separate di Python, R, samtools o
+Docker Desktop. WSL2 e la virtualizzazione devono essere disponibili sul
+computer; la loro attivazione può richiedere Internet, autorizzazione
+amministrativa e riavvio.
 
-## Guided CLI (0.4.1)
+L'installazione Windows usa il nome **NIPAT Desktop**. Avviare
+`NIPAT-Setup.exe` con doppio clic dal proprio account, senza scegliere
+«Esegui come amministratore»;
+la configurazione deve terminare con `NIPAT: ready`. Per ogni utilizzo
+successivo, aprire con doppio clic il collegamento **NIPAT Desktop**
+sul desktop o selezionarlo dal menu Start. Non occorre spostare archivi o aprire
+manualmente PowerShell. Il setup permette di scegliere separatamente le
+cartelle dell'applicazione, dell'ambiente WSL, della cache, dei dati e dei
+risultati, anche su dischi locali fissi diversi. Le scelte vengono riproposte
+alla reinstallazione. Un’installazione NIPAT Desktop riconosciuta può essere aggiornata o riparata
+nella stessa cartella, conservando i file estranei ai componenti installati.
+La disinstallazione conserva sempre dati e risultati;
+la rimozione dell'ambiente NIPAT e della cache è facoltativa.
+Requisiti, percorsi e gestione dell'installazione sono nella
+[guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
+[documentazione di distribuzione](docs/DISTRIBUZIONE.md).
 
-The interface provides a NIPAT banner with version, a vertical menu and
-arrow/Enter navigation in supported interactive terminals. Numbered choices
-remain available; redirected output and simple terminals use plain text.
-Contextual instructions accompany mode selection and input fields in all four
-workflows, with format examples and an explanation of Enter. In a file list,
-Enter repeats the instructions until the first file is added; it then ends the
-list. Inputs are checked as they are entered. Use `:indietro` to revisit an input
-or `:annulla` to return to the main menu; entered values are retained while
-editing. Review the selected input files, parameters and results destination,
-then explicitly choose **Avvia analisi**. In text and path fields, `0` does not
-cancel the operation; use `:annulla`.
+Il pacchetto Windows non è firmato digitalmente da NIPAT. Le protezioni
+del computer possono impedirne il download, la preparazione o l'avvio;
+l'installazione va verificata sui dispositivi destinati al collaudo. La
+[guida Windows](docs/INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser)
+descrive come documentare un blocco.
 
-The final screen offers the results folder, run folder, log and an execution
-summary. **6 — Ultima esecuzione** reopens the most recent result screen in the
-current session. **7 — Guida all'uso** separates **1 — Come usare NIPAT** from
-**2 — Verifica strumenti di analisi**. The check runs only when requested and
-is not executed in `--dry-run`; opening the help menu does not verify the runtime.
-**5 — Cartella risultati** still applies only to the current session.
-Persistent preferences, a cross-session history and automatic workflow chaining
-are not part of this revision. The direct CLI and scientific input modes remain
-available, and the interface adds no external Python dependencies.
+Il pacchetto Ubuntu incorpora l’applicazione e lo stesso archivio scientifico
+del pacchetto Windows. APT installa anche Python, Docker Engine e Compose v2
+se mancano, scaricandoli dai repository configurati. Servono Internet e
+autorizzazione amministrativa per queste dipendenze; l’accesso dell’utente
+a Docker richiede una configurazione amministrativa distinta. Il collegamento
+**NIPAT Desktop** o il comando `nipat` apre il menu.
+Requisiti, preparazione iniziale e rimozione
+sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 
-Record package-specific Windows interaction checks separately from the
-historical installer and scientific evidence below.
+## Utilizzo
 
-## Input locations and results
+1. Aprire NIPAT e scegliere il workflow.
+2. Selezionare la modalità di input e inserire file e parametri richiesti.
+3. Verificare il riepilogo e la destinazione dei risultati.
+4. Confermare **Avvia analisi** per eseguire il calcolo scientifico.
+5. Consultare risultati e log dalla schermata finale.
 
-Select existing files accessible to the selected runtime. The WSL installer
-initially supports fixed local Windows drive paths; UNC shares and network drives
-are not supported by this backend. NIPAT mounts
-the selected inputs read-only for each run; large BAM/FASTA files do not need
-to be copied into the project. Container aliases handle paths containing spaces
-and preserve the association with the original files in the run metadata.
+Le indicazioni contestuali spiegano ogni campo. `:indietro` corregge il campo
+precedente, `:annulla` torna al menu e `:vuoto` svuota un campo facoltativo.
+**5 — Configura** salva cartelle dati e risultati, riferimenti, modalità e
+parametri predefiniti dei workflow per gli avvii successivi del menu.
+Ogni analisi permette di modificarli prima della conferma; campioni, coppie
+e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
+CLI diretti. **6 — Ultima esecuzione** riapre il run più recente della sessione;
+**7 — Guida e informazioni** e **8 — Verifica ambiente** separano consultazione
+e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
+approvate su GitHub; download e installazione richiedono conferme distinte.
+In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
+all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
+Per spostare applicazione, ambiente WSL o cache usare il setup.
 
-For source checkouts, `data` and `runs` are beside the project. The installer
-uses `%LOCALAPPDATA%\NIPAT\data` and `%LOCALAPPDATA%\NIPAT\runs`. `data` is a convenience
-directory, not a boundary for input selection. Use global `--data-dir` and
-`--runs-dir`, or `NIPAT_DATA_DIR` and `NIPAT_RUNS_DIR`, to choose other locations.
-Wizard option **5 — Cartella risultati** changes the results root for the
-remaining session. Global options precede the subcommand. Relative paths are resolved from the
-calling terminal's current directory; entries in a BAM list are resolved from
-the list's directory. There is no required drive letter or project folder name.
+Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
+cartella dell'applicazione; condivisioni UNC e unità di rete non sono supportate.
+I percorsi possono contenere spazi. Le analisi in sequenza si compongono
+selezionando gli output compatibili di un run come input del successivo.
 
-Each analysis creates a new subdirectory under the selected results root,
-containing `output`, `work`, `run.json` and `execution.log`. Existing runs are
-never overwritten. See [execution records](docs/ESECUZIONI.md).
+### CLI diretta
 
-## Workflow examples
-
-Run these commands from the directory containing `nipat.cmd`: the extracted
-project, or `%LOCALAPPDATA%\Programs\NIPAT` for the installed application.
-Replace the example paths with your files; all input modes are also available
-in `NIPAT.exe`, `2_AVVIA.cmd` or the **NIPAT** Start-menu shortcut.
+Nella cartella dell'applicazione Windows, `nipat.cmd` accetta gli stessi
+workflow del menu. Sostituire i percorsi relativi di esempio con i propri:
 
 ```powershell
-$samples = "..\campioni"
-$reference = "..\riferimenti\genome.fa"
-$panels = "..\pannelli"
-$runs = "..\risultati"
+.\nipat.cmd --runs-dir "..\risultati" dnp-call `
+  --bam "..\campioni\campione.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt"
 
-.\nipat.cmd --runs-dir $runs dnp-call `
-  --bam "$samples\sample1.bam" --bam "$samples\sample2.bam" `
-  --reference $reference --panel "$panels\DNP_list.txt"
+.\nipat.cmd snp-call `
+  --pileup "..\campioni\campione.pileup" --panel "..\pannelli\SNPlist.txt"
 
-.\nipat.cmd --runs-dir $runs snp-call `
-  --pileup "$samples\sample.pileup" --panel "$panels\SNPlist.txt"
+.\nipat.cmd contamination `
+  --input-dir "..\risultati\run-dnp\output\individual_outputs" `
+  --panel "..\pannelli\DNP_list.txt"
 
-.\nipat.cmd --runs-dir $runs contamination `
-  --input-dir "$samples\DNPcall_outputs" --panel "$panels\DNPpanel.txt"
-
-.\nipat.cmd --runs-dir $runs cpi `
-  --input-dir "$samples\cpi" --pairs "A1:A1,A2:A2" `
-  --popfreq "$panels\pop_allFreq.txt" `
-  --cutoff panel1 "$panels\DNPpanel1.txt" `
-  --cutoff panel2 "$panels\DNPpanel2.txt"
+.\nipat.cmd cpi --input-dir "..\campioni\cpi" --pairs "A1:A1" `
+  --popfreq "..\pannelli\pop_allFreq.txt" --panel "..\pannelli\DNP_list.txt"
 ```
 
-| Workflow | Supported input modes |
-| --- | --- |
-| DNPcall | Repeated `--bam` or `--bamlist`, plus FASTA and the five-column DNP panel; optional `--parallel`. |
-| SNPcall | `--bam` with `--reference`, or a ready `--pileup` with at least seven samtools columns and QNAME in column 7; SNP panel in either mode. |
-| Contamination | Repeated `--input` or recursive `--input-dir` for TXT/TSV files, plus a DNP coordinate panel. |
-| CPI | Pair tables and population frequencies; optional `--panel`, repeated `--cutoff LABEL PATH`, or native `--cutoff-map`. With no filter, use all sites. |
+Le opzioni globali, come `--runs-dir` e `--dry-run`, precedono il sottocomando.
+`--dry-run` valida gli input e registra un'esecuzione `planned`, senza eseguire
+il motore scientifico. `nipat.cmd --help` e `nipat.cmd <workflow> --help`
+elencano le opzioni. La [guida](docs/GUIDA_UTILIZZO.md) documenta formati,
+modalità alternative e parametri.
 
-FASTA input requires its `.fai` sidecar, and BGZF FASTA also requires `.gzi`.
-BAM indexes are optional for the current `samtools mpileup -l` path.
-DNPcall uses numbered sample aliases; the original-name mapping is retained
-with the run. Its small DNP panel is normalized in `work`, with uppercase
-REF/ALT alleles; the original remains unchanged. For one sample, the UpSet
-plot is intentionally omitted.
-Contamination accepts inputs without `ratio_REF_ALT`: the upstream script
-calculates it from REF/ALT counts. Estimates are fractions, so `0.025` means 2.5%.
-The default CPI `--err-const` remains `0.0000892303778101497` and is editable
-in the wizard or CLI. See the [usage guide](docs/GUIDA_UTILIZZO.md) for formats.
+Su Ubuntu installato dal pacchetto `.deb`, usare `nipat` al posto
+di `.\nipat.cmd`, percorsi Linux e `\` per continuare un comando su più righe.
+Le opzioni e i workflow sono gli stessi. Per esempio:
 
-## Checks and development
-
-The development branch adds [continuous integration and dependency controls](docs/CI_CD.md):
-Python and Windows checks on every pull request and push to `main`, scientific
-regressions when relevant files change, and one aggregate `required` check.
-Full installer builds and publication remain separate. These changes apply to
-future builds; they do not change the published `0.4.1` installers or their assets.
-
-After setup, repeat the runtime checks with:
-
-```powershell
-.\nipat.cmd doctor --runtime
-.\nipat.cmd self-test
-.\.runtime\python\python.exe scripts/verify_input_modes.py
+```bash
+nipat --runs-dir "$HOME/risultati-nipat" contamination \
+  --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
 ```
 
-The self-test runs four check groups: the SNP reference example, synthetic
-CPI and Contamination regressions, and the new external-input checks. The last
-group exercises direct SNP pileup, recursive Contamination input and CPI with
-two labeled cutoffs or all sites; the standalone script repeats that group.
-These checks use the configured scientific runtime: the installer starts its
-own WSL engine automatically; source installations use the available Docker
-engine. They do not add numerical DNPcall-from-BAM coverage.
-All four groups passed on Windows with Docker Desktop in `0.2.0a2`. A separate DNPcall run from a real BAM,
-using external inputs and a different results root, reproduced all 11 rows
-and 17 columns of its previous individual output. These checks support the
-validation handoff. On 21 October 2026, the locally corrected WSL candidate
-also completed setup and self-tests, restarted its engine after WSL termination,
-and reproduced 11 sites and the 11 compared count/genotype columns from the
-same real BAM. The rebuilt installer passed CI, including image load/run/reload
-in its shipped engine. These are separate checks: a complete installation of
-that rebuilt EXE on another PC and independent domain validation remain.
-See the [recorded evidence](docs/INSTALLATORE_WINDOWS.md).
+### Ubuntu: esecuzione da sorgenti
 
-For development, use Python 3.12 from a project virtual environment, install
-with `python -m pip install -e ".[dev]"`, then run `nipat build-runtime` and
-`python -m unittest discover -s tests -v` from the repository root.
+Servono Python 3.12 con `venv`, Docker Engine e Compose v2, accessibili
+all'utente che esegue NIPAT. Dalla radice del repository:
 
-On Windows, source users can build the launcher once with the system .NET
-Framework compiler, after the usual setup:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\installer\windows\build-launcher.ps1 -OutputPath .\NIPAT.exe
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e .
+nipat build-runtime
+nipat doctor --runtime
+nipat self-test
+nipat wizard
 ```
 
-Keep the generated executable in the project root. `NIPAT.exe` opens the
-wizard by default and also accepts the direct CLI arguments. It uses the
-backend configured for that copy of NIPAT; it does not select a separate
-installation elsewhere on the computer.
+La costruzione dell'immagine richiede una connessione Internet. I calcoli
+usano l'immagine locale. Il pacchetto Python da solo non contiene il runtime:
+conservare il checkout completo e seguire i requisiti della
+[distribuzione](docs/DISTRIBUZIONE.md).
 
-- Keep genomic inputs, generated results and local environments outside Git.
-- Preserve upstream archives. Document scientific source changes in
-  `scientific/README.md` and update `scientific/SHA256SUMS`.
-- Use global `--dry-run` before a workflow to check inputs and inspect commands.
-  It prepares a new run recorded as `planned`, without executing the analysis.
+## Risultati e verifiche
 
-## License
+Ogni run contiene `output`, `work`, `run.json` ed `execution.log`.
+Il record identifica input, parametri e immagine effettivamente usata;
+la [guida alle esecuzioni](docs/ESECUZIONI.md) ne descrive significato e limiti.
+Lo stato `succeeded` indica il completamento tecnico del workflow. La
+concordanza scientifica richiede il confronto con risultati attesi appropriati.
 
-Original NIPAT code is available under **GPL-3.0-or-later**; see [LICENSE](LICENSE).
-Bundled components retain their respective licenses and attribution, described
-in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Interface localization is
-planned; the current guided interface remains in Italian.
+`doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
+`self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
+modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
+La CI esegue inoltre regressioni DNPcall sintetiche e controlli del motore;
+la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
+verifica degli installatori e pubblicazione. La
+[scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove
+indipendenti e problemi riproducibili.
+
+## Documentazione e licenza
+
+- [Sintesi del prodotto](SUNTO.md)
+- [Note della versione 0.6.0](docs/RELEASE_0.6.0.md)
+- [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
+- [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
+- [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
+- [Architettura](docs/ARCHITECTURE.md)
+- [Controlli CI/CD](docs/CI_CD.md)
+- [Accettazione degli installatori](docs/ACCETTAZIONE_INSTALLATORI.md)
+- [Componenti scientifici](scientific/README.md)
+
+Il codice originale NIPAT è distribuito con licenza
+[GPL-3.0-or-later](LICENSE). Le licenze e le attribuzioni dei componenti inclusi
+sono descritte in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

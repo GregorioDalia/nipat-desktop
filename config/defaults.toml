@@ -1,3 +1,7 @@
+# Reference values only: this file is not read as user configuration.
+# Guided CLI preferences are saved through Configura in preferences.json.
+# Direct CLI commands use their explicit flags and documented built-in defaults.
+
 [runtime]
 compose_service = "scientific"
 

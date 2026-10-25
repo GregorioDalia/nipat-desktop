@@ -1,14 +1,17 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'install-profile.ps1')
 
 function Read-NipatInstallerManifest([string] $Path) {
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.4.1' -or
+    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.6.0' -or
         $manifest.release_tag -cne ('v' + $manifest.version) -or
         $manifest.source_commit -cnotmatch '^[a-f0-9]{40}$' -or
         $manifest.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$') {
         throw 'Manifest installer non valido o di una versione non supportata.'
     }
+    if ($null -eq $manifest.PSObject.Properties['installation_profile']) { throw 'Profilo di installazione assente dal manifest.' }
+    Assert-NipatInstallationProfile $manifest.installation_profile
     foreach ($name in @('rootfs', 'scientific_image')) {
         $asset = $manifest.assets.$name
         if ($asset.file -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]*\.tar\.gz$' -or
@@ -218,18 +221,33 @@ function Install-NipatScientificImage($Manifest, [string] $CacheDirectory, [stri
 }
 
 function Assert-NipatRuntimeBinding($Manifest, $State, $Configuration) {
+    Assert-NipatInstallationProfile $Manifest.installation_profile
+    Assert-NipatInstallationChannel $State 'Lo stato del runtime'
+    Assert-NipatInstallationChannel $Configuration 'La configurazione del runtime'
+    $profile = Get-NipatInstallationProfile
     foreach ($name in @('resolved_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256')) {
         if ($null -eq $State.PSObject.Properties[$name]) {
-            throw 'Verifica del runtime da aggiornare: riaprire 1_SETUP.cmd.'
+            throw ('Verifica del runtime da aggiornare: aprire ' + $profile.display_name + ' - completa preparazione dal menu Start.')
         }
     }
     foreach ($name in @('source_runtime_image', 'runtime_archive_sha256', 'wsl_distro', 'rootfs_sha256')) {
         if ($null -eq $Configuration.PSObject.Properties[$name]) {
-            throw 'Configurazione del runtime da aggiornare: riaprire 1_SETUP.cmd.'
+            throw ('Configurazione del runtime da aggiornare: aprire ' + $profile.display_name + ' - completa preparazione dal menu Start.')
         }
     }
-    if ($Configuration.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
-        $State.wsl_distro -cne $Configuration.wsl_distro -or
+    $runtimeDirectory = ''
+    if ($null -ne $Configuration.PSObject.Properties['runtime_dir']) {
+        $runtimeDirectory = [string]$Configuration.runtime_dir
+        foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+            if ($null -eq $Configuration.PSObject.Properties[$field] -or
+                $null -eq $State.PSObject.Properties[$field] -or
+                (Resolve-NipatInstallPath $Configuration.$field) -ine (Resolve-NipatInstallPath $State.$field)) {
+                throw "Le destinazioni del runtime non corrispondono alla preparazione: $field."
+            }
+        }
+    }
+    Assert-NipatRuntimeNamespace $Configuration.wsl_distro $Manifest.assets.rootfs.sha256 $runtimeDirectory
+    if ($State.wsl_distro -cne $Configuration.wsl_distro -or
         $State.rootfs_sha256 -cne $Manifest.assets.rootfs.sha256 -or
         $Configuration.rootfs_sha256 -cne $Manifest.assets.rootfs.sha256 -or
         $Configuration.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
@@ -240,7 +258,7 @@ function Assert-NipatRuntimeBinding($Manifest, $State, $Configuration) {
         $Configuration.release_tag -cne $Manifest.release_tag -or
         $State.runtime_archive_sha256 -cne $Manifest.assets.scientific_image.sha256 -or
         $Configuration.runtime_archive_sha256 -cne $Manifest.assets.scientific_image.sha256) {
-        throw 'Il runtime configurato non corrisponde alla verifica di questa release: riaprire 1_SETUP.cmd.'
+        throw ('Il runtime configurato non corrisponde a questa release: aprire ' + $profile.display_name + ' - completa preparazione dal menu Start.')
     }
 }
 
@@ -259,23 +277,30 @@ function Assert-NipatDistroLocation([string] $Distro, [string] $ExpectedDirector
     }
 }
 
+function Open-NipatResumeRegistry([switch] $Create) {
+    $path = 'Software\Microsoft\Windows\CurrentVersion\RunOnce'
+    if ($Create) { return [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($path) }
+    return [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey($path, $true)
+}
+
 function Register-NipatResume([string] $Project) {
+    Assert-NipatInstallationLocation $Project
     $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $bootstrap = Join-Path $Project 'installer\windows\bootstrap.ps1'
     $command = '"' + $powershell + '" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "' + $bootstrap + '" -Resume'
     if ($command.Length -gt 260) {
-        Write-Host 'Dopo il riavvio aprire NIPAT - completa preparazione dal menu Start (percorso troppo lungo per RunOnce).'
+        Write-Host ('Dopo il riavvio aprire ' + (Get-NipatInstallationProfile).display_name + ' - completa preparazione dal menu Start (percorso troppo lungo per RunOnce).')
         return $false
     }
-    $key = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Microsoft\Windows\CurrentVersion\RunOnce')
-    try { $key.SetValue('NIPAT-ResumeSetup', $command, [Microsoft.Win32.RegistryValueKind]::String) }
+    $key = Open-NipatResumeRegistry -Create
+    try { $key.SetValue((Get-NipatInstallationProfile).resume_key, $command, [Microsoft.Win32.RegistryValueKind]::String) }
     finally { $key.Dispose() }
     return $true
 }
 
 function Unregister-NipatResume {
-    $key = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\CurrentVersion\RunOnce', $true)
+    $key = Open-NipatResumeRegistry
     if ($null -ne $key) {
-        try { $key.DeleteValue('NIPAT-ResumeSetup', $false) } finally { $key.Dispose() }
+        try { $key.DeleteValue((Get-NipatInstallationProfile).resume_key, $false) } finally { $key.Dispose() }
     }
 }

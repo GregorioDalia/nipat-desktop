@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
+from nipat.execution.transport import DockerTransport
 from nipat.execution.tracking import HASH_LIMIT_BYTES, file_evidence
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
@@ -31,7 +32,7 @@ class RunTrackingTests(unittest.TestCase):
         data = root / "data"
         data.mkdir()
         self.layout = ProjectLayout(project, root, data, root / "runs", project / "compose.yaml")
-        self.runner = DockerComposeRunner(self.layout)
+        self.runner = DockerComposeRunner(self.layout, transport=DockerTransport())
         self.input = data / "input.txt"
         self.input.write_text("original data\n", encoding="utf-8")
         self.output = io.StringIO()
@@ -89,20 +90,21 @@ class RunTrackingTests(unittest.TestCase):
         panel.write_text("pos\tref\talt\nchr1:100\tA\tC\n", encoding="utf-8")
         return bam, reference, panel
 
-    def test_second_snp_command_failure_marks_whole_workflow_failed(self):
+    def test_snp_engine_failure_marks_whole_workflow_failed(self):
         bam, reference, panel = self.bam_inputs()
         with redirect_stdout(self.output), patch(
             "nipat.execution.runner.subprocess.Popen",
-            side_effect=self.popen_factory(["print('pileup ready')", "import sys; print('R failed'); sys.exit(7)"]),
-        ):
+            side_effect=self.popen_factory(["import sys; print('pileup ready'); print('R failed'); sys.exit(7)"]),
+        ), patch.object(self.runner, "_describe_bundled_engine"):
             with self.assertRaisesRegex(RuntimeExecutionError, "codice 7"):
                 Workflows(self.layout, self.runner).snp_call(
                     bam=bam, reference=reference, panel=panel, run_name="failed-snp"
                 )
         record = self.record("failed-snp")
         self.assertEqual(record["status"], "failed")
-        self.assertEqual([c["status"] for c in record["commands"]], ["succeeded", "failed"])
-        self.assertEqual([c["returncode"] for c in record["commands"]], [0, 7])
+        self.assertEqual([c["status"] for c in record["commands"]], ["failed"])
+        self.assertEqual([c["returncode"] for c in record["commands"]], [7])
+        self.assertIn("snp-call", record["commands"][0]["argv"])
         self.assertIn("R failed", (self.layout.runs_dir / "failed-snp" / "execution.log").read_text())
 
     def test_dry_run_is_planned_and_launches_no_process(self):
@@ -118,7 +120,7 @@ class RunTrackingTests(unittest.TestCase):
         popen.assert_not_called()
         record = self.record("planned")
         self.assertEqual(record["status"], "planned")
-        self.assertEqual([c["status"] for c in record["commands"]], ["planned", "planned"])
+        self.assertEqual([c["status"] for c in record["commands"]], ["planned"])
         self.assertTrue(all(c["returncode"] is None for c in record["commands"]))
 
     def test_keyboard_interrupt_is_recorded_and_propagated(self):
@@ -155,13 +157,13 @@ class RunTrackingTests(unittest.TestCase):
         prepare.assert_not_called()
         self.assertEqual(self.record("changed-source")["status"], "failed")
 
-    def test_staging_failure_is_recorded(self):
+    def test_engine_request_write_failure_is_recorded(self):
         panel = self.layout.data_dir / "panel.txt"
         panel.write_text("chr1\t100\t101\tAA\tCC\n")
         self.input.write_text("chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\nchr1\t100\t101\t95\t5\t0\n")
         with redirect_stdout(self.output), patch(
-            "nipat.execution.workflows.shutil.copy2", side_effect=OSError("disk full")
-        ):
+            "nipat.execution.workflows._write_engine_request", side_effect=OSError("disk full")
+        ), patch.object(self.runner, "_describe_bundled_engine"):
             with self.assertRaisesRegex(OSError, "disk full"):
                 Workflows(self.layout, self.runner).contamination(
                     inputs=[self.input], panel=panel, run_name="copy-failed"
@@ -191,7 +193,7 @@ class RunTrackingTests(unittest.TestCase):
 class RuntimeResolutionTests(unittest.TestCase):
     def test_resolves_requested_image_and_pins_compose_execution(self):
         layout = ProjectLayout(Path("."), Path("."), Path("data"), Path("runs"), Path("compose.yaml"))
-        runner = DockerComposeRunner(layout)
+        runner = DockerComposeRunner(layout, transport=DockerTransport())
         image_id = "sha256:" + "a" * 64
         answers = [
             "linux", '{"services":{"scientific":{"image":"test-runtime:tag"}}}',
@@ -207,7 +209,7 @@ class RuntimeResolutionTests(unittest.TestCase):
 
     def test_rejects_windows_container_engine(self):
         layout = ProjectLayout(Path("."), Path("."), Path("data"), Path("runs"), Path("compose.yaml"))
-        runner = DockerComposeRunner(layout)
+        runner = DockerComposeRunner(layout, transport=DockerTransport())
         with patch.object(runner, "_capture", return_value="windows") as capture:
             with self.assertRaisesRegex(RuntimeExecutionError, "container Linux"):
                 runner._prepare_runtime()

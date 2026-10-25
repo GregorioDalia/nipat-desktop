@@ -8,12 +8,15 @@ import math
 import sys
 from pathlib import Path
 
+# Embedded Python excludes the script directory from its default search path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from nipat.cli import DEFAULT_ERR_CONST
 from nipat.errors import NipatError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
-from nipat.validation.integrity import verify_sha256_manifest
+from verify_contamination_update import check_bundled_run
 
 
 EXPECTED_INFORMATIVE = {
@@ -94,7 +97,6 @@ def main() -> int:
                 "Il pacchetto nipat o NIPAT_PROJECT_DIR punta a un altro progetto. "
                 "Usare la venv di questa repository e verificare l'installazione editable."
             )
-        verify_sha256_manifest(layout.project_dir / "scientific" / "SHA256SUMS")
         fixtures = layout.project_dir / "tests" / "fixtures" / "cpi"
         workflow = Workflows(layout, DockerComposeRunner(layout))
         run_dir = workflow.cpi(
@@ -110,6 +112,7 @@ def main() -> int:
         print(f"Risultati del test: {run_dir}", flush=True)
         cutoff = str(layout.container_path(run_dir / "work" / "DNPpanel.txt"))
         check_outputs(run_dir, cutoff)
+        check_bundled_run(run_dir, layout, workflow="cpi")
     except (NipatError, OSError) as exc:
         print(f"Verifica CPI fallita: {exc}", file=sys.stderr)
         return 1

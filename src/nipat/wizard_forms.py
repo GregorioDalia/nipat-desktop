@@ -98,9 +98,11 @@ class WorkflowForm:
 
     TITLES = {"1": "DNPcall", "2": "SNPcall", "3": "Contamination", "4": "CPI"}
 
-    def __init__(self, choice: str, ui: Any, layout: ProjectLayout, err_const: float):
+    def __init__(self, choice: str, ui: Any, layout: ProjectLayout, err_const: float,
+                 *, defaults: dict[str, Any] | None = None):
         self.choice, self.ui, self.layout, self.err_const = choice, ui, layout, err_const
-        self.values: dict[str, Any] = {}
+        # Saved defaults are proposed and validated again when each field is read.
+        self.values: dict[str, Any] = dict(defaults or {})
 
     @property
     def title(self) -> str:
@@ -263,12 +265,26 @@ class WorkflowForm:
             while True:
                 action = navigation(self.ui.menu("Elenco gia' inserito", [
                     ("1", "Mantieni", ""), ("2", "Sostituisci", ""),
-                    ("3", "Aggiungi", ""), ("0", "Indietro", ""),
-                ], default="1"))
+                    ("3", "Aggiungi", ""),
+                ] + ([("4", "Rimuovi il valore predefinito", "")] if not field.required else [])
+                  + [("0", "Indietro", "")], default="1"))
                 if action == "0":
                     raise Back
                 if action == "1":
+                    try:
+                        for item in current:
+                            if field.kind == "cutoffs":
+                                self._file(Field("cutoff_file", "File cutoff", "file",
+                                                 check=read_position_panel), str(item[1]))
+                            else:
+                                self._file(field, str(item))
+                    except (ValidationError, OSError, ValueError, csv.Error) as exc:
+                        self.ui.message(str(exc), kind="error")
+                        self.ui.message("Sostituire l'elenco per correggere i percorsi non disponibili.", kind="muted")
+                        continue
                     return current
+                if action == "4" and not field.required:
+                    return []
                 if action in {"2", "3"}:
                     current = [] if action == "2" else current
                     break
@@ -278,11 +294,14 @@ class WorkflowForm:
                 if current:
                     self.ui.message(f"Elementi inseriti: {len(current)}. Aggiungerne un altro oppure premere Invio senza testo per continuare.", kind="muted")
                 else:
-                    self.ui.message("Inserire il primo elemento per iniziare la lista. Invio senza testo mantiene aperto questo passaggio.", kind="muted")
+                    self.ui.message("Inserire il primo elemento per iniziare la lista. Invio senza testo mantiene aperto questo passaggio."
+                                    if field.required else "Inserire il primo elemento oppure premere Invio per non salvare un elenco predefinito.", kind="muted")
                 if field.kind == "cutoffs":
                     label = navigation(self.ui.prompt("Altra etichetta cutoff (Invio per continuare)" if current else "Prima etichetta cutoff"))
+                    if label.casefold() == ":vuoto" and not field.required:
+                        return []
                     if not label:
-                        if current:
+                        if current or not field.required:
                             return current
                         continue
                     if any(c in label for c in ",=") or any(ord(c) < 32 for c in label):
@@ -325,7 +344,7 @@ class WorkflowForm:
                     return answer
                 answer = self._text(field, default)
                 if field.kind == "file":
-                    return self._file(field, answer)
+                    return self._file(field, answer) if answer or field.required else None
                 if field.kind == "directory":
                     return require_directory(Path(unquote(answer)), field.label)
                 if field.kind == "number":
@@ -412,7 +431,7 @@ class WorkflowForm:
                 ("1", "Prepara dry-run" if dry_run else "Avvia analisi", "Con i valori mostrati"),
                 ("2", "Modifica un campo", "Gli altri valori vengono conservati"),
                 ("0", "Annulla", "Torna al menu senza avviare"),
-            ], default="1")
+            ], default="0")
             if choice in {"0", ":annulla", ":indietro"}:
                 return False
             if choice == "1":

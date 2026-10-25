@@ -16,14 +16,15 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
 function New-TestManifest {
     $assets = [ordered]@{}
     foreach ($name in @('rootfs', 'scientific_image')) {
-        $file = $name + '-0.4.1.tar.gz'
+        $file = $name + '-0.6.0.tar.gz'
         $assets[$name] = [ordered]@{
             file = $file; sha256 = ('b' * 64); size = 123
-            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/' + $file)
+            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.6.0/' + $file)
         }
     }
     return [ordered]@{
-        schema_version = 1; version = '0.4.1'; release_tag = 'v0.4.1'
+        schema_version = 1; version = '0.6.0'; release_tag = 'v0.6.0'
+        installation_profile = (Get-NipatInstallationProfile)
         source_commit = ('a' * 40); runtime_image = ('sha256:' + ('c' * 64)); assets = $assets
     }
 }
@@ -32,19 +33,81 @@ try {
     $manifest = New-TestManifest
     Write-NipatJsonAtomic $manifestPath $manifest
     $parsed = Read-NipatInstallerManifest $manifestPath
-    Assert-Test ($parsed.release_tag -eq 'v0.4.1') 'accept valid release manifest'
-    $manifest = New-TestManifest
-    $manifest.version = '0.3.0a1'
-    $manifest.release_tag = 'v0.3.0a1'
-    foreach ($name in @('rootfs', 'scientific_image')) {
-        $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.4.1', '0.3.0a1')
-        $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.4.1', '0.3.0a1')
+    Assert-Test ($parsed.release_tag -eq 'v0.6.0') 'accept valid release manifest'
+    $profile = Get-NipatInstallationProfile
+    Assert-Test ($profile.app_dir_name -cne 'NIPAT' -and $profile.data_dir_name -cne 'NIPAT' -and
+        $profile.resume_key -cne 'NIPAT-ResumeSetup' -and $profile.distro_prefix -cne 'NIPAT-Runtime-') 'candidate identities differ from stable'
+    Assert-Test ($profile.app_dir_name -cne 'NIPAT-0.5-Preview' -and $profile.data_dir_name -cne 'NIPAT-0.5-Preview' -and
+        $profile.resume_key -cne 'NIPAT-05-Preview-ResumeSetup' -and $profile.distro_prefix -cne 'NIPAT-05-Preview-' -and
+        $profile.app_id -cne '9E27D451-67B5-4D28-B388-A41CFE2F7D05') 'Desktop identities differ from the retained 0.5 Preview'
+    foreach ($field in @('channel', 'app_dir_name', 'data_dir_name', 'distro_prefix', 'resume_key', 'mutex_prefix', 'app_id')) {
+        $manifest = New-TestManifest
+        $manifest.installation_profile.$field = 'stable'
+        Write-NipatJsonAtomic $manifestPath $manifest
+        Assert-Rejected { Read-NipatInstallerManifest $manifestPath } "reject foreign installation profile $field"
     }
+    foreach ($badSchema in @('1', $true)) {
+        $manifest = New-TestManifest
+        $manifest.installation_profile.schema_version = $badSchema
+        Write-NipatJsonAtomic $manifestPath $manifest
+        Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject coerced profile schema version'
+    }
+    $manifest = New-TestManifest
+    $manifest.Remove('installation_profile')
     Write-NipatJsonAtomic $manifestPath $manifest
-    Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject unsupported version even with consistent tag and asset URLs'
+    Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject old manifest with no installation channel'
+
+    # Only the registry boundary is simulated; command generation and the keys are production code.
+    $resumeValues = @{
+        'NIPAT-ResumeSetup' = 'stable resume sentinel'
+        'NIPAT-05-Preview-ResumeSetup' = 'preview resume sentinel'
+    }
+    $registryKey = New-Object PSObject
+    $registryKey | Add-Member -MemberType ScriptMethod -Name SetValue -Value {
+        param($Name, $Value, $Kind)
+        $script:resumeValues[$Name] = $Value
+    }
+    $registryKey | Add-Member -MemberType ScriptMethod -Name DeleteValue -Value {
+        param($Name, $ThrowOnMissing)
+        $script:resumeValues.Remove($Name)
+    }
+    $registryKey | Add-Member -MemberType ScriptMethod -Name Dispose -Value {}
+    $openRegistry = (Get-Command Open-NipatResumeRegistry).ScriptBlock
+    function Open-NipatResumeRegistry([switch] $Create) { return $script:registryKey }
+    $oldLocalAppData = $env:LOCALAPPDATA
+    try {
+        # A short nonexistent location keeps RunOnce below its Windows length limit. No files are written there.
+        $env:LOCALAPPDATA = 'C:\NipatResumeTest'
+        $candidateProject = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') $profile.app_dir_name
+        Assert-NipatInstallationLocation $candidateProject
+        Assert-Rejected { Assert-NipatInstallationLocation (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'NIPAT') } 'bootstrap rejects stable app folder before writes'
+        Assert-Rejected { Assert-NipatInstallationLocation (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'NIPAT-0.5-Preview') } 'bootstrap rejects the Preview app folder before writes'
+        Assert-Test (Register-NipatResume $candidateProject) 'candidate resume registration succeeds'
+        Assert-Test ($resumeValues[$profile.resume_key].Contains($candidateProject)) 'candidate resume points to candidate app'
+        Assert-Test ($resumeValues['NIPAT-ResumeSetup'] -ceq 'stable resume sentinel') 'register preserves stable pending resume'
+        Assert-Test ($resumeValues['NIPAT-05-Preview-ResumeSetup'] -ceq 'preview resume sentinel') 'register preserves Preview pending resume'
+        Unregister-NipatResume
+        Assert-Test (-not $resumeValues.ContainsKey($profile.resume_key) -and
+            $resumeValues['NIPAT-ResumeSetup'] -ceq 'stable resume sentinel' -and
+            $resumeValues['NIPAT-05-Preview-ResumeSetup'] -ceq 'preview resume sentinel') 'unregister removes only candidate pending resume'
+    } finally {
+        $env:LOCALAPPDATA = $oldLocalAppData
+        Set-Item -Path Function:Open-NipatResumeRegistry -Value $openRegistry
+    }
+    foreach ($unsupportedVersion in @('0.3.0a1', '0.5.0a1', '0.6.1')) {
+        $manifest = New-TestManifest
+        $manifest.version = $unsupportedVersion
+        $manifest.release_tag = 'v' + $unsupportedVersion
+        foreach ($name in @('rootfs', 'scientific_image')) {
+            $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.6.0', $unsupportedVersion)
+            $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.6.0', $unsupportedVersion)
+        }
+        Write-NipatJsonAtomic $manifestPath $manifest
+        Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject unsupported version even with consistent tag and asset URLs'
+    }
     foreach ($url in @('https://example.org/rootfs.tar.gz',
-        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.4.1/rootfs-0.4.1.tar.gz?redirect=1',
-        'https://github.com/other/repo/releases/download/v0.4.1/rootfs-0.4.1.tar.gz')) {
+        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.6.0/rootfs-0.6.0.tar.gz?redirect=1',
+        'https://github.com/other/repo/releases/download/v0.6.0/rootfs-0.6.0.tar.gz')) {
         $manifest = New-TestManifest
         $manifest.assets.rootfs.url = $url
         Write-NipatJsonAtomic $manifestPath $manifest

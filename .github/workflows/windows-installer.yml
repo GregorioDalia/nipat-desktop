@@ -1,29 +1,17 @@
-name: Windows installer (review build)
+name: Installers (review build)
 
 on:
-  # The stable CI gate runs on every PR. Large installer builds are reviewed
-  # only for packaging/runtime changes, or requested explicitly for a release.
-  pull_request:
-    paths:
-      - 'installer/**'
-      - 'docker/**'
-      - 'scripts/windows/**'
-      - 'scripts/build_*'
-      - 'distribution-files.txt'
-      - 'compose.yaml'
-      - 'pyproject.toml'
-      - 'src/nipat/__init__.py'
-      - '.dockerignore'
-      - '.github/workflows/windows-installer.yml'
-      - '.github/scripts/**'
+  # Installer candidates are explicit, expensive review builds. Ordinary pushes
+  # and PRs run CI without generating or publishing new installers.
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: windows-installer-${{ github.ref }}
-  cancel-in-progress: true
+  # Each requested candidate has its own identity and is never cancelled by a push.
+  group: installers-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   windows-checks:
@@ -46,43 +34,12 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
-      - name: Windows Python unit tests
-        run: python -m unittest discover -s tests -v
-      - name: Parse scripts with Windows PowerShell 5.1
+      - name: Record the exact checkout identity
+        id: source
+        run: python .github/scripts/ci_control.py source
+      - name: Run shared Windows unit, installer and launcher checks
         shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
-          }
-      - name: Test bootstrap guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
-      - name: Test scientific image identity with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
-      - name: Test Docker Desktop archive import guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-runtime.ps1
-      - name: Test single-click Docker preparation with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/test-portable-bootstrap.ps1
-      - name: Test resumable WSL migration with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
-      - name: Compile the shared NIPAT executable
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/launcher/NIPAT.exe')
-          if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
-      - name: Test the shared executable with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
+        run: ./.github/scripts/check_windows.ps1
       - name: Retain the tested shared launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -107,10 +64,15 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
+      - name: Record the exact checkout identity
+        id: source
+        run: python .github/scripts/ci_control.py source
       - name: Python unit tests
         run: python -m unittest discover -s tests -v
-      - name: Release package guard tests
-        run: python -m unittest discover -s .github/scripts -p 'test_publish_windows_release.py' -v
+      - name: CI selection, release and installer-set guard tests
+        run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Validate local documentation links and anchors
+        run: python .github/scripts/check_docs.py
       - name: Check dedicated daemon helper syntax
         run: bash -n installer/runtime/nipat-engine
       - name: Set up Buildx
@@ -127,6 +89,13 @@ jobs:
           provenance: false
           cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
           cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
+      - name: Verify bundled scientific scripts without host sources
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-engine-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Scientific regression and input-mode checks
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
@@ -142,7 +111,7 @@ jobs:
           file: installer/runtime/Dockerfile
           platforms: linux/amd64
           tags: nipat-wsl-rootfs:installer-test
-          build-args: SOURCE_COMMIT=${{ github.sha }}
+          build-args: SOURCE_COMMIT=${{ steps.source.outputs.source_commit }}
           load: true
           pull: true
           provenance: false
@@ -193,13 +162,14 @@ jobs:
           path: |
             ${{ runner.temp }}/nipat-validation/runs/**/run.json
             ${{ runner.temp }}/nipat-validation/runs/**/execution.log
+            ${{ runner.temp }}/nipat-engine-check/
           retention-days: 14
           if-no-files-found: ignore
 
   windows-installer:
     needs: [linux-runtime, windows-checks]
     runs-on: windows-2022
-    # Both self-contained EXEs embed the same scientific archive; allow for both builds/uploads.
+    # The installer embeds the scientific archive and dedicated WSL filesystem.
     timeout-minutes: 45
     env:
       PYTHONPATH: src
@@ -222,7 +192,7 @@ jobs:
         with:
           name: nipat-installer-inputs
           path: build/windows-installer
-      - name: Download exact runtime archives for both distributions
+      - name: Download exact runtime archives for the self-contained installer
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nipat-runtime-assets
@@ -232,27 +202,6 @@ jobs:
         with:
           name: nipat-tested-launcher
           path: build/windows-installer/app
-      - name: Package Docker Desktop with the same launcher and scientific archive
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $manifest = Get-Content -LiteralPath 'build/assets/installer-manifest.json' -Raw -Encoding UTF8 | ConvertFrom-Json
-          $output = Join-Path $PWD 'build/docker-desktop'
-          $zipName = "NIPAT-DockerDesktop-$($manifest.version)-windows-x64.zip"
-          $zip = Join-Path $output $zipName
-          $launcher = Join-Path $PWD 'build/windows-installer/app/NIPAT.exe'
-          $pythonZip = Join-Path $PWD 'build/windows-installer/app/.distribution/python-3.12.10-embed-amd64.zip'
-          $runtime = Join-Path (Join-Path $PWD 'build/assets') $manifest.assets.scientific_image.file
-          python scripts/build_validation_bundle.py --output $zip --python-archive $pythonZip `
-            --launcher $launcher --runtime-archive $runtime --runtime-manifest 'build/assets/installer-manifest.json'
-          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop package creation failed.' }
-          $record = [ordered]@{
-            schema_version = 1; version = $manifest.version; source_commit = $manifest.source_commit
-            file = $zipName; sha256 = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-            size = (Get-Item -LiteralPath $zip).Length
-            launcher_sha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
-          }
-          [IO.File]::WriteAllText((Join-Path $output 'package-build.json'), ($record | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
       - name: Compile the narrowly scoped WSL elevation helper
         shell: powershell
         run: |
@@ -264,20 +213,16 @@ jobs:
           & $compiler /nologo /target:exe /platform:x64 "/win32manifest:$manifest" "/out:$target" $source
           if ($LASTEXITCODE -ne 0) { throw 'WSL helper compilation failed.' }
           if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'WSL helper was not written into the installer stage.' }
+      - name: Record the application payload for safe reinstall and repair
+        shell: powershell
+        run: |
+          python scripts/build_windows_installer_assets.py inventory --stage-dir build/windows-installer
+          if ($LASTEXITCODE -ne 0) { throw 'Application payload inventory failed.' }
       - name: Install verified Inno Setup compiler
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $download = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
-          Invoke-WebRequest -UseBasicParsing 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $download
-          $signature = Get-AuthenticodeSignature -LiteralPath $download
-          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)CN=Pyrsys B\.V\.(?:,|$)') {
-            throw 'Inno Setup Authenticode signature or publisher is invalid.'
-          }
-          $inno = Join-Path $env:RUNNER_TEMP 'InnoSetup'
-          $process = Start-Process -FilePath $download -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$inno`"")
-          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
-          "NIPAT_ISCC=$inno\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $compiler = & ./.github/scripts/install_inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'InnoSetup')
+          "NIPAT_ISCC=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Compile the self-contained installer with verified embedded runtimes
         shell: powershell
         run: |
@@ -290,16 +235,20 @@ jobs:
           python scripts/build_windows_installer_assets.py verify-embedded `
             --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
           if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs do not match the trusted manifest.' }
+          python scripts/build_windows_installer_assets.py verify-inventory --stage-dir $stage
+          if ($LASTEXITCODE -ne 0) { throw 'Application payload does not match its inventory.' }
           & $env:NIPAT_ISCC "/DStageDir=$stage" "/DRuntimeAssetsDir=$assets" "/DOutputDir=$output" $script
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           python scripts/build_windows_installer_assets.py verify-embedded `
             --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
           if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs changed during compilation.' }
+          python scripts/build_windows_installer_assets.py verify-inventory --stage-dir $stage
+          if ($LASTEXITCODE -ne 0) { throw 'Application payload changed during compilation.' }
           if (@(Get-ChildItem -LiteralPath $output -Filter '*.bin' -File).Count -ne 0) {
             throw 'The installer must be a single EXE without companion data files.'
           }
           Copy-Item "$stage/app/.distribution/installer-manifest.json" $output
-          # Retained as build evidence to bind both packages to the same launcher.
+          # Retained as build evidence for the tested launcher embedded in the installer.
           Copy-Item "$stage/app/NIPAT.exe" $output
           $exe = Join-Path $output 'NIPAT-Setup.exe'
           $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -319,30 +268,11 @@ jobs:
             installer_manifest_sha256 = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
             launcher_sha256 = (Get-FileHash -LiteralPath "$stage/app/NIPAT.exe" -Algorithm SHA256).Hash.ToLowerInvariant()
             embedded_assets = $embedded
+            installation_profile = $manifest.installation_profile
           }
           [IO.File]::WriteAllText((Join-Path $output 'installer-build.json'), ($record | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding($false)))
           "$hash  NIPAT-Setup.exe" | Set-Content -LiteralPath "$output/SHA256SUMS" -Encoding ascii
-      - name: Compile the single-file Docker Desktop installer from the verified bundle
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $manifest = Get-Content -LiteralPath 'build/assets/installer-manifest.json' -Raw -Encoding UTF8 | ConvertFrom-Json
-          $output = (Resolve-Path 'build/docker-desktop').Path
-          $package = Join-Path $output "NIPAT-DockerDesktop-$($manifest.version)-windows-x64.zip"
-          $launcher = (Resolve-Path 'build/windows-installer/app/NIPAT.exe').Path
-          $stage = Join-Path $PWD 'build/docker-installer-stage'
-          $inputs = @('--package', $package, '--manifest', 'build/assets/installer-manifest.json',
-                      '--launcher', $launcher, '--stage-dir', $stage)
-          python scripts/build_docker_installer.py stage @inputs
-          if ($LASTEXITCODE -ne 0) { throw 'Docker installer staging failed verification.' }
-          # Compile the exact recipe whose source hash was verified in the bundle.
-          $script = Join-Path $stage 'app/installer/windows/NIPAT-DockerDesktop.iss'
-          & $env:NIPAT_ISCC "/DStageDir=$stage" "/DOutputDir=$output" $script
-          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop Inno Setup compilation failed.' }
-          # Recheck all source/archive bytes and produce the final EXE binding.
-          python scripts/build_docker_installer.py record @inputs --output-dir $output
-          if ($LASTEXITCODE -ne 0) { throw 'Docker Desktop installer identity verification failed.' }
-      - name: Verify both final packages without publishing
+      - name: Verify the final WSL package without publishing
         shell: powershell
         run: |
           @'
@@ -354,9 +284,8 @@ jobs:
           spec.loader.exec_module(publisher)
           manifest = json.loads(Path("build/assets/installer-manifest.json").read_text())
           publisher.prepare_assets(Path("build/output"), Path("build/assets"),
-                                   Path("build/verified-release"), manifest["source_commit"],
-                                   desktop=Path("build/docker-desktop"))
-          print("PASS: WSL and Docker Desktop packages identify the same source, launcher and scientific archive.")
+                                   Path("build/verified-release"), manifest["source_commit"])
+          print("PASS: WSL installer identifies the verified source, installation profile, launcher and runtime archives.")
           '@ | python -
           if ($LASTEXITCODE -ne 0) { throw 'Final distribution verification failed.' }
       - name: Retain installer for review (no release publication)
@@ -367,11 +296,162 @@ jobs:
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Retain Docker Desktop installer and internal package evidence (no release publication)
+
+  linux-installer:
+    needs: linux-runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Download the exact runtime archives used by Windows
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-runtime-assets
+          path: build/assets
+      - name: Build the self-contained Ubuntu package
+        run: |
+          python scripts/build_linux_installer.py \
+            --manifest build/assets/installer-manifest.json \
+            --output-dir build/linux-output
+      - name: Install with missing dependencies in a clean Ubuntu container
+        # No host Docker socket or writable mount is exposed to the container.
+        # This verifies APT resolution, not a fresh Ubuntu Desktop installation.
+        run: |
+          package=(build/linux-output/*.deb)
+          test "${#package[@]}" -eq 1
+          python scripts/verify_linux_dependencies.py \
+            --package "${package[0]}" \
+            --manifest build/assets/installer-manifest.json \
+            --output build/linux-output/linux-dependency-check.json
+      - name: Install and exercise the package as a non-root user
+        # The runner already has Docker access. This is not a clean Ubuntu Desktop test.
+        run: |
+          package=(build/linux-output/*.deb)
+          test "${#package[@]}" -eq 1
+          python scripts/verify_linux_installer.py \
+            --package "${package[0]}" \
+            --manifest build/assets/installer-manifest.json \
+            --work-dir "$RUNNER_TEMP/NIPAT Linux installation check" \
+            --output build/linux-output/linux-installation-check.json \
+            --system-package-test
+      - name: Retain the Ubuntu package and installation evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: nipat-docker-desktop
-          path: build/docker-desktop/
+          name: nipat-linux-setup
+          path: build/linux-output/
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
+      - name: Retain Linux installation and scientific diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-linux-installation-logs
+          path: |
+            build/linux-output/linux-dependency-check.json
+            build/linux-output/linux-installation-check.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/setup.log
+            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/state.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/run.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/execution.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+  installer-required:
+    if: always()
+    needs: [windows-installer, linux-installer]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require both installer checks
+        env:
+          CHECK_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          results = json.loads(os.environ["CHECK_RESULTS"])
+          failed = {name: job["result"] for name, job in results.items() if job["result"] != "success"}
+          if failed:
+              raise SystemExit(f"Both installers must pass: {failed}")
+          PY
+      - name: Checkout exact source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Record the exact checkout identity
+        id: source
+        run: python .github/scripts/ci_control.py source
+      - name: Download the verified Windows installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-windows-setup
+          path: build/windows-output
+      - name: Download the verified Linux installer
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-linux-setup
+          path: build/linux-output
+      - name: Download the shared runtime identity
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-runtime-assets
+          path: build/assets
+      - name: Verify both installers identify the same source and scientific archive
+        run: |
+          python .github/scripts/verify_installer_set.py \
+            --windows-dir build/windows-output --linux-dir build/linux-output \
+            --assets-dir build/assets --output-dir build/verified-installers \
+            --source-commit "$(git rev-parse HEAD)"
+      - name: Retain the installer-set verification without publishing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-installer-set-evidence
+          path: build/verified-installers/
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
+      - name: Provide the verified Windows setup as one downloadable file
+        id: windows-download
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: build/windows-output/NIPAT-Setup.exe
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Summarize the Windows preview download
+        env:
+          WINDOWS_SETUP_URL: ${{ steps.windows-download.outputs.artifact-url }}
+          WINDOWS_SETUP_SHA256: ${{ steps.windows-download.outputs.artifact-digest }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          setup_hash = os.environ["WINDOWS_SETUP_SHA256"]
+          # The unarchived upload must identify the same bytes as the reviewed setup.
+          with Path("build/windows-output/NIPAT-Setup.exe").open("rb") as installer:
+              expected = hashlib.file_digest(installer, "sha256").hexdigest()
+          if setup_hash != expected:
+              raise SystemExit("Direct Windows download differs from the verified installer")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Windows Preview download\n\n")
+              summary.write(f"[Download NIPAT-Setup.exe]({os.environ['WINDOWS_SETUP_URL']})\n\n")
+              summary.write("One self-contained installer; no ZIP extraction or separate runtime downloads. ")
+              summary.write("Sign in to GitHub to download. Available for 14 days.\n\n")
+              summary.write(f"SHA-256: `{setup_hash}`\n\n")
+              summary.write("Internal unsigned candidate. This build is not a published or accepted release.\n")
+          PY

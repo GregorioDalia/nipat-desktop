@@ -7,11 +7,12 @@ import re
 import subprocess
 
 
-SCIENTIFIC_PREFIXES = ("src/", "scientific/", "docker/", "tests/fixtures/")
+SCIENTIFIC_PREFIXES = ("src/", "scientific/", "docker/", "engine/", "tests/")
 SCIENTIFIC_FILES = {
     "compose.yaml", "pyproject.toml", ".dockerignore",
     ".github/workflows/ci.yml", ".github/workflows/windows-installer.yml",
     ".github/scripts/ci_changes.py", ".github/scripts/test_ci_changes.py",
+    ".github/scripts/ci_control.py", ".github/scripts/test_ci_control.py",
 }
 
 

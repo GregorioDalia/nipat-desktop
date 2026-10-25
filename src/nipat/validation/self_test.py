@@ -11,6 +11,7 @@ from pathlib import Path
 
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
+from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
 
 
@@ -70,23 +71,11 @@ def run_snp_example(layout: ProjectLayout, run_name: str | None = None) -> Path:
     for path in inputs:
         if not path.is_file():
             raise ValidationError(f"File di esempio mancante: {path}")
-    run_dir = layout.new_run_dir("snp-example", run_name)
+    run_dir = Workflows(layout, DockerComposeRunner(layout)).snp_call(
+        pileup=inputs[0], panel=inputs[1], run_name=run_name,
+    )
     output = run_dir / "output" / "SNPcall_output.txt"
-    runner = DockerComposeRunner(layout)
-    with runner.record_run(
-        run_dir, workflow="snp-example", inputs=inputs,
-        parameters={"reference_comparison": "bundled SNPcall examples/output.txt"},
-    ):
-        runner.run(
-            [
-                "Rscript", layout.container_path(source / "SNPcall.R"),
-                "--pileup", layout.container_path(inputs[0]),
-                "--snplist", layout.container_path(inputs[1]),
-                "--out", layout.container_path(output),
-            ],
-            working_dir=layout.container_path(run_dir / "work"),
-        )
-        rows = compare_snp_outputs(inputs[2], output)
+    rows = compare_snp_outputs(inputs[2], output)
     print(f"Verifica SNPcall superata: {rows} righe corrispondono al riferimento.")
     print(f"Risultati del test: {run_dir}")
     return run_dir
@@ -123,4 +112,4 @@ def run_self_tests(layout: ProjectLayout) -> None:
                 f"Autotest {label} non superato. Consultare l'errore e i run appena creati."
             ) from exc
     print("\nAutotest superati: esempi numerici, percorsi esterni e modalità di input.")
-    print("DNPcall da BAM e validazione su campioni reali richiedono le prove di dominio.")
+    print("Questo autotest non include DNPcall da BAM; le prove su campioni reali restano necessarie.")

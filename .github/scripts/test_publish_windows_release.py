@@ -1,13 +1,14 @@
 import copy
-import gzip
 import hashlib
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
-import struct
 import tempfile
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location("publisher", Path(__file__).with_name("publish_windows_release.py"))
@@ -25,7 +26,11 @@ class ReleaseGuards(unittest.TestCase):
         self.runtime = self.root / "runtime"
         self.setup.mkdir()
         self.runtime.mkdir()
-        self.sources = {"distribution-files.txt": b"distribution-files.txt\nREADME.md\n", "README.md": b"approved\n"}
+        self.sources = {
+            "distribution-files.txt": b"distribution-files.txt\nREADME.md\npyproject.toml\n",
+            "README.md": b"approved\n",
+            "pyproject.toml": b'[project]\nversion = "0.3.0a1"\n',
+        }
         self.manifest = {
             "schema_version": 1, "version": "0.3.0a1", "release_tag": "v0.3.0a1", "source_commit": COMMIT,
             "rootfs_provenance": {"source_commit": COMMIT},
@@ -52,21 +57,28 @@ class ReleaseGuards(unittest.TestCase):
         return publisher.prepare_assets(self.setup, self.runtime, self.root / "release", COMMIT,
                                         read_source=lambda commit, name: self.sources[name], desktop=desktop)
 
-    def make_dual_package(self, version="0.4.0"):
+    def make_wsl_package(self, version):
         self.manifest["version"] = version
         self.manifest["release_tag"] = f"v{version}"
         self.manifest["runtime_image"] = "sha256:" + "b" * 64
+        self.sources["pyproject.toml"] = f'[project]\nversion = "{version}"\n'.encode()
+        self.manifest["source_sha256"]["pyproject.toml"] = hashlib.sha256(
+            self.sources["pyproject.toml"]).hexdigest()
         for entry in self.manifest["assets"].values():
             old = entry["file"]
             entry["file"] = old.replace("0.3.0a1", version)
             entry["url"] = entry["url"].replace("0.3.0a1", version)
             (self.runtime / old).rename(self.runtime / entry["file"])
         self.write_manifests()
+        (self.setup / "NIPAT.exe").write_bytes(b"MZ launcher fixture")
+        self.write_installer_evidence()
+
+    def make_dual_package(self, version="0.4.0"):
+        self.make_wsl_package(version)
         self.desktop = self.root / "desktop"
         self.desktop.mkdir()
         self.package_name = f"NIPAT-DockerDesktop-{version}-windows-x64.zip"
-        launcher = b"MZ launcher fixture"
-        (self.setup / "NIPAT.exe").write_bytes(launcher)
+        launcher = (self.setup / "NIPAT.exe").read_bytes()
         python_archive = b"portable Python fixture"
         python_hash = hashlib.sha256(python_archive).hexdigest()
         pin = patch.object(publisher, "PYTHON_SHA256", python_hash)
@@ -122,7 +134,20 @@ class ReleaseGuards(unittest.TestCase):
                 for key in ("rootfs", "scientific_image")
             },
         }
+        if "installation_profile" in self.manifest:
+            evidence["installation_profile"] = self.manifest["installation_profile"]
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    def make_desktop_package(self):
+        profile_path = Path(__file__).resolve().parents[2] / publisher.INSTALLATION_PROFILE_SOURCE
+        profile_bytes = profile_path.read_bytes()
+        self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = profile_bytes
+        self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
+        self.manifest["source_sha256"] = {
+            name: hashlib.sha256(content).hexdigest() for name, content in self.sources.items()
+        }
+        self.manifest["installation_profile"] = json.loads(profile_bytes)
+        self.make_wsl_package("0.6.0")
 
     def make_docker_installer(self):
         self.make_dual_package("0.4.1")
@@ -149,6 +174,208 @@ class ReleaseGuards(unittest.TestCase):
             "staged_files_sha256": staged_hashes,
         }
         (self.desktop / "docker-installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
+
+    def joint_fixture(self):
+        self.make_desktop_package()
+        linux = self.root / "linux"
+        evidence = self.root / "pair"
+        linux.mkdir()
+        evidence.mkdir()
+        package = linux / "nipat-desktop_0.6.0_amd64.deb"
+        package.write_bytes(b"deb fixture; actual package validation is covered by builder tests")
+        for name in ("linux-installer-build.json", "linux-installation-check.json", "linux-dependency-check.json"):
+            (linux / name).write_text("{}")
+        actual = {
+            "schema_version": 1, "version": "0.6.0", "source_commit": COMMIT,
+            "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
+            "scientific_archive": self.manifest["assets"]["scientific_image"],
+            "windows": {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(self.setup / "NIPAT-Setup.exe")},
+            "linux": {"file": package.name, "sha256": publisher.sha256(package)},
+            "publication_authorized": False,
+        }
+        (evidence / "installer-set-check.json").write_text(json.dumps(actual))
+        validator = publisher.load_module("acceptance_fixture", Path(__file__).with_name("release_acceptance.py"))
+        record = validator.template(actual, 123)
+        record["decision"] = "accepted"
+        for test in record["tests"].values():
+            test.update(result="passed", tester="Test operator", tested_at="2026-01-01T12:00:00Z",
+                        evidence=["https://github.com/example/repository/issues/1"])
+        return linux, evidence, actual, validator, record
+
+    def prepare_joint(self, linux, evidence, actual, validator, record):
+        calls = []
+        def verify_set(*args, **kwargs):
+            calls.append((args, kwargs))
+            return actual
+        original = publisher.prepare_assets
+        def prepare(*args, **kwargs):
+            return original(*args, **kwargs, read_source=lambda commit, name: self.sources[name])
+        with patch.object(publisher, "load_module", side_effect=lambda name, path:
+                          validator if path.name == "release_acceptance.py" else SimpleNamespace(verify_set=verify_set)), \
+                patch.object(publisher, "prepare_assets", side_effect=prepare):
+            result = publisher.prepare_installer_set(
+                self.setup, self.runtime, linux, evidence, self.root / "release", COMMIT,
+                record, json.dumps(record).encode(), 123, "b" * 40, self.root / "exact-built-source")
+        return result, calls
+
+    def test_joint_assets_require_fresh_verification_and_publish_both_packages_and_evidence(self):
+        parts = self.joint_fixture()
+        result, calls = self.prepare_joint(*parts)
+        self.assertEqual(result["version"], "0.6.0")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], {"project": self.root / "exact-built-source"})
+        digests = publisher.checksums(self.root / "release/SHA256SUMS")
+        self.assertIn("NIPAT-Setup.exe", digests)
+        self.assertIn(parts[2]["linux"]["file"], digests)
+        for name in ("installer-set-check.json", "desktop-acceptance.json", "linux-dependency-check.json",
+                     "linux-installation-check.json", "release-provenance.json", "update-manifest.json"):
+            self.assertIn(name, digests)
+            self.assertEqual(publisher.sha256(self.root / "release" / name), digests[name])
+        provenance = json.loads((self.root / "release/release-provenance.json").read_text())
+        self.assertEqual(provenance["source_commit"], COMMIT)
+        self.assertEqual(provenance["publication_commit"], "b" * 40)
+        self.assertFalse(any("DockerDesktop" in name for name in digests))
+        update = json.loads((self.root / "release/update-manifest.json").read_text())
+        self.assertEqual(update["product"], "nipat-desktop")
+        self.assertEqual(update["channel"], "testing")
+        self.assertEqual(update["source_commit"], COMMIT)
+        self.assertEqual(update["minimum_updater_version"], 1)
+        self.assertEqual({asset["platform"] for asset in update["assets"]},
+                         {"windows-x86_64", "linux-x86_64"})
+        for asset in update["assets"]:
+            self.assertEqual(asset["sha256"], digests[asset["name"]])
+            self.assertEqual(asset["size"], (self.root / "release" / asset["name"]).stat().st_size)
+            self.assertEqual(asset["url"],
+                f"https://github.com/{publisher.REPO}/releases/download/v0.6.0/{asset['name']}")
+
+    def test_update_manifest_rejects_replaced_package_after_pair_verification(self):
+        parts = self.joint_fixture()
+        self.prepare_joint(*parts)
+        (self.root / "release/NIPAT-Setup.exe").write_bytes(b"different installer")
+        with self.assertRaisesRegex(ValueError, "differs from the accepted build"):
+            publisher.write_update_manifest(self.root / "release", self.manifest, parts[2], "testing")
+
+    def test_update_manifest_requires_both_matching_source_and_installer_name(self):
+        parts = self.joint_fixture()
+        self.prepare_joint(*parts)
+        for field, value in (("source_commit", "f" * 40), ("version", "0.7.0")):
+            altered = copy.deepcopy(parts[2])
+            altered[field] = value
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "source differs"):
+                publisher.write_update_manifest(self.root / "release", self.manifest, altered, "testing")
+        altered = copy.deepcopy(parts[2])
+        altered["linux"]["file"] = "../foreign.deb"
+        with self.assertRaisesRegex(ValueError, "filename"):
+            publisher.write_update_manifest(self.root / "release", self.manifest, altered, "testing")
+
+    def test_joint_assets_reject_changed_pair_record_before_staging(self):
+        parts = self.joint_fixture()
+        (parts[1] / "installer-set-check.json").write_text("{}")
+        with self.assertRaisesRegex(ValueError, "differs from the verified packages"):
+            self.prepare_joint(*parts)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_joint_assets_reject_other_accepted_installer_before_staging(self):
+        parts = self.joint_fixture()
+        parts[-1]["linux_installer_sha256"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "hashes do not identify"):
+            self.prepare_joint(*parts)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_joint_publication_requires_success_of_both_installers_and_pair_check(self):
+        parts = self.joint_fixture()
+        run = {"id": 123, "head_sha": COMMIT, "head_branch": "main", "status": "completed",
+               "conclusion": "success", "event": "workflow_dispatch",
+               "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
+               "head_repository": {"full_name": publisher.REPO}}
+        required = ("windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required")
+        for missing in ("linux-installer", "installer-required"):
+            jobs = {"jobs": [{"name": name, "conclusion": "success"} for name in required if name != missing]}
+            with self.subTest(missing=missing), \
+                    patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                    patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                            "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                    patch.object(publisher.subprocess, "run"), \
+                    patch.object(publisher, "committed_version", return_value="0.6.0"), \
+                    patch.object(publisher, "source_bytes", return_value=json.dumps(parts[-1]).encode()), \
+                    patch.object(publisher, "api", side_effect=[run, jobs]), \
+                    patch.object(publisher, "command", return_value="b" * 40) as command, \
+                    patch.object(publisher, "create_draft") as create:
+                with self.assertRaisesRegex(ValueError, f"Missing successful job: {missing}"):
+                    publisher.main()
+                command.assert_called_once_with("git", "rev-parse", "HEAD")
+                create.assert_not_called()
+
+    def test_invalid_pair_cannot_reach_tag_draft_or_upload_operations(self):
+        parts = self.joint_fixture()
+        run = {"id": 123, "head_sha": COMMIT, "head_branch": "feature/0.6-validation", "status": "completed",
+               "conclusion": "success", "event": "workflow_dispatch",
+               "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
+               "head_repository": {"full_name": publisher.REPO}}
+        jobs = {"jobs": [{"name": name, "conclusion": "success"} for name in (
+            "windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required")]}
+        def command(*args):
+            if args == ("git", "rev-parse", "HEAD"):
+                return "b" * 40
+            self.assertEqual(args[:3], ("gh", "run", "download"))
+            folder = Path(args[-1]) / "nipat-runtime-assets"
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / publisher.MANIFEST).write_text(json.dumps(self.manifest))
+            return ""
+        with patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                        "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                patch.object(publisher.subprocess, "run"), \
+                patch.object(publisher, "committed_version", return_value="0.6.0"), \
+                patch.object(publisher, "source_bytes", return_value=json.dumps(parts[-1]).encode()), \
+                patch.object(publisher, "api", side_effect=[run, jobs]) as api, \
+                patch.object(publisher, "command", side_effect=command), \
+                patch.object(publisher, "extract_build_source"), \
+                patch.object(publisher, "prepare_installer_set", side_effect=ValueError("corrupt pair")), \
+                patch.object(publisher, "create_draft") as create, \
+                patch.object(publisher, "check_tag") as tag:
+            with self.assertRaisesRegex(ValueError, "corrupt pair"):
+                publisher.main()
+        self.assertEqual(api.call_count, 2)  # Run/jobs reads only.
+        create.assert_not_called()
+        tag.assert_not_called()
+
+    def test_publication_requires_manual_main_workflow_before_any_api_or_command(self):
+        for settings in ({}, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/feature/test",
+                              "GITHUB_EVENT_NAME": "workflow_dispatch"},
+                         {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                          "GITHUB_EVENT_NAME": "push"}):
+            with self.subTest(settings=settings), patch.dict(os.environ, settings, clear=True), \
+                    patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                    patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
+                with self.assertRaisesRegex(ValueError, "manual workflow"):
+                    publisher.main()
+                command.assert_not_called()
+                api.assert_not_called()
+
+    def test_source_snapshot_uses_built_commit_when_publication_docs_changed(self):
+        repository = self.root / "git-source"
+        repository.mkdir()
+        def git(*args):
+            return subprocess.check_output(["git", *args], cwd=repository, text=True).strip()
+        git("init", "-q")
+        git("config", "user.email", "test@example.com")
+        git("config", "user.name", "Test")
+        (repository / "README.md").write_text("built documentation")
+        (repository / "distribution-files.txt").write_text("README.md\n")
+        git("add", ".")
+        git("commit", "-qm", "build")
+        built = git("rev-parse", "HEAD")
+        (repository / "README.md").write_text("later publication documentation")
+        git("add", ".")
+        git("commit", "-qm", "acceptance")
+        snapshot = self.root / "snapshot"
+        original = subprocess.run
+        with patch.object(publisher.subprocess, "run", side_effect=lambda *a, **kw:
+                          original(*a, **kw, cwd=repository)):
+            publisher.extract_build_source(built, snapshot)
+        self.assertEqual((snapshot / "README.md").read_text(), "built documentation")
+        self.assertEqual((repository / "README.md").read_text(), "later publication documentation")
 
     def test_combines_both_checksum_lists_without_losing_exe(self):
         self.prepare()
@@ -212,6 +439,169 @@ class ReleaseGuards(unittest.TestCase):
         self.assertNotIn(self.package_name, result)
         self.assertFalse((self.root / "release" / self.package_name).exists())
         self.assertFalse((self.root / "release/docker-installer-build.json").exists())
+
+    def test_desktop_review_accepts_profile_bound_to_source_and_installer(self):
+        self.make_desktop_package()
+        result = self.prepare()
+        self.assertEqual(result["installation_profile"]["channel"], "desktop")
+        evidence = json.loads((self.setup / "installer-build.json").read_text())
+        self.assertEqual(evidence["installation_profile"], result["installation_profile"])
+        assets = publisher.checksums(self.root / "release/SHA256SUMS")
+        self.assertEqual(set(assets), {
+            "NIPAT-Setup.exe", publisher.MANIFEST,
+            "nipat-wsl-rootfs-0.6.0-amd64.tar.gz",
+            "nipat-scientific-runtime-0.6.0-amd64.tar.gz",
+        })
+
+    def test_desktop_rejects_preview_identity_even_when_source_matches(self):
+        self.make_desktop_package()
+        profile = dict(publisher.PREVIEW_INSTALLATION_PROFILE)
+        raw = json.dumps(profile).encode()
+        self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = raw
+        self.manifest["source_sha256"][publisher.INSTALLATION_PROFILE_SOURCE] = hashlib.sha256(raw).hexdigest()
+        self.manifest["installation_profile"] = profile
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "required isolated desktop namespace"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_05_requires_wsl_evidence_independently_of_desktop_delivery(self):
+        for version in ("0.6.0", "0.5.0", "1.0.0"):
+            with self.subTest(version=version):
+                self.assertTrue(publisher.requires_wsl_installer_evidence(version))
+                self.assertFalse(publisher.requires_desktop_bundle(version))
+                self.assertFalse(publisher.requires_desktop_installer(version))
+        self.make_desktop_package()
+        (self.setup / "installer-build.json").unlink()
+        with self.assertRaisesRegex(ValueError, "Missing self-contained installer build evidence"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_desktop_rejects_mixed_wsl_build_inputs_without_desktop(self):
+        self.make_desktop_package()
+        path = self.setup / "installer-build.json"
+        original = json.loads(path.read_text())
+        for field in original:
+            with self.subTest(field=field):
+                evidence = copy.deepcopy(original)
+                evidence[field] = "different build"
+                path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(ValueError, "installer build evidence mismatch"):
+                    self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_desktop_rejects_explicit_or_stray_desktop_deliverables(self):
+        self.make_desktop_package()
+        desktop = self.root / "desktop"
+        desktop.mkdir()
+        with self.assertRaisesRegex(ValueError, "Docker Desktop deliverables are not supported"):
+            self.prepare(desktop=desktop)
+        for folder in (self.setup, self.runtime):
+            for name in ("NIPAT-DockerDesktop-Setup.exe", "NIPAT-DockerDesktop-0.6.0-windows-x64.zip",
+                         "package-build.json", "docker-installer-build.json"):
+                with self.subTest(folder=folder.name, name=name):
+                    path = folder / name
+                    path.write_bytes(b"unexpected delivery")
+                    with self.assertRaisesRegex(ValueError, "Docker Desktop deliverables are not supported"):
+                        self.prepare()
+                    path.unlink()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_desktop_rejects_missing_or_foreign_manifest_profile(self):
+        self.make_desktop_package()
+        original = copy.deepcopy(self.manifest["installation_profile"])
+        for key, value in (("channel", "stable"), ("app_dir_name", "NIPAT"),
+                           ("data_dir_name", "NIPAT"), ("distro_prefix", "NIPAT-Runtime-"),
+                           ("resume_key", "NIPAT-ResumeSetup"), ("schema_version", True)):
+            with self.subTest(field=key):
+                self.manifest["installation_profile"] = dict(original, **{key: value})
+                self.write_manifests()
+                self.write_installer_evidence()
+                with self.assertRaisesRegex(ValueError, "required isolated desktop namespace"):
+                    self.prepare()
+        del self.manifest["installation_profile"]
+        self.write_manifests()
+        with self.assertRaisesRegex(ValueError, "required isolated desktop namespace"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_desktop_rejects_profile_not_bound_to_verified_source(self):
+        self.make_desktop_package()
+        changed = dict(self.manifest["installation_profile"], display_name="Other channel")
+        source = publisher.INSTALLATION_PROFILE_SOURCE
+        self.sources[source] = json.dumps(changed).encode()
+        self.manifest["source_sha256"][source] = hashlib.sha256(self.sources[source]).hexdigest()
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "profile differs from the built commit"):
+            self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_desktop_rejects_profile_omitted_from_source_allowlist(self):
+        self.make_desktop_package()
+        source = publisher.INSTALLATION_PROFILE_SOURCE
+        del self.sources[source]
+        self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
+        self.manifest["source_sha256"] = {
+            name: hashlib.sha256(content).hexdigest() for name, content in self.sources.items()
+        }
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "profile is missing from the verified source list"):
+            self.prepare()
+
+    def test_desktop_rejects_installer_evidence_missing_or_changing_profile(self):
+        self.make_desktop_package()
+        path = self.setup / "installer-build.json"
+        original = json.loads(path.read_text())
+        for mutation in ("missing", "foreign"):
+            with self.subTest(mutation=mutation):
+                evidence = copy.deepcopy(original)
+                if mutation == "missing":
+                    del evidence["installation_profile"]
+                else:
+                    evidence["installation_profile"]["app_dir_name"] = "NIPAT"
+                path.write_text(json.dumps(evidence))
+                with self.assertRaisesRegex(ValueError, "installer build evidence mismatch"):
+                    self.prepare()
+        self.assertFalse((self.root / "release").exists())
+
+    def test_desktop_publication_stops_before_api_without_committed_acceptance(self):
+        with patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
+                patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                        "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                patch.object(publisher.subprocess, "run"), \
+                patch.object(publisher, "committed_version", return_value="0.6.0") as version, \
+                patch.object(publisher, "source_bytes", side_effect=subprocess.CalledProcessError(128, "git show")), \
+                patch.object(publisher, "api") as api, \
+                patch.object(publisher, "command", return_value="b" * 40) as command, \
+                patch.object(publisher, "create_draft") as create, \
+                patch.object(publisher, "check_tag") as tag:
+            with self.assertRaisesRegex(ValueError, "Missing committed desktop acceptance"):
+                publisher.main()
+        version.assert_called_once_with(COMMIT)
+        api.assert_not_called()
+        command.assert_called_once_with("git", "rev-parse", "HEAD")
+        create.assert_not_called()
+        tag.assert_not_called()
+        publisher.require_publication_supported("0.4.1")
+
+    def test_manifest_cannot_downgrade_committed_version_to_desktop_protocol(self):
+        self.make_docker_installer()
+        self.sources["pyproject.toml"] = b'[project]\nversion = "0.6.0"\n'
+        self.manifest["source_sha256"]["pyproject.toml"] = hashlib.sha256(
+            self.sources["pyproject.toml"]).hexdigest()
+        self.write_manifests()
+        self.write_installer_evidence()
+        with self.assertRaisesRegex(ValueError, "Manifest version differs from the built commit"):
+            self.prepare(desktop=self.desktop)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_committed_version_requires_numeric_project_version(self):
+        for value in ('"latest"', 'true', '4'):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, "Committed project version is invalid"):
+                publisher.committed_version(COMMIT, lambda commit, name: f'[project]\nversion = {value}\n'.encode())
 
     def test_041_requires_docker_installer_and_bound_evidence(self):
         self.make_dual_package("0.4.1")
@@ -368,78 +758,6 @@ class ReleaseGuards(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.prepare(desktop=self.desktop)
 
-    def build_real_bundle(self, version="0.4.0"):
-        self.make_dual_package(version)
-        script = Path(__file__).resolve().parents[2] / "scripts/build_validation_bundle.py"
-        spec = importlib.util.spec_from_file_location("release_bundle_integration", script)
-        bundle = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(bundle)
-        self.sources.update({name: b"fixture\n" for name in
-                             ("1_SETUP.cmd", "2_AVVIA.cmd", "nipat.cmd", "compose.yaml")})
-        self.sources["pyproject.toml"] = f'[project]\nversion = "{version}"\n'.encode()
-        self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
-        project = self.root / "project"
-        project.mkdir()
-        for name, content in self.sources.items():
-            (project / name).write_bytes(content)
-        self.manifest["source_sha256"] = {name: hashlib.sha256(content).hexdigest()
-                                          for name, content in self.sources.items()}
-        scientific = self.manifest["assets"]["scientific_image"]
-        scientific_path = self.runtime / scientific["file"]
-        scientific_path.write_bytes(gzip.compress(b"scientific fixture", mtime=0))
-        scientific.update(sha256=publisher.sha256(scientific_path), size=scientific_path.stat().st_size)
-        self.write_manifests()
-        header = bytearray(154)
-        header[:2] = b"MZ"
-        struct.pack_into("<I", header, 60, 128)
-        header[128:132] = b"PE\0\0"
-        struct.pack_into("<H", header, 132, 0x8664)
-        struct.pack_into("<H", header, 152, 0x20B)
-        launcher = self.setup / "NIPAT.exe"
-        launcher.write_bytes(header)
-        python_zip = self.root / "python.zip"
-        python_zip.write_bytes(b"portable Python fixture")
-        package = self.desktop / self.package_name
-        package.unlink()
-        with patch.object(bundle, "git_source", return_value={"commit": COMMIT, "dirty": False, "available": True}), \
-                patch.object(bundle, "PYTHON_SHA256", publisher.PYTHON_SHA256):
-            runtime, metadata = bundle.verified_installer_runtime(project, scientific_path, self.setup / publisher.MANIFEST)
-            bundle.package_sources(project, package, python_zip, runtime, metadata, launcher)
-        evidence = {
-            "schema_version": 1, "version": version, "source_commit": COMMIT,
-            "file": self.package_name, "sha256": publisher.sha256(package), "size": package.stat().st_size,
-            "launcher_sha256": publisher.sha256(launcher),
-        }
-        (self.desktop / "package-build.json").write_text(json.dumps(evidence), encoding="utf-8")
-        self.write_installer_evidence()
-        return package
-
-    def test_real_bundle_builder_matches_publication_protocol(self):
-        package = self.build_real_bundle()
-        self.prepare(desktop=self.desktop)
-        self.assertEqual(publisher.checksums(self.root / "release/SHA256SUMS")[self.package_name],
-                         publisher.sha256(package))
-
-    def test_real_docker_installer_builder_matches_publication_protocol(self):
-        package = self.build_real_bundle("0.4.1")
-        script = Path(__file__).resolve().parents[2] / "scripts/build_docker_installer.py"
-        spec = importlib.util.spec_from_file_location("docker_installer_integration", script)
-        builder = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(builder)
-        manifest = self.setup / publisher.MANIFEST
-        launcher = self.setup / "NIPAT.exe"
-        stage = self.root / "docker-stage"
-        installer = self.desktop / "NIPAT-DockerDesktop-Setup.exe"
-        installer.write_bytes(b"MZ compiled executable fixture")
-        with patch.object(builder.bundle, "PYTHON_SHA256", publisher.PYTHON_SHA256):
-            builder.stage_package(package, manifest, launcher, stage)
-            builder.verify_stage(package, manifest, launcher, stage)
-            builder.record_installer(package, manifest, launcher, stage, self.desktop)
-        self.prepare(desktop=self.desktop)
-        self.assertEqual(publisher.checksums(self.root / "release/SHA256SUMS")[installer.name],
-                         publisher.sha256(installer))
-        self.assertFalse((self.root / "release" / package.name).exists())
-
     def test_build_must_be_successful_same_source_and_not_from_a_fork(self):
         run = {"id": 123, "head_sha": COMMIT, "status": "completed", "conclusion": "success", "event": "push",
                "path": ".github/workflows/windows-installer.yml", "repository": {"full_name": publisher.REPO},
@@ -498,6 +816,151 @@ class ReleaseGuards(unittest.TestCase):
         release["prerelease"] = False
         with self.assertRaisesRegex(ValueError, "draft pre-release"):
             publisher.verify_uploaded(release, {}, COMMIT, "v0.4.0", "Domain validation", complete=True)
+
+    def test_stable_channel_is_explicit_and_cannot_publish_a_prerelease_version(self):
+        payload = self.root / "create.json"
+        with patch.object(publisher, "command", return_value='{"id": 12345}') as command:
+            with self.assertRaisesRegex(ValueError, "pre-release version"):
+                publisher.create_draft("v0.6.0rc1", "0.6.0rc1", COMMIT, "notes", payload,
+                                       channel="stable")
+            command.assert_not_called()
+            publisher.create_draft("v0.6.0", "0.6.0", COMMIT, "notes", payload, channel="stable")
+        sent = json.loads(payload.read_text())
+        self.assertFalse(sent["prerelease"])
+        self.assertEqual(sent["make_latest"], "false")
+        publisher.verify_uploaded(dict(sent, assets=[]), {}, COMMIT, "v0.6.0", "notes",
+                                  complete=True, channel="stable")
+        with self.assertRaisesRegex(ValueError, "selected channel"):
+            publisher.verify_uploaded(dict(sent, assets=[]), {}, COMMIT, "v0.6.0", "notes",
+                                      complete=True, channel="testing")
+
+    def prepared_draft(self, channel="testing"):
+        path = self.setup / "NIPAT-Setup.exe"
+        files = {path.name: path}
+        release = {
+            "id": 42, "draft": True, "prerelease": channel == "testing", "target_commitish": COMMIT,
+            "tag_name": "v0.6.0", "body": "reviewed notes", "html_url": "https://github.com/example/draft/42",
+            "assets": [{"name": path.name, "state": "uploaded", "size": path.stat().st_size,
+                        "digest": f"sha256:{publisher.sha256(path)}"}],
+        }
+        return files, release
+
+    def test_prepare_creates_complete_private_draft_without_publication(self):
+        files, prepared = self.prepared_draft()
+        empty = dict(prepared, assets=[])
+        with patch.object(publisher, "find_release", return_value=None), \
+                patch.object(publisher, "create_draft", return_value=empty) as create, \
+                patch.object(publisher, "api", return_value=prepared), \
+                patch.object(publisher, "check_tag"), patch.object(publisher, "command") as command:
+            result = publisher.process_release("prepare", files, COMMIT, "v0.6.0", "0.6.0",
+                                               "reviewed notes", self.root)
+        self.assertTrue(result["draft"])
+        create.assert_called_once()
+        command.assert_called_once_with("gh", "release", "upload", "v0.6.0",
+                                        str(files["NIPAT-Setup.exe"]), "--repo", publisher.REPO)
+
+    def test_prepare_resumes_complete_draft_without_reuploading(self):
+        files, prepared = self.prepared_draft()
+        with patch.object(publisher, "api", return_value=prepared), \
+                patch.object(publisher, "check_tag"), patch.object(publisher, "command") as command, \
+                patch.object(publisher, "create_draft") as create:
+            result = publisher.process_release("prepare", files, COMMIT, "v0.6.0", "0.6.0",
+                                               "reviewed notes", self.root, draft_id="42")
+        self.assertTrue(result["draft"])
+        command.assert_not_called()
+        create.assert_not_called()
+
+    def test_publish_requires_explicit_draft_and_preparation_identity_before_network(self):
+        for additional in ([], ["--draft-release-id", "42"], ["--preparation-commit", "b" * 40]):
+            with self.subTest(additional=additional), \
+                    patch("sys.argv", ["publisher", "--operation", "publish", "--run-id", "123",
+                                       "--source-commit", COMMIT, *additional]), \
+                    patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
+                with self.assertRaisesRegex(ValueError, "draft ID and preparation commit"):
+                    publisher.main()
+                command.assert_not_called()
+                api.assert_not_called()
+
+    def test_publish_blocks_revoked_or_changed_acceptance_before_network(self):
+        parts = self.joint_fixture()
+        original = parts[-1]
+        changed = copy.deepcopy(original)
+        changed["tests"]["windows_clean_wsl"]["tester"] = "Different operator"
+        for current in (changed, dict(original, decision="pending")):
+            with self.subTest(decision=current["decision"]), \
+                    patch("sys.argv", ["publisher", "--operation", "publish", "--run-id", "123",
+                                       "--source-commit", COMMIT, "--draft-release-id", "42",
+                                       "--preparation-commit", "c" * 40]), \
+                    patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                            "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                    patch.object(publisher.subprocess, "run"), \
+                    patch.object(publisher, "committed_version", return_value="0.6.0"), \
+                    patch.object(publisher, "source_bytes", side_effect=lambda commit, path:
+                                 json.dumps(original if commit == "c" * 40 else current).encode()), \
+                    patch.object(publisher, "command", return_value="b" * 40) as command, \
+                    patch.object(publisher, "api") as api:
+                with self.assertRaisesRegex(ValueError, "changed since preparation|pending or rejected"):
+                    publisher.main()
+                command.assert_called_once_with("git", "rev-parse", "HEAD")
+                api.assert_not_called()
+
+    def test_publish_rejects_any_changed_or_incomplete_draft_without_repair(self):
+        files, prepared = self.prepared_draft()
+        changes = {
+            "digest": lambda value: value["assets"][0].update(digest="sha256:" + "0" * 64),
+            "missing_asset": lambda value: value.update(assets=[]),
+            "source": lambda value: value.update(target_commitish="d" * 40),
+            "tag": lambda value: value.update(tag_name="v0.6.1"),
+            "notes": lambda value: value.update(body="unreviewed notes"),
+            "notes_whitespace": lambda value: value.update(body="reviewed notes\n"),
+            "channel": lambda value: value.update(prerelease=False),
+            "published": lambda value: value.update(draft=False),
+            "identity": lambda value: value.update(id=99),
+        }
+        for name, change in changes.items():
+            altered = copy.deepcopy(prepared)
+            change(altered)
+            with self.subTest(change=name), patch.object(publisher, "api", return_value=altered), \
+                    patch.object(publisher, "check_tag"), patch.object(publisher, "command") as command, \
+                    patch.object(publisher, "create_draft") as create:
+                with self.assertRaises(ValueError):
+                    publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
+                                              "reviewed notes", self.root, draft_id="42")
+                command.assert_not_called()
+                create.assert_not_called()
+
+    def test_publish_promotes_only_verified_stable_draft_to_latest(self):
+        for channel in ("testing", "stable"):
+            files, prepared = self.prepared_draft(channel)
+            published = dict(prepared, draft=False)
+            responses = [prepared, published] + ([published] if channel == "stable" else [])
+            with self.subTest(channel=channel), patch.object(publisher, "api", side_effect=responses) as api, \
+                    patch.object(publisher, "check_tag") as tag, \
+                    patch.object(publisher, "command") as command, patch.object(publisher, "create_draft") as create:
+                result = publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
+                                                   "reviewed notes", self.root, channel=channel, draft_id="42")
+            self.assertFalse(result["draft"])
+            command.assert_called_once_with("gh", "api", f"repos/{publisher.REPO}/releases/42",
+                                            "--method", "PATCH", "--input", str(self.root / "publish-release.json"))
+            payload = json.loads((self.root / "publish-release.json").read_text())
+            self.assertEqual(payload, {"draft": False, "prerelease": channel == "testing",
+                                       "make_latest": "true" if channel == "stable" else "false"})
+            self.assertEqual(api.call_args.args[0], "releases/latest" if channel == "stable" else "releases/42")
+            tag.assert_called_with("v0.6.0", COMMIT, required=True)
+            create.assert_not_called()
+
+    def test_publish_checks_result_assets_and_latest_pointer(self):
+        files, prepared = self.prepared_draft("stable")
+        published = dict(prepared, draft=False)
+        tampered = copy.deepcopy(published)
+        tampered["assets"][0]["digest"] = "sha256:" + "0" * 64
+        for responses, error in (([prepared, tampered], "integrity"),
+                                 ([prepared, published, {"id": 99}], "Latest")):
+            with self.subTest(error=error), patch.object(publisher, "api", side_effect=responses), \
+                    patch.object(publisher, "check_tag"), patch.object(publisher, "command"):
+                with self.assertRaisesRegex(ValueError, error):
+                    publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
+                                              "reviewed notes", self.root, channel="stable", draft_id="42")
 
 
 if __name__ == "__main__":

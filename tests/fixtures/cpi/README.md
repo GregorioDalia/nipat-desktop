@@ -36,10 +36,9 @@ despite the column name, this field contains log10(CPI), not the CPI product.
 | Mean_logCPI | 0.735 |
 | CPI_medianFF | 0.602 |
 
-The fourth site specifically detects the upstream summary change: the prior
-version includes it in the summary, yielding four sites and a median fetal
-fraction of 5%, while its CPI iterations already exclude it. The updated
-summary must therefore fail the old four-site expectation and match this table.
+The fourth site has only one fetal read and must be excluded from both the
+summary and CPI iterations. Including it would incorrectly yield four sites
+and a median fetal fraction of 5%.
 
 ## Pair without informative sites
 
@@ -53,6 +52,6 @@ One invocation creates a fresh run outside the repository and verifies exactly
 these two CSV rows, the generated cutoff-panel path, and the PDF signatures of
 both pair plots and `All_CPIplots.pdf`. It does not compare PDF bytes, inspect
 plot appearance, or verify individual curve points that are not exported to CSV.
-No BAM, reference genome, new R package, or rebuild is required when the existing
-scientific image is available. Actual runtime execution must pass before this
-update is recorded as integration-tested.
+No BAM or reference genome is required. The runtime image must provide the
+complete `cpi-v1` interface and its R dependencies.
+The check also verifies the image-owned code metadata and isolated mounts.

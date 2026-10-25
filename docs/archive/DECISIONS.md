@@ -1,3 +1,5 @@
+> Documento storico di sviluppo, conservato per tracciabilità. Non costituisce una guida della versione corrente. Per i contratti attuali consultare [Architettura](../ARCHITECTURE.md) e [CI/CD](../CI_CD.md).
+
 # Consolidated decisions
 
 ## Single-action Docker Desktop delivery (0.4.1)
@@ -171,7 +173,7 @@
   another drive. The wizard accepted a relative results directory and exited
   with code 0. A separate DNPcall real-BAM regression reproduced all 11 rows
   and 17 columns, ignoring row order, with the original BAM mapping recorded.
-  See [distribution evidence](DISTRIBUZIONE.md) for scope and remaining work.
+  See [distribution evidence](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.1/docs/DISTRIBUZIONE.md) for scope and remaining work.
 - Preserve the existing `v0.2.0a1` tag and create `v0.2.0a2` only for the
   verified commit. GitHub remains the distribution channel; Docker/WSL
   prerequisite automation is outside this revision.

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import sys
 from pathlib import Path
 
 from nipat import __version__
+from nipat.activity import activity_session
 from nipat.errors import NipatError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
+from nipat.preferences import PreferencesStore
 from nipat.validation.self_test import run_self_tests
 from nipat.wizard import run_wizard
 
@@ -45,7 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     doctor.add_argument(
         "--runtime",
         action="store_true",
-        help="controlla anche R e samtools nell'immagine già costruita",
+        help="verifica R, samtools e i quattro workflow nell'immagine scientifica",
     )
 
     subparsers.add_parser("build-runtime", help="costruisce l'immagine R/samtools")
@@ -108,8 +111,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("self-test richiede l'esecuzione reale; rimuovere --dry-run")
     completion_label = "Esecuzione pianificata" if args.dry_run else "Esecuzione completata"
 
+    activity = ExitStack()
     try:
         layout = ProjectLayout.discover(data_dir=args.data_dir, runs_dir=args.runs_dir)
+        activity.enter_context(activity_session(project_dir=layout.project_dir))
         runner = DockerComposeRunner(layout, dry_run=args.dry_run)
         workflows = Workflows(layout, runner)
         if args.command == "doctor":
@@ -121,6 +126,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "wizard":
             return run_wizard(
                 workflows, layout, err_const=DEFAULT_ERR_CONST, dry_run=args.dry_run,
+                preferences_store=PreferencesStore(),
+                directory_overrides={
+                    key: getattr(args, key) for key in ("data_dir", "runs_dir")
+                    if getattr(args, key) is not None
+                },
             )
         elif args.command == "self-test":
             run_self_tests(layout)
@@ -174,6 +184,8 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\nEsecuzione interrotta.", file=sys.stderr)
         return 130
+    finally:
+        activity.close()
     return 0
 
 

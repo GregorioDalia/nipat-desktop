@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "channel": "desktop",
+  "display_name": "NIPAT Desktop",
+  "app_dir_name": "NIPAT-Desktop",
+  "data_dir_name": "NIPAT-Desktop",
+  "distro_prefix": "NIPAT-Desktop-",
+  "resume_key": "NIPAT-Desktop-ResumeSetup",
+  "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
+  "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45"
+}

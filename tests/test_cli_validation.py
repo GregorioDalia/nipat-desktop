@@ -13,6 +13,7 @@ from nipat.cli import DEFAULT_ERR_CONST, build_parser, main
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
+from nipat.preferences import PreferencesStore
 from nipat.validation.self_test import compare_snp_outputs, run_self_tests
 from nipat.wizard import run_wizard
 
@@ -203,7 +204,8 @@ class WizardTests(unittest.TestCase):
     def test_output_directory_choice_updates_both_layouts(self):
         target = self.root / 'separate results'
         with chdir(self.root):
-            result, _ = self.invoke(['5', '"separate results"', '0'])
+            result, _ = self.invoke(['5', '1', '2', '"separate results"', '9', '0', '0'],
+                                    preferences_store=PreferencesStore(self.root / 'preferences.json'))
         self.assertEqual(result, 0)
         self.assertTrue(target.is_dir())
         self.assertEqual(self.workflows.layout.runs_dir, target)
@@ -211,7 +213,7 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(self.layout.runs_dir, self.root / 'runs')
 
     def test_invalid_output_directory_can_be_corrected_or_cancelled(self):
-        result, messages = self.invoke(['5', str(self.layout.data_dir / 'results'), ':annulla', '0'])
+        result, messages = self.invoke(['5', '1', '2', str(self.layout.data_dir / 'results'), '9', '0', '0', '0'])
         self.assertEqual(result, 0)
         self.assertFalse((self.layout.data_dir / 'results').exists())
         self.assertIn('senza sovrapporsi', messages)
@@ -221,14 +223,14 @@ class WizardTests(unittest.TestCase):
         self.assertEqual(self.workflows.snp_call.call_args.kwargs['run_name'], 'new-run')
 
     def test_runtime_is_checked_only_on_explicit_request(self):
-        result, messages = self.invoke(['7', '1', '0', '7', '2', '0', '0'])
+        result, messages = self.invoke(['7', '1', '0', '8', '0'])
         self.assertEqual(result, 0)
         self.workflows.runner.doctor.assert_called_once_with(True)
         self.assertNotIn('da verificare', messages)
         self.assertIn('Controllo completato: ambiente di analisi, R e samtools disponibili.', messages)
 
     def test_help_instructions_do_not_start_runtime_or_analyses(self):
-        result, messages = self.invoke(['7', '1', '0', '0'])
+        result, messages = self.invoke(['7', '1', '4', '0', '0'])
         self.assertEqual(result, 0)
         self.workflows.runner.doctor.assert_not_called()
         for name in ('dnp_call', 'snp_call', 'contamination', 'cpi'):
@@ -240,7 +242,7 @@ class WizardTests(unittest.TestCase):
         self.assertNotIn('Controllo completato:', messages)
 
     def test_help_dry_run_explains_verification_without_running_it(self):
-        result, messages = self.invoke(['7', '2', '0', '0'], dry_run=True)
+        result, messages = self.invoke(['8', '0'], dry_run=True)
         self.assertEqual(result, 0)
         self.workflows.runner.doctor.assert_not_called()
         self.assertIn('la verifica degli strumenti non viene eseguita', messages)
@@ -251,12 +253,12 @@ class WizardTests(unittest.TestCase):
         result, messages = self.invoke(['7', 'invalid', '1', ':indietro', '0'])
         self.assertEqual(result, 0)
         self.workflows.runner.doctor.assert_not_called()
-        self.assertIn('Scegliere 1 per le istruzioni', messages)
+        self.assertIn('Scegliere un argomento', messages)
         self.assertIn('Come usare NIPAT', messages)
 
     def test_failed_tool_verification_never_claims_availability(self):
         self.workflows.runner.doctor.side_effect = RuntimeExecutionError('Strumenti non disponibili')
-        result, messages = self.invoke(['7', '2', '0'])
+        result, messages = self.invoke(['8', '0'])
         self.assertEqual(result, 2)
         self.assertIn('Strumenti non disponibili', messages)
         self.assertNotIn('Controllo completato:', messages)
@@ -272,6 +274,7 @@ class WizardTests(unittest.TestCase):
 class CliRoutingTests(unittest.TestCase):
     def setUp(self):
         self.layout = Mock()
+        self.layout.project_dir = Path(__file__).resolve().parents[1]
         self.runner = Mock()
         self.workflows = Mock()
 
@@ -295,6 +298,15 @@ class CliRoutingTests(unittest.TestCase):
             with redirect_stderr(stderr):
                 self.assertEqual(main(['doctor']), 2)
         self.assertIn('Percorsi errati', stderr.getvalue())
+
+    def test_installer_lease_prevents_cli_runtime_or_analysis_start(self):
+        stderr = io.StringIO()
+        with patch('nipat.cli.ProjectLayout.discover', return_value=self.layout), \
+                patch('nipat.cli.activity_session', side_effect=ValidationError('Aggiornamento in corso')), \
+                patch('nipat.cli.DockerComposeRunner') as runner, redirect_stderr(stderr):
+            self.assertEqual(main(['doctor', '--runtime']), 2)
+        runner.assert_not_called()
+        self.assertIn('Aggiornamento in corso', stderr.getvalue())
 
     def test_repeated_dnp_bams_are_routed(self):
         self.invoke(['dnp-call', '--bam', 'one.bam', '--bam', 'two.bam',
