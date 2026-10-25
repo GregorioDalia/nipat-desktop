@@ -75,8 +75,11 @@ COPY scientific/vendor/NEWPAT/SNPcall/SNPcall.R /opt/nipat/scientific/vendor/NEW
 COPY scientific/vendor/NEWPAT/contamination/detect_contamination.R /opt/nipat/scientific/vendor/NEWPAT/contamination/detect_contamination.R
 COPY scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R /opt/nipat/scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R
 COPY engine/main.py /opt/nipat/engine/main.py
-COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py /opt/nipat/lib/nipat_scientific/
-RUN python3 /opt/nipat/engine/main.py verify
+COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py src/nipat_scientific/catalog.py src/nipat_scientific/plan.py /opt/nipat/lib/nipat_scientific/
+COPY src/nipat_scientific/catalog_data/ /opt/nipat/lib/nipat_scientific/catalog_data/
+RUN python3 /opt/nipat/engine/main.py verify \
+    && python3 /opt/nipat/engine/main.py catalog --json > /tmp/nipat-catalog-check.json \
+    && rm /tmp/nipat-catalog-check.json
 
 # The client explicitly selects the bundled workflow or an isolated runtime probe.
 WORKDIR /workspace/nipat-desktop

@@ -1,9 +1,15 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.6.0** è un'applicazione locale per eseguire quattro workflow
+**NIPAT Desktop 0.7.0a1, in sviluppo**, è un'applicazione locale per eseguire quattro workflow
 scientifici da un menu testuale guidato o dalla riga di comando. Ogni avvio
-elabora un'analisi; la versione 0.6.0 non include una GUI grafica né il
+elabora un'analisi; questa versione non include una GUI grafica né il
 concatenamento automatico dei workflow.
+
+Il catalogo scientifico consultabile dal menu o con `nipat parameters`
+descrive in italiano e inglese le opzioni R, le regole interne e la
+preparazione degli input. Il motore dispone del contratto per convalidare
+i piani concatenati; la loro esecuzione automatica è ancora da implementare.
+La release ufficiale per l'installazione rimane la 0.6.0.
 
 | Workflow | Funzione |
 | --- | --- |

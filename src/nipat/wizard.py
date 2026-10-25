@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from nipat import __version__
+from nipat.catalog_ui import show_catalog
 from nipat.errors import NipatError
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
@@ -90,12 +91,16 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             ("3", "Cartelle e parametri", "Preferenze, modifiche e ripristino"),
             ("4", "Risultati e analisi in sequenza", "File intermedi, log e workflow successivi"),
             ("5", "Informazioni su NIPAT", "Versione, ambiente e documentazione"),
+            ("6", "Catalogo scientifico", "Opzioni R, regole interne e preparazione; IT / EN"),
             ("0", "Torna al menu", ""),
         ], default="0").strip().casefold()
         if action in {"0", ":indietro", ":annulla"}:
             return
+        if action == "6":
+            show_catalog(ui)
+            continue
         if action not in pages:
-            ui.message("Scegliere un argomento da 1 a 5 oppure 0 per tornare al menu.", kind="muted")
+            ui.message("Scegliere un argomento da 1 a 6 oppure 0 per tornare al menu.", kind="muted")
             continue
         title, paragraphs = pages[action]
         ui.heading(title)

@@ -12,6 +12,12 @@ su Windows e Docker Engine su Linux. Il client conserva interazione,
 configurazione, accesso ai file locali, installazione e aggiornamenti.
 La GUI grafica è successiva alla versione 0.7.
 
+Il primo incremento di sviluppo, 0.7.0a1, rende disponibile il
+[catalogo scientifico](CATALOGO_SCIENTIFICO.md) bilingue e il
+[contratto dei piani](WORKFLOW_CONTRACT.md) con validazione strutturale e
+delle dipendenze. Non esegue ancora piani composti. Gli obiettivi seguenti
+comprendono anche le funzionalità necessarie per completare la 0.7.
+
 ## Versione 0.7: parametri e impostazioni del motore
 
 La configurazione deve rappresentare tutte le opzioni dell'interfaccia

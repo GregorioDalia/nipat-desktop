@@ -27,7 +27,9 @@ SCRIPT_PATHS = {
 }
 PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
+    "catalog.py", "plan.py",
 )
+CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
     "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
     "cpi": "cpi-v1",
@@ -55,7 +57,7 @@ def describe_preparation(bundle_root: Path) -> dict:
     root = bundle_root.resolve()
     library = preparation_root(root)
     paths = [root / "engine" / "main.py", *(
-        library / "nipat_scientific" / name for name in PREPARATION_FILES
+        library / "nipat_scientific" / name for name in (*PREPARATION_FILES, *CATALOG_FILES)
     )]
     hashes = {}
     for path in paths:
@@ -142,6 +144,13 @@ def build_parser() -> argparse.ArgumentParser:
     describe = commands.add_parser("describe", help="Describe the verified scientific bundle.")
     describe.add_argument("--json", action="store_true", help="Write machine-readable metadata.")
     commands.add_parser("verify", help="Verify the bundled scientific source manifest.")
+    catalog = commands.add_parser("catalog", help="Read the source-verified scientific catalog.")
+    catalog.add_argument("workflow", nargs="?", choices=SCRIPT_PATHS)
+    catalog.add_argument("--json", action="store_true", help="Write machine-readable catalog (default).")
+    plan = commands.add_parser(
+        "validate-plan", help="Validate a workflow plan without executing analyses or reading inputs.",
+    )
+    plan.add_argument("--plan", type=Path, required=True, help="JSON workflow plan with container paths.")
     run = commands.add_parser("run", help="Run a bundled workflow with its native R arguments.")
     run.add_argument("workflow", choices=SCRIPT_PATHS)
     run.add_argument(
@@ -206,6 +215,23 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "verify":
             print(f"Scientific bundle verified ({len(SCRIPT_PATHS)} workflows).")
             return 0
+
+        if arguments.command in {"catalog", "validate-plan"}:
+            library = preparation_root(BUNDLE_ROOT).resolve()
+            sys.path.insert(0, str(library))
+            from nipat_scientific.errors import ValidationError
+
+            try:
+                if arguments.command == "catalog":
+                    from nipat_scientific.catalog import load_catalog
+                    result = load_catalog(arguments.workflow, source_root=BUNDLE_ROOT)
+                else:
+                    from nipat_scientific.plan import validate_plan
+                    result = validate_plan(json.loads(arguments.plan.read_text(encoding="utf-8")))
+                print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+                return 0
+            except (ValidationError, ValueError, UnicodeError) as exc:
+                raise BundleError(str(exc)) from exc
 
         if arguments.command == "execute":
             library = preparation_root(BUNDLE_ROOT).resolve()

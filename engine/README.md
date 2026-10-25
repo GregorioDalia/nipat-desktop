@@ -16,6 +16,8 @@ richieste e mount e conservano i metadati dell'esecuzione.
 ```sh
 python3 /opt/nipat/engine/main.py describe --json
 python3 /opt/nipat/engine/main.py verify
+python3 /opt/nipat/engine/main.py catalog cpi --json
+python3 /opt/nipat/engine/main.py validate-plan --plan /inputs/plan.json
 python3 /opt/nipat/engine/main.py execute dnp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
@@ -44,7 +46,7 @@ al manifest scientifico incluso. `describe --json` restituisce:
 | `workflow_interfaces` | `dnp-call-v1`, `snp-call-v1`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
 | `preparation.interface` | `workflow-preparation-v1` |
 | Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
-| `preparation.file_sha256` | Hash dell'ingresso del motore e degli otto moduli Python condivisi |
+| `preparation.file_sha256` | Hash dell'ingresso del motore, dei dieci moduli Python condivisi e delle quattro schede JSON del catalogo |
 
 Moduli mancanti e percorsi esterni al bundle sono rifiutati. Gli hash della
 preparazione identificano i byte nell'immagine; gli hash R vengono inoltre
@@ -57,6 +59,14 @@ codice di uscita e ricezione dei segnali. Gli errori di verifica o avvio
 restituiscono 2. Nella preparazione SNPcall da BAM, i segnali sono inoltrati
 anche al processo samtools; un suo errore impedisce l'avvio di R.
 Nessun comando del motore scarica o installa dipendenze.
+
+`catalog` espone le schede scientifiche bilingui e verifica la corrispondenza
+con i sorgenti R nell'immagine. `validate-plan` legge un documento JSON e
+restituisce il piano canonico e l'ordine derivato dalle dipendenze. Non legge
+i campioni, non crea risultati e non avvia R o samtools. Il
+[contratto dei piani](../docs/WORKFLOW_CONTRACT.md) specifica campi e limiti;
+il [catalogo scientifico](../docs/CATALOGO_SCIENTIFICO.md) ne descrive la
+consultazione. L'esecuzione dei piani concatenati è un incremento distinto.
 
 ## Regole comuni delle richieste
 

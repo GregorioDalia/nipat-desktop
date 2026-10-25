@@ -37,6 +37,7 @@ docker/scientific-runtime/verify-packages.R
 docs/ACCETTAZIONE_INSTALLATORI.md
 docs/ARCHITECTURE.md
 docs/CI_CD.md
+docs/CATALOGO_SCIENTIFICO.md
 docs/DISTRIBUZIONE.md
 docs/ESECUZIONI.md
 docs/GUIDA_UTILIZZO.md
@@ -46,6 +47,7 @@ docs/RELEASE_0.5.0a1.md
 docs/RELEASE_0.6.0.md
 docs/ROADMAP.md
 docs/VALIDAZIONE.md
+docs/WORKFLOW_CONTRACT.md
 engine/README.md
 engine/main.py
 installer/linux/launch.py
@@ -124,6 +126,7 @@ src/nipat/__main__.py
 src/nipat/adapters/__init__.py
 src/nipat/adapters/panels.py
 src/nipat/cli.py
+src/nipat/catalog_ui.py
 src/nipat/errors.py
 src/nipat/execution/__init__.py
 src/nipat/execution/mounts.py
@@ -143,6 +146,12 @@ src/nipat/wizard.py
 src/nipat/wizard_forms.py
 src/nipat/wizard_settings.py
 src/nipat_scientific/__init__.py
+src/nipat_scientific/catalog.py
+src/nipat_scientific/catalog_data/dnp-call.json
+src/nipat_scientific/catalog_data/snp-call.json
+src/nipat_scientific/catalog_data/contamination.json
+src/nipat_scientific/catalog_data/cpi.json
+src/nipat_scientific/plan.py
 src/nipat_scientific/contamination.py
 src/nipat_scientific/cpi.py
 src/nipat_scientific/dnp.py
@@ -179,6 +188,8 @@ tests/fixtures/snp_engine/expected.tsv
 tests/fixtures/snp_engine/reads.sam
 tests/fixtures/snp_engine/reference.fa
 tests/test_bundled_runner.py
+tests/test_scientific_catalog.py
+tests/test_workflow_plan.py
 tests/test_cli_validation.py
 tests/test_contamination_engine.py
 tests/test_contamination_workflow.py

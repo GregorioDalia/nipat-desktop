@@ -1,11 +1,19 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.6.0**,
+Questa guida descrive **NIPAT Desktop 0.7.0a1, in sviluppo**,
 con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
 artefatti GitHub Actions sono destinati alla revisione tecnica.
+
+La release ufficiale disponibile è la 0.6.0. Questo incremento aggiunge
+**Guida e informazioni → Catalogo scientifico**, consultabile in italiano
+e inglese, e il comando `nipat parameters`. Il
+[riferimento del catalogo](CATALOGO_SCIENTIFICO.md) distingue opzioni
+configurabili, regole interne e preparazione degli input. La verifica tecnica
+dei [piani di workflow](WORKFLOW_CONTRACT.md) non ne esegue i passaggi;
+le analisi dal menu continuano a essere avviate singolarmente.
 
 NIPAT esegue DNPcall, SNPcall, Contamination e CPI sul computer dell'utente.
 Il motore scientifico contiene gli script R e gli strumenti necessari.

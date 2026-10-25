@@ -55,6 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("wizard", help="avvia la CLI guidata per i quattro workflow")
     subparsers.add_parser("self-test", help="esegue le verifiche numeriche distribuite")
 
+    parameters = subparsers.add_parser(
+        "parameters", help="consulta opzioni R, regole interne e preparazione degli input",
+    )
+    parameters.add_argument("workflow", nargs="?", choices=("dnp-call", "snp-call", "contamination", "cpi"))
+    parameters.add_argument("--lang", choices=("it", "en"), default="it")
+    parameters.add_argument("--section", choices=("all", "parameters", "rules", "preparation"), default="all")
+    parameters.add_argument("--json", action="store_true", help="catalogo strutturato bilingue")
+
     dnp = subparsers.add_parser("dnp-call", help="esegue DNPcall da BAM")
     dnp_input = dnp.add_mutually_exclusive_group(required=True)
     dnp_input.add_argument("--bam", type=_path, action="append", help="ripetibile per piu' BAM")
@@ -113,6 +121,20 @@ def main(argv: list[str] | None = None) -> int:
 
     activity = ExitStack()
     try:
+        if args.command == "parameters":
+            import json
+            from nipat.catalog_ui import catalog_lines
+            from nipat.terminal import Terminal
+            from nipat_scientific.catalog import load_catalog
+
+            catalog = load_catalog(args.workflow)
+            if args.json:
+                print(json.dumps(catalog, ensure_ascii=False, indent=2))
+            else:
+                with Terminal() as ui:
+                    for line in catalog_lines(catalog, language=args.lang, section=args.section):
+                        ui.message(line)
+            return 0
         layout = ProjectLayout.discover(data_dir=args.data_dir, runs_dir=args.runs_dir)
         activity.enter_context(activity_session(project_dir=layout.project_dir))
         runner = DockerComposeRunner(layout, dry_run=args.dry_run)

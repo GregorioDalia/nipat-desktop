@@ -10,7 +10,8 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione documentata: NIPAT Desktop 0.6.0.** Consultare la pagina
+**Versione documentata: NIPAT Desktop 0.7.0a1, in sviluppo.** La release
+ufficiale disponibile è la 0.6.0. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni effettivamente pubblicate, gli installatori e le rispettive note.
 Gli artefatti GitHub Actions sono pacchetti di verifica tecnica, distinti dalle
@@ -31,7 +32,16 @@ cartella distinta con risultati, intermedi conservati, metadati e log.
 I run esistenti non vengono sovrascritti. I quattro workflow sono disponibili
 sia nel menu sia nella CLI diretta. Ogni avvio esegue una singola analisi;
 le sequenze si compongono selezionando gli output compatibili del run precedente.
-L'interfaccia della 0.6 è testuale.
+L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
+e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
+scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
+input senza modificare gli algoritmi o avviare analisi.
+
+Il motore convalida inoltre il [contratto dei piani](docs/WORKFLOW_CONTRACT.md)
+per le composizioni compatibili. Questo incremento verifica struttura,
+riferimenti e ordine dei passaggi; l'esecuzione automatica dei piani non è
+ancora disponibile. Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md)
+descrive modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
 

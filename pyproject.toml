@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nipat-desktop"
-version = "0.6.0"
+version = "0.7.0a1"
 description = "Local desktop orchestration layer for the NIPAT scientific workflows"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -28,6 +28,9 @@ license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md", "scientific/vendor/*/LICEN
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+nipat_scientific = ["catalog_data/*.json"]
 
 [tool.pytest.ini_options]
 addopts = "-q"

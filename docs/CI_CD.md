@@ -56,6 +56,13 @@ del programma non bastano a identificare un installatore.
 I nomi e il numero dei test possono evolvere; la copertura viene valutata
 rispetto ai comportamenti e ai rischi verificati, non al solo conteggio.
 
+Il catalogo scientifico è verificato rispetto ai sorgenti R identificati da
+SHA-256, al numero di righe e alla copertura delle sezioni esaminate. I test
+del contratto dei piani verificano struttura, riferimenti tipizzati,
+dipendenze e ordine deterministico. Questi controlli validano la descrizione
+di un workflow composto: non ne eseguono i passaggi e non attestano
+la validità biologica degli input.
+
 ## Controlli sui sorgenti
 
 I job `linux-checks` e `windows-checks` eseguono la suite Python su entrambi
@@ -81,6 +88,8 @@ Il job `scientific` costruisce il motore e avvia:
 
 - `scripts/verify_engine_package.py`: quattro workflow nell'immagine, senza
   sorgenti applicativi montati, con aspettative numeriche e casi non validi;
+  controlla inoltre il catalogo incorporato e la validazione dei piani
+  senza eseguire workflow composti;
 - `python -m nipat doctor --runtime`: compatibilità e identità del motore;
 - `python -m nipat self-test`: regressioni distribuite e modalità di input.
 
@@ -94,6 +103,8 @@ La selezione delle verifiche scientifiche è definita in
 sorgenti scientifici, a qualsiasi file sotto `src/` o `tests/`, agli script
 di verifica scientifica e alla configurazione CI pertinente le rendono
 obbligatorie. Anche una modifica ai soli test può quindi eseguire il motore.
+I dati JSON del catalogo e il validatore dei piani appartengono a questi
+percorsi: le loro modifiche richiedono le prove nell'immagine reale.
 Un avvio manuale le richiede sempre.
 Se il confronto Git non riesce, vengono richieste per precauzione.
 Le modifiche esclusivamente documentali possono evitare la ricostruzione
