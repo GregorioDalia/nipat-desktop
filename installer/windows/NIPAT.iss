@@ -109,15 +109,17 @@ var
 function NipatGetDriveType(RootPath: String): Cardinal;
   external 'GetDriveTypeW@kernel32.dll stdcall';
 
+{ Inno Setup 6.7.3 uses a 32-bit process, also in 64-bit install mode.
+  UINT_PTR is its pointer-width unsigned type; BOOL maps to WinAPI LongBool. }
 function NipatCreateFile(FileName: String; DesiredAccess, ShareMode: Cardinal;
-  SecurityAttributes: NativeUInt; CreationDisposition, Flags: Cardinal;
+  SecurityAttributes: UINT_PTR; CreationDisposition, Flags: Cardinal;
   TemplateFile: THandle): THandle;
   external 'CreateFileW@kernel32.dll stdcall';
 
-function NipatCloseHandle(Handle: THandle): Boolean;
+function NipatCloseHandle(Handle: THandle): BOOL;
   external 'CloseHandle@kernel32.dll stdcall';
 
-function NipatCreateEvent(SecurityAttributes: NativeUInt; ManualReset, InitialState: Boolean;
+function NipatCreateEvent(SecurityAttributes: UINT_PTR; ManualReset, InitialState: BOOL;
   Name: String): THandle;
   external 'CreateEventW@kernel32.dll stdcall';
 
@@ -127,10 +129,10 @@ function NipatGetLastError(): Cardinal;
 function NipatGetCurrentProcessId(): Cardinal;
   external 'GetCurrentProcessId@kernel32.dll stdcall';
 
-function NipatSetEnvironmentVariable(Name, Value: String): Boolean;
+function NipatSetEnvironmentVariable(Name, Value: String): BOOL;
   external 'SetEnvironmentVariableW@kernel32.dll stdcall';
 
-function NipatDeleteEnvironmentVariable(Name: String; Value: NativeUInt): Boolean;
+function NipatDeleteEnvironmentVariable(Name: String; Value: UINT_PTR): BOOL;
   external 'SetEnvironmentVariableW@kernel32.dll stdcall';
 
 function NipatRememberedPath(Name, DefaultPath: String): String;
@@ -239,7 +241,7 @@ begin
   { No sharing and no inheritable handle: sessions hold compatible shared read handles. }
   ActivityLock := NipatCreateFile(LockPath, $80000000, 0, 0, 4, $80, 0);
   ErrorCode := NipatGetLastError;
-  if ActivityLock = NativeUInt(-1) then begin
+  if ActivityLock = UINT_PTR(-1) then begin
     ActivityLock := 0;
     if (ErrorCode = 32) or (ErrorCode = 33) then
       Result := 'NIPAT e ancora in uso. Attendere il termine delle analisi e chiudere tutte le finestre NIPAT, quindi riprovare. Nessuna sessione viene interrotta.'
