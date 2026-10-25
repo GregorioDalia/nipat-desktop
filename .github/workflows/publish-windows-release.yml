@@ -1,8 +1,16 @@
-name: Publish verified release
+name: Prepare or publish verified release
 
 on:
   workflow_dispatch:
     inputs:
+      operation:
+        description: Prepare a private draft, or explicitly publish the reviewed draft
+        required: true
+        default: prepare
+        type: choice
+        options:
+          - prepare
+          - publish
       run_id:
         description: Successful installer build run ID (Windows and Ubuntu for 0.6)
         required: true
@@ -12,11 +20,15 @@ on:
         required: true
         type: string
       draft_release_id:
-        description: Existing draft release ID to resume (optional)
+        description: Exact draft ID (required for publish; optional resume for prepare)
+        required: false
+        type: string
+      preparation_commit:
+        description: Exact preparation commit from the prepare summary (required for publish; empty for prepare)
         required: false
         type: string
       channel:
-        description: Update channel (testing for domain-validation releases)
+        description: Update channel (stable becomes Latest; testing remains a pre-release)
         required: true
         default: testing
         type: choice
@@ -32,7 +44,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
+  release:
     if: github.repository == 'GregorioDalia/nipat-desktop' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -51,14 +63,18 @@ jobs:
           python-version: '3.12.10'
       - name: Test release guards
         run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
-      - name: Verify joint build and committed desktop acceptance, then publish selected channel
+      - name: Reverify build and acceptance, then execute the selected release phase
         env:
           GH_TOKEN: ${{ github.token }}
           BUILD_RUN_ID: ${{ inputs.run_id }}
           BUILD_SOURCE_COMMIT: ${{ inputs.source_commit }}
           DRAFT_RELEASE_ID: ${{ inputs.draft_release_id }}
           RELEASE_CHANNEL: ${{ inputs.channel }}
+          RELEASE_OPERATION: ${{ inputs.operation }}
+          PREPARATION_COMMIT: ${{ inputs.preparation_commit }}
         run: |
           python .github/scripts/publish_windows_release.py \
+            --operation "$RELEASE_OPERATION" \
             --run-id "$BUILD_RUN_ID" --source-commit "$BUILD_SOURCE_COMMIT" \
-            --draft-release-id "$DRAFT_RELEASE_ID" --channel "$RELEASE_CHANNEL"
+            --draft-release-id "$DRAFT_RELEASE_ID" --channel "$RELEASE_CHANNEL" \
+            --preparation-commit "$PREPARATION_COMMIT"

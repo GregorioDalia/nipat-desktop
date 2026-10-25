@@ -81,6 +81,21 @@ class ScientificSelection(unittest.TestCase):
     def test_manual_request_runs_scientific_checks_without_changes(self):
         self.assertTrue(changes.scientific_decision(self.base, self.base, force=True, repository=self.root)[0])
 
+    def test_new_or_renamed_tests_cannot_silently_skip_scientific_integration(self):
+        # A whitelist misses future regression tests: the directory is the contract.
+        for name in ("tests/test_previously_unknown_regression.py", "tests/new_area/test_workflow.py",
+                     ".github/scripts/ci_control.py"):
+            with self.subTest(path=name):
+                self.write(name, "changed\n")
+                self.assertTrue(self.selected())
+                self.base = self.git("rev-parse", "HEAD")
+
+    def test_deleting_a_test_requires_scientific_integration(self):
+        self.write("tests/test_regression.py", "previous coverage\n")
+        self.base = self.commit()
+        (self.root / "tests/test_regression.py").unlink()
+        self.assertTrue(self.selected())
+
 
 if __name__ == "__main__":
     unittest.main()

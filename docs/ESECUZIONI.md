@@ -117,6 +117,12 @@ Conservare insieme `output`, `work`, `run.json` ed `execution.log`, oltre agli
 input originali necessari alla riproduzione. Per concatenare analisi,
 selezionare gli output compatibili del run completato come input del
 successivo; ogni passaggio mantiene una propria cartella e un proprio record.
+Le tabelle individuali DNPcall possono alimentare Contamination e, con ruoli
+materni/paterni e frequenze adeguati, CPI. La
+[guida alle sequenze](GUIDA_UTILIZZO.md#risultati-e-analisi-in-sequenza)
+descrive la preparazione richiesta. La 0.6 non registra un workflow globale
+fra più run: documentare i collegamenti e l'eventuale rinomina delle copie
+utilizzate come input.
 
 I metadati contengono nomi e percorsi dei campioni e non sono anonimizzati.
 Prima di condividere una segnalazione o pubblicare un allegato, controllare

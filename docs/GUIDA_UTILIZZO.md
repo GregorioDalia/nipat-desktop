@@ -1,6 +1,6 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.6.0**, destinata al collaudo interno,
+Questa guida descrive **NIPAT Desktop 0.6.0**,
 con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
@@ -20,11 +20,10 @@ e riavvio, secondo la configurazione del computer. Le policy dell'istituzione
 possono richiedere l'intervento del servizio informatico. Non sono necessarie
 installazioni separate di Python, R, samtools o Docker Desktop.
 
-Per ottenere la candidata di collaudo, accedere a GitHub e aprire il link
-alla build riuscita fornito dal referente. Nella sezione **Artifacts**,
-selezionare **NIPAT-Setup.exe**. Si scarica un solo file eseguibile, senza
-archivi da estrarre; il download è disponibile per **14 giorni** dalla
-creazione dell'artefatto.
+Nella pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases),
+aprire la versione desiderata e scaricare **NIPAT-Setup.exe** dagli asset.
+Si utilizza un solo file eseguibile, senza archivi da estrarre. I file
+**Source code** sono destinati allo sviluppo e non sono installatori.
 
 Installare e avviare NIPAT:
 
@@ -55,7 +54,7 @@ I dettagli dell'installazione e dei suoi limiti sono in
 
 Il pacchetto Windows non è firmato da NIPAT. Se Windows o il browser ne impediscono
 l'uso, conservare il messaggio completo e il nome del file bloccato e comunicarli
-al referente del collaudo insieme alla versione del pacchetto. Le indicazioni
+al responsabile tecnico insieme alla versione del pacchetto. Le indicazioni
 per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser).
 
 ## Requisiti e avvio su Ubuntu
@@ -479,6 +478,21 @@ le esecuzioni precedenti rimangono nelle rispettive cartelle.
 La [guida alle esecuzioni](ESECUZIONI.md) descrive gli intermedi effettivamente
 conservati e il significato degli stati.
 
+Le quattro analisi non sono quattro passaggi obbligatori della stessa catena:
+
+| Composizione | Uso degli input |
+| --- | --- |
+| DNPcall → Contamination | Le tabelle in `output/individual_outputs` forniscono i conteggi necessari; scegliere un pannello coerente. |
+| DNPcall → CPI | Le tabelle individuali dei campioni appropriati forniscono i conteggi; occorre assegnare esplicitamente il ruolo materno/paterno, preparare nomi compatibili con i prefissi e fornire coppie e frequenze di popolazione. |
+| Contamination e CPI dopo DNPcall | Possono utilizzare le stesse tabelle DNPcall per analisi distinte; nessuna delle due richiede il risultato dell'altra. |
+| SNPcall sullo stesso BAM | È un'analisi separata con pannello SNP. Il suo output non è direttamente compatibile con gli schemi DNP di Contamination e CPI. |
+
+Contamination produce stime e filtra i siti secondo il proprio metodo: non
+genera automaticamente tabelle «decontaminate» da inviare a CPI.
+Il menu esegue un'analisi alla volta e non avvia automaticamente i passaggi
+successivi. L'opzione parallela di DNPcall riguarda i campioni all'interno
+di quella singola analisi, non l'orchestrazione degli altri workflow.
+
 Per una sequenza **DNPcall → Contamination**:
 
 1. Completare DNPcall e verificare stato, campioni e risultati.
@@ -487,6 +501,13 @@ Per una sequenza **DNPcall → Contamination**:
    DNPcall, oppure quella sottocartella come input. La radice del run contiene
    anche file non compatibili con Contamination.
 4. Indicare il pannello appropriato e avviare un nuovo run.
+
+Per una sequenza **DNPcall → CPI**, verificare prima la corrispondenza fra
+alias DNPcall e campioni originali in `run.json`. Preparare una cartella con
+copie delle tabelle selezionate, nominando per esempio `MotherA1.txt` la tabella
+cfDNA materna e `FatherA1.txt` quella del presunto padre; indicare poi `A1:A1`
+in CPI e fornire le frequenze di popolazione. La scelta dei ruoli non è dedotta
+dai genotipi o dagli alias. Conservare la corrispondenza fra copie e run sorgente.
 
 Conservare entrambi i run. Per preparare input modificati utilizzare copie
 separate. Un run `succeeded` attesta il completamento tecnico, non la validità
@@ -497,7 +518,7 @@ Una cartella di output parziale non dimostra il completamento del workflow.
 
 | Problema | Verifica da effettuare |
 | --- | --- |
-| Setup Windows incompleto | Conservare `setup.log` e `state.json` in `%LOCALAPPDATA%\Programs\NIPAT-Desktop\.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
+| Setup Windows incompleto | Aprire **Cartella NIPAT Desktop** dal menu Start e conservare `setup.log` e `state.json` nella sottocartella `.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
 | Preparazione Ubuntu incompleta | Conservare `setup.log` e `state.json` nella cartella di stato XDG; verificare servizio e accesso a Docker, quindi ripetere `nipat --setup`. Consultare [Installatore Linux](INSTALLATORE_LINUX.md). |
 | File non accessibile | Controllare percorso, permessi e disponibilità del disco; su Windows usare un disco locale fisso. |
 | Indice FASTA assente | Fornire il `.fai` del riferimento selezionato e, per BGZF, il `.gzi`. |

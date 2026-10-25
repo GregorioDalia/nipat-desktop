@@ -29,6 +29,11 @@ class Response(io.BytesIO):
 
 class PublishedUpdateContract(unittest.TestCase):
     def test_accepted_pair_is_discoverable_downloadable_and_channel_filtered(self):
+        for channel in ("testing", "stable"):
+            with self.subTest(channel=channel):
+                self.check_published_pair(channel)
+
+    def check_published_pair(self, channel):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             commit = "c" * 40
@@ -40,7 +45,7 @@ class PublishedUpdateContract(unittest.TestCase):
                 path = root / name
                 path.write_bytes(b"fixture bytes for verified " + system.encode())
                 pair[system] = {"file": name, "sha256": publisher.sha256(path)}
-            document = publisher.write_update_manifest(root, manifest, pair, "testing")
+            document = publisher.write_update_manifest(root, manifest, pair, channel)
             release_url = f"{WEB}/releases/tag/{tag}"
             payloads = {}
             assets = []
@@ -51,7 +56,7 @@ class PublishedUpdateContract(unittest.TestCase):
                 assets.append({"name": name, "state": "uploaded", "size": len(content),
                                "browser_download_url": url,
                                "digest": "sha256:" + hashlib.sha256(content).hexdigest()})
-            release = {"tag_name": tag, "draft": False, "prerelease": True,
+            release = {"tag_name": tag, "draft": False, "prerelease": channel == "testing",
                        "published_at": "2026-10-25T12:00:00Z", "html_url": release_url, "assets": assets}
             payloads[f"{API}/releases?per_page=100&page=1"] = json.dumps([release]).encode()
             payloads[f"{API}/git/ref/tags/{tag}"] = json.dumps({
@@ -72,7 +77,12 @@ class PublishedUpdateContract(unittest.TestCase):
                 package = client.download(check.offer, root / "cache" / platform / version)
                 self.assertEqual(package.read_bytes(), (root / pair[system]["file"]).read_bytes())
                 self.assertEqual(check.offer.release_notes_url, document["release_notes_url"])
-            self.assertIsNone(client.check("0.6.0", "stable", "windows-x86_64").offer)
+            stable = client.check("0.6.0", "stable", "windows-x86_64")
+            if channel == "stable":
+                self.assertEqual(stable.status, "available", stable.message)
+                self.assertEqual(stable.offer.channel, "stable")
+            else:
+                self.assertIsNone(stable.offer)
             self.assertIsNone(client.check("0.6.2", "testing", "windows-x86_64").offer)
             self.assertTrue(all(url.startswith((API + "/", WEB + "/releases/")) for url in requests))
 

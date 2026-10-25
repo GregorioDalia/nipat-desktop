@@ -1,5 +1,7 @@
 # NIPAT CLI 0.3.0a1 — prove di dominio su Windows
 
+> Note storiche della versione indicata. Per installazione e utilizzo della versione corrente consultare il [README](../README.md) e la [guida per l’utilizzo](GUIDA_UTILIZZO.md).
+
 Pre-release per Windows 11 x64 con **WSL2 già funzionante**. La CLI comprende
 DNPcall, SNPcall, Contamination e CPI; la GUI non è ancora inclusa.
 

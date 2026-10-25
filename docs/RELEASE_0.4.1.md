@@ -1,5 +1,7 @@
 # NIPAT CLI 0.4.1 — installazione e avvio semplificati
 
+> Note storiche della versione indicata. Per installazione e utilizzo della versione corrente consultare il [README](../README.md) e la [guida per l’utilizzo](GUIDA_UTILIZZO.md).
+
 Pre-release per le prove di dominio su Windows 11 x64. Questa revisione
 semplifica la distribuzione Docker Desktop: un solo installatore e la stessa
 icona per preparare l'ambiente, aprire NIPAT o riprovare dopo un errore.
@@ -25,7 +27,7 @@ e riavvio e resta una prova separata.
 ## Verifica dell'utilizzo
 
 La [guida per l'utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.1/docs/GUIDA_UTILIZZO.md) descrive il menu e i quattro workflow.
-La [prima prova Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop)
+La [prima prova Docker Desktop](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.1/docs/VALIDAZIONE.md#prima-prova-con-docker-desktop)
 comprende preparazione e una sequenza reale DNPcall → Contamination, con log,
 risultati attesi e osservati. Registrare gli esiti per il pacchetto effettivamente
 utilizzato: queste note non attestano una nuova prova manuale su Windows.

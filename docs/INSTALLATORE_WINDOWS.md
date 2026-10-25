@@ -5,7 +5,7 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive NIPAT Desktop 0.6.0, candidata alla validazione.
+Questo documento descrive NIPAT Desktop 0.6.0.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti degli
@@ -41,7 +41,6 @@ Control, SmartScreen e un rilevamento antivirus: richiedono verifiche diverse.
 Il setup non disattiva le protezioni né introduce esclusioni antivirus.
 Il referente del collaudo deve verificare l'errore sul componente indicato
 prima di considerare utilizzabile il pacchetto su quel dispositivo.
-La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifiche.
 
 ### Procedura
 

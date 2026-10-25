@@ -1,5 +1,7 @@
 # NIPAT 0.5.0a1 — Preview per la validazione
 
+> Note storiche della versione indicata. Per installazione e utilizzo della versione corrente consultare il [README](../README.md) e la [guida per l’utilizzo](GUIDA_UTILIZZO.md).
+
 NIPAT 0.5.0a1 esegue DNPcall, SNPcall, Contamination e CPI attraverso un menu
 testuale guidato e comandi riproducibili. Questa pre-release è destinata
 alla verifica tecnica e alla valutazione di dominio. Non include una GUI
@@ -45,8 +47,8 @@ aggiornamento fra versioni differenti. Gli autotest verificano i casi
 inclusi: i dati e i parametri dello specifico impiego richiedono valutazione
 di dominio.
 
-Consultare la [guida per l’utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/v0.5.0a1/docs/GUIDA_UTILIZZO.md), i requisiti di
-[distribuzione](https://github.com/GregorioDalia/nipat-desktop/blob/v0.5.0a1/docs/DISTRIBUZIONE.md) e la [scheda di validazione](https://github.com/GregorioDalia/nipat-desktop/blob/v0.5.0a1/docs/VALIDAZIONE.md).
+Consultare la [guida per l’utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/f4f6930c08c1d6f23554f38224a47ae243d676f1/docs/GUIDA_UTILIZZO.md), i requisiti di
+[distribuzione](https://github.com/GregorioDalia/nipat-desktop/blob/f4f6930c08c1d6f23554f38224a47ae243d676f1/docs/DISTRIBUZIONE.md) e la [scheda di validazione](https://github.com/GregorioDalia/nipat-desktop/blob/f4f6930c08c1d6f23554f38224a47ae243d676f1/docs/VALIDAZIONE.md).
 Il codice originale NIPAT è distribuito con licenza
-[GPL-3.0-or-later](https://github.com/GregorioDalia/nipat-desktop/blob/v0.5.0a1/LICENSE); le attribuzioni sono in
-[THIRD_PARTY_NOTICES.md](https://github.com/GregorioDalia/nipat-desktop/blob/v0.5.0a1/THIRD_PARTY_NOTICES.md).
+[GPL-3.0-or-later](https://github.com/GregorioDalia/nipat-desktop/blob/f4f6930c08c1d6f23554f38224a47ae243d676f1/LICENSE); le attribuzioni sono in
+[THIRD_PARTY_NOTICES.md](https://github.com/GregorioDalia/nipat-desktop/blob/f4f6930c08c1d6f23554f38224a47ae243d676f1/THIRD_PARTY_NOTICES.md).

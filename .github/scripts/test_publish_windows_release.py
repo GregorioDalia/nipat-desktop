@@ -834,6 +834,134 @@ class ReleaseGuards(unittest.TestCase):
             publisher.verify_uploaded(dict(sent, assets=[]), {}, COMMIT, "v0.6.0", "notes",
                                       complete=True, channel="testing")
 
+    def prepared_draft(self, channel="testing"):
+        path = self.setup / "NIPAT-Setup.exe"
+        files = {path.name: path}
+        release = {
+            "id": 42, "draft": True, "prerelease": channel == "testing", "target_commitish": COMMIT,
+            "tag_name": "v0.6.0", "body": "reviewed notes", "html_url": "https://github.com/example/draft/42",
+            "assets": [{"name": path.name, "state": "uploaded", "size": path.stat().st_size,
+                        "digest": f"sha256:{publisher.sha256(path)}"}],
+        }
+        return files, release
+
+    def test_prepare_creates_complete_private_draft_without_publication(self):
+        files, prepared = self.prepared_draft()
+        empty = dict(prepared, assets=[])
+        with patch.object(publisher, "find_release", return_value=None), \
+                patch.object(publisher, "create_draft", return_value=empty) as create, \
+                patch.object(publisher, "api", return_value=prepared), \
+                patch.object(publisher, "check_tag"), patch.object(publisher, "command") as command:
+            result = publisher.process_release("prepare", files, COMMIT, "v0.6.0", "0.6.0",
+                                               "reviewed notes", self.root)
+        self.assertTrue(result["draft"])
+        create.assert_called_once()
+        command.assert_called_once_with("gh", "release", "upload", "v0.6.0",
+                                        str(files["NIPAT-Setup.exe"]), "--repo", publisher.REPO)
+
+    def test_prepare_resumes_complete_draft_without_reuploading(self):
+        files, prepared = self.prepared_draft()
+        with patch.object(publisher, "api", return_value=prepared), \
+                patch.object(publisher, "check_tag"), patch.object(publisher, "command") as command, \
+                patch.object(publisher, "create_draft") as create:
+            result = publisher.process_release("prepare", files, COMMIT, "v0.6.0", "0.6.0",
+                                               "reviewed notes", self.root, draft_id="42")
+        self.assertTrue(result["draft"])
+        command.assert_not_called()
+        create.assert_not_called()
+
+    def test_publish_requires_explicit_draft_and_preparation_identity_before_network(self):
+        for additional in ([], ["--draft-release-id", "42"], ["--preparation-commit", "b" * 40]):
+            with self.subTest(additional=additional), \
+                    patch("sys.argv", ["publisher", "--operation", "publish", "--run-id", "123",
+                                       "--source-commit", COMMIT, *additional]), \
+                    patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
+                with self.assertRaisesRegex(ValueError, "draft ID and preparation commit"):
+                    publisher.main()
+                command.assert_not_called()
+                api.assert_not_called()
+
+    def test_publish_blocks_revoked_or_changed_acceptance_before_network(self):
+        parts = self.joint_fixture()
+        original = parts[-1]
+        changed = copy.deepcopy(original)
+        changed["tests"]["windows_clean_wsl"]["tester"] = "Different operator"
+        for current in (changed, dict(original, decision="pending")):
+            with self.subTest(decision=current["decision"]), \
+                    patch("sys.argv", ["publisher", "--operation", "publish", "--run-id", "123",
+                                       "--source-commit", COMMIT, "--draft-release-id", "42",
+                                       "--preparation-commit", "c" * 40]), \
+                    patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                            "GITHUB_EVENT_NAME": "workflow_dispatch"}), \
+                    patch.object(publisher.subprocess, "run"), \
+                    patch.object(publisher, "committed_version", return_value="0.6.0"), \
+                    patch.object(publisher, "source_bytes", side_effect=lambda commit, path:
+                                 json.dumps(original if commit == "c" * 40 else current).encode()), \
+                    patch.object(publisher, "command", return_value="b" * 40) as command, \
+                    patch.object(publisher, "api") as api:
+                with self.assertRaisesRegex(ValueError, "changed since preparation|pending or rejected"):
+                    publisher.main()
+                command.assert_called_once_with("git", "rev-parse", "HEAD")
+                api.assert_not_called()
+
+    def test_publish_rejects_any_changed_or_incomplete_draft_without_repair(self):
+        files, prepared = self.prepared_draft()
+        changes = {
+            "digest": lambda value: value["assets"][0].update(digest="sha256:" + "0" * 64),
+            "missing_asset": lambda value: value.update(assets=[]),
+            "source": lambda value: value.update(target_commitish="d" * 40),
+            "tag": lambda value: value.update(tag_name="v0.6.1"),
+            "notes": lambda value: value.update(body="unreviewed notes"),
+            "notes_whitespace": lambda value: value.update(body="reviewed notes\n"),
+            "channel": lambda value: value.update(prerelease=False),
+            "published": lambda value: value.update(draft=False),
+            "identity": lambda value: value.update(id=99),
+        }
+        for name, change in changes.items():
+            altered = copy.deepcopy(prepared)
+            change(altered)
+            with self.subTest(change=name), patch.object(publisher, "api", return_value=altered), \
+                    patch.object(publisher, "check_tag"), patch.object(publisher, "command") as command, \
+                    patch.object(publisher, "create_draft") as create:
+                with self.assertRaises(ValueError):
+                    publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
+                                              "reviewed notes", self.root, draft_id="42")
+                command.assert_not_called()
+                create.assert_not_called()
+
+    def test_publish_promotes_only_verified_stable_draft_to_latest(self):
+        for channel in ("testing", "stable"):
+            files, prepared = self.prepared_draft(channel)
+            published = dict(prepared, draft=False)
+            responses = [prepared, published] + ([published] if channel == "stable" else [])
+            with self.subTest(channel=channel), patch.object(publisher, "api", side_effect=responses) as api, \
+                    patch.object(publisher, "check_tag") as tag, \
+                    patch.object(publisher, "command") as command, patch.object(publisher, "create_draft") as create:
+                result = publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
+                                                   "reviewed notes", self.root, channel=channel, draft_id="42")
+            self.assertFalse(result["draft"])
+            command.assert_called_once_with("gh", "api", f"repos/{publisher.REPO}/releases/42",
+                                            "--method", "PATCH", "--input", str(self.root / "publish-release.json"))
+            payload = json.loads((self.root / "publish-release.json").read_text())
+            self.assertEqual(payload, {"draft": False, "prerelease": channel == "testing",
+                                       "make_latest": "true" if channel == "stable" else "false"})
+            self.assertEqual(api.call_args.args[0], "releases/latest" if channel == "stable" else "releases/42")
+            tag.assert_called_with("v0.6.0", COMMIT, required=True)
+            create.assert_not_called()
+
+    def test_publish_checks_result_assets_and_latest_pointer(self):
+        files, prepared = self.prepared_draft("stable")
+        published = dict(prepared, draft=False)
+        tampered = copy.deepcopy(published)
+        tampered["assets"][0]["digest"] = "sha256:" + "0" * 64
+        for responses, error in (([prepared, tampered], "integrity"),
+                                 ([prepared, published, {"id": 99}], "Latest")):
+            with self.subTest(error=error), patch.object(publisher, "api", side_effect=responses), \
+                    patch.object(publisher, "check_tag"), patch.object(publisher, "command"):
+                with self.assertRaisesRegex(ValueError, error):
+                    publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
+                                              "reviewed notes", self.root, channel="stable", draft_id="42")
+
 
 if __name__ == "__main__":
     unittest.main()

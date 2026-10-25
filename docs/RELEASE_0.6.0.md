@@ -1,8 +1,10 @@
 # NIPAT Desktop 0.6.0
 
-NIPAT Desktop 0.6.0 è una candidata alla validazione tecnica e di dominio.
-Queste note descrivono il contenuto del pacchetto; non attestano il completamento
-delle prove di accettazione o una validazione scientifica generale.
+NIPAT Desktop 0.6.0 offre quattro analisi scientifiche locali, un menu testuale
+guidato, configurazione persistente e aggiornamenti dall'applicazione.
+La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
+identifica i pacchetti effettivamente pubblicati. Queste note descrivono le
+funzionalità della versione; non attestano una validazione scientifica generale.
 
 ## Installazione
 
@@ -11,8 +13,7 @@ delle prove di accettazione o una validazione scientifica generale.
 | Windows 11 x64 | `NIPAT-Setup.exe`, con Python portabile, ambiente WSL2 dedicato e immagine scientifica incorporata. | Doppio clic sul setup, poi sul collegamento **NIPAT Desktop**. |
 | Ubuntu 24.04 LTS x86_64 | `nipat-desktop_0.6.0_amd64.deb`, con applicazione e stessa immagine scientifica. | Installazione con APT; collegamento **NIPAT Desktop** oppure comando `nipat`. |
 
-NIPAT Desktop utilizza identità e percorsi propri. Le installazioni NIPAT 0.4
-e 0.5 restano separate. Su Windows il setup consente di scegliere applicazione,
+NIPAT Desktop utilizza identità e percorsi propri. Su Windows il setup consente di scegliere applicazione,
 ambiente WSL, cache, dati e risultati; aggiornamento e riparazione dello stesso
 prodotto conservano le destinazioni e i file estranei ai componenti installati.
 

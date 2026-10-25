@@ -1,8 +1,9 @@
 # NIPAT CLI 0.3.0a2 — interazione guidata e avvio Windows
 
+> Note storiche della versione indicata. Per installazione e utilizzo della versione corrente consultare il [README](../README.md) e la [guida per l’utilizzo](GUIDA_UTILIZZO.md).
+
 Note storiche del candidato `0.3.0a2`, conservate per distinguere le evidenze
-raccolte durante lo sviluppo. La versione destinata alla consegna per il testing
-è [0.4.0](RELEASE_0.4.0.md); questi appunti non ne attestano le prove.
+raccolte durante lo sviluppo; non attestano prove di versioni successive.
 
 ## Novità
 

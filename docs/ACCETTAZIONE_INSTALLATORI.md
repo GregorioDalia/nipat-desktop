@@ -20,8 +20,8 @@ commit revisionato destinato alla distribuzione. La build deve provenire
 da questo repository, essere avviata manualmente e avere superato il
 controllo `installer-required`. Può essere eseguita sul branch di sviluppo
 prima dell’integrazione: ciò consente di provare e accettare gli installatori
-senza modificare `main`. Le build automatiche di pull request servono alla
-revisione e non sono pubblicabili.
+senza modificare `main`. I controlli automatici delle pull request non
+producono un'autorizzazione alla distribuzione.
 
 La sequenza prevista è:
 
@@ -29,8 +29,11 @@ La sequenza prevista è:
 2. Completare le prove e compilare l’accettazione dei file prodotti.
 3. Dopo approvazione, integrare sorgenti e record in `main`, conservando
    il commit compilato nella sua storia.
-4. Avviare il publisher da `main` per distribuire gli stessi file, senza
-   una nuova build.
+4. Avviare **Prepare or publish verified release** da `main` con operazione
+   `prepare` per creare una bozza completa degli stessi pacchetti.
+5. Esaminare la bozza e avviare separatamente `publish`, indicando ID della
+   bozza e commit di preparazione. Questa operazione ricontrolla le evidenze
+   senza ricompilare o sostituire i file.
 
 Una riscrittura dei commit durante l’integrazione può rendere il commit
 compilato estraneo alla storia di `main`: in quel caso la pubblicazione
@@ -130,10 +133,9 @@ Su Windows registrare anche lo stato di Smart App Control e gli eventuali
 avvisi di Chrome, SmartScreen o antivirus. Provare download, setup, avvio,
 abilitazione dei prerequisiti e disinstallazione con le protezioni attive.
 Un blocco richiede il nome del componente e il testo dell'avviso; un'installazione
-completata dopo un aggiramento non soddisfa questo controllo. La verifica delle
-firme deve riguardare i file finali: una firma applicata dopo il collaudo modifica
-i digest e richiede una nuova candidata. Consultare la
-[copertura della firma Windows](FIRMA_WINDOWS.md).
+completata dopo un aggiramento non soddisfa questo controllo. Il pacchetto
+non è firmato digitalmente da NIPAT: l'esito sul dispositivo deve essere
+registrato senza attribuire al checksum il valore di una firma del distributore.
 
 Per entrambi i sistemi includere input fuori dalla cartella dell’applicazione,
 percorsi con spazi e caratteri non ASCII e una destinazione dei risultati

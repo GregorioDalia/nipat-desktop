@@ -22,6 +22,9 @@ di analisi remoto.
 Il client e il motore includono la stessa libreria di preparazione, ma non
 condividono file montati dall'applicazione. Gli algoritmi scientifici risiedono
 negli script R; gli adattatori Python preparano le loro interfacce di file.
+Ogni richiesta identifica una sola analisi. La versione 0.6 non contiene un
+orchestratore di dipendenze tra run: il riuso degli output compatibili è
+esplicito e ogni passaggio conserva input e metadati propri.
 
 ## Ambienti di esecuzione
 

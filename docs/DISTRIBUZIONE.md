@@ -1,6 +1,6 @@
 # Distribuzione e requisiti
 
-Questo documento descrive **NIPAT Desktop 0.6.0**, candidata alla validazione. Consultare la pagina
+Questo documento descrive **NIPAT Desktop 0.6.0**. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate, i pacchetti disponibili e le relative evidenze.
 Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
@@ -21,11 +21,11 @@ l'integrità del motore prima dell'esecuzione.
 
 ## Pacchetto Windows
 
-Per il collaudo, accedere a GitHub e aprire l'esecuzione riuscita del workflow
-**Installers (review build)** indicata dal referente. Nella sezione
-**Artifacts**, scaricare **NIPAT-Setup.exe**: si ottiene direttamente l'EXE,
-senza ZIP da estrarre. Il download resta disponibile per **14 giorni** dalla
-creazione; conservare il link al run per identificare la build installata.
+Scaricare `NIPAT-Setup.exe` dagli asset della versione scelta nella pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+È sufficiente un solo file eseguibile: non occorre estrarre uno ZIP.
+Le build tecniche prima della pubblicazione seguono la procedura di
+[accettazione degli installatori](ACCETTAZIONE_INSTALLATORI.md).
 
 `NIPAT-Setup.exe` incorpora applicazione, componenti di avvio, Python
 portabile, ambiente Linux e archivio dell'immagine scientifica. Il setup

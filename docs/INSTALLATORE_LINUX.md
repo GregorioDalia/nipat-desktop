@@ -49,7 +49,9 @@ analisi con percorsi o proprietari dei risultati differenti da quelli attesi.
 
 ## Installazione e primo avvio
 
-Dalla cartella che contiene il file ricevuto da una build verificata:
+Scaricare il pacchetto `.deb` della versione scelta dagli asset della pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+Dalla cartella che contiene il pacchetto:
 
 ```bash
 sudo apt install ./nipat-desktop_0.6.0_amd64.deb

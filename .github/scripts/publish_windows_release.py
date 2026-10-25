@@ -1,4 +1,4 @@
-"""Publish one already-successful installer build, without rebuilding its assets."""
+"""Prepare a verified draft, or explicitly publish it without rebuilding assets."""
 
 import argparse
 import hashlib
@@ -445,12 +445,13 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     return manifest
 
 
-def verify_uploaded(release, files, commit, tag, notes, complete=False, channel="testing"):
+def verify_uploaded(release, files, commit, tag, notes, complete=False, channel="testing", expect_draft=True):
     require(channel in {"stable", "testing"}, "Unknown publication channel")
-    require(release["draft"] and release["prerelease"] == (channel == "testing"),
-            "Existing release is not a draft pre-release or stable draft for the selected channel")
+    require(release["draft"] == expect_draft and release["prerelease"] == (channel == "testing"),
+            "Existing release is not a draft pre-release or stable draft for the selected channel"
+            if expect_draft else "Publication was not confirmed for the selected channel")
     require(release["target_commitish"] == commit and release["tag_name"] == tag
-            and release["body"].strip() == notes.strip(), "Existing draft belongs to different source or notes")
+            and release["body"] == notes, "Existing draft belongs to different source or notes")
     assets = release["assets"]
     names = [asset["name"] for asset in assets]
     require(len(names) == len(set(names)) and set(names) <= set(files), "Unexpected/duplicate release assets")
@@ -497,30 +498,86 @@ def create_draft(tag, version, commit, notes, payload_path, channel="testing"):
                               "--input", str(payload_path)))
 
 
+def process_release(operation, files, commit, tag, version, notes, root, channel="testing", draft_id=""):
+    """Publishing never creates, repairs, replaces or adds assets to a prepared draft."""
+    require(operation in {"prepare", "publish"}, "Unknown release operation")
+    publication_channel(version, channel)
+    require(operation != "publish" or draft_id, "Publishing requires the exact prepared draft ID")
+    check_tag(tag, commit)
+    release = api(f"releases/{draft_id}") if draft_id else find_release(tag)
+    if release is None and operation == "prepare":
+        release = create_draft(tag, version, commit, notes, root / "create-release.json", channel=channel)
+    require(release is not None, "Draft release not found")
+    require(type(release.get("id")) is int and release["id"] > 0
+            and (not draft_id or str(release["id"]) == str(draft_id)), "Unexpected draft release ID")
+    present = verify_uploaded(release, files, commit, tag, notes,
+                              complete=operation == "publish", channel=channel)
+    if operation == "prepare":
+        missing = [str(files[name]) for name in sorted(set(files) - present)]
+        if missing:
+            command("gh", "release", "upload", tag, *missing, "--repo", REPO)
+        prepared = api(f"releases/{release['id']}")
+        require(prepared.get("id") == release["id"], "Unexpected prepared release ID")
+        verify_uploaded(prepared, files, commit, tag, notes, complete=True, channel=channel)
+        check_tag(tag, commit)
+        return prepared
+    # Address the exact reviewed draft ID, rather than selecting a release by tag.
+    # This is the only mutation in the publish phase; no build or asset upload occurs.
+    payload = root / "publish-release.json"
+    payload.write_text(json.dumps({"draft": False, "prerelease": channel == "testing",
+                                   "make_latest": "true" if channel == "stable" else "false"}), encoding="utf-8")
+    command("gh", "api", f"repos/{REPO}/releases/{release['id']}", "--method", "PATCH", "--input", str(payload))
+    published = api(f"releases/{release['id']}")
+    require(published.get("id") == release["id"], "Unexpected published release ID")
+    verify_uploaded(published, files, commit, tag, notes, complete=True, channel=channel, expect_draft=False)
+    check_tag(tag, commit, required=True)
+    if channel == "stable":
+        require(api("releases/latest").get("id") == published["id"], "Stable release was not confirmed as Latest")
+    return published
+
+
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--operation", choices=("prepare", "publish"), default="prepare")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--draft-release-id", default="")
+    parser.add_argument("--preparation-commit", default="")
     parser.add_argument("--channel", choices=("testing", "stable"), default="testing")
     args = parser.parse_args()
     require(re.fullmatch(r"[1-9][0-9]*", args.run_id), "Invalid run ID")
     require(re.fullmatch(r"[0-9a-f]{40}", args.source_commit), "Full source SHA is required")
     require(not args.draft_release_id or re.fullmatch(r"[1-9][0-9]*", args.draft_release_id), "Invalid draft ID")
+    require(not args.preparation_commit or re.fullmatch(r"[0-9a-f]{40}", args.preparation_commit),
+            "Full preparation SHA is required")
+    require(args.operation != "publish" or (args.draft_release_id and args.preparation_commit),
+            "Publishing requires the exact prepared draft ID and preparation commit")
     require(os.environ.get("GITHUB_REPOSITORY") == REPO
             and os.environ.get("GITHUB_REF") == "refs/heads/main"
             and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch",
             "Publication must run through the manual workflow on this repository's main branch")
     commit = args.source_commit
-    publication_commit = command("git", "rev-parse", "HEAD")
-    require(re.fullmatch(r"[0-9a-f]{40}", publication_commit), "Invalid publication procedure commit")
+    procedure_commit = command("git", "rev-parse", "HEAD")
+    require(re.fullmatch(r"[0-9a-f]{40}", procedure_commit), "Invalid publication procedure commit")
+    require(args.operation != "prepare" or not args.preparation_commit,
+            "Preparation uses the current main commit; leave preparation_commit empty")
+    # Keep the generated provenance byte-for-byte stable across the two phases.
+    # Current main still supplies the procedure and must retain the same acceptance.
+    publication_commit = args.preparation_commit or procedure_commit
     subprocess.run(["git", "merge-base", "--is-ancestor", commit, "HEAD"], check=True)
+    if args.operation == "publish":
+        subprocess.run(["git", "merge-base", "--is-ancestor", publication_commit, "HEAD"], check=True)
+        subprocess.run(["git", "merge-base", "--is-ancestor", commit, publication_commit], check=True)
     version = committed_version(commit)
     publication_channel(version, args.channel)
     acceptance = acceptance_bytes = None
     if requires_installation_profile(version):
         validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
         acceptance, acceptance_bytes = validator.load(version, commit, int(args.run_id), publication_commit, source_bytes)
+        if args.operation == "publish":
+            _, current_acceptance_bytes = validator.load(version, commit, int(args.run_id), procedure_commit, source_bytes)
+            require(acceptance_bytes == current_acceptance_bytes,
+                    "Committed acceptance changed since preparation; publishing is blocked")
     require_publication_supported(version, acceptance, commit, int(args.run_id))
     run = api(f"actions/runs/{args.run_id}")
     validate_run(run, commit, int(args.run_id))
@@ -585,31 +642,21 @@ def main():
                       "non costituiscono una validazione clinica o di dominio.\n")
         notes = notes.strip()
         files = {path.name: path for path in output.iterdir()}
-        check_tag(tag, commit)
-        release = api(f"releases/{args.draft_release_id}") if args.draft_release_id else find_release(tag)
-        if release is None:
-            release = create_draft(tag, manifest["version"], commit, notes, root / "create-release.json",
-                                   channel=args.channel)
-        require(release is not None, "Draft release not found")
-        present = verify_uploaded(release, files, commit, tag, notes, channel=args.channel)
-        missing = [str(files[name]) for name in sorted(set(files) - present)]
-        if missing:
-            command("gh", "release", "upload", tag, *missing, "--repo", REPO)
-        release = api(f"releases/{release['id']}")
-        verify_uploaded(release, files, commit, tag, notes, complete=True, channel=args.channel)
-        check_tag(tag, commit)
-        command("gh", "release", "edit", tag, "--repo", REPO, "--draft=false",
-                "--prerelease=" + str(args.channel == "testing").lower(), "--latest=false")
-        published = api(f"releases/{release['id']}")
-        require(not published["draft"] and published["prerelease"] == (args.channel == "testing"),
-                "Publication was not confirmed for the selected channel")
-        check_tag(tag, commit, required=True)
-        print(published["html_url"])
+        release = process_release(args.operation, files, commit, tag, manifest["version"], notes, root,
+                                  channel=args.channel, draft_id=args.draft_release_id)
+        action = "Prepared private draft" if args.operation == "prepare" else "Published"
+        report = (f"{action} [{tag}]({release['html_url']}) from `{commit}`.\n\n"
+                  f"Build run: `{args.run_id}`; channel: `{args.channel}`; draft ID: `{release['id']}`; "
+                  f"preparation commit: `{publication_commit}`.\n\n"
+                  f"All {len(files)} release assets match their verified SHA-256 digests.\n")
+        if args.operation == "prepare":
+            report += ("\nNo release was published. Review this draft, then run the manual workflow with operation=publish "
+                       "and the same build run, source, channel, draft ID and preparation commit.\n")
+        print(report)
         summary = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary:
             with open(summary, "a", encoding="utf-8") as stream:
-                stream.write(f"Published [{tag}]({published['html_url']}) from `{commit}`.\n\n")
-                stream.write(f"All {len(files)} release assets were checked against their SHA-256 digests before publication.\n")
+                stream.write(report)
 
 
 if __name__ == "__main__":

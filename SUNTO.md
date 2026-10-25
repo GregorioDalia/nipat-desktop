@@ -1,8 +1,9 @@
 # NIPAT in sintesi
 
 **NIPAT Desktop 0.6.0** è un'applicazione locale per eseguire quattro workflow
-scientifici da un menu testuale guidato o dalla riga di comando. La candidata
-0.6.0 è destinata alla validazione e non include una GUI grafica.
+scientifici da un menu testuale guidato o dalla riga di comando. Ogni avvio
+elabora un'analisi; la versione 0.6.0 non include una GUI grafica né il
+concatenamento automatico dei workflow.
 
 | Workflow | Funzione |
 | --- | --- |
@@ -53,8 +54,10 @@ L'eventuale verifica all'avvio è disattivata inizialmente e mostra solo un avvi
 Ogni analisi crea un nuovo run con risultati in `output`, intermedi conservati
 in `work`, metadati in `run.json` e messaggi in `execution.log`. Le cartelle
 esistenti non vengono sovrascritte. Per concatenare analisi si selezionano i
-risultati compatibili del run precedente, ad esempio le tabelle individuali
-DNPcall come input di Contamination.
+risultati compatibili del run precedente: le tabelle individuali DNPcall
+alimentano Contamination e, con campioni materni/paterni appropriati e frequenze
+di popolazione, CPI. SNPcall usa un proprio pannello e produce una tabella SNP,
+che non è un input diretto degli altri due workflow.
 
 La verifica degli strumenti controlla l'ambiente di esecuzione; gli autotest
 confrontano casi noti. Il completamento di un run non sostituisce la

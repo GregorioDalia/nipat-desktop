@@ -10,14 +10,12 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**NIPAT Desktop 0.6.0 — candidata alla validazione.**
-Questa documentazione descrive la candidata prodotta dalle build di revisione;
-non attesta una pubblicazione o il completamento dell'accettazione. Consultare la pagina
+**Versione documentata: NIPAT Desktop 0.6.0.** Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
-versioni pubblicate e i relativi installatori. Gli artefatti GitHub Actions
-sono pacchetti di revisione tecnica e non equivalgono a una release.
-La disponibilità del software e il superamento degli autotest non equivalgono
-alla validazione scientifica per uno specifico impiego.
+versioni effettivamente pubblicate, gli installatori e le rispettive note.
+Gli artefatti GitHub Actions sono pacchetti di verifica tecnica, distinti dalle
+release. NIPAT è software per la ricerca: gli autotest verificano casi noti,
+mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
 
 ## Analisi disponibili
 
@@ -31,7 +29,9 @@ alla validazione scientifica per uno specifico impiego.
 Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
 cartella distinta con risultati, intermedi conservati, metadati e log.
 I run esistenti non vengono sovrascritti. I quattro workflow sono disponibili
-sia nel menu sia nella CLI diretta; la GUI grafica non fa parte della 0.6.
+sia nel menu sia nella CLI diretta. Ogni avvio esegue una singola analisi;
+le sequenze si compongono selezionando gli output compatibili del run precedente.
+L'interfaccia della 0.6 è testuale.
 
 ## Piattaforme e installazione
 
@@ -63,7 +63,7 @@ Requisiti, percorsi e gestione dell'installazione sono nella
 [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
 [documentazione di distribuzione](docs/DISTRIBUZIONE.md).
 
-Il pacchetto Windows non dispone di una firma Authenticode NIPAT. Le protezioni
+Il pacchetto Windows non è firmato digitalmente da NIPAT. Le protezioni
 del computer possono impedirne il download, la preparazione o l'avvio;
 l'installazione va verificata sui dispositivi destinati al collaudo. La
 [guida Windows](docs/INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser)
@@ -170,8 +170,11 @@ Lo stato `succeeded` indica il completamento tecnico del workflow. La
 concordanza scientifica richiede il confronto con risultati attesi appropriati.
 
 `doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
-`self-test` confronta i risultati dei casi di prova distribuiti; non copre
-ogni combinazione possibile di dati e parametri. La
+`self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
+modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
+La CI esegue inoltre regressioni DNPcall sintetiche e controlli del motore;
+la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
+verifica degli installatori e pubblicazione. La
 [scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove
 indipendenti e problemi riproducibili.
 

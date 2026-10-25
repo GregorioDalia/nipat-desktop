@@ -1,57 +1,17 @@
 name: Installers (review build)
 
 on:
-  # The stable CI gate runs on every PR. Large installer builds are reviewed
-  # only for packaging/runtime changes, or requested explicitly for a release.
-  pull_request:
-    paths:
-      - 'installer/**'
-      - 'assets/branding/**'
-      - 'docker/**'
-      - 'engine/**'
-      - 'src/nipat_scientific/**'
-      - 'scientific/**'
-      - 'tests/test_engine_package.py'
-      - 'tests/test_contamination_engine.py'
-      - 'tests/test_bundled_runner.py'
-      - 'tests/test_snp_engine.py'
-      - 'tests/test_dnp_engine.py'
-      - 'tests/test_dnp_workflow.py'
-      - 'tests/test_cpi_engine.py'
-      - 'tests/fixtures/**'
-      - 'tests/test_input_modes.py'
-      - 'scripts/windows/**'
-      - '1_SETUP.cmd'
-      - '2_AVVIA.cmd'
-      - 'nipat.cmd'
-      - 'scripts/build_*'
-      - 'scripts/distribution_support.py'
-      - 'tests/test_distribution.py'
-      - 'tests/test_installer_assets.py'
-      - 'tests/test_linux_installer.py'
-      - 'tests/test_linux_launcher.py'
-      - 'tests/test_linux_installation_check.py'
-      - 'tests/test_linux_dependencies.py'
-      - 'scripts/verify_engine_package.py'
-      - 'scripts/verify_dnp_engine.py'
-      - 'scripts/verify_cpi_engine.py'
-      - 'scripts/verify_linux_installer.py'
-      - 'scripts/verify_linux_dependencies.py'
-      - 'distribution-files.txt'
-      - 'compose.yaml'
-      - 'pyproject.toml'
-      - 'src/nipat/__init__.py'
-      - '.dockerignore'
-      - '.github/workflows/windows-installer.yml'
-      - '.github/scripts/**'
+  # Installer candidates are explicit, expensive review builds. Ordinary pushes
+  # and PRs run CI without generating or publishing new installers.
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: installers-${{ github.ref }}
-  cancel-in-progress: true
+  # Each requested candidate has its own identity and is never cancelled by a push.
+  group: installers-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   windows-checks:
@@ -74,61 +34,12 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
-      - name: Windows Python unit tests
-        run: python -m unittest discover -s tests -v
-      - name: Parse scripts with Windows PowerShell 5.1
+      - name: Record the exact checkout identity
+        id: source
+        run: python .github/scripts/ci_control.py source
+      - name: Run shared Windows unit, installer and launcher checks
         shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $files = Get-ChildItem scripts/windows,installer/windows -Recurse -Filter '*.ps1' -File
-          foreach ($file in $files) {
-            $tokens = $null
-            $errors = $null
-            [void][System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$errors)
-            if ($errors.Count -gt 0) { throw ($errors | Out-String) }
-          }
-      - name: Test bootstrap guards with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-bootstrap.ps1
-      - name: Test scientific image identity with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-scientific-image.ps1
-      - name: Test resumable WSL migration with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
-      - name: Test configurable installation destinations
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-install-layout.ps1
-      - name: Test optional owned-runtime removal
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-uninstall.ps1
-      - name: Test application repair and preservation of existing files
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-repair-installation.ps1
-      - name: Test Authenticode verification policy with mocked trust results
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1
-      - name: Compile the installer definition before building the large runtime
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $compiler = & ./.github/scripts/install_inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'InnoSetup')
-          & ./installer/windows/test-installer-layout.ps1 -CompilerPath $compiler
-      - name: Compile the shared NIPAT executable
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          & ./installer/windows/build-launcher.ps1 -OutputPath (Join-Path $PWD 'build/launcher/NIPAT.exe')
-          if ($LASTEXITCODE -ne 0) { throw 'NIPAT launcher compilation failed.' }
-      - name: Test executable and script launchers with Windows PowerShell 5.1
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-launcher.ps1 -LauncherPath build/launcher/NIPAT.exe
-      - name: Test update handoff and active-session protection
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-update-handoff.ps1
-      - name: Test standalone setup and removal activity leases
-        shell: powershell
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-activity-lock.ps1
+        run: ./.github/scripts/check_windows.ps1
       - name: Retain the tested shared launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -153,10 +64,15 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
+      - name: Record the exact checkout identity
+        id: source
+        run: python .github/scripts/ci_control.py source
       - name: Python unit tests
         run: python -m unittest discover -s tests -v
       - name: CI selection, release and installer-set guard tests
         run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Validate local documentation links and anchors
+        run: python .github/scripts/check_docs.py
       - name: Check dedicated daemon helper syntax
         run: bash -n installer/runtime/nipat-engine
       - name: Set up Buildx
@@ -174,7 +90,12 @@ jobs:
           cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
           cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
       - name: Verify bundled scientific scripts without host sources
-        run: python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE"
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-engine-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Scientific regression and input-mode checks
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
@@ -190,7 +111,7 @@ jobs:
           file: installer/runtime/Dockerfile
           platforms: linux/amd64
           tags: nipat-wsl-rootfs:installer-test
-          build-args: SOURCE_COMMIT=${{ github.sha }}
+          build-args: SOURCE_COMMIT=${{ steps.source.outputs.source_commit }}
           load: true
           pull: true
           provenance: false
@@ -241,6 +162,7 @@ jobs:
           path: |
             ${{ runner.temp }}/nipat-validation/runs/**/run.json
             ${{ runner.temp }}/nipat-validation/runs/**/execution.log
+            ${{ runner.temp }}/nipat-engine-check/
           retention-days: 14
           if-no-files-found: ignore
 
@@ -470,6 +392,9 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
+      - name: Record the exact checkout identity
+        id: source
+        run: python .github/scripts/ci_control.py source
       - name: Download the verified Windows installer
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:

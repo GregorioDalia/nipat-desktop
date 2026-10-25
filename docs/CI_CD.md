@@ -11,18 +11,47 @@ prima di modificare una release.
 
 | Workflow | Attivazione | Risultato |
 | --- | --- | --- |
-| [CI](../.github/workflows/ci.yml) | Pull request, push su `main`, avvio manuale. | Test Linux/Windows, verifiche scientifiche quando richieste e controllo aggregato `required`. |
-| [Installers (review build)](../.github/workflows/windows-installer.yml) | Pull request sui percorsi di packaging/runtime indicati nel file, oppure avvio manuale. | Installatore WSL e pacchetto Ubuntu con lo stesso archivio scientifico, prove ed evidenze di costruzione. |
-| [Publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Verifica la coppia Windows/Ubuntu e l’accettazione dei file esatti, quindi pubblica nel canale scelto senza ricostruire gli asset. |
+| [CI](../.github/workflows/ci.yml) | Push sui branch, aggiornamenti delle pull request, incluse le bozze, e avvio manuale. | Test Linux/Windows, documentazione e verifiche scientifiche quando richieste; controllo aggregato `required` su pull request e `main`. |
+| [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale su un commit scelto. | Installatore WSL e pacchetto Ubuntu con lo stesso archivio scientifico, prove ed evidenze di costruzione. |
+| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Due avvii manuali distinti da `main`: `prepare`, poi `publish`. | Prepara una bozza completa verificata; dopo la revisione, ricontrolla e pubblica gli stessi file nel canale scelto. |
 
-Una build di pull request serve alla revisione ed è rifiutata dal publisher.
-Per la 0.6, una build destinata alla pubblicazione deve essere avviata
+La CI controlla ogni aggiornamento senza ricostruire gli installatori completi.
+Quando un push riguarda una pull request aperta dello stesso repository e
+dello stesso commit, e risulta avviata una CI della pull request corrispondente,
+i controlli sono assegnati alla pull request per evitare
+una seconda esecuzione equivalente. Il controllo delle pull request è sempre
+attivo; se GitHub non consente di confermare questa corrispondenza, vengono
+eseguiti anche i controlli del push. Una pull request con conflitti o priva di
+una CI confermata non sopprime quindi le verifiche del branch.
+Le esecuzioni manuali rimangono indipendenti
+e non vengono annullate da nuovi push.
+
+Una build destinata alla pubblicazione deve essere avviata
 manualmente su un commit revisionato di questo repository; può provenire
 dal branch di sviluppo prima dell’integrazione. I pacchetti vengono provati
 e accettati su quel commit. Prima della pubblicazione, sorgenti e record di
 accettazione devono essere integrati in `main`, conservando il commit
 compilato nella sua storia. Il publisher opera da `main` e riusa gli stessi
 artefatti verificati senza ricostruirli; non modifica release già pubblicate.
+Un artefatto prodotto da un evento `pull_request` non è pubblicabile.
+Il commit effettivamente compilato è quello riportato nel manifest e nel
+riepilogo di build: un checkout di pull request può identificare un merge
+temporaneo, diverso dalla testa del branch. Nome del branch e sola versione
+del programma non bastano a identificare un installatore.
+
+## Copertura e livelli di prova
+
+| Livello | Esecuzione | Verifiche principali | Limite |
+| --- | --- | --- | --- |
+| Client e contratti | CI su Linux e Windows a ogni aggiornamento applicabile. | Tutta la suite Python, CLI/menu, preferenze, percorsi, errori, interruzioni, aggiornamenti e registrazione dei run. | Processi esterni simulati dove occorre; non prova l'installazione su un PC nuovo. |
+| Documentazione | CI Linux a ogni aggiornamento applicabile. | Link a file locali, asset e sezioni Markdown, inclusi README e guide. | Non verifica disponibilità di siti esterni né correttezza scientifica della prosa. |
+| Motore scientifico reale | CI selettiva; sempre nella CI manuale e nella build installatori. | Container autonomo, quattro workflow, BAM sintetici, risultati numerici, casi non validi e isolamento degli input. | Casi sintetici e regressioni non equivalgono a validazione di dominio. |
+| Componenti Windows | CI e build installatori. | PowerShell, percorsi, migrazione, riparazione, rimozione, blocchi attività, aggiornamento, launcher e compilazione Inno Setup. | Le simulazioni WSL e il passaggio a un installatore di prova non sono una prima installazione o un aggiornamento reale fra versioni. |
+| Pacchetti completi | Build installatori manuale. | Archivio comune, importazione nel motore distribuito, confezionamento Windows/Ubuntu e ciclo APT reale sul runner. | Il runner predisposto e il container delle dipendenze non sono un desktop utente pulito. |
+| Accettazione dei sistemi destinatari | Prove registrate sui due installatori esatti. | Sei scenari Windows/Ubuntu, avvio, riavvio, conservazione dei dati e rimozione. | Attesta gli scenari registrati; la valutazione scientifica rimane distinta. |
+
+I nomi e il numero dei test possono evolvere; la copertura viene valutata
+rispetto ai comportamenti e ai rischi verificati, non al solo conteggio.
 
 ## Controlli sui sorgenti
 
@@ -41,6 +70,9 @@ la prova dell'interfaccia del setup su Windows. I controlli dell'aggiornatore
 comprendono selezione del canale, rifiuto dei metadati non coerenti, integrità
 del download, conferme esplicite e comportamento senza rete; le prove simulate
 non attestano l'installazione completa di una versione successiva.
+Il verificatore [`check_docs.py`](../.github/scripts/check_docs.py) controlla
+la documentazione mantenuta nel repository senza richieste di rete; i documenti
+importati in `scientific/vendor` restano esclusi dalla scansione dei sorgenti.
 
 Il job `scientific` costruisce il motore e avvia:
 
@@ -56,8 +88,10 @@ della costante d'errore. Le fixture dichiarano dati, valori attesi e tolleranze.
 
 La selezione delle verifiche scientifiche è definita in
 [`ci_changes.py`](../.github/scripts/ci_changes.py). Modifiche al motore, ai
-sorgenti scientifici, all'esecuzione, alle fixture e alla configurazione
-pertinente le rendono obbligatorie. Un avvio manuale le richiede sempre.
+sorgenti scientifici, a qualsiasi file sotto `src/` o `tests/`, agli script
+di verifica scientifica e alla configurazione CI pertinente le rendono
+obbligatorie. Anche una modifica ai soli test può quindi eseguire il motore.
+Un avvio manuale le richiede sempre.
 Se il confronto Git non riesce, vengono richieste per precauzione.
 Le modifiche esclusivamente documentali possono evitare la ricostruzione
 scientifica, mantenendo i controlli rapidi.
@@ -66,11 +100,15 @@ Il controllo conclusivo `required` viene valutato anche dopo un fallimento.
 Riesce soltanto se i controlli rapidi e la selezione hanno avuto successo e
 le prove scientifiche richieste sono riuscite. Un controllo obbligatorio
 fallito, annullato o saltato impedisce un esito positivo.
+I push sui branch di sviluppo espongono il nome `branch-required`, così un
+push delegato alla propria pull request non può soddisfare il controllo
+protetto `required` al suo posto.
 
-Per un repository di distribuzione, configurare la protezione di `main` con
-pull request obbligatoria, controllo `required`, branch aggiornato e divieto
-di force push e cancellazione. Queste regole sono impostazioni di GitHub,
-non vengono applicate automaticamente copiando i file del repository.
+Nel repository ufficiale `main` è protetto da pull request obbligatoria,
+controllo `required`, branch aggiornato e divieto di force push e cancellazione.
+Queste sono impostazioni GitHub, non proprietà applicate automaticamente a un
+fork copiando i file. Le azioni di CI e costruzione hanno permessi di sola
+lettura; soltanto il job di pubblicazione dispone di `contents: write`.
 
 ## Costruzione degli installatori
 
@@ -142,11 +180,20 @@ installatore Docker Desktop.
 
 ## Pubblicazione dei canali di aggiornamento
 
-**Publish verified release** richiede una scelta esplicita del canale:
+**Prepare or publish verified release** richiede una scelta esplicita del canale:
 `testing` è il valore predefinito e pubblica una pre-release; `stable` pubblica
 una release stabile e richiede una versione numerica `MAJOR.MINOR.PATCH`.
 Entrambi richiedono avvio manuale da `main`, coppia verificata e accettazione
 dei medesimi pacchetti. Nessun canale consente di evitare questi controlli.
+
+`prepare` crea e completa una bozza senza renderla pubblica. Il riepilogo
+restituisce l'ID della bozza e il commit della preparazione. Dopo averne
+controllato note, pacchetti e canale, un secondo avvio con `publish` deve
+indicare entrambi gli identificativi. La pubblicazione ricontrolla build,
+accettazione invariata e byte della bozza; non carica file mancanti e non
+ripara una bozza alterata. Una release `stable` diventa **Latest**; una
+pre-release `testing` non lo diventa. Il solo push di un branch o tag non
+pubblica software.
 
 Dopo le verifiche, il publisher genera `update-manifest.json`, lo include in
 `SHA256SUMS` e lo pubblica con gli installatori. Il manifest identifica prodotto,

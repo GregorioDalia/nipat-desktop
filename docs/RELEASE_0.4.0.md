@@ -1,5 +1,7 @@
 # NIPAT CLI 0.4.0 — pre-release per le prove di dominio
 
+> Note storiche della versione indicata. Per installazione e utilizzo della versione corrente consultare il [README](../README.md) e la [guida per l’utilizzo](GUIDA_UTILIZZO.md).
+
 Questa versione è destinata ai ricercatori che devono valutare NIPAT con
 input e risultati attesi del proprio dominio. **Pronto per il testing** non
 significa che la validazione scientifica sia completata.
@@ -31,8 +33,8 @@ richiedere Internet, autorizzazioni e riavvio e resta una verifica separata.
 
 Per queste prove si assume WSL2 funzionante. Registrare separatamente
 installazione e analisi per ciascun pacchetto nella
-[scheda di validazione](VALIDAZIONE.md), che include la
-[prima prova con Docker Desktop](VALIDAZIONE.md#prima-prova-con-docker-desktop).
+[scheda di validazione della 0.4.0](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.0/docs/VALIDAZIONE.md), che include la
+[prima prova con Docker Desktop](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.0/docs/VALIDAZIONE.md#prima-prova-con-docker-desktop).
 
 La [guida per l’utilizzo](https://github.com/GregorioDalia/nipat-desktop/blob/v0.4.0/docs/GUIDA_UTILIZZO.md) accompagna questa versione.
 Le verifiche tecniche storiche sono conservate separatamente e non attestano

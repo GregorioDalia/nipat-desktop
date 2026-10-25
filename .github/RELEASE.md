@@ -24,6 +24,9 @@ le prove e conserva quello stesso file per il confezionamento. Costruisce
 l'immagine scientifica, verifica i quattro workflow, esporta l'archivio e
 costruisce il filesystem WSL. Verifica inoltre il caricamento, l'esecuzione
 e il ricaricamento dell'archivio nel motore interno distribuito.
+Si avvia manualmente dal branch e dal commit scelti per la distribuzione.
+La CI automatica continua a verificare ogni aggiornamento dei sorgenti, ma
+non produce installatori completi a ogni push.
 
 Il builder prepara soltanto i file ammessi da `distribution-files.txt`, Python
 portabile verificato e i componenti previsti. La compilazione Inno Setup usa
@@ -51,6 +54,10 @@ scientifico, filesystem WSL e profilo di installazione. Il profilo deve
 corrispondere al sorgente del commit e al canale `desktop`.
 La versione del manifest deve coincidere con quella del `pyproject.toml`
 committato: un manifest non può scegliere un protocollo di distribuzione diverso.
+Usare il commit completo indicato dal manifest e dal riepilogo della build.
+Un eventuale artefatto storico di pull request può provenire da un merge
+temporaneo, diverso dalla testa del branch: quell'evento non è ammesso alla
+pubblicazione. Il confronto della sola versione non identifica gli stessi byte.
 
 ## Verifica dell'installatore Windows
 
@@ -112,14 +119,10 @@ operativi del pacchetto sono nell’[installatore Linux](../docs/INSTALLATORE_LI
 
 ## Accettazione dei pacchetti
 
-La verifica dei checksum e il successo dei test non attestano la firma
-Authenticode. La candidata Windows deve essere valutata anche con Smart App
-Control attivo e senza aggirare i blocchi del browser o dell'antivirus.
-La [procedura di firma Windows](../docs/FIRMA_WINDOWS.md) definisce l'ordine
-di firma, la copertura e il legame con i digest finali. Il verificatore delle
-firme è uno strumento preparatorio: il servizio di firma e il relativo
-controllo obbligatorio di pubblicazione devono essere attivati prima di
-distribuire una release dichiarata firmata.
+Il pacchetto Windows non è firmato digitalmente da NIPAT. La verifica dei
+checksum identifica i file approvati ma non autentica un distributore per
+Windows. Registrare l'esito con le protezioni dei dispositivi destinatari
+attive, inclusi eventuali blocchi del browser, di Smart App Control o antivirus.
 
 Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
 le prove sui sistemi destinatari. Una scheda generata con
@@ -146,7 +149,7 @@ dalla conservazione degli artefatti Actions.
 
 ## Protezioni della pubblicazione
 
-Il workflow **Publish verified release** è esclusivamente manuale e
+Il workflow **Prepare or publish verified release** è esclusivamente manuale e
 opera su `main`. Richiede l'ID della build, il suo commit completo e il canale
 `testing` o `stable`. `testing` è predefinito e pubblica una pre-release;
 `stable` pubblica una release stabile e accetta soltanto versioni numeriche
@@ -163,7 +166,13 @@ della build manuale, senza ricostruirli dopo l’integrazione. Le build di
 pull request vengono rifiutate. Il successo del solo workflow CI non
 sostituisce una build completa degli installatori.
 
-La procedura:
+La distribuzione richiede due avvii separati dello stesso workflow.
+
+### 1. Preparare la bozza
+
+Selezionare `operation: prepare`, il `run_id` della build accettata,
+il suo `source_commit` completo e il canale scelto. Lasciare
+`preparation_commit` vuoto. La procedura:
 
 1. verifica commit, versione, build e accettazione richiesta;
 2. scarica gli artefatti di quella build e ripete la verifica della coppia
@@ -173,8 +182,31 @@ La procedura:
 4. usa le note `docs/RELEASE_<versione>.md` del commit compilato;
 5. crea una bozza sul commit verificato e carica gli asset;
 6. verifica dimensioni e digest restituiti da GitHub;
-7. pubblica come pre-release per `testing` o release stabile per `stable`,
-   senza indicare **Latest**.
+7. conserva la release come **bozza**, senza pubblicarla, e riporta l'ID
+   della bozza e il commit di preparazione nel riepilogo Actions.
+
+Controllare nella bozza note, versione, commit sorgente, canale e nomi degli
+installatori. In questa fase l'aggiornatore NIPAT non propone il pacchetto.
+
+### 2. Pubblicare la bozza verificata
+
+Avviare nuovamente il workflow su `main` con `operation: publish`, gli stessi
+`run_id`, `source_commit` e `channel`, il `draft_release_id` restituito e
+il `preparation_commit` completo del primo avvio. Non utilizzare il commit
+del pacchetto al posto di quello della preparazione: identificano due ruoli
+diversi.
+
+La procedura ripete le verifiche del set, richiede che il record di accettazione
+sia invariato rispetto alla preparazione e controlla che la bozza contenga
+esattamente gli asset approvati. Non crea una bozza mancante, non carica asset
+e non corregge contenuti alterati. Un avanzamento di `main` è ammesso soltanto
+se le condizioni verificate rimangono soddisfatte.
+
+Dopo i controlli, `stable` pubblica una release stabile e la imposta come
+**Latest**; `testing` pubblica una pre-release senza impostarla come Latest.
+La pubblicazione della stabile viene verificata anche tramite il riferimento
+GitHub alla release Latest. Non sono previste pubblicazioni automatiche al push
+di un branch o di un tag.
 
 La verifica comprende il contenuto del `.deb`, l’evidenza di compilazione
 dell’EXE, gli archivi incorporati e le prove Linux. Non ricompila
@@ -205,9 +237,10 @@ L’esito automatico del set, con
 `publication_authorized: false`, resta distinto dall’accettazione umana;
 il publisher richiede entrambi.
 
-Un errore lascia la bozza non pubblicata. Una bozza parziale può essere
-ripresa con `draft_release_id` soltanto se commit, note e contenuti
-coincidono con quelli verificati. Release già pubblicate e tag associati
+Una preparazione interrotta può essere ripresa con `operation: prepare` e
+`draft_release_id`, soltanto se commit, note e contenuti già presenti
+coincidono con quelli verificati. `publish` richiede invece una bozza completa
+e non la modifica per recuperare errori di preparazione. Release già pubblicate e tag associati
 ad altri commit non vengono modificati. Non ricostruire un runtime per
 sostituire un archivio già verificato o pubblicato.
 
