@@ -4,9 +4,12 @@ import contextlib
 import copy
 import io
 import json
+import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -212,6 +215,18 @@ class ScientificCatalogTests(unittest.TestCase):
         result = json.loads(output.getvalue())
         self.assertEqual(set(result["workflows"]), {"cpi"})
         self.assertEqual(result["interface"], "scientific-catalog-v1")
+
+    def test_cli_json_preserves_bilingual_text_with_ascii_stdout(self):
+        environment = os.environ.copy()
+        environment["PYTHONPATH"] = str(ROOT / "src")
+        environment["PYTHONIOENCODING"] = "ascii"
+        result = subprocess.run(
+            [sys.executable, "-m", "nipat", "parameters", "--json"],
+            cwd=ROOT, env=environment, capture_output=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr.decode("ascii", errors="replace"))
+        actual = json.loads(result.stdout.decode("ascii"))
+        self.assertEqual(actual, load_catalog())
 
     def test_menu_can_consult_english_rules_and_return_without_analysis(self):
         answers = iter(["l", "2", "2", "0", "0"])

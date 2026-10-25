@@ -129,7 +129,9 @@ def main(argv: list[str] | None = None) -> int:
 
             catalog = load_catalog(args.workflow)
             if args.json:
-                print(json.dumps(catalog, ensure_ascii=False, indent=2))
+                # ASCII JSON escapes preserve the bilingual content even when
+                # redirected from a Windows console with a legacy encoding.
+                print(json.dumps(catalog, ensure_ascii=True, indent=2))
             else:
                 with Terminal() as ui:
                     for line in catalog_lines(catalog, language=args.lang, section=args.section):

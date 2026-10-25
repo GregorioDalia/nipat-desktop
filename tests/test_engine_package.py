@@ -257,9 +257,10 @@ class EnginePackageTests(unittest.TestCase):
         metadata = engine.verify_bundle(PROJECT_ROOT)
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
 
-    def relocated_command(self, *arguments):
+    def relocated_command(self, *arguments, extra_env=None):
         environment = os.environ.copy()
         environment["PYTHONPATH"] = str(PROJECT_ROOT / "src")
+        environment.update(extra_env or {})
         return subprocess.run(
             [sys.executable, str(self.root / "engine/main.py"), *arguments],
             cwd=self.root / "engine", env=environment, capture_output=True,
@@ -282,6 +283,19 @@ class EnginePackageTests(unittest.TestCase):
         selected = self.relocated_command("catalog", "cpi", "--json")
         self.assertEqual(selected.returncode, 0, selected.stderr)
         self.assertEqual(set(json.loads(selected.stdout)["workflows"]), {"cpi"})
+
+    def test_catalog_json_preserves_unicode_on_an_ascii_output_stream(self):
+        result = self.relocated_command("catalog", "--json",
+                                        extra_env={"PYTHONIOENCODING": "ascii"})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(result.stdout.isascii())
+        expected = {
+            workflow: json.loads((self.root / "lib/nipat_scientific/catalog_data" /
+                                  f"{workflow}.json").read_text(encoding="utf-8"))
+            for workflow in engine.SCRIPT_PATHS
+        }
+        self.assertFalse(json.dumps(expected, ensure_ascii=False).isascii())
+        self.assertEqual(json.loads(result.stdout)["workflows"], expected)
 
     def test_missing_catalog_never_falls_back_to_checkout(self):
         path = self.root / "lib/nipat_scientific/catalog_data/cpi.json"

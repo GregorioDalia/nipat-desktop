@@ -228,7 +228,9 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     from nipat_scientific.plan import validate_plan
                     result = validate_plan(json.loads(arguments.plan.read_text(encoding="utf-8")))
-                print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+                # JSON escapes preserve every Unicode value while keeping the
+                # transport independent of Windows console/pipe code pages.
+                print(json.dumps(result, indent=2, sort_keys=True))
                 return 0
             except (ValidationError, ValueError, UnicodeError) as exc:
                 raise BundleError(str(exc)) from exc
