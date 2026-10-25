@@ -6,7 +6,10 @@ di trasferire manualmente gli archivi dal proprio computer.
 
 La versione 0.6 richiede installatori Windows e Ubuntu dello stesso commit
 e con lo stesso archivio scientifico. La procedura verifica entrambi i
-pacchetti e richiede un’accettazione revisionata dei file esatti. Le versioni
+pacchetti e richiede una decisione di distribuzione riferita ai file esatti.
+Per la 0.6 è ammessa l'accettazione per ricerca pre-1.0: integra una prova
+manuale documentata di installazione e funzionamento con i controlli automatici,
+rendendo espliciti i collaudi estesi ancora da svolgere. Le versioni
 pubblicate e le relative evidenze sono disponibili nella pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
 Un record assente o incompleto interrompe la pubblicazione prima della
@@ -127,8 +130,23 @@ attive, inclusi eventuali blocchi del browser, di Smart App Control o antivirus.
 Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
 le prove sui sistemi destinatari. Una scheda generata con
 `release_acceptance.py` parte da `pending` e non costituisce un’autorizzazione.
-I risultati devono essere osservati sugli stessi EXE e `.deb` della build
-che si intende pubblicare.
+Il record distingue due modalità:
+
+- **Schema 1, qualificazione completa:** richiede tutti i sei scenari desktop
+  superati sugli installatori esatti della build.
+- **Schema 2, distribuzione per ricerca pre-1.0:** richiede una decisione
+  esplicita del manutentore, una prova manuale osservata di installazione e
+  funzionamento, le evidenze automatiche e l'elenco delle prove rinviate.
+  La 0.6 usa questa modalità; la valutazione con le esperte di dominio è
+  pianificata sulla 0.7. Il numero di versione o il canale `stable` non
+  trasformano questa accettazione in una validazione scientifica.
+
+Quando la prova manuale riguarda una build precedente, il record ne conserva
+il commit effettivo. La procedura confronta i sorgenti operativi di quella
+build con quelli della candidata secondo l'ambito definito nel validatore.
+Un confronto riuscito permette di riutilizzare la prova come riferimento,
+ma non attesta che il nuovo EXE sia stato installato né che i due pacchetti
+siano identici. Il confronto e i limiti sono parte delle evidenze della release.
 
 Il record viene sottoposto a revisione in
 `.github/release-acceptance/v0.6.0.json` e integrato in `main` prima della
@@ -136,9 +154,9 @@ pubblicazione, insieme al sorgente accettato. Può essere preparato e
 revisionato sul branch di sviluppo dopo le prove. È separato dai file
 incorporati negli installatori e dal commit della build provata. Collega versione,
 commit, ID della build, manifest comune, archivio scientifico e checksum
-di entrambi gli installatori alle prove completate, con responsabile,
-data UTC e collegamenti alle evidenze. Il successo della build non
-compila o approva automaticamente questo record.
+di entrambi gli installatori alla decisione, alle prove osservate e ai limiti
+dichiarati, con responsabile, data e collegamenti alle evidenze. Il successo
+della build non compila o approva automaticamente questo record.
 
 Il publisher legge l’accettazione dal commit della procedura su `main`.
 Un record mancante o non accettato interrompe l’operazione; dopo il download,
@@ -153,8 +171,10 @@ Il workflow **Prepare or publish verified release** è esclusivamente manuale e
 opera su `main`. Richiede l'ID della build, il suo commit completo e il canale
 `testing` o `stable`. `testing` è predefinito e pubblica una pre-release;
 `stable` pubblica una release stabile e accetta soltanto versioni numeriche
-`MAJOR.MINOR.PATCH`. La scelta del canale non modifica i requisiti di accettazione. Per la
-0.6, avviare manualmente **Installers (review build)** su un commit
+`MAJOR.MINOR.PATCH`. La scelta del canale non modifica i requisiti della
+modalità di accettazione selezionata. Lo schema pre-1.0 attuale è limitato
+alla serie 0.6; i criteri delle versioni successive richiedono una revisione
+esplicita. Per la 0.6, avviare manualmente **Installers (review build)** su un commit
 revisionato di questo repository: può essere il branch di sviluppo, così
 che le prove e l’accettazione precedano l’integrazione in `main`.
 
@@ -179,7 +199,9 @@ il suo `source_commit` completo e il canale scelto. Lasciare
    Windows/Ubuntu sui file effettivi;
 3. confronta pacchetti, manifest e archivio scientifico con il record di
    accettazione e prepara un elenco combinato dei checksum;
-4. usa le note `docs/RELEASE_<versione>.md` del commit compilato;
+4. usa le note `docs/RELEASE_<versione>.md` del commit compilato per lo
+   schema 1; nello schema 2 usa quelle del commit di preparazione, che
+   descrivono la decisione di ricerca e i limiti correnti;
 5. crea una bozza sul commit verificato e carica gli asset;
 6. verifica dimensioni e digest restituiti da GitHub;
 7. conserva la release come **bozza**, senza pubblicarla, e riporta l'ID
@@ -198,7 +220,8 @@ diversi.
 
 La procedura ripete le verifiche del set, richiede che il record di accettazione
 sia invariato rispetto alla preparazione e controlla che la bozza contenga
-esattamente gli asset approvati. Non crea una bozza mancante, non carica asset
+esattamente gli asset approvati. Per lo schema 2 mantiene le note del commit
+di preparazione, anche se `main` avanza. Non crea una bozza mancante, non carica asset
 e non corregge contenuti alterati. Un avanzamento di `main` è ammesso soltanto
 se le condizioni verificate rimangono soddisfatte.
 
@@ -213,7 +236,12 @@ dell’EXE, gli archivi incorporati e le prove Linux. Non ricompila
 applicazione o immagine. La release conserva i due installatori, il manifest
 comune, gli archivi runtime, le evidenze di costruzione e prova,
 `desktop-acceptance.json`, `release-provenance.json`, `update-manifest.json`
-e `SHA256SUMS`.
+e `SHA256SUMS`. Lo schema 2 include anche `baseline-source-check.json`,
+che registra l'esito e l'ambito del confronto con il riferimento manuale.
+`release-provenance.json` identifica separatamente il commit del pacchetto,
+quello della procedura e quello delle note tramite `release_notes_commit`.
+I collegamenti delle note puntano alla revisione documentale corrispondente;
+la documentazione aggiornata non comporta una ricompilazione dei pacchetti.
 Per l’installazione ordinaria l’utente scarica soltanto l’EXE o il `.deb`
 della propria piattaforma; gli altri file servono alla verifica e al recupero.
 

@@ -4,7 +4,9 @@ NIPAT Desktop 0.6.0 offre quattro analisi scientifiche locali, un menu testuale
 guidato, configurazione persistente e aggiornamenti dall'applicazione.
 La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
 identifica i pacchetti effettivamente pubblicati. Queste note descrivono le
-funzionalità della versione; non attestano una validazione scientifica generale.
+funzionalità della versione e il suo ambito di distribuzione per ricerca
+pre-1.0. La campagna di accettazione con le esperte di dominio è prevista
+sulla 0.7; la 0.6 non attesta una validazione scientifica generale.
 
 ## Installazione
 
@@ -76,9 +78,13 @@ parametri e stato in `run.json`, messaggi in `execution.log`. Le analisi in
 sequenza si compongono selezionando gli output compatibili come input del
 workflow successivo. I risultati esistenti non vengono sovrascritti.
 
-Gli autotest verificano i casi distribuiti. Le prove degli installatori e la
-valutazione di dominio richiedono evidenze distinte riferite ai pacchetti e
-agli input effettivamente utilizzati.
+Gli autotest verificano i casi distribuiti. La decisione di pubblicazione
+integra i controlli automatici con una prova manuale documentata di
+installazione e funzionamento, indicando gli scenari desktop ancora da
+verificare. Un eventuale riferimento a una build precedente richiede il
+confronto dei sorgenti operativi e non equivale a una prova del nuovo EXE.
+Le evidenze e i limiti sono conservati con la release; la valutazione di
+dominio sarà svolta sulla 0.7 con input e risultati di riferimento appropriati.
 
 ## Documentazione
 

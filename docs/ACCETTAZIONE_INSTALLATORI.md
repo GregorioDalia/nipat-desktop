@@ -1,17 +1,60 @@
 # Accettazione degli installatori
 
-Questo protocollo verifica i pacchetti **NIPAT Desktop** su Windows 11 x64
-con WSL2 e Ubuntu 24.04 LTS x86_64. Si applica agli installatori effettivi
-che si intende pubblicare, identificati da commit, build GitHub Actions e
-checksum. La riuscita della CI e gli autotest non sostituiscono queste prove.
-La pubblicazione richiede un record di accettazione revisionato e coerente
-con i pacchetti verificati; questo documento non ne attesta il completamento.
+Questo documento definisce i criteri di distribuzione e il piano di collaudo
+progressivo di **NIPAT Desktop** su Windows 11 x64 con WSL2 e Ubuntu 24.04 LTS
+x86_64. Ogni decisione identifica gli installatori tramite commit, build
+GitHub Actions e checksum e distingue prove osservate, controlli automatici
+e scenari ancora da verificare.
+
+Per la serie **0.6** è prevista una distribuzione per ricerca pre-1.0,
+basata su una prova manuale documentata di installazione e funzionamento,
+una build completa riuscita e una decisione esplicita del manutentore.
+La qualificazione desktop completa rimane un percorso distinto: il suo
+catalogo di casi non blocca automaticamente ogni release pre-1.0.
+La **0.7** è la versione prevista per la consegna alle esperte di dominio
+e per la relativa campagna di accettazione.
 
 L’accettazione tecnica riguarda installazione, avvio, conservazione dei dati
 e funzionamento dei workflow. La validazione scientifica sui dati e sugli
 scenari d’uso è documentata separatamente in [VALIDAZIONE.md](VALIDAZIONE.md).
-Una pre-release destinata alla valutazione di dominio non equivale a una
-versione scientificamente validata per ogni impiego.
+La pubblicazione nel canale `stable` identifica una versione ufficiale
+per gli aggiornamenti; non attesta una validazione scientifica generale.
+
+## Criteri di distribuzione pre-1.0
+
+L'accettazione per ricerca della 0.6 richiede:
+
+1. CI applicabile e build completa degli installatori riuscite, incluse le
+   regressioni dei quattro workflow e le prove automatiche dei pacchetti.
+2. Identità verificata di commit, manifest, archivio scientifico comune e
+   installatori Windows/Ubuntu. Pacchetti diversi richiedono una nuova decisione.
+3. Evidenza manuale di installazione pronta e di almeno una esecuzione
+   scientifica riuscita, tramite autotest o analisi DNPcall, con il commit
+   realmente osservato. Registrare anche la diagnostica quando disponibile.
+4. Revisione esplicita della distribuzione per ricerca, con responsabile,
+   data, riferimenti alle evidenze e indicazione degli scenari rinviati.
+
+Una prova svolta su una build precedente può costituire il riferimento
+manuale soltanto quando il controllo automatico conferma l'equivalenza dei
+sorgenti operativi distribuiti. Sono confrontati applicazione, motore,
+script R, configurazione, definizioni dei runtime, installatori, script di
+costruzione e fixture inclusi nell'elenco di distribuzione. Documentazione
+e strumenti `.github` di CI/pubblicazione sono esclusi da questo confronto;
+le eccezioni limitate ai due verificatori di firma rimossi sono dichiarate
+nel validatore. Altri cambiamenti, aggiunte o rimozioni di sorgenti operativi
+interrompono il riutilizzo della prova.
+
+Questa equivalenza riguarda i sorgenti, non i byte degli installatori o
+l'ambiente completo. Le evidenze devono conservare tale distinzione e non
+attribuire una prova manuale al nuovo EXE se non è stato installato.
+L'accettazione per ricerca non trasforma i sei scenari desktop rinviati in
+prove superate. Il relativo schema è autorizzato per la serie 0.6; non
+abilita automaticamente altre versioni o la qualificazione della 1.0.
+
+I test automatici vengono estesi quando un difetto, un nuovo comportamento
+o una condizione di confine possono essere riprodotti. Rimangono separati
+la copertura automatica, l'esperienza su dispositivi reali e il giudizio
+scientifico delle esperte di dominio.
 
 ## Pacchetti da provare
 
@@ -26,7 +69,8 @@ producono un'autorizzazione alla distribuzione.
 La sequenza prevista è:
 
 1. Avviare manualmente la build sul commit revisionato del branch di sviluppo.
-2. Completare le prove e compilare l’accettazione dei file prodotti.
+2. Raccogliere le prove richieste dalla modalità scelta e compilare il record
+   di accettazione, indicando esplicitamente i casi rinviati.
 3. Dopo approvazione, integrare sorgenti e record in `main`, conservando
    il commit compilato nella sua storia.
 4. Avviare **Prepare or publish verified release** da `main` con operazione
@@ -50,10 +94,18 @@ Conservare questi elementi della medesima build:
 Verificare gli SHA-256 prima di installare. Non sostituire gli archivi
 incorporati, ricompilare gli eseguibili o combinare artefatti di build diverse.
 Se i pacchetti cambiano, l’accettazione precedente non si applica.
-Gli artefatti Actions hanno scadenza: completare le prove entro la loro
+Gli artefatti Actions hanno scadenza: completare la revisione entro la loro
 conservazione, oppure ripetere build e accettazione sui nuovi artefatti.
+L’eventuale riutilizzo di una prova manuale segue i criteri di equivalenza
+dei sorgenti sopra descritti.
 
 ## Registrazione di ciascuna prova
+
+La tabella seguente costituisce il catalogo della qualificazione desktop
+completa. Nello schema 1 tutti i sei scenari devono essere superati;
+nello schema 2 della 0.6 sono dichiarati esplicitamente come rinviati.
+Le singole evidenze automatiche o manuali restano utilizzabili con il loro
+ambito effettivo, senza attribuire loro la copertura dell’intero scenario.
 
 Registrare sistema operativo e build, architettura, account utilizzato,
 stato iniziale di WSL o Docker, versione NIPAT, commit, checksum del
@@ -99,9 +151,10 @@ WSL e i checksum dei file di controllo prima e dopo ciascuna operazione.
 | Rimozione facoltativa | Selezionare la rimozione di ambiente e cache dopo avere usato più destinazioni. Controllare che vengano rimosse soltanto distribuzioni possedute da NIPAT Desktop e archivi verificati delle destinazioni registrate, inclusi quelli conservati in precedenza. Dati e risultati di tutte le destinazioni, file estranei, Docker Desktop, altre installazioni NIPAT e altre distribuzioni devono restare invariati. |
 | Annullamento e fallimenti | Annullare la disinstallazione prima della rimozione e verificare assenza di effetti. In un ambiente di prova controllato, simulare proprietà o cache non verificabili e un errore dopo una rimozione parziale; verificare arresto, messaggio, registri e risorse rimaste, quindi ripresa senza rimuovere dati o risorse estranee. |
 
-Questi casi sono requisiti di collaudo, non risultati già acquisiti.
-Non registrare `windows_reinstall_removal` come superato se uno dei casi
-richiesti non è stato eseguito o non dispone di evidenze.
+Questi casi definiscono il collaudo completo dello scenario, non risultati
+già acquisiti né un obbligo per ogni distribuzione pre-1.0. Non registrare
+`windows_reinstall_removal` come superato se uno dei casi richiesti non è
+stato eseguito o non dispone di evidenze.
 
 ## Configurazione e interazione
 
@@ -124,8 +177,8 @@ il file delle preferenze e i record dei run quando condivisibili:
 6. Aprire **Guida e informazioni** senza attivare controlli; eseguire quindi
    **Verifica ambiente** e verificare l'esito separato.
 
-Queste verifiche integrano le sei prove della tabella, senza introdurre
-ulteriori chiavi nel record di accettazione.
+Queste verifiche integrano i sei scenari della qualificazione completa.
+Registrare i casi svolti e mantenere distinti quelli non ancora eseguiti.
 
 ## Verifiche durante le analisi
 
@@ -197,9 +250,12 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Il comando riporta commit, versione e checksum e inizializza la decisione
-e le prove come `pending`. Non esegue le prove e non autorizza la pubblicazione.
-Compilare il record soltanto con risultati realmente osservati.
+Il comando genera il modello dello **schema 1**: riporta commit, versione
+e checksum e inizializza la decisione e le prove come `pending`. Non esegue
+le prove e non autorizza la pubblicazione. Compilare il record soltanto con
+risultati realmente osservati.
+
+### Schema 1: qualificazione desktop completa
 
 Il record schema 1 contiene:
 
@@ -220,13 +276,37 @@ nei log o negli allegati del repository. Il controllo automatico verifica
 struttura, completezza e coerenza del record; la valutazione dei rapporti
 e degli esiti dichiarati resta responsabilità della revisione.
 
+### Schema 2: accettazione per ricerca della serie 0.6
+
+Lo schema 2 conserva i campi di identità e i quattro digest dello schema 1,
+ma sostituisce la dichiarazione di qualificazione completa con una decisione
+circoscritta:
+
+| Campo | Contenuto |
+| --- | --- |
+| `schema_version` | `2`. |
+| `decision`, `scope` | `accepted-for-research` e `pre-1.0-research`. |
+| `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
+| `observed_baseline` | Commit effettivamente osservato, riferimenti alle evidenze e osservazioni ricevute. Sono obbligatori `installation_ready` e almeno uno fra `scientific_self_tests` e `dnp_sample_analysis`; `runtime_diagnostics` può completare la registrazione. |
+| `observed_baseline.source_equivalence_scope` | `distributed-operative-sources-v1`; la procedura esegue il confronto dei sorgenti, non si limita alla dichiarazione nel record. |
+| `deferred_desktop_scenarios` | Tutte le sei chiavi del catalogo desktop, esplicitamente rinviate. |
+| `domain_validation` | `planned-for-0.7`. |
+
+Non inserire `passed` per le prove rinviate o un checksum dell'installatore
+precedente non disponibile. L'identità della candidata da pubblicare resta
+completa e distinta da quella del riferimento manuale. Il confronto dei
+sorgenti viene ripetuto prima della preparazione e della pubblicazione;
+una differenza fuori dall'ambito ammesso interrompe la procedura.
+
+### Revisione e pubblicazione
+
 Sottoporre il record a revisione in
 `.github/release-acceptance/v0.6.0.json`, separatamente dal commit della
-build provata. Il record può essere preparato sul branch di sviluppo;
+build da distribuire. Il record può essere preparato sul branch di sviluppo;
 prima della pubblicazione, integrare in `main` sia il commit compilato sia
 il record approvato. Quest’ultimo non è incorporato negli installatori.
 Il publisher legge il file dal commit della procedura su `main`,
-verifica tutti i risultati e confronta i checksum con gli
+verifica i requisiti dello schema selezionato e confronta i checksum con gli
 artefatti della build richiesta. Un record mancante, incompleto o riferito ad
 altri file interrompe la pubblicazione prima della modifica di una release.
 

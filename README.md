@@ -186,6 +186,7 @@ indipendenti e problemi riproducibili.
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
 - [Architettura](docs/ARCHITECTURE.md)
+- [Piano di sviluppo: workflow e lingue](docs/ROADMAP.md)
 - [Controlli CI/CD](docs/CI_CD.md)
 - [Accettazione degli installatori](docs/ACCETTAZIONE_INSTALLATORI.md)
 - [Componenti scientifici](scientific/README.md)

@@ -1,9 +1,9 @@
-"""Bind explicit desktop acceptance to one verified Windows/Ubuntu build."""
+"""Bind an explicit desktop or research acceptance policy to one verified build."""
 
 import argparse
 from datetime import datetime, timezone
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import subprocess
 from urllib.parse import urlsplit
@@ -17,6 +17,23 @@ DIGESTS = {
     "windows_installer_sha256", "linux_installer_sha256",
 }
 FIELDS = {"schema_version", "version", "source_commit", "build_run_id", "decision", "tests"} | DIGESTS
+RESEARCH_FIELDS = (FIELDS - {"tests"}) | {
+    "scope", "review", "observed_baseline", "deferred_desktop_scenarios", "domain_validation",
+}
+SOURCE_EQUIVALENCE_SCOPE = "distributed-operative-sources-v1"
+BASELINE_OBSERVATIONS = {
+    "installation_ready", "runtime_diagnostics", "scientific_self_tests", "dnp_sample_analysis",
+}
+REMOVABLE_SIGNING_HELPERS = {
+    "installer/windows/verify-signatures.ps1", "installer/windows/test-signatures.ps1",
+}
+# These inputs must remain part of the distributed inventory being compared.
+REQUIRED_OPERATIVE_PATHS = {
+    "pyproject.toml", "compose.yaml", "engine/main.py", "src/nipat/cli.py", "scientific/SHA256SUMS",
+    "docker/scientific-runtime/Dockerfile", "docker/scientific-runtime/r-packages.tsv",
+    "installer/runtime/Dockerfile", "installer/runtime/nipat-engine", "installer/windows/NIPAT.iss",
+    "scripts/build_windows_installer_assets.py", "scripts/build_linux_installer.py",
+}
 
 
 def require(condition, message):
@@ -58,8 +75,11 @@ def template(installer_set, run_id):
 
 
 def validate(record, version, commit, run_id, installer_set=None):
-    """A committed human record is necessary; CI evidence alone is insufficient."""
+    """Require a committed review under the record's explicit acceptance policy."""
     acceptance_path(version)
+    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 2:
+        validate_research(record, version, commit, run_id, installer_set)
+        return
     require(isinstance(record, dict) and set(record) == FIELDS, "Acceptance record fields are invalid")
     require(type(record["schema_version"]) is int and record["schema_version"] == 1,
             "Unsupported acceptance schema")
@@ -99,6 +119,129 @@ def validate(record, version, commit, run_id, installer_set=None):
     if installer_set is not None:
         require(all(record[field] == value for field, value in identity(installer_set).items()),
                 "Acceptance hashes do not identify these verified installers")
+
+
+def review_timestamp(value, label):
+    require(isinstance(value, str)
+            and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", value),
+            f"{label} must be a UTC date and time")
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    except ValueError as error:
+        raise ValueError(f"Invalid {label}") from error
+    require(parsed <= datetime.now(timezone.utc), f"{label} is in the future")
+
+
+def review_evidence(value, label):
+    require(isinstance(value, list) and value and all(isinstance(link, str) for link in value),
+            f"Missing {label}")
+    for link in value:
+        parsed = urlsplit(link)
+        require(parsed.scheme == "https" and parsed.hostname and parsed.path not in ("", "/")
+                and not parsed.username and not parsed.password and not any(c.isspace() for c in link),
+                f"{label} must identify an HTTPS resource")
+
+
+def validate_research(record, version, commit, run_id, installer_set=None):
+    """A limited research decision records deferred qualification, never fictitious passes."""
+    require(isinstance(version, str) and re.fullmatch(r"0\.6\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+            "Research acceptance is limited to the pre-1.0 0.6 contract")
+    require(isinstance(record, dict) and set(record) == RESEARCH_FIELDS
+            and type(record["schema_version"]) is int and record["schema_version"] == 2,
+            "Research acceptance record fields are invalid")
+    require(record["version"] == version and record["source_commit"] == commit
+            and isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit)
+            and type(record["build_run_id"]) is int and type(run_id) is int
+            and run_id > 0 and record["build_run_id"] == run_id,
+            "Acceptance belongs to a different version, source or build run")
+    for field in DIGESTS:
+        require(isinstance(record[field], str) and re.fullmatch(r"[0-9a-f]{64}", record[field]),
+                f"Invalid acceptance digest: {field}")
+    require(record["decision"] == "accepted-for-research" and record["scope"] == "pre-1.0-research",
+            "Research acceptance is pending, rejected or outside its stated scope")
+    review = record["review"]
+    require(isinstance(review, dict) and set(review) == {"reviewer", "reviewed_at", "evidence"},
+            "Invalid research review fields")
+    require(isinstance(review["reviewer"], str) and review["reviewer"].strip(), "Missing research reviewer")
+    review_timestamp(review["reviewed_at"], "Research review date")
+    review_evidence(review["evidence"], "Research review evidence")
+    baseline = record["observed_baseline"]
+    require(isinstance(baseline, dict) and set(baseline) == {
+        "source_commit", "observations", "evidence", "source_equivalence_scope",
+    }, "Invalid observed baseline fields")
+    require(isinstance(baseline["source_commit"], str)
+            and re.fullmatch(r"[0-9a-f]{40}", baseline["source_commit"]), "Invalid observed baseline commit")
+    observations = baseline["observations"]
+    require(isinstance(observations, list) and all(isinstance(item, str) for item in observations)
+            and len(observations) == len(set(observations)) and set(observations) <= BASELINE_OBSERVATIONS
+            and "installation_ready" in observations
+            and bool(set(observations) & {"scientific_self_tests", "dnp_sample_analysis"}),
+            "Baseline must identify observed installation and scientific execution")
+    require(baseline["source_equivalence_scope"] == SOURCE_EQUIVALENCE_SCOPE,
+            "Unsupported baseline source equivalence scope")
+    review_evidence(baseline["evidence"], "Observed baseline evidence")
+    deferred = record["deferred_desktop_scenarios"]
+    require(isinstance(deferred, list) and all(isinstance(item, str) for item in deferred)
+            and len(deferred) == len(SCENARIOS) and set(deferred) == SCENARIOS,
+            "Research acceptance must explicitly defer all six desktop scenarios")
+    require(record["domain_validation"] == "planned-for-0.7",
+            "Research acceptance cannot claim completed domain validation")
+    if installer_set is not None:
+        require(all(record[field] == value for field, value in identity(installer_set).items()),
+                "Acceptance hashes do not identify these verified installers")
+
+
+def verify_baseline(record, read_source):
+    """Compare operative source bytes; this does not assert installer or image identity.
+
+    Markdown documentation and .github maintenance/CI/release procedures are not
+    executable inputs of the installed application. The allowlist is compared as
+    a normalized inventory. Only removal of the two obsolete signing helpers is
+    exempted; modifying, adding or retaining them still requires matching bytes.
+    """
+    require(isinstance(record, dict) and type(record.get("schema_version")) is int
+            and record["schema_version"] in (1, 2), "Unsupported acceptance schema")
+    if record["schema_version"] == 1:
+        return None
+    require(set(record) == RESEARCH_FIELDS, "Research acceptance record fields are invalid")
+    validate_research(record, record["version"], record["source_commit"], record["build_run_id"])
+    baseline = record["observed_baseline"]["source_commit"]
+    candidate = record["source_commit"]
+
+    def read(commit, path):
+        try:
+            result = read_source(commit, path)
+        except (OSError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
+            raise ValueError(f"Cannot read baseline equivalence input: {commit}:{path}") from error
+        require(isinstance(result, bytes), "Source equivalence requires exact file bytes")
+        return result
+
+    def inventory(commit):
+        try:
+            lines = read(commit, "distribution-files.txt").decode("utf-8").splitlines()
+        except UnicodeError as error:
+            raise ValueError("Invalid source inventory encoding") from error
+        paths = set()
+        for line in lines:
+            value = line.strip()
+            if not value or value.startswith("#"):
+                continue
+            path = PurePosixPath(value)
+            require(not path.is_absolute() and path.as_posix() == value and ".." not in path.parts
+                    and "\\" not in value and value not in paths, "Invalid or duplicate source inventory path")
+            paths.add(value)
+        require("distribution-files.txt" in paths and REQUIRED_OPERATIVE_PATHS <= paths,
+                "Source inventory omits required operative inputs")
+        return {path for path in paths if path != "distribution-files.txt"
+                and not path.startswith(".github/") and PurePosixPath(path).suffix.casefold() != ".md"}
+
+    before, after = inventory(baseline), inventory(candidate)
+    before -= REMOVABLE_SIGNING_HELPERS & (before - after)
+    require(before == after, "Baseline operative inventory differs from candidate")
+    for path in sorted(after):
+        require(read(baseline, path) == read(candidate, path), f"Baseline operative source differs: {path}")
+    return {"baseline_source_commit": baseline, "source_commit": candidate,
+            "scope": SOURCE_EQUIVALENCE_SCOPE, "files_verified": len(after)}
 
 
 def load(version, commit, run_id, publication_commit, read_source):

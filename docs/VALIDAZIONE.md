@@ -1,12 +1,17 @@
 # Validazione tecnica e di dominio
 
-Questa scheda accompagna **NIPAT Desktop 0.6.0**.
-Consente di registrare separatamente installazione, esecuzione e concordanza
-scientifica. Un autotest superato verifica i casi inclusi; non attesta la
-validità per ogni campione o scenario d’impiego. Per l’autorizzazione alla
-pubblicazione degli installatori, applicare anche il
-[protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md): questa scheda
-non sostituisce il record associato ai pacchetti esatti.
+Questa scheda consente di registrare separatamente installazione, esecuzione
+e concordanza scientifica di **NIPAT Desktop**. La versione 0.6 dispone di
+prove tecniche e costituisce una distribuzione per ricerca pre-1.0; la
+consegna alle esperte di dominio e la relativa campagna di accettazione sono
+pianificate sulla **0.7**. Registrare in ogni scheda la versione effettivamente
+utilizzata, senza trasferire automaticamente gli esiti a versioni successive.
+
+Un autotest superato verifica i casi inclusi; non attesta la validità per
+ogni campione o scenario d’impiego. Per la pubblicazione applicare il
+[protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md), che distingue
+l'accettazione per ricerca della 0.6 dalla qualificazione desktop completa.
+Questa scheda non sostituisce il record di decisione associato ai pacchetti.
 
 ## Ambiente e preparazione
 

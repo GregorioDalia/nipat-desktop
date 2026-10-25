@@ -1,0 +1,41 @@
+{
+  "schema_version": 2,
+  "version": "0.6.0",
+  "source_commit": "eb1601885da0d0038ea2f928055e0656368fa58d",
+  "installer_manifest_sha256": "6a8e33bbe76afd2ca4c6eb80666374e421385fb196a57a6bd7a6130f49ce0ca5",
+  "scientific_archive_sha256": "737a310bd175eb705387f54d94082e28d794c4a5b880126e1f7d4098aefebce4",
+  "windows_installer_sha256": "2901cb07ca3c49eca72fa7beb7e663c4f257dea0c61cf07e78dc6b1643bec046",
+  "linux_installer_sha256": "ad48f1b99c303cb45835b039e23f29c0a0e88a8129b6a644544b75e742c07604",
+  "build_run_id": 40218369232,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "Gregorio Dalia",
+    "reviewed_at": "2026-10-25T18:33:46Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/0d7f61e7f96213ce0e24c10c383653d7d849e22b/.github/release-acceptance/v0.6.0-evidence.md"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "f062b2376b1fe115c1b68dc50ad697efee1b40d0",
+    "observations": [
+      "dnp_sample_analysis",
+      "installation_ready",
+      "runtime_diagnostics",
+      "scientific_self_tests"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/0d7f61e7f96213ce0e24c10c383653d7d849e22b/.github/release-acceptance/v0.6.0-evidence.md"
+    ],
+    "source_equivalence_scope": "distributed-operative-sources-v1"
+  },
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "planned-for-0.7"
+}
