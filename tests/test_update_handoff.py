@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 import tempfile
@@ -15,7 +16,7 @@ from nipat.update_handoff import (HANDOFF_EXIT_CODE, _start_windows_update, _ver
 class HandoffTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.project = self.root / 'app'
         self.project.mkdir()
         (self.project / '.runtime').mkdir()
@@ -45,6 +46,14 @@ class HandoffTests(unittest.TestCase):
             self.assertEqual(update_cache_directory(self.project), self.cache)
         self.assertEqual(HANDOFF_EXIT_CODE, 85)
 
+    def test_relative_linux_cache_rejected_before_directory_creation(self):
+        with patch('nipat.update_handoff.sys.platform', 'linux'), \
+                patch.dict(os.environ, {'XDG_CACHE_HOME': 'relative-cache'}), \
+                patch('nipat.update_handoff.Path.mkdir') as mkdir:
+            with self.assertRaisesRegex(NipatError, 'XDG_CACHE_HOME'):
+                update_cache_directory(self.project)
+            mkdir.assert_not_called()
+
     def test_foreign_or_overlapping_layout_rejected(self):
         path = self.project / '.runtime/install-layout.json'
         original = json.loads(path.read_text())
@@ -58,6 +67,48 @@ class HandoffTests(unittest.TestCase):
         with patch('nipat.update_handoff._start_windows_update') as start:
             with self.assertRaises(NipatError):
                 begin_update(self.offer, self.package, self.project)
+            start.assert_not_called()
+
+    @unittest.skipUnless(sys.platform == 'win32', 'requires Windows short-name aliases')
+    def test_real_windows_short_name_alias_is_canonicalized_before_cache_check(self):
+        import ctypes
+        from ctypes import wintypes
+
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        kernel.GetShortPathNameW.restype = wintypes.DWORD
+        needed = kernel.GetShortPathNameW(str(self.package), None, 0)
+        if not needed:
+            self.skipTest('short names unavailable on this volume')
+        buffer = ctypes.create_unicode_buffer(needed)
+        length = kernel.GetShortPathNameW(str(self.package), buffer, needed)
+        if not length or length >= needed:
+            self.skipTest('short name could not be obtained')
+        alias = Path(buffer.value)
+        if str(alias).casefold() == str(self.package).casefold():
+            self.skipTest('8.3 short-name generation is disabled on this volume')
+        self.assertEqual(alias.resolve(strict=True), self.package)
+
+        def started(argv, **kwargs):
+            descriptor = Path(argv[-1])
+            self.assertEqual(json.loads(descriptor.read_text())['package'], str(self.package))
+            descriptor.with_name('ready.json').write_text(json.dumps(
+                dict(schema_version=1, worker_pid=12345, parent_pid=os.getpid())))
+            return MagicMock(pid=12345)
+
+        with patch('nipat.update_handoff.subprocess.Popen', side_effect=started):
+            self.assertTrue(begin_update(self.offer, alias, self.project))
+            self.assertTrue(_start_windows_update(self.offer, alias, self.project))
+
+    def test_package_symlink_rejected_before_canonicalization(self):
+        link = self.cache / 'linked-installer.exe'
+        try:
+            link.symlink_to(self.package)
+        except OSError:
+            self.skipTest('symlink creation unavailable')
+        with patch('nipat.update_handoff._start_windows_update') as start:
+            with self.assertRaises(NipatError):
+                begin_update(self.offer, link, self.project)
             start.assert_not_called()
 
     def test_windows_worker_is_external_and_receives_only_fixed_file_arguments(self):

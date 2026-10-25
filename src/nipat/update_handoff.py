@@ -62,7 +62,9 @@ def update_cache_directory(project_dir: Path) -> Path:
         path = _windows_layout(project_dir)["cache_dir"] / "updates"
     else:
         base = os.environ.get("XDG_CACHE_HOME")
-        root = Path(base) if base and Path(base).is_absolute() else Path.home() / ".cache"
+        if base and not Path(base).is_absolute():
+            raise NipatError("XDG_CACHE_HOME deve essere un percorso assoluto prima di scaricare aggiornamenti.")
+        root = Path(base) if base else Path.home() / ".cache"
         path = root / "nipat-desktop" / "updates"
     _safe_parent(path)
     try:
@@ -86,7 +88,19 @@ def _verify_package(package: Path, sha256: str, size: int) -> None:
         raise NipatError("SHA-256 del pacchetto non valido. Ripetere il download prima di installare.")
 
 
+def _canonical_package(package: Path) -> Path:
+    # Reject links before resolving: resolution must normalize legitimate Windows
+    # short-name aliases without concealing a junction or symbolic link.
+    package = Path(package).absolute()
+    _safe_parent(package)
+    try:
+        return package.resolve(strict=True)
+    except OSError as exc:
+        raise NipatError("Il pacchetto scaricato non e piu disponibile.") from exc
+
+
 def _start_windows_update(offer, package: Path, project_dir: Path) -> bool:
+    package = _canonical_package(package)
     layout = _windows_layout(project_dir)
     cache = update_cache_directory(project_dir)
     if cache not in package.parents:
@@ -140,7 +154,7 @@ def _start_windows_update(offer, package: Path, project_dir: Path) -> bool:
 
 def begin_update(offer, downloaded: Path, project_dir: Path) -> bool:
     """Launch an independent worker only after explicit UI consent; caller then exits 85."""
-    package = Path(downloaded).absolute()
+    package = _canonical_package(downloaded)
     project_dir = Path(project_dir).resolve()
     _verify_package(package, offer.asset.sha256, offer.asset.size)
     if sys.platform == "win32":
