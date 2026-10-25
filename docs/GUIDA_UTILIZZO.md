@@ -20,7 +20,13 @@ e riavvio, secondo la configurazione del computer. Le policy dell'istituzione
 possono richiedere l'intervento del servizio informatico. Non sono necessarie
 installazioni separate di Python, R, samtools o Docker Desktop.
 
-Il pacchetto Windows si presenta come un solo file `NIPAT-Setup.exe`:
+Per ottenere la candidata di collaudo, accedere a GitHub e aprire il link
+alla build riuscita fornito dal referente. Nella sezione **Artifacts**,
+selezionare **NIPAT-Setup.exe**. Si scarica un solo file eseguibile, senza
+archivi da estrarre; il download è disponibile per **14 giorni** dalla
+creazione dell'artefatto.
+
+Installare e avviare NIPAT:
 
 1. Eseguire l'EXE con doppio clic dal proprio account Windows, senza usare
    «Esegui come amministratore».

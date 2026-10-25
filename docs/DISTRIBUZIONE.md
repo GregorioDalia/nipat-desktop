@@ -22,6 +22,12 @@ l'integrità del motore prima dell'esecuzione.
 
 ## Pacchetto Windows
 
+Per il collaudo, accedere a GitHub e aprire l'esecuzione riuscita del workflow
+**Installers (review build)** indicata dal referente. Nella sezione
+**Artifacts**, scaricare **NIPAT-Setup.exe**: si ottiene direttamente l'EXE,
+senza ZIP da estrarre. Il download resta disponibile per **14 giorni** dalla
+creazione; conservare il link al run per identificare la build installata.
+
 `NIPAT-Setup.exe` incorpora applicazione, componenti di avvio, Python
 portabile, ambiente Linux e archivio dell'immagine scientifica. Il setup
 verifica gli archivi, prepara la distribuzione WSL, importa l'immagine ed

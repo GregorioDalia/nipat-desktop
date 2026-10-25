@@ -478,3 +478,34 @@ jobs:
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
+      - name: Provide the verified Windows setup as one downloadable file
+        id: windows-download
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: build/windows-output/NIPAT-Setup.exe
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Summarize the Windows preview download
+        env:
+          WINDOWS_SETUP_URL: ${{ steps.windows-download.outputs.artifact-url }}
+          WINDOWS_SETUP_SHA256: ${{ steps.windows-download.outputs.artifact-digest }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          setup_hash = os.environ["WINDOWS_SETUP_SHA256"]
+          # The unarchived upload must identify the same bytes as the reviewed setup.
+          with Path("build/windows-output/NIPAT-Setup.exe").open("rb") as installer:
+              expected = hashlib.file_digest(installer, "sha256").hexdigest()
+          if setup_hash != expected:
+              raise SystemExit("Direct Windows download differs from the verified installer")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## Windows Preview download\n\n")
+              summary.write(f"[Download NIPAT-Setup.exe]({os.environ['WINDOWS_SETUP_URL']})\n\n")
+              summary.write("One self-contained installer; no ZIP extraction or separate runtime downloads. ")
+              summary.write("Sign in to GitHub to download. Available for 14 days.\n\n")
+              summary.write(f"SHA-256: `{setup_hash}`\n\n")
+              summary.write("Internal unsigned candidate. This build is not a published or accepted release.\n")
+          PY
