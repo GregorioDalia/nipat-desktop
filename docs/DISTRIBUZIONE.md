@@ -230,9 +230,13 @@ La verifica di un pacchetto comprende installazione, avvio, diagnostica,
 autotest e analisi con dati appropriati sul sistema dichiarato. L'esito della
 CI non sostituisce una prova dell’installer sul computer destinatario né la
 validazione di dominio. Il [protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md)
-definisce le prove richieste per autorizzare la pubblicazione della coppia
-Windows/Ubuntu. La [scheda di validazione](VALIDAZIONE.md) consente di
-registrare separatamente i risultati scientifici.
+distingue l'accettazione per ricerca della 0.6, basata su prove manuali
+circoscritte e verifiche automatiche, dalla qualificazione desktop completa.
+La decisione documenta le evidenze disponibili e i casi ancora da verificare;
+la scelta del canale `stable` non estende la copertura dichiarata.
+La campagna con le esperte di dominio è prevista sulla 0.7. La
+[scheda di validazione](VALIDAZIONE.md) consente di registrare separatamente
+i risultati scientifici.
 
 Il codice originale NIPAT è distribuito con licenza
 [GPL-3.0-or-later](../LICENSE). Le attribuzioni e le licenze delle dipendenze

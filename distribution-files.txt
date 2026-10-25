@@ -44,6 +44,7 @@ docs/INSTALLATORE_LINUX.md
 docs/INSTALLATORE_WINDOWS.md
 docs/RELEASE_0.5.0a1.md
 docs/RELEASE_0.6.0.md
+docs/ROADMAP.md
 docs/VALIDAZIONE.md
 engine/README.md
 engine/main.py

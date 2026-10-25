@@ -248,6 +248,33 @@ class ReleaseGuards(unittest.TestCase):
             self.assertEqual(asset["url"],
                 f"https://github.com/{publisher.REPO}/releases/download/v0.6.0/{asset['name']}")
 
+    def test_research_release_includes_limited_source_evidence_and_pinned_notes_provenance(self):
+        parts = self.joint_fixture()
+        record = parts[-1]
+        record.pop("tests")
+        evidence = ["https://github.com/example/repository/blob/commit/evidence.md"]
+        record.update(schema_version=2, decision="accepted-for-research", scope="pre-1.0-research",
+                      review={"reviewer": "Test reviewer", "reviewed_at": "2026-01-01T12:00:00Z",
+                              "evidence": evidence},
+                      observed_baseline={"source_commit": "c" * 40,
+                          "observations": ["installation_ready", "scientific_self_tests"],
+                          "evidence": evidence, "source_equivalence_scope": parts[-2].SOURCE_EQUIVALENCE_SCOPE},
+                      deferred_desktop_scenarios=sorted(parts[-2].SCENARIOS),
+                      domain_validation="planned-for-0.7")
+        check = {"baseline_source_commit": "c" * 40, "source_commit": COMMIT,
+                 "scope": parts[-2].SOURCE_EQUIVALENCE_SCOPE, "files_verified": 179}
+        with patch.object(parts[-2], "verify_baseline", return_value=check) as compare:
+            self.prepare_joint(*parts)
+        compare.assert_called_once_with(record, publisher.source_bytes)
+        output = self.root / "release"
+        self.assertEqual(json.loads((output / "baseline-source-check.json").read_text()), check)
+        self.assertEqual(publisher.checksums(output / "SHA256SUMS")["baseline-source-check.json"],
+                         publisher.sha256(output / "baseline-source-check.json"))
+        provenance = json.loads((output / "release-provenance.json").read_text())
+        self.assertEqual(provenance["release_notes_commit"], "b" * 40)
+        self.assertEqual(provenance["acceptance_scope"], "pre-1.0-research")
+        self.assertEqual(json.loads((output / "desktop-acceptance.json").read_text()), record)
+
     def test_update_manifest_rejects_replaced_package_after_pair_verification(self):
         parts = self.joint_fixture()
         self.prepare_joint(*parts)
@@ -961,6 +988,44 @@ class ReleaseGuards(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, error):
                     publisher.process_release("publish", files, COMMIT, "v0.6.0", "0.6.0",
                                               "reviewed notes", self.root, channel="stable", draft_id="42")
+
+
+class ResearchSourceGuards(unittest.TestCase):
+    def test_observed_pr_commit_is_fetched_only_if_missing_and_reverified(self):
+        record = {"schema_version": 2, "observed_baseline": {"source_commit": "c" * 40}}
+        validator = SimpleNamespace(verify_baseline=lambda value, reader: {"verified": value == record})
+        for present in (True, False):
+            with self.subTest(present=present), patch.object(publisher.subprocess, "run") as run:
+                run.return_value.returncode = 0 if present else 1
+                self.assertEqual(publisher.verify_research_baseline(record, validator), {"verified": True})
+                self.assertEqual(run.call_count, 1 if present else 2)
+                if not present:
+                    self.assertEqual(run.call_args.args[0], ["git", "fetch", "--no-tags", "origin", "c" * 40])
+                    self.assertTrue(run.call_args.kwargs["check"])
+
+    def test_missing_or_different_baseline_never_succeeds(self):
+        record = {"schema_version": 2, "observed_baseline": {"source_commit": "c" * 40}}
+        validator = SimpleNamespace(verify_baseline=lambda *_: (_ for _ in ()).throw(ValueError("different bytes")))
+        with patch.object(publisher.subprocess, "run", return_value=SimpleNamespace(returncode=0)), \
+                self.assertRaisesRegex(ValueError, "different bytes"):
+            publisher.verify_research_baseline(record, validator)
+        with patch.object(publisher.subprocess, "run", side_effect=[SimpleNamespace(returncode=1),
+                subprocess.CalledProcessError(1, ["git", "fetch"])]), self.assertRaises(subprocess.CalledProcessError):
+            publisher.verify_research_baseline(record, validator)
+
+    def test_baseline_fetch_rejects_non_sha_input(self):
+        with patch.object(publisher.subprocess, "run") as run, self.assertRaisesRegex(ValueError, "baseline source"):
+            publisher.verify_research_baseline(
+                {"schema_version": 2, "observed_baseline": {"source_commit": "--upload-pack=unexpected"}}, None)
+        run.assert_not_called()
+
+    def test_notes_are_pinned_to_preparation_for_research_and_built_source_for_full_acceptance(self):
+        for schema, expected in ((1, COMMIT), (2, "b" * 40)):
+            with self.subTest(schema=schema), patch.object(publisher, "source_bytes",
+                    return_value=b"# Release\n\n[Guide](GUIDA_UTILIZZO.md)\n") as read:
+                notes = publisher.release_notes(COMMIT, "b" * 40, "0.6.0", {"schema_version": schema})
+            read.assert_called_once_with(expected, "docs/RELEASE_0.6.0.md")
+            self.assertIn(f"/blob/{expected}/docs/GUIDA_UTILIZZO.md", notes)
 
 
 if __name__ == "__main__":

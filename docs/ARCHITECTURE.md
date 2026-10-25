@@ -26,6 +26,23 @@ Ogni richiesta identifica una sola analisi. La versione 0.6 non contiene un
 orchestratore di dipendenze tra run: il riuso degli output compatibili è
 esplicito e ogni passaggio conserva input e metadati propri.
 
+### Confini dell'estensione ai workflow automatici
+
+Per la versione 0.7, la pianificazione ed esecuzione delle dipendenze scientifiche
+sono previste nel motore incorporato nell'immagine. Il client raccoglierà e
+confermerà il piano, preparerà l'accesso ai file e presenterà gli stati restituiti.
+Il motore gestirà l'ordine dei passaggi, i loro parametri e l'associazione tra
+output e input successivi. Il contratto dovrà essere utilizzabile su Windows
+tramite WSL2, su Linux nativo e da un futuro servizio, senza dipendere dalla
+presenza della CLI o di una GUI dentro il container.
+
+Interazione, preferenze locali, traduzione dei testi, avvio del runtime,
+installazione e aggiornamenti restano responsabilità del client e dei pacchetti
+di piattaforma. Gli identificatori del contratto saranno indipendenti dalla
+lingua dell'interfaccia. L'estensione non è implementata nella 0.6;
+obiettivi, verifiche e localizzazione sono descritti nel
+[piano di sviluppo](ROADMAP.md).
+
 ## Ambienti di esecuzione
 
 Su Windows, Python e gli script di avvio operano nell'account dell'utente.

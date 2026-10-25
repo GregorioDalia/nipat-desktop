@@ -156,6 +156,29 @@ def require_publication_supported(version, acceptance=None, commit=None, run_id=
         validator.validate(acceptance, version, commit, run_id)
 
 
+def verify_research_baseline(record, validator):
+    """Fetch an observed PR checkout if necessary, then compare actual source bytes."""
+    if record.get("schema_version") != 2:
+        return None
+    baseline = record["observed_baseline"]["source_commit"]
+    require(re.fullmatch(r"[0-9a-f]{40}", baseline), "Invalid baseline source commit")
+    available = subprocess.run(["git", "cat-file", "-e", f"{baseline}^{{commit}}"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if available.returncode:
+        # The observed package may identify a temporary PR merge, outside main history.
+        subprocess.run(["git", "fetch", "--no-tags", "origin", baseline], check=True)
+    return validator.verify_baseline(record, source_bytes)
+
+
+def release_notes(commit, publication_commit, version, acceptance):
+    # Research acceptance can be reviewed after the immutable installers were built.
+    # Pin its explanatory documentation to the same preparation commit in both phases.
+    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") == 2 else commit
+    notes = source_bytes(notes_commit, f"docs/RELEASE_{version}.md").decode("utf-8").strip()
+    return re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
+        f"https://github.com/{REPO}/blob/{notes_commit}/docs/", m[1]) + ")", notes)
+
+
 def extract_build_source(commit, destination):
     """Read source from the reviewed Git commit, never from downloaded artifacts."""
     destination.mkdir()
@@ -181,6 +204,8 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
             "Installer-set build evidence differs from the verified packages")
     validator.validate(acceptance, actual["version"], commit, run_id, installer_set=actual)
     require(json.loads(acceptance_bytes) == acceptance, "Acceptance bytes differ from the validated record")
+    baseline_check = validator.verify_baseline(acceptance, source_bytes) \
+        if acceptance.get("schema_version") == 2 else None
     manifest = prepare_assets(setup, runtime, output, commit)
     additions = {
         actual["linux"]["file"]: linux / actual["linux"]["file"],
@@ -201,6 +226,11 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
         "acceptance_path": validator.acceptance_path(actual["version"]),
         "acceptance_sha256": hashlib.sha256(acceptance_bytes).hexdigest(),
     }
+    if baseline_check is not None:
+        (output / "baseline-source-check.json").write_text(
+            json.dumps(baseline_check, indent=2) + "\n", encoding="utf-8")
+        provenance["release_notes_commit"] = publication_commit
+        provenance["acceptance_scope"] = acceptance["scope"]
     (output / "release-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     if manifest.get("installation_profile") == DESKTOP_INSTALLATION_PROFILE:
         write_update_manifest(output, manifest, actual, channel)
@@ -579,6 +609,8 @@ def main():
             require(acceptance_bytes == current_acceptance_bytes,
                     "Committed acceptance changed since preparation; publishing is blocked")
     require_publication_supported(version, acceptance, commit, int(args.run_id))
+    if acceptance is not None:
+        verify_research_baseline(acceptance, validator)
     run = api(f"actions/runs/{args.run_id}")
     validate_run(run, commit, int(args.run_id))
     if requires_installation_profile(version):
@@ -615,9 +647,7 @@ def main():
             manifest = prepare_assets(root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
                                       output, commit, desktop=desktop)
         tag = manifest["release_tag"]
-        notes = source_bytes(commit, f"docs/RELEASE_{manifest['version']}.md").decode("utf-8").strip()
-        notes = re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
-            f"https://github.com/{REPO}/blob/{tag}/docs/", m[1]) + ")", notes)
+        notes = release_notes(commit, publication_commit, manifest["version"], acceptance)
         notes += (f"\n\n## Build distribuita\n\nCommit: `{commit}`.\n\n"
                   f"[Build verificata]({run['html_url']}): test Linux e Windows, regressioni scientifiche, "
                   "caricamento/esecuzione/ricaricamento nel motore distribuito e compilazione EXE superati.\n")

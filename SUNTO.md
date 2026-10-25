@@ -65,4 +65,6 @@ validazione scientifica sui campioni e sullo scenario d'uso.
 
 La [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) descrive la procedura operativa;
 la [scheda di validazione](docs/VALIDAZIONE.md) aiuta a documentare le prove.
+Il [piano di sviluppo](docs/ROADMAP.md) descrive i workflow automatici previsti
+per la 0.7, la trasparenza delle impostazioni e il supporto italiano/inglese.
 Il codice originale è distribuito con licenza [GPL-3.0-or-later](LICENSE).

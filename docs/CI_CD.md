@@ -4,8 +4,9 @@ NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
 pubblicazione. La versione 0.6.0 appartiene al canale desktop. La pipeline
 produce installatori Windows WSL e Ubuntu per revisione. La pubblicazione
 richiede una coppia di pacchetti verificata e un record di accettazione
-revisionato, riferito agli stessi file. Il publisher verifica il record
-prima di modificare una release.
+revisionato, riferito agli stessi file. La serie 0.6 ammette un'accettazione
+per ricerca pre-1.0 con prova manuale documentata e scenari estesi dichiarati
+come rinviati. Il publisher verifica il record prima di modificare una release.
 
 ## Workflow GitHub Actions
 
@@ -28,9 +29,10 @@ e non vengono annullate da nuovi push.
 
 Una build destinata alla pubblicazione deve essere avviata
 manualmente su un commit revisionato di questo repository; può provenire
-dal branch di sviluppo prima dell’integrazione. I pacchetti vengono provati
-e accettati su quel commit. Prima della pubblicazione, sorgenti e record di
-accettazione devono essere integrati in `main`, conservando il commit
+dal branch di sviluppo prima dell’integrazione. La decisione di distribuzione
+identifica esattamente i pacchetti prodotti; le prove manuali riportano il
+commit realmente osservato e il loro ambito. Prima della pubblicazione,
+sorgenti e record di accettazione devono essere integrati in `main`, conservando il commit
 compilato nella sua storia. Il publisher opera da `main` e riusa gli stessi
 artefatti verificati senza ricostruirli; non modifica release già pubblicate.
 Un artefatto prodotto da un evento `pull_request` non è pubblicabile.
@@ -48,7 +50,8 @@ del programma non bastano a identificare un installatore.
 | Motore scientifico reale | CI selettiva; sempre nella CI manuale e nella build installatori. | Container autonomo, quattro workflow, BAM sintetici, risultati numerici, casi non validi e isolamento degli input. | Casi sintetici e regressioni non equivalgono a validazione di dominio. |
 | Componenti Windows | CI e build installatori. | PowerShell, percorsi, migrazione, riparazione, rimozione, blocchi attività, aggiornamento, launcher e compilazione Inno Setup. | Le simulazioni WSL e il passaggio a un installatore di prova non sono una prima installazione o un aggiornamento reale fra versioni. |
 | Pacchetti completi | Build installatori manuale. | Archivio comune, importazione nel motore distribuito, confezionamento Windows/Ubuntu e ciclo APT reale sul runner. | Il runner predisposto e il container delle dipendenze non sono un desktop utente pulito. |
-| Accettazione dei sistemi destinatari | Prove registrate sui due installatori esatti. | Sei scenari Windows/Ubuntu, avvio, riavvio, conservazione dei dati e rimozione. | Attesta gli scenari registrati; la valutazione scientifica rimane distinta. |
+| Accettazione per ricerca 0.6 | Prova manuale documentata e revisione esplicita, integrate con la build verificata. | Installazione pronta ed esecuzione scientifica; equivalenza dei sorgenti se si riutilizza un riferimento precedente. | Non attesta una prova manuale di ogni nuovo installer o il completamento dei sei scenari desktop. |
+| Qualificazione desktop completa | Prove registrate sui due installatori esatti. | Sei scenari Windows/Ubuntu, avvio, riavvio, conservazione dei dati e rimozione. | Percorso progressivo distinto dalla distribuzione pre-1.0; la valutazione scientifica rimane separata. |
 
 I nomi e il numero dei test possono evolvere; la copertura viene valutata
 rispetto ai comportamenti e ai rischi verificati, non al solo conteggio.
@@ -183,8 +186,10 @@ installatore Docker Desktop.
 **Prepare or publish verified release** richiede una scelta esplicita del canale:
 `testing` è il valore predefinito e pubblica una pre-release; `stable` pubblica
 una release stabile e richiede una versione numerica `MAJOR.MINOR.PATCH`.
-Entrambi richiedono avvio manuale da `main`, coppia verificata e accettazione
-dei medesimi pacchetti. Nessun canale consente di evitare questi controlli.
+Entrambi richiedono avvio manuale da `main`, coppia verificata e decisione di
+accettazione riferita ai medesimi pacchetti. Il canale non cambia lo schema
+di accettazione e non certifica il metodo scientifico. Tutti i controlli
+automatici e di identità dei pacchetti rimangono obbligatori.
 
 `prepare` crea e completa una bozza senza renderla pubblica. Il riepilogo
 restituisce l'ID della bozza e il commit della preparazione. Dopo averne
@@ -194,6 +199,13 @@ accettazione invariata e byte della bozza; non carica file mancanti e non
 ripara una bozza alterata. Una release `stable` diventa **Latest**; una
 pre-release `testing` non lo diventa. Il solo push di un branch o tag non
 pubblica software.
+
+Nell'accettazione per ricerca, le note della versione provengono dal commit
+di preparazione e vengono mantenute nella pubblicazione. La provenienza
+identifica tale revisione separatamente dal commit del pacchetto; i collegamenti
+puntano alla stessa revisione documentale. `baseline-source-check.json` conserva
+il confronto dei sorgenti con la build osservata manualmente. Nessuna di queste
+operazioni ricompila gli installatori.
 
 Dopo le verifiche, il publisher genera `update-manifest.json`, lo include in
 `SHA256SUMS` e lo pubblica con gli installatori. Il manifest identifica prodotto,
@@ -235,27 +247,34 @@ del motore interno usa Linux. La risoluzione APT in un container Ubuntu
 non verifica riavvio, autorizzazione dell’account o apertura del collegamento
 in un desktop reale.
 
-Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede prove
-degli installatori effettivi su Windows e Ubuntu Desktop: prima installazione,
-riavvio e analisi, coesistenza di NIPAT Desktop con le installazioni 0.4 e 0.5 su Windows,
-Docker già presente su Ubuntu, reinstallazione dello stesso pacchetto e
-rimozione con conservazione dei dati. Su Windows comprende cinque percorsi
-personalizzati, anche su dischi fissi diversi e con spazi o caratteri non ASCII,
-preferenze dopo la disinstallazione, riparazione nella stessa cartella con
-residui e file estranei, backup selettivo, inventario dei componenti e ripresa
-di una distribuzione posseduta rimossa manualmente da WSL. Comprende inoltre
-cambio di destinazione senza trasferimento dei dati e rimozione facoltativa
-di ambiente/cache con protezione delle risorse estranee. Annullamento e
-fallimenti parziali richiedono evidenze distinte.
-Gli aggiornamenti fra versioni differenti richiedono prove aggiuntive.
+Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) distingue la
+distribuzione per ricerca della 0.6 dalla qualificazione completa dei desktop.
+La prima richiede una prova manuale di installazione e funzionamento e una
+decisione del manutentore, conservando esplicitamente i limiti della prova e
+gli scenari rinviati. Se la prova riguarda una build precedente, il publisher
+confronta i sorgenti operativi distribuiti; un cambiamento fuori dall'ambito
+ammesso impedisce il riutilizzo del riferimento. L'equivalenza dei sorgenti
+non dichiara identici i binari né provata l'installazione della nuova candidata.
 
-Il record di accettazione è sottoposto a revisione su `main` e identifica
-build, commit, manifest, archivio scientifico e checksum dei due installatori.
-Il publisher richiede tutte le prove completate e verifica nuovamente gli
-artefatti prima di creare o modificare una bozza. Un record assente, ancora
-`pending` o incoerente interrompe la pubblicazione. Gli artefatti accettati
-non vengono ricostruiti; una nuova build con file differenti richiede una
-nuova accettazione associata ai nuovi checksum.
+La qualificazione completa conserva i sei scenari Windows/Ubuntu: sistema
+pulito, coesistenza, riavvio, percorsi personalizzati, riparazione e rimozione
+con protezione dei dati. Gli aggiornamenti fra versioni differenti richiedono
+casi dedicati. Questi collaudi sono organizzati progressivamente; la campagna
+con le esperte di dominio è prevista sulla 0.7.
+
+Il record revisionato su `main` identifica build, commit, manifest, archivio
+scientifico e checksum dei due installatori. Il publisher verifica i requisiti
+dello schema scelto e ricontrolla gli artefatti prima di creare o modificare
+una bozza. Un record assente, non approvato o incoerente interrompe la
+pubblicazione. Gli artefatti accettati non vengono ricostruiti; file differenti
+richiedono una nuova decisione associata ai nuovi checksum.
+
+La CI viene ampliata con casi riproducibili per i difetti osservati, i valori
+di confine e i nuovi comportamenti. Per la 0.7 le priorità comprendono
+propagazione dei parametri, impostazioni scientifiche fisse, equivalenza
+tra analisi separate e workflow concatenati e gestione dei fallimenti tra
+passaggi dipendenti. Questi incrementi sono pianificati; non descrivono test
+già presenti nella 0.6.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
 regressione. Esiti, versioni e limiti sono registrati nella
