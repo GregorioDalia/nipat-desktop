@@ -17,17 +17,34 @@ $assets = Join-Path $temporary 'runtime archives'
 $output = Join-Path $temporary 'compiled setup'
 try {
     foreach ($directory in @($stage, $app, $assets, $output,
-        (Join-Path $app 'installer\windows'), (Join-Path $app 'assets\branding'))) {
+        (Join-Path $app 'installer\windows'), (Join-Path $app 'assets\branding'),
+        (Join-Path $app '.distribution'))) {
         [IO.Directory]::CreateDirectory($directory) | Out-Null
     }
     Copy-Item -LiteralPath (Join-Path $project 'LICENSE') -Destination (Join-Path $app 'LICENSE')
     Copy-Item -LiteralPath (Join-Path $project 'assets\branding\nipat-icon.ico') `
         -Destination (Join-Path $app 'assets\branding\nipat-icon.ico')
     foreach ($name in @('install-profile.ps1', 'install-profile.json', 'install-layout.ps1',
-        'validate-install-layout.ps1')) {
+        'validate-install-layout.ps1', 'repair-installation.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) `
             -Destination (Join-Path (Join-Path $app 'installer\windows') $name)
     }
+    $applicationFiles = @(
+        Get-ChildItem -LiteralPath $app -Recurse -File | Sort-Object FullName | ForEach-Object {
+            [ordered]@{
+                path = $_.FullName.Substring($app.Length + 1).Replace('\', '/')
+                sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            }
+        }
+    )
+    $inventory = [ordered]@{
+        schema_version = 1
+        installation_channel = 'preview-0.5'
+        source_commit = ('0' * 40)
+        files = $applicationFiles
+    }
+    [IO.File]::WriteAllText((Join-Path $app '.distribution\application-files.json'),
+        ($inventory | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
     $profile = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'install-profile.json') -Raw -Encoding UTF8 |
         ConvertFrom-Json
     $definitions = [ordered]@{

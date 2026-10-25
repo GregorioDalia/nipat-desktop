@@ -116,10 +116,20 @@ scrivibili e indipendenti, senza sovrapposizioni o collegamenti nel percorso.
 Le preferenze dell'account e i registri centrali delle destinazioni appartengono
 al canale e vengono conservati dopo la disinstallazione.
 
+L'aggiornamento e la riparazione agiscono nella cartella applicativa riconosciuta.
+L'inventario identifica i file del pacchetto; prima delle sostituzioni viene
+creato un backup selettivo dei componenti differenti, dei metadati di recupero
+e del Python generato. File estranei vengono conservati; i componenti obsoleti
+si rimuovono soltanto se corrispondono all'hash nell'inventario precedente.
+Gli obsoleti modificati vengono conservati in posizione e copiati nel backup.
+Non sono previsti una pulizia indiscriminata o un rollback completo automatico.
+
 L'identità della distribuzione WSL dipende dal filesystem Linux e dalla
 posizione scelta. Il riutilizzo richiede una registrazione posseduta dal
-canale nella destinazione prevista. Cambiare filesystem o posizione prepara
-un ambiente affiancato senza copiare o cancellare quello precedente;
+canale nella destinazione prevista. Una distribuzione posseduta ma rimossa
+dall'elenco WSL può essere ricreata soltanto in una destinazione vuota,
+conservando la ricevuta precedente nello storico. Cambiare filesystem o posizione
+prepara un ambiente affiancato senza copiare o cancellare quello precedente;
 cambiare cartelle dati e risultati non trasferisce i file esistenti.
 
 Il launcher usa esclusivamente il proprio manifest e backend verificati.

@@ -107,30 +107,56 @@ function Assert-NipatInstallWritableParent([string] $Path) {
     finally { if ($created) { [IO.File]::Delete($probe) } }
 }
 
-function Assert-NipatExistingApplication([string] $Path) {
-    if (-not (Test-Path -LiteralPath $Path) -or @(Get-ChildItem -LiteralPath $Path -Force).Count -eq 0) { return }
+function Get-NipatApplicationKind([string] $Path) {
+    $Path = Resolve-NipatInstallPath $Path
+    Assert-NipatInstallPathWithoutLinks $Path -Tree
+    if (-not (Test-Path -LiteralPath $Path) -or @(Get-ChildItem -LiteralPath $Path -Force).Count -eq 0) { return 'empty' }
     if (Test-Path -LiteralPath (Join-Path $Path '.git')) { throw 'Selezionare una cartella di installazione, non il checkout del progetto.' }
-    if (Test-NipatStorageMarker $Path 'application') { return }
+    if (Test-NipatStorageMarker $Path 'application') { return 'installed' }
     $profileFile = Join-Path $Path 'installer\windows\install-profile.json'
     if (Test-Path -LiteralPath $profileFile -PathType Leaf) {
         Assert-NipatInstallationProfile (Get-Content -LiteralPath $profileFile -Raw -Encoding UTF8 | ConvertFrom-Json)
-        return
+        return 'installed'
     }
-    # Older setups leave generated state/Python after application removal.
+    # Uninstallers can leave generated Python, bytecode and metadata alongside
+    # user-added files. Identity establishes the installation, not ownership of
+    # every file: pre-copy repair preserves unrelated files and backs up collisions.
+    $layoutFile = Join-Path $Path '.runtime\install-layout.json'
+    if (Test-Path -LiteralPath $layoutFile -PathType Leaf) {
+        Read-NipatInstallLayout $Path -Historical | Out-Null
+        return 'residual'
+    }
     $defaults = Get-NipatDefaultInstallLayout
-    $entries = @(Get-ChildItem -LiteralPath $Path -Force)
-    if ($Path -ieq $defaults.app_dir -and $entries.Count -eq 1 -and $entries[0].Name -ceq '.runtime') {
-        foreach ($relative in @('.runtime\installer\state.json', '.runtime\backend.json')) {
+    if ($Path -ieq $defaults.app_dir) {
+        foreach ($relative in @('.runtime\backend.json', '.runtime\installer\state.json')) {
             $file = Join-Path $Path $relative
             if (Test-Path -LiteralPath $file -PathType Leaf) {
                 $record = Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
                 Assert-NipatInstallationChannel $record 'I file della precedente installazione'
-                if ($record.schema_version -ne 1) { throw 'Stato precedente non riconosciuto.' }
-                return
+                if ($null -eq $record.PSObject.Properties['schema_version'] -or
+                    -not (($record.schema_version -is [int]) -or ($record.schema_version -is [long])) -or
+                    $record.schema_version -ne 1) { throw 'Stato precedente non riconosciuto.' }
+                if ($null -eq $record.PSObject.Properties['rootfs_sha256'] -or
+                    $record.rootfs_sha256 -cnotmatch '^[a-f0-9]{64}$') { continue }
+                if ($relative -ceq '.runtime\backend.json') {
+                    if ($null -eq $record.PSObject.Properties['backend'] -or $record.backend -cne 'wsl' -or
+                        $null -eq $record.PSObject.Properties['wsl_distro']) { continue }
+                    Assert-NipatRuntimeNamespace $record.wsl_distro $record.rootfs_sha256
+                    Read-NipatInstallLayout $Path -Historical | Out-Null
+                    return 'residual'
+                }
+                if ($null -ne $record.PSObject.Properties['source_commit'] -and
+                    $record.source_commit -cmatch '^[a-f0-9]{40}$') { return 'residual' }
             }
         }
     }
-    throw "La cartella applicativa contiene file non riconosciuti. Scegliere una cartella vuota: $Path"
+    return 'unknown'
+}
+
+function Assert-NipatExistingApplication([string] $Path) {
+    if ((Get-NipatApplicationKind $Path) -ceq 'unknown') {
+        throw "La cartella applicativa contiene file non riconosciuti. Scegliere una cartella vuota: $Path"
+    }
 }
 
 function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $Historical) {

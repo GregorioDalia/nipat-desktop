@@ -54,7 +54,9 @@ sul desktop o selezionarlo dal menu Start. Non occorre spostare archivi o aprire
 manualmente PowerShell. Il setup permette di scegliere separatamente le
 cartelle dell'applicazione, dell'ambiente WSL, della cache, dei dati e dei
 risultati, anche su dischi locali fissi diversi. Le scelte vengono riproposte
-alla reinstallazione. La disinstallazione conserva sempre dati e risultati;
+alla reinstallazione. Una Preview riconosciuta può essere aggiornata o riparata
+nella stessa cartella, conservando i file estranei ai componenti installati.
+La disinstallazione conserva sempre dati e risultati;
 la rimozione dell'ambiente NIPAT e della cache è facoltativa.
 Requisiti, percorsi e gestione dell'installazione sono nella
 [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella

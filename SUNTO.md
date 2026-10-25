@@ -22,8 +22,9 @@ Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
 installazione con doppio clic e avvio dal collegamento **NIPAT 0.5 Preview**
 sul desktop o nel menu Start. Il setup consente di scegliere cinque cartelle
 separate per applicazione, ambiente WSL, cache, dati e risultati e ricorda le
-scelte nelle reinstallazioni. La rimozione dell'applicazione conserva dati e
-risultati; eliminare l'ambiente NIPAT e la cache è facoltativo. Non richiede
+scelte nelle reinstallazioni. L'aggiornamento e la riparazione riutilizzano
+la cartella della Preview riconosciuta. La rimozione dell'applicazione conserva
+dati e risultati; eliminare l'ambiente NIPAT e la cache è facoltativo. Non richiede
 l'installazione separata degli strumenti scientifici.
 Ubuntu 24.04 x86_64 utilizza un singolo
 pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento

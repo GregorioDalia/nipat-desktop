@@ -64,22 +64,92 @@ function Assert-NipatRuntimeOwner($Target, [switch] $AllowInitialize) {
     }
 }
 
+function Assert-NipatRuntimeTargetReceipt($Target, $RootfsAsset) {
+    $directory = Resolve-NipatInstallPath $Target.Directory
+    $runtimeDirectory = Split-Path -Parent $directory
+    Assert-NipatRuntimeNamespace $Target.Distro $Target.RootfsSha256 $runtimeDirectory
+    if ($RootfsAsset.sha256 -cne $Target.RootfsSha256 -or
+        $directory -ine (Join-Path $runtimeDirectory $Target.Distro)) {
+        throw 'La destinazione del runtime non corrisponde al namespace e al rootfs richiesti.'
+    }
+    $receiptDirectory = Join-Path $runtimeDirectory 'registrations'
+    $expectedReceipt = Join-Path $receiptDirectory ($Target.Distro + '.json')
+    if ([IO.Path]::GetFullPath($Target.OwnershipPath) -ine $expectedReceipt) {
+        throw 'Il registro di proprieta non appartiene alla destinazione del runtime.'
+    }
+    Assert-NipatInstallPathWithoutLinks $directory
+    Assert-NipatInstallPathWithoutLinks $receiptDirectory
+    if ((Test-Path -LiteralPath $expectedReceipt) -and
+        ((Get-Item -LiteralPath $expectedReceipt -Force).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Il registro di proprieta del runtime non puo essere un collegamento.'
+    }
+    $current = Read-NipatOwnership $expectedReceipt $Target.Distro
+    if (($null -eq $current) -ne ($null -eq $Target.Ownership)) {
+        throw 'Il registro di proprieta e cambiato durante la preparazione. Riprovare il setup.'
+    }
+    if ($Target.Registered -and $null -eq $current) {
+        throw 'La distribuzione registrata non dispone di un registro di proprieta NIPAT verificato.'
+    }
+    if ($null -ne $current) {
+        if ($current.rootfs_sha256 -cne $Target.RootfsSha256 -or
+            $current.owner_id -cne $Target.Ownership.owner_id -or
+            $current.status -cne $Target.Ownership.status) {
+            throw 'Il registro di proprieta non corrisponde al runtime selezionato. Nessun file viene modificato.'
+        }
+    }
+}
+
+function Assert-NipatEmptyRuntimeDestination([string] $Directory) {
+    Assert-NipatInstallPathWithoutLinks $Directory
+    if ((Test-Path -LiteralPath $Directory) -and
+        @(Get-ChildItem -LiteralPath $Directory -Force).Count -gt 0) {
+        throw "La cartella $Directory contiene gia file senza una registrazione WSL. Nessun file viene sovrascritto."
+    }
+}
+
 function Initialize-NipatRuntimeTarget($Target, $RootfsAsset, [string] $CacheDirectory, [string] $AssetDirectory) {
+    Assert-NipatRuntimeTargetReceipt $Target $RootfsAsset
     if (-not $Target.Registered) {
-        if ((Test-Path -LiteralPath $Target.Directory) -and
-            @(Get-ChildItem -LiteralPath $Target.Directory -Force).Count -gt 0) {
-            throw "La cartella $($Target.Directory) contiene gia file senza una registrazione WSL. Nessun file viene sovrascritto."
+        Assert-NipatEmptyRuntimeDestination $Target.Directory
+        if (@(Get-NipatWslNames) -contains $Target.Distro) {
+            throw 'La distribuzione e stata registrata durante la preparazione. Nessuna registrazione viene sostituita; riprovare il setup.'
         }
         $rootfs = Get-NipatAsset $RootfsAsset $CacheDirectory $AssetDirectory
-        if ($null -eq $Target.Ownership) {
-            $Target.Ownership = [pscustomobject]@{
+        # Asset preparation can take several minutes. Recheck the registration,
+        # destination and receipt immediately before writing recovery metadata.
+        Assert-NipatRuntimeTargetReceipt $Target $RootfsAsset
+        Assert-NipatEmptyRuntimeDestination $Target.Directory
+        if (@(Get-NipatWslNames) -contains $Target.Distro) {
+            throw 'La distribuzione e stata registrata durante la preparazione. Nessuna registrazione viene sostituita; riprovare il setup.'
+        }
+        $ownership = $Target.Ownership
+        if ($null -ne $ownership -and $ownership.status -ceq 'owned') {
+            # A user may have unregistered this owned Preview manually. Only an
+            # absent registration plus an empty destination permits recreation.
+            # Preserve the exact old receipt outside the active registrations.
+            $history = Join-Path (Split-Path -Parent $Target.Directory) 'registration-history'
+            Assert-NipatInstallPathWithoutLinks $history
+            [IO.Directory]::CreateDirectory($history) | Out-Null
+            $backup = Join-Path $history ($Target.Distro + '-' + [Guid]::NewGuid().ToString('N') + '.json')
+            [IO.File]::Copy($Target.OwnershipPath, $backup, $false)
+            $saved = Read-NipatOwnership $backup $Target.Distro
+            if ($saved.owner_id -cne $ownership.owner_id -or $saved.status -cne 'owned' -or
+                $saved.rootfs_sha256 -cne $Target.RootfsSha256 -or
+                (Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash -cne
+                (Get-FileHash -LiteralPath $Target.OwnershipPath -Algorithm SHA256).Hash) {
+                throw 'Il registro precedente e cambiato durante il recupero. Nessuna nuova importazione viene eseguita.'
+            }
+            Write-Host "Ripristino della distribuzione NIPAT assente. Registro precedente conservato: $backup"
+            $ownership = $null
+        }
+        if ($null -eq $ownership) {
+            $ownership = [pscustomobject]@{
                 schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; distro = $Target.Distro; owner_id = [Guid]::NewGuid().ToString('N')
                 rootfs_sha256 = $Target.RootfsSha256; status = 'importing'
             }
-        } elseif ($Target.Ownership.status -ne 'importing') {
-            throw 'Una distribuzione precedentemente verificata non risulta piu registrata. Conservare il runtime e contattare il supporto.'
         }
-        Write-NipatJsonAtomic $Target.OwnershipPath $Target.Ownership
+        Write-NipatJsonAtomic $Target.OwnershipPath $ownership
+        $Target.Ownership = $ownership
         Invoke-NipatWsl @('--import', $Target.Distro, $Target.Directory, $rootfs, '--version', '2') | Out-Null
         $Target.Registered = $true
     }

@@ -74,8 +74,11 @@ la posizione degli input selezionati per le analisi.
 
 Il menu Start include **Cartella NIPAT 0.5 Preview**, che apre la destinazione applicativa.
 Le preferenze dei percorsi sono associate al canale e vengono riproposte nelle
-reinstallazioni, anche dopo la disinstallazione. L'aggiornamento di una Preview
-installata usa la stessa cartella applicativa.
+reinstallazioni, anche dopo la disinstallazione. La modalità **Aggiornamento
+e riparazione** riutilizza la stessa cartella di una Preview riconosciuta,
+anche quando contiene residui di disinstallazione. Una cartella estranea non
+vuota non viene svuotata: il setup propone, quando disponibile, una
+sottocartella vuota oppure richiede un'altra destinazione.
 
 L'esito finale della configurazione è `NIPAT: ready`. Se si interrompe,
 la nuova applicazione resta bloccata per le analisi. Il collegamento
@@ -84,6 +87,15 @@ i componenti conservati. Stato e log si trovano nella sottocartella
 `.runtime\installer` dell'applicazione.
 
 ### Aggiornamento e rimozione
+
+Prima di sostituire file applicativi differenti, il setup li salva insieme
+ai metadati di recupero e al Python portabile generato in un backup selettivo
+nel profilo dell'utente. I file estranei ai componenti distribuiti restano
+nella loro posizione; una collisione con un file da installare viene salvata
+prima della sovrascrittura. I componenti non più distribuiti vengono rimossi
+soltanto se coincidono con l'inventario precedente verificato; quelli
+modificati rimangono in posizione e vengono anche salvati nel backup. Il backup non
+è una copia completa dell'installazione e non prevede un rollback automatico.
 
 Un aggiornamento dello stesso canale ripropone i percorsi configurati. Se
 cambia l'archivio Linux o la destinazione dell'ambiente WSL, il setup prepara

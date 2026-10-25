@@ -102,6 +102,9 @@ jobs:
       - name: Test optional owned-runtime removal
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-uninstall.ps1
+      - name: Test application repair and preservation of existing files
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-repair-installation.ps1
       - name: Test Authenticode verification policy with mocked trust results
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1
@@ -282,6 +285,11 @@ jobs:
           & $compiler /nologo /target:exe /platform:x64 "/win32manifest:$manifest" "/out:$target" $source
           if ($LASTEXITCODE -ne 0) { throw 'WSL helper compilation failed.' }
           if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'WSL helper was not written into the installer stage.' }
+      - name: Record the application payload for safe reinstall and repair
+        shell: powershell
+        run: |
+          python scripts/build_windows_installer_assets.py inventory --stage-dir build/windows-installer
+          if ($LASTEXITCODE -ne 0) { throw 'Application payload inventory failed.' }
       - name: Install verified Inno Setup compiler
         shell: powershell
         run: |
@@ -299,11 +307,15 @@ jobs:
           python scripts/build_windows_installer_assets.py verify-embedded `
             --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
           if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs do not match the trusted manifest.' }
+          python scripts/build_windows_installer_assets.py verify-inventory --stage-dir $stage
+          if ($LASTEXITCODE -ne 0) { throw 'Application payload does not match its inventory.' }
           & $env:NIPAT_ISCC "/DStageDir=$stage" "/DRuntimeAssetsDir=$assets" "/DOutputDir=$output" $script
           if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed.' }
           python scripts/build_windows_installer_assets.py verify-embedded `
             --manifest 'build/assets/installer-manifest.json' --stage-dir $stage --assets-dir $assets
           if ($LASTEXITCODE -ne 0) { throw 'Embedded runtime inputs changed during compilation.' }
+          python scripts/build_windows_installer_assets.py verify-inventory --stage-dir $stage
+          if ($LASTEXITCODE -ne 0) { throw 'Application payload changed during compilation.' }
           if (@(Get-ChildItem -LiteralPath $output -Filter '*.bin' -File).Count -ne 0) {
             throw 'The installer must be a single EXE without companion data files.'
           }

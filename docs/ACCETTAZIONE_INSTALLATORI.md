@@ -86,7 +86,11 @@ WSL e i checksum dei file di controllo prima e dopo ciascuna operazione.
 | --- | --- |
 | Destinazioni personalizzate | Installare con cartelle applicazione, WSL, cache, dati e risultati separate, includendo un secondo disco locale fisso, spazi e caratteri non ASCII. Usare dati già presenti e verificare che restino invariati. Avviare menu, diagnostica e analisi; verificare risultati nella destinazione scelta e collegamento **Cartella NIPAT 0.5 Preview**. |
 | Destinazioni non ammesse | Provare radici coincidenti o annidate, cartelle non scrivibili, cartella applicativa estranea non vuota, percorsi UNC, rete, supporti rimovibili, junction, cartelle di sistema e destinazioni stabili. Il setup deve rifiutarle senza modificare il contenuto protetto. |
-| Reinstallazione e preferenze | Reinstallare lo stesso EXE nella cartella applicativa esistente; controllare le cinque scelte riproposte, l'avvio e i run conservati. Ripetere dopo la disinstallazione: le preferenze devono restare disponibili anche se ambiente e cache sono stati rimossi. |
+| Reinstallazione e preferenze | Reinstallare lo stesso EXE nella cartella applicativa esistente; controllare la modalità **Aggiornamento e riparazione**, le cinque scelte riproposte, l'avvio e i run conservati. Ripetere dopo la disinstallazione, aggiungendo un file estraneo accanto ai residui riconoscibili della Preview: la riparazione deve riuscire senza eliminarlo. Le preferenze devono restare disponibili anche se ambiente e cache sono stati rimossi. |
+| Backup e inventario | Preparare componenti modificati, un file estraneo che collide con il nome di un componente in arrivo e altri file estranei. Verificare la copia dei file da sovrascrivere, dei metadati e del Python generato nel backup selettivo prima delle sostituzioni; gli altri file devono rimanere invariati. Con un inventario precedente valido, verificare rimozione dei soli componenti obsoleti immutati; quelli modificati devono restare in posizione ed essere copiati nel backup. I file estranei non coinvolti nelle sostituzioni devono restare invariati senza essere inclusi nel backup. Un inventario del nuovo pacchetto non valido deve interrompere l'operazione; un inventario precedente danneggiato deve essere salvato senza autorizzare rimozioni di componenti obsoleti. |
+| Inventario da manifest | Su una Preview priva di `.distribution/application-files.json`, verificare l'uso della mappa `source_sha256` di un manifest precedente valido. Provare schema, profilo, commit o mappa non validi: nessuna rimozione di file obsoleti deve essere autorizzata. Se `application-files.json` esiste ma è danneggiato, il manifest non deve sostituirlo per autorizzare rimozioni. |
+| Cartella estranea | Selezionare una cartella non vuota non appartenente a NIPAT. Verificare la proposta di una sottocartella vuota e la conferma esplicita: il contenuto iniziale resta invariato. Rifiutare la proposta deve mantenere la selezione; una sottocartella già non vuota non deve essere svuotata né generare annidamenti ripetuti. |
+| Distribuzione rimossa manualmente | Con dati sintetici, rimuovere da WSL una distribuzione posseduta dalla Preview mantenendone i registri. Il setup deve ricrearla soltanto nella destinazione vuota e archiviare la ricevuta precedente. Ripetere con un file di controllo nella destinazione: la preparazione deve arrestarsi senza cancellarlo. Verificare anche il riutilizzo della distribuzione ancora registrata e coerente. |
 | Cambio di destinazione | Cambiare cartella WSL mantenendo lo stesso EXE: deve essere preparato un ambiente distinto e quello precedente deve restare intatto. Cambiare dati e risultati: nessun file preesistente deve essere spostato, cancellato o sovrascritto. Verificare nuovi run nella destinazione attiva e accesso ai precedenti. |
 | Rimozione predefinita | Conservare ambiente e cache. Applicazione e collegamenti devono essere rimossi, mentre dati, risultati e risorse WSL/cache restano disponibili. Reinstallare e verificare il riutilizzo compatibile. |
 | Rimozione facoltativa | Selezionare la rimozione di ambiente e cache dopo avere usato più destinazioni. Controllare che vengano rimosse soltanto distribuzioni possedute dalla Preview e archivi verificati delle destinazioni registrate, inclusi quelli conservati in precedenza. Dati e risultati di tutte le destinazioni, file estranei, Docker Desktop, NIPAT stabile e altre distribuzioni devono restare invariati. |
@@ -125,10 +129,11 @@ correggere il caso e avviare una nuova analisi. Conservare anche l’esito
 negativo per documentare il messaggio e il recupero osservati.
 
 Una reinstallazione della stessa build non verifica un aggiornamento fra
-versioni differenti. Quest’ultimo richiede due pacchetti identificati dello
-stesso canale e un protocollo aggiuntivo di conservazione dei dati, migrazione
-del runtime, interruzione e ripresa. Non attribuire questo risultato alle
-prove di reinstallazione richieste qui.
+versioni differenti. Quest'ultimo richiede due pacchetti identificati dello
+stesso canale e prove aggiuntive di sostituzione dei componenti, gestione
+dell'inventario, conservazione dei dati, migrazione del runtime, interruzione
+e ripresa. Le prove con inventari controllati verificano le regole di gestione
+dei file, ma non sostituiscono questo collaudo dei pacchetti effettivi.
 
 ## Record di accettazione
 

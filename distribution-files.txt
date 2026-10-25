@@ -75,6 +75,8 @@ installer/windows/test-scientific-image.ps1
 installer/windows/test-signatures.ps1
 installer/windows/test-uninstall.ps1
 installer/windows/uninstall-runtime.ps1
+installer/windows/repair-installation.ps1
+installer/windows/test-repair-installation.ps1
 installer/windows/validate-install-layout.ps1
 installer/windows/verify-signatures.ps1
 nipat.cmd

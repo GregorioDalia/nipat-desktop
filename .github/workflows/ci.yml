@@ -102,6 +102,9 @@ jobs:
       - name: Test optional owned-runtime removal
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-uninstall.ps1
+      - name: Test application repair and preservation of existing files
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-repair-installation.ps1
       - name: Test Authenticode verification policy with mocked trust results
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1

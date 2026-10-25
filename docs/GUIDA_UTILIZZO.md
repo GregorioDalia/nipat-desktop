@@ -31,8 +31,10 @@ Installare e avviare NIPAT:
 1. Eseguire l'EXE con doppio clic dal proprio account Windows, senza usare
    «Esegui come amministratore».
 2. Scegliere la cartella dell'applicazione e le quattro cartelle per ambiente
-   WSL, cache, dati e risultati, oppure mantenere i valori proposti. Se
-   richiesta, autorizzare l'attivazione di WSL e completare il riavvio.
+   WSL, cache, dati e risultati, oppure mantenere i valori proposti. Il setup
+   indica **Installazione** oppure **Aggiornamento e riparazione** quando
+   riconosce una Preview esistente. Se richiesta, autorizzare l'attivazione
+   di WSL e completare il riavvio.
 3. Attendere il completamento della preparazione e degli autotest, indicato
    da **`NIPAT: ready`**.
 4. Selezionare **Avvia NIPAT 0.5 Preview** nella schermata finale del setup,
@@ -151,14 +153,24 @@ Si possono usare dischi locali fissi diversi. Le cinque cartelle devono essere
 scrivibili, distinte e non contenersi tra loro; il setup controlla le
 destinazioni prima di installare. Non sono accettate cartelle di sistema,
 cartelle della versione stabile o percorsi che attraversano collegamenti.
-Per l'applicazione scegliere una cartella vuota o della stessa Preview;
-le cartelle dati e risultati possono già contenere file, che vengono conservati.
+Per l'applicazione scegliere una cartella vuota o della stessa Preview.
+Se una cartella non vuota non viene riconosciuta, il setup può proporre una
+sottocartella vuota: accettarla cambia la destinazione senza spostare o
+cancellare il contenuto della cartella iniziale. In alternativa, scegliere
+un'altra cartella vuota. Le cartelle dati e risultati possono già contenere
+file, che vengono conservati.
 Il collegamento **Cartella NIPAT 0.5 Preview** nel menu Start apre la cartella applicativa.
 
-Le scelte vengono riproposte alla reinstallazione. Per aggiornare la Preview
-installata, usare la stessa cartella applicativa. Cambiare dati o risultati
-nel setup non sposta i file già presenti: i run precedenti rimangono nella
-vecchia destinazione e si consultano con Esplora file. Cambiare la cartella
+Le scelte vengono riproposte alla reinstallazione. Per aggiornare o riparare
+una Preview riconosciuta, usare la stessa cartella applicativa, anche se
+contiene residui di una disinstallazione. Il setup sostituisce i propri
+componenti e conserva i file estranei; prima di sovrascrivere file differenti,
+ne salva una copia. Il backup è selettivo e non ripristina automaticamente
+l'intera installazione in caso di errore. I dettagli sono nella
+[guida dell'installatore Windows](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione).
+
+Cambiare dati o risultati nel setup non sposta i file già presenti: i run
+precedenti rimangono nella vecchia destinazione e si consultano con Esplora file. Cambiare la cartella
 dell'ambiente WSL prepara un ambiente dedicato nella nuova posizione e
 conserva quello precedente.
 

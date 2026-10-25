@@ -285,6 +285,72 @@ class InstallerAssetTests(unittest.TestCase):
         self.assertEqual(release["source_git"]["commit"], COMMIT)
         self.assertEqual(release["runtime"]["image_id"], SCIENTIFIC)
 
+    def application_stage(self):
+        stage = self.root / "application-stage"
+        with patch.object(assets.bundle, "require_python_archive"):
+            app = assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
+        (app / "NIPAT.exe").write_bytes(b"tested launcher fixture")
+        (app / "installer/windows/EnableWsl.exe").write_bytes(b"elevation helper fixture")
+        return stage, app
+
+    def test_application_inventory_covers_sources_and_compiled_components(self):
+        stage, app = self.application_stage()
+        with patch.object(assets.bundle, "require_python_archive"):
+            inventory = assets.write_application_payload(stage)
+            self.assertEqual(assets.verify_application_payload(stage), inventory)
+        record = json.loads(inventory.read_text())
+        self.assertEqual(record["source_commit"], COMMIT)
+        self.assertEqual(record["installation_channel"], "preview-0.5")
+        entries = {entry["path"]: entry["sha256"] for entry in record["files"]}
+        self.assertEqual(set(entries), {p.relative_to(app).as_posix() for p in app.rglob("*")
+                                       if p.is_file() and p != inventory})
+        for relative, digest in entries.items():
+            self.assertEqual(digest, assets.bundle.sha256_file(app / relative))
+        (app / "NIPAT.exe").write_bytes(b"unexpected replacement")
+        with patch.object(assets.bundle, "require_python_archive"), self.assertRaisesRegex(ValueError, "inventario"):
+            assets.verify_application_payload(stage)
+
+    def test_inventory_refuses_changed_source_missing_binary_and_unlisted_file(self):
+        stage, app = self.application_stage()
+        source = app / "README.md"
+        original = source.read_bytes()
+        source.write_bytes(b"changed after trusted staging")
+        with self.assertRaisesRegex(ValueError, "Sorgente modificato"):
+            assets.write_application_payload(stage)
+        source.write_bytes(original)
+        binary = app / "NIPAT.exe"
+        binary.unlink()
+        with self.assertRaisesRegex(ValueError, "payload non corrisponde"):
+            assets.write_application_payload(stage)
+        binary.write_bytes(b"fixture")
+        private = app / "private.txt"
+        private.write_text("must not ship")
+        with self.assertRaisesRegex(ValueError, "payload non corrisponde"):
+            assets.write_application_payload(stage)
+        self.assertFalse((app / ".distribution" / assets.APPLICATION_FILES_NAME).exists())
+
+    def test_inventory_rejects_windows_aliases_and_links(self):
+        stage, app = self.application_stage()
+        for name in ("extra.", "extra:stream", "nul.txt"):
+            if os.name == "nt":
+                continue  # Windows itself prevents creation of these test paths.
+            path = app / name
+            path.write_text("fixture")
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "non sicuro"):
+                assets.write_application_payload(stage)
+            path.unlink()
+        if os.name != "nt":
+            path = app / "linked"
+            path.symlink_to(app / "README.md")
+            with self.assertRaisesRegex(ValueError, "collegamento"):
+                assets.write_application_payload(stage)
+
+    def test_inventory_requires_the_verified_python_archive(self):
+        stage, app = self.application_stage()
+        with self.assertRaises(ValueError):
+            assets.write_application_payload(stage)
+        self.assertFalse((app / ".distribution" / assets.APPLICATION_FILES_NAME).exists())
+
     def test_stage_embeds_exact_archives_directly_into_persistent_cache(self):
         stage = self.root / "stage"
         with patch.object(assets.bundle, "require_python_archive"):

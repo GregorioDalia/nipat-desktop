@@ -1,6 +1,7 @@
 [CmdletBinding(DefaultParameterSetName = 'Validate')]
 param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Validate')][string] $LayoutFile,
+    [Parameter(ParameterSetName = 'Validate')][string] $InfoFile,
     [Parameter(Mandatory = $true, ParameterSetName = 'Defaults')][string] $Project,
     [Parameter(Mandatory = $true, ParameterSetName = 'Defaults')][string] $DefaultsFile,
     [Parameter(Mandatory = $true)][string] $ErrorFile
@@ -21,7 +22,16 @@ try {
         # GetIniString uses the Unicode Windows INI API; preserve non-ASCII paths.
         [IO.File]::WriteAllLines($DefaultsFile, [string[]] $lines, [Text.Encoding]::Unicode)
     } else {
+        if ($InfoFile -and (Test-Path -LiteralPath $InfoFile)) {
+            Remove-Item -LiteralPath $InfoFile -Force
+        }
         $layout = Get-Content -LiteralPath $LayoutFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        Assert-NipatInstallLayout $layout
+        $kind = Get-NipatApplicationKind $layout.app_dir
+        if ($InfoFile) {
+            [IO.File]::WriteAllLines($InfoFile, [string[]] @('[NIPAT]', "kind=$kind"),
+                [Text.Encoding]::Unicode)
+        }
         Assert-NipatInstallLayout $layout -CheckExisting
     }
     exit 0

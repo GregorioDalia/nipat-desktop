@@ -23,6 +23,7 @@ _SPEC.loader.exec_module(bundle)
 RELEASE_REPOSITORY = "GregorioDalia/nipat-desktop"
 MAX_ASSET_BYTES = 2 * 1024**3  # GitHub release files must be smaller than 2 GiB.
 MANIFEST_NAME = "installer-manifest.json"
+APPLICATION_FILES_NAME = "application-files.json"
 RUNTIME_INCLUDE_NAME = "runtime-assets.iss"
 PROFILE_INCLUDE_NAME = "install-profile.iss"
 PROFILE_PATH = Path("installer/windows/install-profile.json")
@@ -344,6 +345,64 @@ def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path)
     return app
 
 
+def application_payload(stage: Path) -> dict:
+    """Identify the complete Windows payload after compiling both executables."""
+    app = stage / "app"
+    if app.is_symlink():
+        raise ValueError("La cartella applicativa non puo essere un collegamento.")
+    manifest = json.loads((app / ".distribution" / MANIFEST_NAME).read_text(encoding="utf-8"))
+    validate_manifest(manifest)
+    validate_installation_profile(manifest.get("installation_profile"))
+    source_hashes = manifest.get("source_sha256", {})
+    if not isinstance(source_hashes, dict) or not source_hashes:
+        raise ValueError("Inventario dei sorgenti mancante.")
+    generated = {"release.json", "NIPAT.exe", "installer/windows/EnableWsl.exe",
+                 f".distribution/{MANIFEST_NAME}", f".distribution/{bundle.PYTHON_NAME}"}
+    inventory_path = f".distribution/{APPLICATION_FILES_NAME}"
+    files = []
+    seen = set()
+    for path in sorted(app.rglob("*")):
+        if path.is_symlink():
+            raise ValueError(f"Il payload contiene un collegamento: {path}")
+        if path.is_dir():
+            continue
+        relative = path.relative_to(app).as_posix()
+        if relative == inventory_path:
+            continue
+        parts = relative.split("/")
+        if (any(part in ("", ".", "..") or part.endswith((".", " ")) or
+                re.search(r'[<>:"|?*\\\x00-\x1f]', part) or
+                re.match(r"(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", part)
+                for part in parts) or parts[0].casefold() in {".git", ".runtime"} or
+                relative.casefold() in seen):
+            raise ValueError(f"Percorso payload non sicuro o ambiguo: {relative}")
+        seen.add(relative.casefold())
+        digest = bundle.sha256_file(path)
+        if relative in source_hashes and digest != source_hashes[relative]:
+            raise ValueError(f"Sorgente modificato dopo lo staging: {relative}")
+        files.append({"path": relative, "sha256": digest})
+    if {entry["path"] for entry in files} != set(source_hashes) | generated:
+        raise ValueError("Il payload non corrisponde ai sorgenti e ai componenti generati previsti.")
+    bundle.require_python_archive(app / ".distribution" / bundle.PYTHON_NAME)
+    return {"schema_version": 1, "installation_channel": "preview-0.5",
+            "source_commit": manifest["source_commit"], "files": files}
+
+
+def write_application_payload(stage: Path) -> Path:
+    payload = application_payload(stage)
+    destination = stage / "app" / ".distribution" / APPLICATION_FILES_NAME
+    destination.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return destination
+
+
+def verify_application_payload(stage: Path) -> Path:
+    expected = application_payload(stage)
+    path = stage / "app" / ".distribution" / APPLICATION_FILES_NAME
+    if json.loads(path.read_text(encoding="utf-8")) != expected:
+        raise ValueError("L inventario applicativo non corrisponde ai file da installare.")
+    return path
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project", type=Path, default=Path(__file__).resolve().parents[1])
@@ -361,6 +420,9 @@ def main() -> int:
     verify.add_argument("--manifest", type=Path, required=True)
     verify.add_argument("--stage-dir", type=Path, required=True)
     verify.add_argument("--assets-dir", type=Path, required=True)
+    for command in ("inventory", "verify-inventory"):
+        inventory = subparsers.add_parser(command, help="registra o verifica i file applicativi per la riparazione")
+        inventory.add_argument("--stage-dir", type=Path, required=True)
     args = parser.parse_args()
     try:
         project = args.project.resolve()
@@ -369,6 +431,9 @@ def main() -> int:
                 project, args.output_dir.resolve(), source_commit=args.source_commit,
                 scientific_reference=args.scientific_image, rootfs_reference=args.rootfs_image,
             )
+        elif args.command in ("inventory", "verify-inventory"):
+            operation = write_application_payload if args.command == "inventory" else verify_application_payload
+            result = operation(args.stage_dir)
         elif args.command == "verify-embedded":
             result = verify_embedded_inputs(args.manifest, args.stage_dir, args.assets_dir)
         else:

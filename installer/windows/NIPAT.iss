@@ -19,6 +19,7 @@ LicenseFile={#StageDir}\app\LICENSE
 DefaultDirName={code:GetNipatDefaultAppDir}
 DisableDirPage=no
 UsePreviousAppDir=yes
+SetupMutex=Local\NIPAT-05-Preview-Installer
 DefaultGroupName={#NipatDisplayName}
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
@@ -44,6 +45,8 @@ Source: "{#StageDir}\app\installer\windows\install-profile.ps1"; Flags: dontcopy
 Source: "{#StageDir}\app\installer\windows\install-profile.json"; Flags: dontcopy noencryption
 Source: "{#StageDir}\app\installer\windows\install-layout.ps1"; Flags: dontcopy noencryption
 Source: "{#StageDir}\app\installer\windows\validate-install-layout.ps1"; Flags: dontcopy noencryption
+Source: "{#StageDir}\app\installer\windows\repair-installation.ps1"; Flags: dontcopy noencryption
+Source: "{#StageDir}\app\.distribution\application-files.json"; Flags: dontcopy noencryption
 Source: "{#StageDir}\app\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; The archives are embedded and written once, directly into the verified resume cache.
 #include StageDir + "\runtime-assets.iss"
@@ -96,6 +99,8 @@ var
   WslRebootRequired: Boolean;
   StoragePage: TInputDirWizardPage;
   LayoutHelpersExtracted: Boolean;
+  ApplicationKind: String;
+  ProposedParent: String;
 
 function NipatGetDriveType(RootPath: String): Cardinal;
   external 'GetDriveTypeW@kernel32.dll stdcall';
@@ -287,24 +292,21 @@ begin
   for I := 1 to 4 do StoragePage.Values[I - 1] := Paths[I];
 end;
 
-function NextButtonClick(CurPageID: Integer): Boolean;
-var
-  MessageText: String;
-begin
-  Result := True;
-  if CurPageID = StoragePage.ID then begin
-    MessageText := NipatValidateSelection;
-    if MessageText <> '' then begin
-      MsgBox(MessageText, mbError, MB_OK);
-      Result := False;
-    end;
-  end;
-end;
-
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo,
   MemoTypeInfo, MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
+var
+  ModeText, PreservationText: String;
 begin
-  Result := MemoDirInfo + NewLine + NewLine +
+  ModeText := 'Installazione';
+  PreservationText := 'Dati e risultati gia presenti vengono conservati.';
+  if (ApplicationKind = 'installed') or (ApplicationKind = 'residual') then begin
+    ModeText := 'Aggiornamento e riparazione';
+    PreservationText := PreservationText + ' Prima della copia viene salvato un backup dei file applicativi ' +
+      'che saranno sostituiti. Gli altri file presenti restano nella cartella. ' +
+      'Il backup non comporta un ripristino automatico.';
+  end;
+  Result := 'Operazione: ' + ModeText + NewLine + NewLine + PreservationText + NewLine + NewLine +
+    MemoDirInfo + NewLine + NewLine +
     'Ambiente di calcolo WSL:' + NewLine + Space + GetNipatRuntimeDir('') + NewLine + NewLine +
     'Cache dei componenti:' + NewLine + Space + GetNipatCacheDir('') + NewLine + NewLine +
     'Dati predefiniti:' + NewLine + Space + GetNipatDataDir('') + NewLine + NewLine +
@@ -378,6 +380,8 @@ begin
   ExtractTemporaryFile('install-profile.json');
   ExtractTemporaryFile('install-layout.ps1');
   ExtractTemporaryFile('validate-install-layout.ps1');
+  ExtractTemporaryFile('repair-installation.ps1');
+  ExtractTemporaryFile('application-files.json');
   LayoutHelpersExtracted := True;
 end;
 
@@ -395,29 +399,132 @@ end;
 
 function NipatValidateWithSharedRules(): String;
 var
-  LayoutFile, ErrorFile, Parameters: String;
+  LayoutFile, ErrorFile, InfoFile, Parameters: String;
   ValidationResult: Integer;
 begin
   Result := '';
+  ApplicationKind := '';
   LayoutFile := ExpandConstant('{tmp}\nipat-layout-selection.json');
   ErrorFile := ExpandConstant('{tmp}\nipat-layout-error.txt');
+  InfoFile := ExpandConstant('{tmp}\nipat-layout-info.ini');
   try
     ExtractNipatLayoutHelpers;
     WriteNipatInstallLayoutAt(LayoutFile);
     DeleteFile(ErrorFile);
+    DeleteFile(InfoFile);
     Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
       QuoteNipatArgument(ExpandConstant('{tmp}\validate-install-layout.ps1')) +
       ' -LayoutFile ' + QuoteNipatArgument(LayoutFile) +
+      ' -InfoFile ' + QuoteNipatArgument(InfoFile) +
       ' -ErrorFile ' + QuoteNipatArgument(ErrorFile);
     if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
       Parameters, ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, ValidationResult) then
       ValidationResult := 1;
+    ApplicationKind := GetIniString('NIPAT', 'kind', '', InfoFile);
     if ValidationResult <> 0 then
       Result := NipatReadValidationError(ErrorFile,
         'Impossibile verificare le cartelle selezionate. Nessun file viene copiato. ' +
-        'Verificare che Windows consenta l''esecuzione di PowerShell e riprovare.');
+        'Verificare che Windows consenta l''esecuzione di PowerShell e riprovare.')
+    else if (ApplicationKind <> 'empty') and (ApplicationKind <> 'installed') and
+      (ApplicationKind <> 'residual') then
+      Result := 'La verifica non ha riconosciuto la destinazione applicativa. Nessun file viene copiato.';
   except
     Result := 'Verifica delle cartelle non completata: ' + GetExceptionMessage;
+  end;
+end;
+
+function NipatDirectoryIsEmpty(Path: String): Boolean;
+var
+  Entry: TFindRec;
+begin
+  Result := not FileExists(Path);
+  if not Result or not DirExists(Path) then Exit;
+  if not FindFirst(AddBackslash(Path) + '*', Entry) then begin
+    Result := False;
+    Exit;
+  end;
+  try
+    repeat
+      if (Entry.Name <> '.') and (Entry.Name <> '..') then begin
+        Result := False;
+        Exit;
+      end;
+    until not FindNext(Entry);
+  finally
+    FindClose(Entry);
+  end;
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  MessageText, ParentPath, ChildPath: String;
+begin
+  Result := True;
+  if CurPageID <> StoragePage.ID then Exit;
+  ApplicationKind := '';
+  MessageText := NipatValidateSelection;
+  if MessageText = '' then MessageText := NipatValidateWithSharedRules;
+  if (MessageText <> '') and (ApplicationKind = 'unknown') and not WizardSilent then begin
+    ParentPath := WizardDirValue;
+    ChildPath := AddBackslash(ParentPath) + '{#NipatAppDirectory}';
+    if (CompareText(ProposedParent, ParentPath) <> 0) and
+      (CompareText(ExtractFileName(ParentPath), '{#NipatAppDirectory}') <> 0) and
+      NipatDirectoryIsEmpty(ChildPath) then begin
+      ProposedParent := ParentPath;
+      if MsgBox('La cartella selezionata contiene file che non identificano un''installazione NIPAT. ' +
+        'Vuoi usare questa sottocartella dedicata e vuota?' + #13#10#13#10 + ChildPath + #13#10#13#10 +
+        'Nessun file esistente verra spostato o eliminato. Scegli No per tornare indietro e indicare un''altra destinazione.',
+        mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then begin
+        WizardForm.DirEdit.Text := ChildPath;
+        MessageText := NipatValidateSelection;
+        if MessageText = '' then MessageText := NipatValidateWithSharedRules;
+      end;
+    end;
+  end;
+  if MessageText <> '' then begin
+    MsgBox(MessageText + #13#10#13#10 + 'Usa Indietro per modificare la cartella applicativa.', mbError, MB_OK);
+    Result := False;
+  end;
+end;
+
+function NipatPrepareApplication(): String;
+var
+  LayoutFile, ErrorFile, ReportFile, Parameters, Mode, BackupDir: String;
+  RepairResult: Integer;
+begin
+  Result := '';
+  LayoutFile := ExpandConstant('{tmp}\nipat-layout-selection.json');
+  ErrorFile := ExpandConstant('{tmp}\nipat-repair-error.txt');
+  ReportFile := ExpandConstant('{tmp}\nipat-repair-report.ini');
+  try
+    ExtractNipatLayoutHelpers;
+    WriteNipatInstallLayoutAt(LayoutFile);
+    DeleteFile(ErrorFile);
+    DeleteFile(ReportFile);
+    Parameters := '-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' +
+      QuoteNipatArgument(ExpandConstant('{tmp}\repair-installation.ps1')) +
+      ' -LayoutFile ' + QuoteNipatArgument(LayoutFile) +
+      ' -PayloadFile ' + QuoteNipatArgument(ExpandConstant('{tmp}\application-files.json')) +
+      ' -ReportFile ' + QuoteNipatArgument(ReportFile) +
+      ' -ErrorFile ' + QuoteNipatArgument(ErrorFile);
+    if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+      Parameters, ExpandConstant('{tmp}'), SW_HIDE, ewWaitUntilTerminated, RepairResult) then
+      RepairResult := 1;
+    if RepairResult <> 0 then begin
+      Result := NipatReadValidationError(ErrorFile,
+        'Preparazione o backup dell''applicazione non completati. Nessun file applicativo viene copiato.');
+      Exit;
+    end;
+    Mode := GetIniString('NIPAT', 'mode', '', ReportFile);
+    BackupDir := GetIniString('NIPAT', 'backup_dir', '', ReportFile);
+    if (Mode <> 'install') and (Mode <> 'repair') then
+      Result := 'Rapporto di preparazione non valido. Nessun file applicativo viene copiato.'
+    else if (Mode = 'repair') and ((BackupDir = '') or not DirExists(BackupDir)) then
+      Result := 'Backup della riparazione non disponibile. Nessun file applicativo viene copiato.'
+    else if Mode = 'repair' then
+      Log('Backup prima della riparazione: ' + BackupDir);
+  except
+    Result := 'Preparazione dell''applicazione non completata: ' + GetExceptionMessage;
   end;
 end;
 
@@ -427,6 +534,7 @@ begin
   if (Result = '') and (CompareText(WizardGroupValue, '{#NipatDisplayName}') <> 0) then
     Result := 'Il gruppo Start di questa Preview deve restare separato da NIPAT stabile. Riavviare senza /GROUP.';
   if Result = '' then Result := NipatValidateWithSharedRules;
+  if Result = '' then Result := NipatPrepareApplication;
 end;
 
 procedure ReadNipatPreviousDefaults(Project, DefaultsFile: String);

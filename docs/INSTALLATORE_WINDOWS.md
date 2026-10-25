@@ -48,7 +48,9 @@ La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifich
 1. Avviare `NIPAT-Setup.exe` con doppio clic dal proprio account Windows,
    senza scegliere «Esegui come amministratore».
 2. Scegliere la cartella applicativa nella pagina di destinazione, quindi
-   le cartelle di ambiente WSL, cache, dati e risultati. Se richiesto,
+   le cartelle di ambiente WSL, cache, dati e risultati. Verificare la modalità
+   indicata dal setup: **Installazione** per una cartella vuota oppure
+   **Aggiornamento e riparazione** per una Preview riconosciuta. Se richiesto,
    autorizzare l'abilitazione dei componenti Windows. Dopo un riavvio,
    accedere allo stesso account per riprendere.
 3. Attendere la verifica degli archivi, la preparazione del runtime e gli
@@ -105,8 +107,17 @@ coincidere né essere annidate tra loro; non sono ammesse sovrapposizioni con
 cartelle di sistema, `Windows`, `Program Files` o destinazioni predefinite
 della versione stabile. Sono rifiutati percorsi UNC, unità di rete e supporti
 rimovibili. La cartella applicativa deve essere vuota o riconosciuta come
-appartenente alla Preview. Dati e risultati possono contenere file preesistenti,
-che non vengono trasferiti o cancellati dal setup.
+appartenente alla Preview. Una configurazione di stato e backend valida può
+identificare anche i residui di una disinstallazione, senza richiedere che
+la cartella contenga soltanto `.runtime`. La presenza di altri file non ne
+autorizza la cancellazione.
+
+Per una cartella estranea non vuota, il setup può proporre la sottocartella
+vuota `NIPAT-0.5-Preview`, previa conferma. Questa scelta cambia soltanto la
+destinazione. Se anche la sottocartella contiene file, occorre scegliere
+un'altra cartella vuota: il setup non svuota il contenuto né crea una catena
+di sottocartelle. Dati e risultati possono contenere file preesistenti, che
+non vengono trasferiti o cancellati dal setup.
 
 Manifest, backend, stato, proprietà del runtime e registri di recupero devono
 indicare il canale previsto. Il setup non adotta ambienti o configurazioni
@@ -135,7 +146,37 @@ Stato e backend conservano separatamente ID della build, ID risolto localmente
 e SHA-256 dell'archivio. Le esecuzioni usano l'ID locale verificato, con pull
 disabilitato. Il launcher ne controlla il legame con il manifest installato.
 
-## Aggiornamento e ripresa
+## Aggiornamento e riparazione
+
+Il setup riutilizza la cartella della Preview riconosciuta, conservando i
+percorsi selezionati. Un inventario dei file distribuiti distingue i componenti
+gestiti dall'installatore dai file aggiunti dall'utente. Prima di sovrascrivere
+un componente differente, il setup ne salva la copia in
+`%LOCALAPPDATA%\NIPAT-0.5-Preview\installations\backups\<UTC-guid>`.
+Il backup include anche l'inventario precedente, la configurazione dei percorsi,
+lo stato dell'installatore, il backend, il marcatore applicativo e il Python
+portabile generato sotto `.runtime\python`. I componenti applicativi identici
+non richiedono una copia.
+Solo quando `.distribution\application-files.json` è assente, il setup può
+usare la mappa `source_sha256` di `.distribution\installer-manifest.json`
+come inventario precedente, dopo averne verificato schema, profilo, commit e
+corrispondenze fra percorsi e hash; un inventario presente ma non valido non
+abilita questo recupero alternativo.
+
+I file estranei ai componenti distribuiti rimangono nella loro posizione;
+un file con lo stesso nome di un componente da installare viene salvato prima
+della sovrascrittura. Un componente presente nell'inventario precedente ma non
+più distribuito viene rimosso soltanto se il suo hash coincide con quello
+registrato; se è stato modificato, rimane nella propria posizione e viene
+anche copiato nel backup. I file estranei non elencati negli inventari e non
+coinvolti nelle sostituzioni rimangono in posizione, senza una copia nel backup.
+Un inventario precedente danneggiato viene salvato, ma non autorizza la rimozione di componenti obsoleti.
+Un inventario del nuovo pacchetto non valido interrompe invece la preparazione.
+Non viene svuotata l'intera cartella applicativa. Il backup selettivo non
+comprende tutti i dati o il filesystem WSL e non realizza un ripristino
+automatico completo in caso di errore.
+
+### Preparazione del runtime e ripresa
 
 Una distribuzione può essere riutilizzata soltanto se digest completo,
 registrazione WSL, proprietà del canale e posizione effettiva sono coerenti.
@@ -144,6 +185,10 @@ filesystem Linux e 12 cifre del digest della posizione. Un ambiente già
 posseduto dalla Preview con un nome precedente può essere riutilizzato nella
 stessa destinazione, dopo le medesime verifiche di proprietà. Un nome occupato
 da un ambiente non riconosciuto interrompe la preparazione senza sostituirlo.
+Se una distribuzione posseduta dalla Preview è stata rimossa manualmente da
+WSL, il setup può ricrearla soltanto quando la destinazione precedente è vuota.
+La ricevuta precedente viene conservata nello storico delle registrazioni;
+una cartella ancora contenente file non viene cancellata per forzare l'importazione.
 
 Un digest Linux diverso o una diversa cartella dell'ambiente WSL produce una
 distribuzione affiancata: il setup non copia né elimina quella precedente.
@@ -169,8 +214,9 @@ Start. Conservare questi file della cartella applicativa:
 - `.runtime\backend.json`: configurazione attivata, se presente.
 
 Non modificare questi file per forzare lo stato `ready`. I registri di recupero
-sono evidenze di configurazione, non un backup completo dell'applicazione.
-Inno Setup copia i file applicativi prima della preparazione del runtime:
+e il backup selettivo hanno scopi distinti; nessuno costituisce una copia
+completa dell'installazione. Inno Setup copia i file applicativi prima della
+preparazione del runtime:
 un errore lascia l'applicazione bloccata fino al completamento del setup,
 anche se la distribuzione precedente è ancora presente.
 

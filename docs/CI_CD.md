@@ -30,8 +30,10 @@ I job `linux-checks` e `windows-checks` eseguono la suite Python su entrambi
 i sistemi. Il primo comprende i test della selezione CI, del publisher e la
 verifica sintattica dell'helper del motore. Il secondo comprende parsing con
 PowerShell 5.1, protezioni del bootstrap, identità delle immagini, configurazione
-WSL riprendibile e compilazione/prova del launcher. I controlli relativi ai
-percorsi e alla rimozione devono verificare separazione delle destinazioni,
+WSL riprendibile e compilazione/prova del launcher. I controlli di riparazione
+e inventario verificano il backup selettivo, la gestione dei componenti
+sostituiti o obsoleti e la conservazione dei file estranei. I controlli relativi
+ai percorsi e alla rimozione devono verificare separazione delle destinazioni,
 identità delle risorse possedute e conservazione dei dati; non sostituiscono
 la prova dell'interfaccia del setup su Windows.
 
@@ -172,9 +174,12 @@ riavvio e analisi, coesistenza della Preview con NIPAT stabile su Windows,
 Docker già presente su Ubuntu, reinstallazione dello stesso pacchetto e
 rimozione con conservazione dei dati. Su Windows comprende cinque percorsi
 personalizzati, anche su dischi fissi diversi e con spazi o caratteri non ASCII,
-preferenze dopo la disinstallazione, cambio di destinazione senza trasferimento
-dei dati e rimozione facoltativa di ambiente/cache con protezione delle risorse
-estranee. Annullamento e fallimenti parziali richiedono evidenze distinte.
+preferenze dopo la disinstallazione, riparazione nella stessa cartella con
+residui e file estranei, backup selettivo, inventario dei componenti e ripresa
+di una distribuzione posseduta rimossa manualmente da WSL. Comprende inoltre
+cambio di destinazione senza trasferimento dei dati e rimozione facoltativa
+di ambiente/cache con protezione delle risorse estranee. Annullamento e
+fallimenti parziali richiedono evidenze distinte.
 Gli aggiornamenti fra versioni differenti richiedono prove aggiuntive.
 
 Il record di accettazione è sottoposto a revisione su `main` e identifica
