@@ -51,8 +51,13 @@ L'installazione Windows usa il nome **NIPAT 0.5 Preview**. Avviare
 la configurazione deve terminare con `NIPAT: ready`. Per ogni utilizzo
 successivo, aprire con doppio clic il collegamento **NIPAT 0.5 Preview**
 sul desktop o selezionarlo dal menu Start. Non occorre spostare archivi o aprire
-manualmente PowerShell. Requisiti, percorsi e gestione dell'installazione sono
-nella [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
+manualmente PowerShell. Il setup permette di scegliere separatamente le
+cartelle dell'applicazione, dell'ambiente WSL, della cache, dei dati e dei
+risultati, anche su dischi locali fissi diversi. Le scelte vengono riproposte
+alla reinstallazione. La disinstallazione conserva sempre dati e risultati;
+la rimozione dell'ambiente NIPAT e della cache è facoltativa.
+Requisiti, percorsi e gestione dell'installazione sono nella
+[guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
 [documentazione di distribuzione](docs/DISTRIBUZIONE.md).
 
 La Preview Windows non dispone di una firma Authenticode NIPAT. Le protezioni

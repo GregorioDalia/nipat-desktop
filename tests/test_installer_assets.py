@@ -177,17 +177,17 @@ class InstallerAssetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Profilo"):
             assets.installation_profile_include(bad)
 
-    def test_setup_guards_explicit_path_group_and_junction_overrides_before_copying(self):
+    def test_setup_validates_selected_paths_before_copying_and_preserves_channel(self):
         setup = (Path(__file__).resolve().parents[1] / "installer/windows/NIPAT.iss").read_text(encoding="utf-8")
-        self.assertIn("UsePreviousAppDir=no", setup)
+        self.assertIn("DisableDirPage=no", setup)
+        self.assertIn("UsePreviousAppDir=yes", setup)
         self.assertIn("UsePreviousGroup=no", setup)
         guard = setup.split("function PrepareToInstall(var NeedsRestart: Boolean): String;", 1)[1]
-        guard = guard.split("function QuoteNipatArgument", 1)[0]
-        self.assertIn("ExpandConstant('{app}')", guard)
+        guard = guard.split("function InitializeUninstall", 1)[0]
+        self.assertIn("NipatValidateSelection", guard)
+        self.assertIn("NipatValidateWithSharedRules", guard)
         self.assertIn("WizardGroupValue, '{#NipatDisplayName}'", guard)
-        self.assertIn("NipatPathHasReparsePoint(ExpectedApp)", guard)
-        self.assertIn("NipatTreeHasReparsePoint(ExpectedApp)", guard)
-        self.assertIn("NipatTreeHasReparsePoint(AddBackslash(DataRoot) + 'cache')", guard)
+        self.assertIn("validate-install-layout.ps1", setup)
         self.assertIn("'{#NipatResumeKey}'", setup)
         self.assertNotIn("'NIPAT-ResumeSetup'", setup)
 
@@ -299,7 +299,7 @@ class InstallerAssetTests(unittest.TestCase):
             fields = dict(re.findall(r'(\w+): "([^"]*)"', line))
             entry = self.manifest["assets"][key]
             self.assertEqual(fields["Source"], "{#RuntimeAssetsDir}\\" + entry["file"])
-            self.assertEqual(fields["DestDir"], "{localappdata}\\NIPAT-0.5-Preview\\cache")
+            self.assertEqual(fields["DestDir"], "{code:GetNipatCacheDir}")
             self.assertEqual(fields["DestName"], entry["sha256"] + "-" + entry["file"])
             self.assertEqual(fields["Hash"], entry["sha256"])
             flags = line.rsplit("Flags: ", 1)[1].split()

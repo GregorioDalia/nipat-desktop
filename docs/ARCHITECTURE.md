@@ -109,12 +109,26 @@ attestare la disponibilità dell'immagine.
 
 ## Installazione Windows
 
-Il profilo `preview-0.5` identifica applicazione, cartelle, distribuzione WSL,
-collegamenti e stato di configurazione. Il launcher usa esclusivamente il
-proprio manifest e backend verificati. La configurazione è attivata dopo
-la riuscita di diagnostica e autotest; uno stato incompleto impedisce l'avvio
-dell'analisi. Identità, aggiornamento e recupero sono descritti nel
-[riferimento dell'installatore](INSTALLATORE_WINDOWS.md).
+Il profilo `preview-0.5` identifica applicazione, collegamenti e stato di
+configurazione. Il setup gestisce cinque radici configurabili per applicazione,
+ambiente WSL, cache, dati e risultati. Le radici devono essere locali, fisse,
+scrivibili e indipendenti, senza sovrapposizioni o collegamenti nel percorso.
+Le preferenze dell'account e i registri centrali delle destinazioni appartengono
+al canale e vengono conservati dopo la disinstallazione.
+
+L'identità della distribuzione WSL dipende dal filesystem Linux e dalla
+posizione scelta. Il riutilizzo richiede una registrazione posseduta dal
+canale nella destinazione prevista. Cambiare filesystem o posizione prepara
+un ambiente affiancato senza copiare o cancellare quello precedente;
+cambiare cartelle dati e risultati non trasferisce i file esistenti.
+
+Il launcher usa esclusivamente il proprio manifest e backend verificati.
+La configurazione è attivata dopo la riuscita di diagnostica e autotest;
+uno stato incompleto impedisce l'avvio dell'analisi. La disinstallazione
+conserva sempre dati e risultati; l'eventuale rimozione aggiuntiva riguarda
+solo distribuzioni WSL possedute e archivi verificati della cache, nelle
+destinazioni attuali e precedenti registrate. Identità, verifiche e recupero
+sono descritti nel [riferimento dell'installatore](INSTALLATORE_WINDOWS.md).
 
 ## Installazione Ubuntu
 

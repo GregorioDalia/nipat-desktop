@@ -52,22 +52,30 @@ con le protezioni del computer va verificata per ciascun dispositivo del
 collaudo. Il setup non modifica le policy di sicurezza per autorizzarsi
 all'esecuzione.
 
-La configurazione ha identità **NIPAT 0.5 Preview**:
+La configurazione ha identità **NIPAT 0.5 Preview**. Il setup propone cinque
+cartelle modificabili separatamente:
 
-| Elemento | Posizione o identificativo |
+| Contenuto | Percorso predefinito |
 | --- | --- |
 | Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
-| Dati predefiniti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
-| Risultati predefiniti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
-| Cache dei componenti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
-| Distribuzione WSL | Nome con prefisso `NIPAT-05-Preview-`, derivato dall'archivio Linux. |
-| Avvio | Collegamento **NIPAT 0.5 Preview** nel menu Start o sul desktop. |
+| Ambiente WSL e immagine scientifica | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
+| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
+| Dati di riferimento | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
 
-Applicazione, configurazione, cache e distribuzione appartengono a questo
-canale. Il setup rifiuta cartelle applicative diverse da quella prevista;
-i dati di analisi e la destinazione dei risultati si selezionano invece
-nell'applicazione. La cartella dati non limita la posizione degli input:
-sono ammessi file su dischi locali fissi.
+Le cartelle devono essere scrivibili dall'account e trovarsi su dischi locali
+fissi. Possono essere su dischi diversi, ma devono essere distinte e nessuna
+può contenerne un'altra. Il setup rifiuta cartelle di sistema, destinazioni
+della versione stabile, percorsi UNC, unità di rete, supporti rimovibili e
+percorsi che attraversano junction o collegamenti. La cartella applicativa
+deve essere vuota o appartenere alla stessa Preview; dati già presenti nelle
+cartelle dati e risultati vengono conservati. La cartella dati non limita
+la posizione degli input selezionati per le analisi.
+
+Il menu Start include **Cartella NIPAT 0.5 Preview**, che apre la destinazione applicativa.
+Le preferenze dei percorsi sono associate al canale e vengono riproposte nelle
+reinstallazioni, anche dopo la disinstallazione. L'aggiornamento di una Preview
+installata usa la stessa cartella applicativa.
 
 L'esito finale della configurazione è `NIPAT: ready`. Se si interrompe,
 la nuova applicazione resta bloccata per le analisi. Il collegamento
@@ -77,20 +85,26 @@ i componenti conservati. Stato e log si trovano nella sottocartella
 
 ### Aggiornamento e rimozione
 
-Un aggiornamento dello stesso canale conserva le cartelle dati e risultati
-configurate. Se cambia l'archivio dell'ambiente Linux, il setup prepara una
-distribuzione dedicata al nuovo archivio e attiva la configurazione dopo i
-controlli. La distribuzione precedente viene conservata. Un'interruzione
-non attiva una configurazione incompleta; i file applicativi già installati
-non vengono però ripristinati automaticamente.
+Un aggiornamento dello stesso canale ripropone i percorsi configurati. Se
+cambia l'archivio Linux o la destinazione dell'ambiente WSL, il setup prepara
+una distribuzione dedicata e attiva la configurazione dopo i controlli.
+L'ambiente precedente viene conservato, senza copiarlo o eliminarlo
+automaticamente. Cambiare le cartelle dati o risultati non trasferisce i file:
+i risultati precedenti restano consultabili nella destinazione originaria.
+Un'interruzione non attiva una configurazione incompleta; i file applicativi
+già installati non vengono però ripristinati automaticamente.
 
 La gestione di questa distribuzione NIPAT è distinta dalla manutenzione del
 componente WSL di Windows. L'applicazione non costituisce un sistema di
 aggiornamento automatico generale di Windows o WSL.
 
-La disinstallazione rimuove i file applicativi e i collegamenti. Dati,
-risultati e ambiente WSL vengono conservati: la disinstallazione non deve
-essere interpretata come cancellazione completa dei dati di ricerca.
+La disinstallazione rimuove i file applicativi e i collegamenti e conserva
+sempre dati e risultati. Per impostazione predefinita conserva anche ambiente
+WSL e cache; l'opzione di rimozione aggiuntiva elimina soltanto le distribuzioni
+verificate della Preview e gli archivi verificati della sua cache, nelle
+destinazioni attuali e precedenti registrate. Non interviene su Docker
+Desktop, sulla versione stabile o su altre distribuzioni WSL. Le preferenze
+e i piccoli registri dei percorsi restano disponibili per una reinstallazione.
 I dettagli tecnici e le prove richieste sono in
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
 

@@ -18,10 +18,19 @@ function Read-NipatOwnership([string] $Path, [string] $Distro) {
 function Get-NipatRuntimeTarget([string] $WslDirectory, [string] $RootfsSha256, [string[]] $Names) {
     if ($RootfsSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Identita rootfs non valida.' }
     $profile = Get-NipatInstallationProfile
-    # Even an identical stable rootfs belongs to another installation channel.
-    $distro = $profile.distro_prefix + $RootfsSha256.Substring(0, 40)
+    # Reuse an earlier Preview only when its receipt is in this selected runtime
+    # directory. A different destination gets a distinct name and a fresh import;
+    # the existing distribution and its disk are never moved or unregistered.
+    $legacyDistro = $profile.distro_prefix + $RootfsSha256.Substring(0, 40)
+    $legacyRecordPath = Join-Path (Join-Path $WslDirectory 'registrations') ($legacyDistro + '.json')
+    $legacyOwnership = Read-NipatOwnership $legacyRecordPath $legacyDistro
+    if ($null -ne $legacyOwnership) {
+        $distro = $legacyDistro
+    } else {
+        $distro = Get-NipatRuntimeDistroName $RootfsSha256 $WslDirectory
+    }
     $recordPath = Join-Path (Join-Path $WslDirectory 'registrations') ($distro + '.json')
-    $ownership = Read-NipatOwnership $recordPath $distro
+    $ownership = if ($null -ne $legacyOwnership) { $legacyOwnership } else { Read-NipatOwnership $recordPath $distro }
     if ($null -ne $ownership -and $ownership.rootfs_sha256 -cne $RootfsSha256) {
         throw 'Conflitto tra nome della distribuzione e identita completa del rootfs. Nessuna sostituzione viene eseguita.'
     }
@@ -81,14 +90,26 @@ function Initialize-NipatRuntimeTarget($Target, $RootfsAsset, [string] $CacheDir
     }
 }
 
-function Save-NipatRecoverySnapshot([string] $Project, $Manifest) {
+function Save-NipatRecoverySnapshot([string] $Project, $Manifest, $Layout = $null) {
     foreach ($relative in @('.runtime/installer/state.json', '.runtime/backend.json')) {
         $existing = Join-Path $Project $relative
         if (Test-Path -LiteralPath $existing -PathType Leaf) {
             Assert-NipatInstallationChannel (Get-Content -LiteralPath $existing -Raw -Encoding UTF8 | ConvertFrom-Json) $relative
         }
     }
-    $name = $Manifest.source_commit + '-' + $Manifest.assets.rootfs.sha256.Substring(0, 16) + '.json'
+    $layoutDigest = ''
+    if ($null -ne $Layout) {
+        $paths = @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir') | ForEach-Object {
+            [IO.Path]::GetFullPath([string]$Layout.$_).TrimEnd('\').ToLowerInvariant()
+        }
+        $hasher = [Security.Cryptography.SHA256]::Create()
+        try {
+            $layoutDigest = ([BitConverter]::ToString($hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes(($paths -join "`n"))))).Replace('-', '').ToLowerInvariant()
+        } finally { $hasher.Dispose() }
+    }
+    $name = $Manifest.source_commit + '-' + $Manifest.assets.rootfs.sha256.Substring(0, 16)
+    if ($layoutDigest) { $name += '-' + $layoutDigest.Substring(0, 16) }
+    $name += '.json'
     $path = Join-Path (Join-Path $Project '.runtime\installer\recovery') $name
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $snapshot = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -96,6 +117,10 @@ function Save-NipatRecoverySnapshot([string] $Project, $Manifest) {
         if ($snapshot.schema_version -ne 1 -or $snapshot.target_source_commit -cne $Manifest.source_commit -or
             $snapshot.target_rootfs_sha256 -cne $Manifest.assets.rootfs.sha256) {
             throw 'Il registro di recupero esistente non corrisponde alla preparazione richiesta.'
+        }
+        if ($layoutDigest -and ($null -eq $snapshot.PSObject.Properties['target_layout_sha256'] -or
+            $snapshot.target_layout_sha256 -cne $layoutDigest)) {
+            throw 'Il registro di recupero esistente non corrisponde alle cartelle selezionate.'
         }
         return $path
     }
@@ -112,6 +137,7 @@ function Save-NipatRecoverySnapshot([string] $Project, $Manifest) {
     Write-NipatJsonAtomic $path ([ordered]@{
         schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; target_source_commit = $Manifest.source_commit
         target_rootfs_sha256 = $Manifest.assets.rootfs.sha256
+        target_layout_sha256 = $layoutDigest
         created_utc = [DateTime]::UtcNow.ToString('o'); previous_files = $files
     })
     return $path
@@ -122,15 +148,24 @@ function Get-NipatPreviousDataRoots([string] $Project, [string] $BaseDirectory) 
     if (Test-Path -LiteralPath $path -PathType Leaf) {
         $configuration = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json
         Assert-NipatInstallationChannel $configuration 'La configurazione precedente'
-        $profile = Get-NipatInstallationProfile
         if ($configuration.schema_version -ne 1 -or $configuration.backend -cne 'wsl' -or
-            $configuration.wsl_distro -cnotmatch ('^' + [regex]::Escape($profile.distro_prefix) + '[a-f0-9]{40}$') -or
             $configuration.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
             [string]::IsNullOrWhiteSpace($configuration.data_dir) -or
             [string]::IsNullOrWhiteSpace($configuration.runs_dir) -or
             -not [IO.Path]::IsPathRooted($configuration.data_dir) -or
             -not [IO.Path]::IsPathRooted($configuration.runs_dir)) {
             throw 'La configurazione precedente non e valida. Conservare backend.json e contattare il supporto.'
+        }
+        $runtimeDirectory = ''
+        if ($null -ne $configuration.PSObject.Properties['runtime_dir']) { $runtimeDirectory = [string]$configuration.runtime_dir }
+        if ($null -ne $configuration.PSObject.Properties['rootfs_sha256']) {
+            Assert-NipatRuntimeNamespace $configuration.wsl_distro $configuration.rootfs_sha256 $runtimeDirectory
+        } else {
+            # Older Preview metadata did not always persist the full rootfs hash.
+            $profile = Get-NipatInstallationProfile
+            if ($configuration.wsl_distro -cnotmatch ('^' + [regex]::Escape($profile.distro_prefix) + '[a-f0-9]{40}$')) {
+                throw 'Il runtime della configurazione precedente non appartiene a NIPAT Preview.'
+            }
         }
         return [pscustomobject]@{ data_dir = $configuration.data_dir; runs_dir = $configuration.runs_dir }
     }
@@ -142,8 +177,29 @@ function Get-NipatPreviousDataRoots([string] $Project, [string] $BaseDirectory) 
 function Complete-NipatRuntimeActivation([string] $Project, [string] $StatePath, $State, $Configuration, [scriptblock] $Verify) {
     Assert-NipatInstallationChannel $State 'Lo stato candidato'
     Assert-NipatInstallationChannel $Configuration 'La configurazione candidata'
-    Assert-NipatRuntimeNamespace $Configuration.wsl_distro $Configuration.rootfs_sha256
-    Assert-NipatRuntimeNamespace $State.wsl_distro $State.rootfs_sha256
+    $runtimeDirectory = ''
+    if ($Configuration -is [Collections.IDictionary]) {
+        if ($Configuration.Contains('runtime_dir')) { $runtimeDirectory = [string]$Configuration.runtime_dir }
+    } elseif ($null -ne $Configuration.PSObject.Properties['runtime_dir']) {
+        $runtimeDirectory = [string]$Configuration.runtime_dir
+    }
+    $stateRuntimeDirectory = ''
+    if ($State -is [Collections.IDictionary]) {
+        if ($State.Contains('runtime_dir')) { $stateRuntimeDirectory = [string]$State.runtime_dir }
+    } elseif ($null -ne $State.PSObject.Properties['runtime_dir']) {
+        $stateRuntimeDirectory = [string]$State.runtime_dir
+    }
+    Assert-NipatRuntimeNamespace $Configuration.wsl_distro $Configuration.rootfs_sha256 $runtimeDirectory
+    Assert-NipatRuntimeNamespace $State.wsl_distro $State.rootfs_sha256 $stateRuntimeDirectory
+    if ($State.wsl_distro -cne $Configuration.wsl_distro -or $State.rootfs_sha256 -cne $Configuration.rootfs_sha256) {
+        throw 'Lo stato di preparazione e la configurazione candidata selezionano runtime diversi.'
+    }
+    if ($runtimeDirectory -or $stateRuntimeDirectory) {
+        if ([string]::IsNullOrWhiteSpace($runtimeDirectory) -or [string]::IsNullOrWhiteSpace($stateRuntimeDirectory) -or
+            [IO.Path]::GetFullPath($runtimeDirectory).TrimEnd('\') -ine [IO.Path]::GetFullPath($stateRuntimeDirectory).TrimEnd('\')) {
+            throw 'La cartella del runtime candidato non corrisponde allo stato di preparazione.'
+        }
+    }
     # Tests run with a candidate environment while backend.json still selects the old runtime.
     # Ready state is the final activation gate; an interrupted commit remains blocked and resumable.
     $candidate = [ordered]@{

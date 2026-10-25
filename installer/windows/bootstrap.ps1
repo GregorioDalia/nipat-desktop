@@ -39,8 +39,7 @@ try {
     Assert-NipatInstallationLocation $project
     $profile = Get-NipatInstallationProfile
     $manifest = Read-NipatInstallerManifest (Join-Path $project '.distribution\installer-manifest.json')
-    $base = Join-Path $env:LOCALAPPDATA $profile.data_dir_name
-    $dataRoots = Get-NipatPreviousDataRoots $project $base
+    $layout = Read-NipatInstallLayout $project
     # Reject a foreign state before even creating the log or recovery directory.
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
         Assert-NipatInstallationChannel (Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json) 'Lo stato precedente'
@@ -49,10 +48,11 @@ try {
     $mutex = New-Object Threading.Mutex($false, ($profile.mutex_prefix + $sid))
     try { $lockHeld = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $lockHeld = $true }
     if (-not $lockHeld) { throw 'Un altra preparazione NIPAT e gia in corso. Attendere che termini.' }
+    Save-NipatInstallLayoutHistory $layout
     Initialize-NipatWritableDirectory (Split-Path -Parent $statePath) 'dello stato installer'
     Start-Transcript -LiteralPath (Join-Path $project '.runtime\installer\setup.log') -Append | Out-Null
     $transcriptStarted = $true
-    $recoveryPath = Save-NipatRecoverySnapshot $project $manifest
+    $recoveryPath = Save-NipatRecoverySnapshot $project $manifest $layout
     $previous = $null
     if (Test-Path -LiteralPath $statePath -PathType Leaf) {
         $previous = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -66,12 +66,14 @@ try {
         source_commit = $manifest.source_commit; runtime_image = $manifest.runtime_image
         resolved_runtime_image = $null; runtime_archive_sha256 = $null
         wsl_distro = $null; rootfs_sha256 = $manifest.assets.rootfs.sha256; recovery_snapshot = $recoveryPath
+        app_dir = $layout.app_dir; runtime_dir = $layout.runtime_dir; cache_dir = $layout.cache_dir
+        data_dir = $layout.data_dir; runs_dir = $layout.runs_dir
         phase = 'starting'; updated_utc = [DateTime]::UtcNow.ToString('o')
         asset_directory = $AssetDirectory; last_error = $null
     }
     Save-NipatPhase 'checking_windows'
-    $cache = Join-Path $base 'cache'
-    $wslDirectory = Join-Path $base 'wsl'
+    $cache = $layout.cache_dir
+    $wslDirectory = $layout.runtime_dir
     Initialize-NipatWritableDirectory $cache 'della cache installer'
     Initialize-NipatWritableDirectory $wslDirectory 'della distribuzione Linux'
     $ready = $false
@@ -125,7 +127,8 @@ try {
             rootfs_sha256 = $manifest.assets.rootfs.sha256
             runtime_image = $runtimeImage; source_runtime_image = $manifest.runtime_image
             runtime_archive_sha256 = $manifest.assets.scientific_image.sha256
-            data_dir = $dataRoots.data_dir; runs_dir = $dataRoots.runs_dir
+            app_dir = $layout.app_dir; runtime_dir = $layout.runtime_dir; cache_dir = $layout.cache_dir
+            data_dir = $layout.data_dir; runs_dir = $layout.runs_dir
             release_tag = $manifest.release_tag; source_commit = $manifest.source_commit
         }
         if (-not (Test-Path -LiteralPath $configuration.data_dir -PathType Container)) {
@@ -142,6 +145,9 @@ try {
         }
         Unregister-NipatResume
         Write-Host ($profile.display_name + ' e pronto. Apri ' + $profile.display_name + ' dal menu Start per scegliere un analisi.')
+        Write-Host "Applicazione: $($configuration.app_dir)"
+        Write-Host "Ambiente WSL: $($configuration.runtime_dir)"
+        Write-Host "Cache installazione: $($configuration.cache_dir)"
         Write-Host "Dati: $($configuration.data_dir)"
         Write-Host "Risultati: $($configuration.runs_dir)"
         $result = 0

@@ -30,8 +30,9 @@ Installare e avviare NIPAT:
 
 1. Eseguire l'EXE con doppio clic dal proprio account Windows, senza usare
    «Esegui come amministratore».
-2. Seguire la configurazione. Se richiesta, autorizzare l'attivazione di WSL
-   e completare il riavvio.
+2. Scegliere la cartella dell'applicazione e le quattro cartelle per ambiente
+   WSL, cache, dati e risultati, oppure mantenere i valori proposti. Se
+   richiesta, autorizzare l'attivazione di WSL e completare il riavvio.
 3. Attendere il completamento della preparazione e degli autotest, indicato
    da **`NIPAT: ready`**.
 4. Selezionare **Avvia NIPAT 0.5 Preview** nella schermata finale del setup,
@@ -136,11 +137,30 @@ relativi alla cartella corrente mostrata dal programma. In Windows, **Copia
 come percorso** di Esplora file produce un valore utilizzabile. Le voci relative
 in un file BAM list partono invece dalla cartella della lista.
 
+Il setup Windows permette di scegliere separatamente queste destinazioni:
+
 | Contenuto | Percorso predefinito Windows |
 | --- | --- |
-| Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
+| Applicazione e documentazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
+| Ambiente WSL e strumenti scientifici | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
+| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
 | Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
 | Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
+
+Si possono usare dischi locali fissi diversi. Le cinque cartelle devono essere
+scrivibili, distinte e non contenersi tra loro; il setup controlla le
+destinazioni prima di installare. Non sono accettate cartelle di sistema,
+cartelle della versione stabile o percorsi che attraversano collegamenti.
+Per l'applicazione scegliere una cartella vuota o della stessa Preview;
+le cartelle dati e risultati possono già contenere file, che vengono conservati.
+Il collegamento **Cartella NIPAT 0.5 Preview** nel menu Start apre la cartella applicativa.
+
+Le scelte vengono riproposte alla reinstallazione. Per aggiornare la Preview
+installata, usare la stessa cartella applicativa. Cambiare dati o risultati
+nel setup non sposta i file già presenti: i run precedenti rimangono nella
+vecchia destinazione e si consultano con Esplora file. Cambiare la cartella
+dell'ambiente WSL prepara un ambiente dedicato nella nuova posizione e
+conserva quello precedente.
 
 Su Ubuntu installato dal pacchetto, l’applicazione si trova in
 `/opt/nipat-05-preview`; dati e risultati predefiniti sono nelle sottocartelle
@@ -162,6 +182,22 @@ Il checkout da sorgenti accetta anche `NIPAT_DATA_DIR` e `NIPAT_RUNS_DIR`.
 I launcher dei pacchetti installati utilizzano la propria configurazione e
 ignorano eventuali variabili NIPAT ereditate per questi percorsi; usare le opzioni
 CLI o il menu per selezionare una destinazione diversa.
+
+## Disinstallazione su Windows
+
+Da **Impostazioni → App → App installate**, disinstallare **NIPAT 0.5 Preview**.
+Dati e risultati vengono sempre conservati. La rimozione dell'ambiente WSL e
+della cache NIPAT è facoltativa e non è selezionata per impostazione predefinita.
+Se richiesta, riguarda soltanto le risorse verificate della Preview nelle
+cartelle registrate; non elimina Docker Desktop, altre distribuzioni WSL o
+la versione stabile di NIPAT.
+
+Le preferenze dei percorsi restano disponibili per una reinstallazione.
+Conservando ambiente e cache si possono riutilizzare i componenti compatibili;
+eliminandoli, il setup deve prepararli nuovamente. Un errore nella rimozione
+va conservato insieme al log: non implica che tutte le risorse siano state
+eliminate. La procedura e i registri sono descritti nella
+[guida dell'installatore Windows](INSTALLATORE_WINDOWS.md).
 
 ## Input dei quattro workflow
 

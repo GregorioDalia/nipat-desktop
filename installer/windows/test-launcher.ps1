@@ -115,6 +115,9 @@ function Invoke-TestLauncher([string] $Executable, [string[]] $Arguments = @(), 
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('nipat-launcher-test-' + [Guid]::NewGuid().ToString('N'))
 try {
     [IO.Directory]::CreateDirectory($temporary) | Out-Null
+    # Model the full directory spelling recorded by the installer, even when
+    # the runner inherited an 8.3 TEMP environment variable.
+    $temporary = [NipatLauncherTestPaths]::Normalize($temporary)
     if ([string]::IsNullOrWhiteSpace($LauncherPath)) {
         $LauncherPath = Join-Path $temporary 'compiled\NIPAT.exe'
         & (Join-Path $PSScriptRoot 'build-launcher.ps1') -OutputPath $LauncherPath
@@ -245,7 +248,7 @@ class FixturePython {
     }
     # Exercise the ready WSL Preview through the compiled executable and real
     # launch scripts. Scientific execution remains at the fake Python boundary.
-    foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json')) {
+    foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json', 'install-layout.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $app "installer\windows\$name")
     }
     $profile = Get-Content -LiteralPath (Join-Path $app 'installer\windows\install-profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -337,6 +340,80 @@ class FixturePython {
     Assert-Test ($result.ExitCode -eq 0) ('Preview preserves explicit output override: ' + $result.Output)
     $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
     Assert-Test ($capture[10] -ceq '--runs-dir' -and $capture[11] -ceq $explicitRuns -and $capture[12] -ceq 'wizard') 'explicit CLI output directory reaches Python unchanged'
+
+    # Exercise the actual installed bridge with independent destinations. Keep
+    # the earlier metadata for the legacy-path checks that follow this section.
+    . (Join-Path $PSScriptRoot 'bootstrap-common.ps1')
+    $oldBackendJson = $backend | ConvertTo-Json -Depth 8
+    $oldStateJson = $state | ConvertTo-Json -Depth 8
+    $layoutPath = Join-Path $app '.runtime\install-layout.json'
+    $layout = [ordered]@{
+        schema_version = 1; installation_channel = $profileChannel; app_dir = $app
+        runtime_dir = (Join-Path $temporary ('runtime & [selected] ' + [char]0x00E8))
+        cache_dir = (Join-Path $temporary 'download cache')
+        data_dir = (Join-Path $temporary 'research inputs')
+        runs_dir = (Join-Path $temporary 'research results')
+    }
+    foreach ($name in @('runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        [IO.Directory]::CreateDirectory($layout[$name]) | Out-Null
+    }
+    foreach ($kind in @('runtime', 'cache')) {
+        @('[NIPAT]', 'schema_version=1', ('installation_channel=' + $profileChannel), ('role=' + $kind)) |
+            Set-Content -LiteralPath (Join-Path $layout[$kind + '_dir'] '.nipat-storage.ini') -Encoding ASCII
+    }
+    $inputSentinel = Join-Path $layout.data_dir 'existing input.txt'
+    $resultSentinel = Join-Path $layout.runs_dir 'existing result.txt'
+    'input unchanged' | Set-Content -LiteralPath $inputSentinel -Encoding ASCII
+    'result unchanged' | Set-Content -LiteralPath $resultSentinel -Encoding ASCII
+    $inputHash = (Get-FileHash -LiteralPath $inputSentinel -Algorithm SHA256).Hash
+    $resultHash = (Get-FileHash -LiteralPath $resultSentinel -Algorithm SHA256).Hash
+    $customDistro = Get-NipatRuntimeDistroName $rootfsHash $layout.runtime_dir
+    foreach ($name in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        $backend[$name] = $layout[$name]
+        $state[$name] = $layout[$name]
+    }
+    $backend.wsl_distro = $customDistro
+    $state.wsl_distro = $customDistro
+    $layout | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $layoutPath -Encoding UTF8
+    $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -Environment $environment
+    Assert-Test ($result.ExitCode -eq 0) ('custom installation launches from the guided shortcut entry point: ' + $result.Output)
+    $capture = @(Get-Content -LiteralPath $script:CapturePath | ForEach-Object { [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($_)) })
+    Assert-Test ($capture[5] -ceq $customDistro -and
+        (Test-SamePath $capture[2] $layout.data_dir) -and (Test-SamePath $capture[3] $layout.runs_dir) -and
+        (Test-SamePath $capture[7] $app)) 'the selected runtime and independent data/result directories reach the client'
+    $beforeLayoutRejections = @(Get-Content -LiteralPath $events).Count
+    Remove-Item -LiteralPath $layoutPath
+    $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'new destination-bound metadata requires the matching installation layout'
+    $layout | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $layoutPath -Encoding UTF8
+    foreach ($name in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        $backend[$name] = Join-Path $temporary ('different-' + $name)
+        $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+        $result = Invoke-TestLauncher -Executable $guidedCommand -BatchFile -Environment $environment
+        Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) ("changed backend $name is rejected before Python")
+        $backend[$name] = $layout[$name]
+    }
+    $backend | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $backendPath -Encoding UTF8
+    $state.runtime_dir = Join-Path $temporary 'different state runtime'
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'a readiness state for another destination cannot authorize the selected backend'
+    $state.runtime_dir = $layout.runtime_dir
+    $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $layout.app_dir = Join-Path $temporary 'another application'
+    $layout | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $layoutPath -Encoding UTF8
+    $result = Invoke-TestLauncher -Executable $executable -Environment $environment
+    Assert-Test ($result.ExitCode -ne 0 -and -not (Test-Path -LiteralPath $script:CapturePath)) 'a layout for a different application directory is rejected'
+    Assert-Test (@(Get-Content -LiteralPath $events).Count -eq $beforeLayoutRejections) 'invalid destination bindings never reach Python'
+    Assert-Test ((Get-FileHash -LiteralPath $inputSentinel -Algorithm SHA256).Hash -ceq $inputHash -and
+        (Get-FileHash -LiteralPath $resultSentinel -Algorithm SHA256).Hash -ceq $resultHash) 'custom-location launch and rejection checks preserve existing inputs and results'
+    Remove-Item -LiteralPath $layoutPath
+    $oldBackendJson | Set-Content -LiteralPath $backendPath -Encoding UTF8
+    $oldStateJson | Set-Content -LiteralPath $statePath -Encoding UTF8
+    $backend = $oldBackendJson | ConvertFrom-Json
+    $state = $oldStateJson | ConvertFrom-Json
 
     $beforeRejected = @(Get-Content -LiteralPath $events).Count
     foreach ($foreignChannel in @('stable', $null)) {

@@ -30,6 +30,12 @@ function Set-NipatEnvironment([string] $Project) {
     }
     if (Test-Path -LiteralPath $backendFile -PathType Leaf) {
         $installed = Get-Content -LiteralPath $backendFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (($null -ne $installed.PSObject.Properties['app_dir'] -or
+            $null -ne $installed.PSObject.Properties['runtime_dir'] -or
+            $null -ne $installed.PSObject.Properties['cache_dir']) -and
+            -not (Test-Path -LiteralPath (Join-Path $Project '.runtime\install-layout.json') -PathType Leaf)) {
+            throw 'Configurazione delle cartelle mancante: riaprire il setup della stessa Preview.'
+        }
         if ($installed.schema_version -ne 1 -or $installed.backend -ne 'wsl' -or
             $installed.wsl_distro -cnotmatch '^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$' -or
             $installed.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or
@@ -38,9 +44,19 @@ function Set-NipatEnvironment([string] $Project) {
             throw 'Configurazione dell installer non valida: riaprire NIPAT 0.5 Preview - completa preparazione dal menu Start.'
         }
         Assert-NipatInstallationChannel $installed 'configurazione di avvio'
-        $expectedDistro = $profile.distro_prefix + $installerManifest.assets.rootfs.sha256.Substring(0, 40)
-        if ($installed.wsl_distro -cne $expectedDistro) {
-            throw 'La configurazione di avvio seleziona una distribuzione esterna a questa installazione Preview.'
+        $runtimeDirectory = ''
+        if ($null -ne $installed.PSObject.Properties['runtime_dir']) { $runtimeDirectory = [string]$installed.runtime_dir }
+        Assert-NipatRuntimeNamespace $installed.wsl_distro $installerManifest.assets.rootfs.sha256 $runtimeDirectory
+        if (Test-Path -LiteralPath (Join-Path $Project '.runtime\install-layout.json') -PathType Leaf) {
+            $layout = Read-NipatInstallLayout $Project
+            foreach ($name in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+                if ($null -eq $installed.PSObject.Properties[$name] -or
+                    [string]::IsNullOrWhiteSpace([string]$installed.$name) -or
+                    [IO.Path]::GetFullPath([string]$installed.$name).TrimEnd('\') -ine
+                    [IO.Path]::GetFullPath([string]$layout.$name).TrimEnd('\')) {
+                    throw 'Le cartelle di avvio non corrispondono alla configurazione verificata. Riaprire il setup per completare la preparazione.'
+                }
+            }
         }
         # An installed application owns its defaults. An inherited shell may
         # belong to the stable application; only explicit CLI flags may override

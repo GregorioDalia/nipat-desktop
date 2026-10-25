@@ -235,8 +235,19 @@ function Assert-NipatRuntimeBinding($Manifest, $State, $Configuration) {
             throw ('Configurazione del runtime da aggiornare: aprire ' + $profile.display_name + ' - completa preparazione dal menu Start.')
         }
     }
-    if ($Configuration.wsl_distro -cne ($profile.distro_prefix + $Manifest.assets.rootfs.sha256.Substring(0, 40)) -or
-        $State.wsl_distro -cne $Configuration.wsl_distro -or
+    $runtimeDirectory = ''
+    if ($null -ne $Configuration.PSObject.Properties['runtime_dir']) {
+        $runtimeDirectory = [string]$Configuration.runtime_dir
+        foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+            if ($null -eq $Configuration.PSObject.Properties[$field] -or
+                $null -eq $State.PSObject.Properties[$field] -or
+                (Resolve-NipatInstallPath $Configuration.$field) -ine (Resolve-NipatInstallPath $State.$field)) {
+                throw "Le destinazioni del runtime non corrispondono alla preparazione: $field."
+            }
+        }
+    }
+    Assert-NipatRuntimeNamespace $Configuration.wsl_distro $Manifest.assets.rootfs.sha256 $runtimeDirectory
+    if ($State.wsl_distro -cne $Configuration.wsl_distro -or
         $State.rootfs_sha256 -cne $Manifest.assets.rootfs.sha256 -or
         $Configuration.rootfs_sha256 -cne $Manifest.assets.rootfs.sha256 -or
         $Configuration.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$' -or

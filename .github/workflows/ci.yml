@@ -96,9 +96,21 @@ jobs:
       - name: Test resumable WSL migration with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
+      - name: Test configurable installation destinations
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-install-layout.ps1
+      - name: Test optional owned-runtime removal
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-uninstall.ps1
       - name: Test Authenticode verification policy with mocked trust results
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1
+      - name: Compile the installer definition before building the large runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = & ./.github/scripts/install_inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'InnoSetup')
+          & ./installer/windows/test-installer-layout.ps1 -CompilerPath $compiler
       - name: Compile the shared NIPAT executable
         shell: powershell
         run: |

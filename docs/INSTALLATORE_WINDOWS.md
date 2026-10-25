@@ -47,8 +47,10 @@ La [firma dei pacchetti Windows](FIRMA_WINDOWS.md) descrive copertura e verifich
 
 1. Avviare `NIPAT-Setup.exe` con doppio clic dal proprio account Windows,
    senza scegliere «Esegui come amministratore».
-2. Completare il setup e, se richiesto, autorizzare l'abilitazione dei componenti
-   Windows. Dopo un riavvio, accedere allo stesso account per riprendere.
+2. Scegliere la cartella applicativa nella pagina di destinazione, quindi
+   le cartelle di ambiente WSL, cache, dati e risultati. Se richiesto,
+   autorizzare l'abilitazione dei componenti Windows. Dopo un riavvio,
+   accedere allo stesso account per riprendere.
 3. Attendere la verifica degli archivi, la preparazione del runtime e gli
    autotest. La configurazione è completa quando compare `NIPAT: ready`.
 4. Se la preparazione è completa e non serve un riavvio, il setup propone
@@ -61,6 +63,8 @@ per l'uso nei terminali. Entrambi passano attraverso `scripts/windows/run.ps1`,
 che verifica stato `ready`, manifest e associazione al runtime prima di
 preparare l'ambiente del client. Il launcher `NIPAT.exe` resta incluso come
 componente aggiuntivo, ma non è il destinatario dei collegamenti ordinari.
+Il collegamento **Cartella NIPAT 0.5 Preview** nel menu Start apre la cartella applicativa
+selezionata, con documentazione e comandi disponibili.
 
 Lo spazio disponibile deve contenere applicazione, cache degli archivi,
 filesystem WSL importato e immagine scientifica, oltre a input e risultati.
@@ -75,21 +79,34 @@ Il file [`install-profile.json`](../installer/windows/install-profile.json)
 definisce l'identità del canale. Il builder genera da questo profilo le
 istruzioni Inno Setup e le verifica rispetto al manifest.
 
-| Risorsa | Valore |
+| Risorsa | Valore o percorso predefinito |
 | --- | --- |
 | Canale | `preview-0.5` |
 | Nome applicazione | `NIPAT 0.5 Preview` |
 | Applicazione | `%LOCALAPPDATA%\Programs\NIPAT-0.5-Preview` |
-| Dati e risultati predefiniti | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` e `runs` |
+| Ambiente WSL | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
 | Cache | `%LOCALAPPDATA%\NIPAT-0.5-Preview\cache` |
-| Registri del runtime | `%LOCALAPPDATA%\NIPAT-0.5-Preview\wsl` |
-| Distribuzione WSL2 | `NIPAT-05-Preview-` seguito dalle prime 40 cifre dello SHA-256 del rootfs |
+| Dati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-0.5-Preview\runs` |
+| Registri delle destinazioni | `%LOCALAPPDATA%\NIPAT-0.5-Preview\installations` |
+| Distribuzione WSL2 | Nome con prefisso `NIPAT-05-Preview-`, associato al filesystem Linux e alla posizione scelta. |
 | Ripresa al successivo accesso | Valore RunOnce `NIPAT-05-Preview-ResumeSetup` |
 
 AppId, mutex, collegamenti e voce di disinstallazione appartengono al medesimo
-canale. La destinazione dell'applicazione è fissa; opzioni `/DIR` o `/GROUP`
-che alterano le destinazioni previste vengono rifiutate prima della copia.
-I controlli rifiutano anche junction e collegamenti nelle destinazioni protette.
+canale. Le cinque radici di applicazione, ambiente WSL, cache, dati e risultati
+sono configurabili; i registri centrali restano nel profilo dell'utente.
+Le preferenze salvate in `HKCU` ripropongono le scelte nelle reinstallazioni,
+anche dopo la rimozione dell'applicazione. Un aggiornamento della Preview
+installata deve usare la stessa cartella applicativa.
+
+Il setup verifica percorsi assoluti su dischi locali fissi, scrivibili
+dall'account e privi di junction o collegamenti. Le cinque radici non possono
+coincidere né essere annidate tra loro; non sono ammesse sovrapposizioni con
+cartelle di sistema, `Windows`, `Program Files` o destinazioni predefinite
+della versione stabile. Sono rifiutati percorsi UNC, unità di rete e supporti
+rimovibili. La cartella applicativa deve essere vuota o riconosciuta come
+appartenente alla Preview. Dati e risultati possono contenere file preesistenti,
+che non vengono trasferiti o cancellati dal setup.
 
 Manifest, backend, stato, proprietà del runtime e registri di recupero devono
 indicare il canale previsto. Il setup non adotta ambienti o configurazioni
@@ -120,16 +137,24 @@ disabilitato. Il launcher ne controlla il legame con il manifest installato.
 
 ## Aggiornamento e ripresa
 
-Un filesystem WSL con lo stesso digest completo può essere riutilizzato solo
-se registrazione e proprietà appartengono al canale. Un digest diverso produce
-una distribuzione affiancata. Un nome già occupato da un ambiente non
-riconosciuto interrompe la preparazione senza sostituirlo.
+Una distribuzione può essere riutilizzata soltanto se digest completo,
+registrazione WSL, proprietà del canale e posizione effettiva sono coerenti.
+I nuovi nomi combinano il prefisso del canale, 32 cifre del digest del
+filesystem Linux e 12 cifre del digest della posizione. Un ambiente già
+posseduto dalla Preview con un nome precedente può essere riutilizzato nella
+stessa destinazione, dopo le medesime verifiche di proprietà. Un nome occupato
+da un ambiente non riconosciuto interrompe la preparazione senza sostituirlo.
+
+Un digest Linux diverso o una diversa cartella dell'ambiente WSL produce una
+distribuzione affiancata: il setup non copia né elimina quella precedente.
+Le cartelle dati e risultati scelte diventano i valori predefiniti del client;
+modificarle non trasferisce i file esistenti. I run precedenti rimangono nella
+loro destinazione e i dati dell'utente non vengono importati nel filesystem Linux.
 
 Il setup conserva una copia dello stato e del backend precedenti per ogni
 combinazione di commit e filesystem in `.runtime\installer\recovery`.
-Conserva inoltre le cartelle dati e risultati di una configurazione valida
-appartenente allo stesso canale. I dati dell'utente non sono trasferiti nel
-filesystem Linux.
+I piccoli registri centrali delle installazioni conservano le destinazioni
+attuali e precedenti necessarie per la verifica delle risorse del canale.
 
 Il candidato viene verificato con `doctor --runtime` e `self-test` prima
 dell'attivazione del backend; lo stato `ready` viene scritto per ultimo.
@@ -149,9 +174,36 @@ Inno Setup copia i file applicativi prima della preparazione del runtime:
 un errore lascia l'applicazione bloccata fino al completamento del setup,
 anche se la distribuzione precedente è ancora presente.
 
-La disinstallazione rimuove l'applicazione e la sua ripresa automatica;
-conserva dati, risultati, cache e distribuzioni WSL. Non elimina automaticamente
-gli ambienti conservati dagli aggiornamenti.
+## Disinstallazione
+
+La disinstallazione rimuove i file applicativi gestiti dal setup, i collegamenti
+e la ripresa automatica. Conserva sempre dati e risultati, comprese le
+destinazioni precedenti registrate. Dopo la conferma di disinstallazione,
+una seconda richiesta propone la rimozione dell'ambiente WSL e della cache,
+con **No** come scelta predefinita. **Annulla** interrompe prima della pulizia.
+Con **Sì**, il programma verifica le risorse della Preview nelle destinazioni
+correnti e nello storico registrato prima di rimuoverle.
+
+La rimozione riguarda soltanto distribuzioni WSL con proprietà e registrazione
+coerenti e archivi della cache riconosciuti e verificati. Non consiste nella
+cancellazione ricorsiva delle radici selezionate: file estranei, Docker Desktop,
+altre distribuzioni WSL e risorse della versione stabile non sono destinazioni
+di rimozione. Una verifica fallita interrompe la pulizia e viene segnalata;
+un errore durante le operazioni può lasciare risorse da rimuovere. In entrambi
+i casi la disinstallazione dei file applicativi viene interrotta. Conservare
+l'esito e il log persistente in
+`%LOCALAPPDATA%\NIPAT-0.5-Preview\installations\logs\uninstall-*.log`
+prima di riprovare.
+
+Preferenze dei percorsi e registri centrali delle installazioni sopravvivono
+alla disinstallazione. Servono a riproporre le destinazioni e a identificare
+le risorse conservate; non sono copie di sicurezza dei dati o del filesystem WSL.
+Nella cartella applicativa possono restare i marcatori di proprietà, la
+configurazione dei percorsi e file generati non gestiti da Inno Setup, come
+Python portabile in `.runtime\python`. La disinstallazione non garantisce
+quindi una cartella applicativa vuota; la configurazione conservata consente
+la verifica della successiva reinstallazione. La rimozione dell'ambiente
+NIPAT non disinstalla il componente WSL di Windows.
 
 ## Client Windows da sorgenti
 
@@ -163,7 +215,8 @@ Per usare il runtime di una Preview già preparata, leggere il suo backend e
 selezionarlo esplicitamente nella sessione PowerShell del checkout:
 
 ```powershell
-$nipatApp = Join-Path $env:LOCALAPPDATA "Programs\NIPAT-0.5-Preview"
+# Indicare la cartella applicativa scelta nel setup.
+$nipatApp = Read-Host "Cartella applicativa NIPAT 0.5 Preview"
 $nipatBackend = Get-Content -Raw -LiteralPath `
     (Join-Path $nipatApp ".runtime\backend.json") | ConvertFrom-Json
 $env:NIPAT_BACKEND = "wsl"
@@ -194,16 +247,21 @@ Inno Setup. `installer-build.json` lega l'eseguibile a commit, versione,
 manifest, launcher, profilo e archivi incorporati. I dettagli e gli artefatti
 sono descritti in [CI/CD](CI_CD.md).
 
-Per una prova tecnica usare il solo `NIPAT-Setup.exe` estratto dall'artefatto
-`nipat-windows-setup` di una build riuscita e identificata dal commit.
-Il launcher separato nello stesso artefatto è un'evidenza di compilazione,
-non un'installazione autonoma.
+Per una prova tecnica scaricare il file diretto **NIPAT-Setup.exe** dalla
+sezione **Artifacts** di una build riuscita e identificata dal commit.
+Serve l'accesso a GitHub e il download resta disponibile per 14 giorni.
+L'artefatto `nipat-windows-setup` conserva lo stesso installatore e le evidenze;
+il launcher separato al suo interno è un'evidenza di compilazione, non
+un'installazione autonoma.
 
 Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede
 prima installazione, riavvio del runtime, analisi di un caso noto,
-coesistenza con l’installazione stabile, reinstallazione dello stesso
-pacchetto e disinstallazione con conservazione dei dati. I test automatici
-dei confini Windows/WSL non sostituiscono queste prove del pacchetto reale.
+coesistenza con l'installazione stabile, percorsi personalizzati,
+reinstallazione e disinstallazione con entrambe le scelte di conservazione
+dell'ambiente. Include interruzioni e riprese, destinazioni su dischi fissi
+diversi, spazi e caratteri non ASCII, conservazione dei dati e protezione
+delle risorse estranee. I test automatici dei confini Windows/WSL non
+sostituiscono queste prove del pacchetto reale.
 Un aggiornamento fra versioni differenti richiede una prova distinta;
 la reinstallazione della stessa build non la dimostra. La
 [scheda di validazione](VALIDAZIONE.md) registra le analisi di dominio.

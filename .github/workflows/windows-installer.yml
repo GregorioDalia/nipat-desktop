@@ -96,9 +96,21 @@ jobs:
       - name: Test resumable WSL migration with Windows PowerShell 5.1
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-migration.ps1
+      - name: Test configurable installation destinations
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-install-layout.ps1
+      - name: Test optional owned-runtime removal
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-uninstall.ps1
       - name: Test Authenticode verification policy with mocked trust results
         shell: powershell
         run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/windows/test-signatures.ps1
+      - name: Compile the installer definition before building the large runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = & ./.github/scripts/install_inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'InnoSetup')
+          & ./installer/windows/test-installer-layout.ps1 -CompilerPath $compiler
       - name: Compile the shared NIPAT executable
         shell: powershell
         run: |
@@ -273,17 +285,8 @@ jobs:
       - name: Install verified Inno Setup compiler
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
-          $download = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
-          Invoke-WebRequest -UseBasicParsing 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $download
-          $signature = Get-AuthenticodeSignature -LiteralPath $download
-          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)CN=Pyrsys B\.V\.(?:,|$)') {
-            throw 'Inno Setup Authenticode signature or publisher is invalid.'
-          }
-          $inno = Join-Path $env:RUNNER_TEMP 'InnoSetup'
-          $process = Start-Process -FilePath $download -Wait -PassThru -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-',"/DIR=`"$inno`"")
-          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed: $($process.ExitCode)" }
-          "NIPAT_ISCC=$inno\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $compiler = & ./.github/scripts/install_inno.ps1 -Destination (Join-Path $env:RUNNER_TEMP 'InnoSetup')
+          "NIPAT_ISCC=$compiler" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Compile the self-contained installer with verified embedded runtimes
         shell: powershell
         run: |

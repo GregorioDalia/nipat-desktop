@@ -67,7 +67,7 @@ restano da verificare; non vanno registrati come `passed`.
 | --- | --- | --- |
 | `windows_clean_wsl` | Windows 11 x64 senza NIPAT, Docker Desktop, Python o strumenti scientifici; WSL inizialmente non configurato. Eseguire l’EXE con doppio clic, autorizzare i componenti richiesti, completare l’eventuale riavvio e riaprire NIPAT dall’icona. Eseguire diagnostica, autotest e i quattro workflow con casi noti. Riavviare Windows e ripetere l’avvio. | La preparazione arriva a `ready` senza spostare file; il menu e i calcoli funzionano dal normale account; risultati e log sono accessibili; dopo il riavvio non servono comandi manuali per avviare il runtime. |
 | `windows_stable_coexistence` | Windows 11 x64 con installazione NIPAT stabile e dati di controllo, affiancato alla Preview. Registrare prima e dopo percorsi, versioni, stato e inventario delle distribuzioni WSL. Avviare entrambe le applicazioni. | La Preview usa nome, cartelle, collegamenti e distribuzione propri. Applicazione, configurazione, dati e runtime della versione stabile restano utilizzabili e non vengono adottati o sostituiti dalla Preview. |
-| `windows_reinstall_removal` | Sulla Preview preparata, conservare un run e un file di controllo; reinstallare lo stesso EXE, ripetere avvio e diagnostica, poi disinstallare dal sistema. | Reinstallazione e avvio riescono senza alterare dati e risultati. La rimozione elimina applicazione e collegamenti della Preview e conserva dati e ambienti WSL previsti, senza modificare l’installazione stabile. |
+| `windows_reinstall_removal` | Sulla Preview preparata, eseguire i casi sotto riportati per percorsi personalizzati, reinstallazione, cambio di destinazione e rimozione. Provare entrambe le scelte di conservazione dell'ambiente, l'annullamento e un errore parziale. | Le preferenze vengono riproposte, i file esistenti restano nelle loro destinazioni e le analisi funzionano. La rimozione elimina applicazione e collegamenti; l'opzione aggiuntiva riguarda soltanto risorse verificate della Preview. Dati, risultati e risorse estranee rimangono invariati. |
 | `ubuntu_clean_dependencies` | Ubuntu Desktop 24.04 x86_64 senza Docker Engine o Compose. Installare il `.deb` con APT, registrare le dipendenze installate e configurare l’accesso Docker tramite l’amministratore. Accedere nuovamente all’account se richiesto. Avviare dal menu applicazioni, eseguire preparazione, diagnostica, autotest e i quattro workflow; riavviare il sistema e ripetere l’avvio. | APT installa le dipendenze; l’account non riceve accesso Docker senza autorizzazione; il servizio e l’accesso funzionano dopo la configurazione e il riavvio. Menu e analisi sono eseguiti senza `sudo`; risultati e log appartengono all’utente. |
 | `ubuntu_existing_docker` | Ubuntu Desktop 24.04 con Docker di sistema già configurato e risorse Docker estranee a NIPAT. Registrare versioni, endpoint e configurazione prima e dopo installazione, preparazione e analisi. | Il Docker compatibile viene riutilizzato; non vengono sostituiti repository, contesto globale, configurazione del daemon, immagini o container estranei. NIPAT usa il socket locale dichiarato. |
 | `ubuntu_reinstall_removal` | Sulla Preview preparata, conservare un run e un file di controllo; reinstallare lo stesso `.deb`, ripetere avvio e diagnostica, poi rimuovere `nipat-05-preview` con APT. | Reinstallazione e avvio riescono; la rimozione elimina applicazione e collegamento, conservando dati, risultati, stato e immagini Docker. Le risorse Docker estranee non cambiano. |
@@ -75,6 +75,26 @@ restano da verificare; non vanno registrati come `passed`.
 Le prove possono essere ripartite tra più sistemi, registrando le condizioni
 di ciascuno. Non è necessario modificare la configurazione di un computer
 che contiene dati di ricerca per ottenere un ambiente iniziale pulito.
+
+## Percorsi e rimozione su Windows
+
+Associare a `windows_reinstall_removal` evidenze per tutti i casi seguenti.
+Registrare le cinque destinazioni selezionate, l'inventario delle distribuzioni
+WSL e i checksum dei file di controllo prima e dopo ciascuna operazione.
+
+| Caso | Operazioni e criteri |
+| --- | --- |
+| Destinazioni personalizzate | Installare con cartelle applicazione, WSL, cache, dati e risultati separate, includendo un secondo disco locale fisso, spazi e caratteri non ASCII. Usare dati già presenti e verificare che restino invariati. Avviare menu, diagnostica e analisi; verificare risultati nella destinazione scelta e collegamento **Cartella NIPAT 0.5 Preview**. |
+| Destinazioni non ammesse | Provare radici coincidenti o annidate, cartelle non scrivibili, cartella applicativa estranea non vuota, percorsi UNC, rete, supporti rimovibili, junction, cartelle di sistema e destinazioni stabili. Il setup deve rifiutarle senza modificare il contenuto protetto. |
+| Reinstallazione e preferenze | Reinstallare lo stesso EXE nella cartella applicativa esistente; controllare le cinque scelte riproposte, l'avvio e i run conservati. Ripetere dopo la disinstallazione: le preferenze devono restare disponibili anche se ambiente e cache sono stati rimossi. |
+| Cambio di destinazione | Cambiare cartella WSL mantenendo lo stesso EXE: deve essere preparato un ambiente distinto e quello precedente deve restare intatto. Cambiare dati e risultati: nessun file preesistente deve essere spostato, cancellato o sovrascritto. Verificare nuovi run nella destinazione attiva e accesso ai precedenti. |
+| Rimozione predefinita | Conservare ambiente e cache. Applicazione e collegamenti devono essere rimossi, mentre dati, risultati e risorse WSL/cache restano disponibili. Reinstallare e verificare il riutilizzo compatibile. |
+| Rimozione facoltativa | Selezionare la rimozione di ambiente e cache dopo avere usato più destinazioni. Controllare che vengano rimosse soltanto distribuzioni possedute dalla Preview e archivi verificati delle destinazioni registrate, inclusi quelli conservati in precedenza. Dati e risultati di tutte le destinazioni, file estranei, Docker Desktop, NIPAT stabile e altre distribuzioni devono restare invariati. |
+| Annullamento e fallimenti | Annullare la disinstallazione prima della rimozione e verificare assenza di effetti. In un ambiente di prova controllato, simulare proprietà o cache non verificabili e un errore dopo una rimozione parziale; verificare arresto, messaggio, registri e risorse rimaste, quindi ripresa senza rimuovere dati o risorse estranee. |
+
+Questi casi sono requisiti di collaudo, non risultati già acquisiti.
+Non registrare `windows_reinstall_removal` come superato se uno dei casi
+richiesti non è stato eseguito o non dispone di evidenze.
 
 ## Verifiche durante le analisi
 

@@ -42,10 +42,12 @@ function Assert-NipatInstallationChannel($Value, [string] $Description) {
     }
 }
 
-function Assert-NipatRuntimeNamespace([string] $Distro, [string] $RootfsSha256) {
+function Assert-NipatRuntimeNamespace([string] $Distro, [string] $RootfsSha256, [string] $RuntimeDirectory = '') {
     $profile = Get-NipatInstallationProfile
-    if ($RootfsSha256 -cnotmatch '^[a-f0-9]{64}$' -or
-        $Distro -cne ($profile.distro_prefix + $RootfsSha256.Substring(0, 40))) {
+    if ($RootfsSha256 -cnotmatch '^[a-f0-9]{64}$') { throw 'Identita rootfs non valida.' }
+    $allowed = @($profile.distro_prefix + $RootfsSha256.Substring(0, 40))
+    if ($RuntimeDirectory) { $allowed += Get-NipatRuntimeDistroName $RootfsSha256 $RuntimeDirectory }
+    if ($Distro -cnotin $allowed) {
         throw 'La distribuzione richiesta non appartiene a questa installazione NIPAT Preview.'
     }
 }
@@ -54,6 +56,10 @@ function Assert-NipatInstallationLocation([string] $Project) {
     $profile = Get-NipatInstallationProfile
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA non disponibile.' }
     $expected = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') $profile.app_dir_name
+    if (Test-Path -LiteralPath (Join-Path $Project '.runtime\install-layout.json') -PathType Leaf) {
+        Read-NipatInstallLayout $Project | Out-Null
+        return
+    }
     if ([IO.Path]::GetFullPath($Project).TrimEnd('\') -ine [IO.Path]::GetFullPath($expected).TrimEnd('\')) {
         throw 'NIPAT Preview deve essere installato nella propria cartella dedicata. Avviare il relativo installer normalmente.'
     }
@@ -74,3 +80,5 @@ function Assert-NipatInstallationLocation([string] $Project) {
         }
     }
 }
+
+. (Join-Path $PSScriptRoot 'install-layout.ps1')

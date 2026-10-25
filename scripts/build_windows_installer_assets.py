@@ -257,7 +257,7 @@ def runtime_assets_include(manifest: dict) -> str:
         entry = manifest["assets"][key]
         lines.append(
             f'Source: "{{#RuntimeAssetsDir}}\\{entry["file"]}"; '
-            f'DestDir: "{{localappdata}}\\{manifest["installation_profile"]["data_dir_name"]}\\cache"; '
+            'DestDir: "{code:GetNipatCacheDir}"; '
             f'DestName: "{entry["sha256"]}-{entry["file"]}"; '
             f'Hash: "{entry["sha256"]}"; '
             'Flags: ignoreversion uninsneveruninstall nocompression solidbreak'

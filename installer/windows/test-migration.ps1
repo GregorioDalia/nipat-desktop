@@ -60,7 +60,7 @@ try {
     $wsl = Join-Path $temporary 'wsl'
     [IO.Directory]::CreateDirectory($wsl) | Out-Null
     $target = Get-NipatRuntimeTarget $wsl $hash @()
-    Assert-Test ($target.Distro -ceq ((Get-NipatInstallationProfile).distro_prefix + $hash.Substring(0, 40)) -and $target.Distro.Length -le 64) 'fresh install uses deterministic digest-qualified name'
+    Assert-Test ($target.Distro -ceq (Get-NipatRuntimeDistroName $hash $wsl) -and $target.Distro.Length -le 64) 'fresh install binds the WSL name to both rootfs and runtime directory'
     Initialize-NipatRuntimeTarget $target $asset '' ''
     Assert-Test ($registrations.Count -eq 1 -and $target.Ownership.status -ceq 'owned') 'fresh import verifies owner before marking owned'
     $receipt = Get-Content -LiteralPath $target.OwnershipPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -69,6 +69,32 @@ try {
     $again = Get-NipatRuntimeTarget $wsl $hash @($registrations.Keys)
     Initialize-NipatRuntimeTarget $again $asset '' ''
     Assert-Test (@($calls | Where-Object { $_[0] -ceq '--import' }).Count -eq $imports) 'same rootfs retry reuses verified distro without another import'
+
+    $targetReceiptBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($target.OwnershipPath))
+    $relocatedWsl = Join-Path $temporary ('other runtime & ' + [char]0x00E8)
+    $relocated = Get-NipatRuntimeTarget $relocatedWsl $hash @($registrations.Keys)
+    Assert-Test ($relocated.Distro -cne $target.Distro -and -not $relocated.Registered) 'a new runtime directory gets a new namespace for the identical scientific filesystem'
+    Initialize-NipatRuntimeTarget $relocated $asset '' ''
+    Assert-Test ($registrations.ContainsKey($target.Distro) -and
+        $registrations[$target.Distro].directory -ceq $target.Directory) 'preparing another destination retains the earlier registration and disk location'
+    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($target.OwnershipPath)) -ceq $targetReceiptBefore) 'preparing another destination preserves the earlier ownership receipt'
+    Assert-Rejected { Assert-NipatRuntimeNamespace $relocated.Distro $hash $wsl } 'a location-bound name cannot authorize another runtime directory'
+
+    $previousPreviewHash = '7' * 64
+    $previousPreviewName = (Get-NipatInstallationProfile).distro_prefix + $previousPreviewHash.Substring(0, 40)
+    $previousPreviewReceipt = Join-Path (Join-Path $wsl 'registrations') ($previousPreviewName + '.json')
+    $previousPreviewOwner = New-Ownership $previousPreviewName $previousPreviewHash
+    Write-NipatJsonAtomic $previousPreviewReceipt $previousPreviewOwner
+    $registrations[$previousPreviewName] = @{ directory = (Join-Path $wsl $previousPreviewName); product = 'nipat-runtime-v1'; owner = $previousPreviewOwner.owner_id }
+    $previousPreviewBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($previousPreviewReceipt))
+    $beforeLegacyImports = @($calls | Where-Object { $_[0] -ceq '--import' }).Count
+    $existingPreview = Get-NipatRuntimeTarget $wsl $previousPreviewHash @($registrations.Keys)
+    Initialize-NipatRuntimeTarget $existingPreview ([pscustomobject]@{ sha256 = $previousPreviewHash }) '' ''
+    Assert-Test ($existingPreview.Distro -ceq $previousPreviewName -and
+        @($calls | Where-Object { $_[0] -ceq '--import' }).Count -eq $beforeLegacyImports) 'an owned earlier Preview remains reusable at its original selected directory'
+    Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($previousPreviewReceipt)) -ceq $previousPreviewBefore) 'reusing an owned earlier Preview does not rewrite its receipt'
+    $differentLegacyLocation = Get-NipatRuntimeTarget $relocatedWsl $previousPreviewHash @($registrations.Keys)
+    Assert-Test ($differentLegacyLocation.Distro -cne $previousPreviewName -and -not $differentLegacyLocation.Registered) 'a legacy Preview elsewhere is not adopted when its receipt is absent from the selected directory'
 
     $legacyPath = Join-Path $wsl 'ownership.json'
     $oldHash = 'c' * 64
@@ -143,7 +169,7 @@ try {
     [IO.Directory]::CreateDirectory($runs) | Out-Null
     [IO.File]::WriteAllText((Join-Path $data 'input.txt'), 'input sentinel')
     [IO.File]::WriteAllText((Join-Path $runs 'result.txt'), 'result sentinel')
-    $previous = [pscustomobject]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; runtime_image = ('sha256:' + ('2' * 64)); data_dir = $data; runs_dir = $runs }
+    $previous = [pscustomobject]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_dir = $wsl; runtime_image = ('sha256:' + ('2' * 64)); data_dir = $data; runs_dir = $runs }
     Write-NipatJsonAtomic $backendPath $previous
     [IO.File]::WriteAllText($runtimeImagePath, $previous.runtime_image)
     Write-NipatJsonAtomic $statePath ([ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; phase = 'ready'; source_commit = ('3' * 40) })
@@ -153,10 +179,15 @@ try {
     $snapshot = Get-Content -LiteralPath $snapshotPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $savedBackend = $snapshot.previous_files.PSObject.Properties['.runtime/backend.json'].Value
     Assert-Test ($savedBackend.content_base64 -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($backendPath))) 'snapshot preserves previous backend bytes'
-    $state = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; phase = 'verifying_installation'; updated_utc = ''; wsl_distro = $target.Distro; rootfs_sha256 = $hash }
+    $state = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; phase = 'verifying_installation'; updated_utc = ''; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_dir = $wsl }
     Write-NipatJsonAtomic $statePath $state
     Save-NipatRecoverySnapshot $project $manifest | Out-Null
     Assert-Test ([Convert]::ToBase64String([IO.File]::ReadAllBytes($snapshotPath)) -ceq $snapshotBytes) 'retry never overwrites first recovery evidence'
+    $snapshotLayout = [pscustomobject]@{ app_dir = $project; runtime_dir = $wsl; cache_dir = (Join-Path $temporary 'cache'); data_dir = $data; runs_dir = $runs }
+    $layoutSnapshot = Save-NipatRecoverySnapshot $project $manifest $snapshotLayout
+    $snapshotLayout.runtime_dir = $relocatedWsl
+    $relocatedSnapshot = Save-NipatRecoverySnapshot $project $manifest $snapshotLayout
+    Assert-Test ($layoutSnapshot -cne $relocatedSnapshot -and (Test-Path -LiteralPath $layoutSnapshot)) 'changing destinations within the same build retains distinct recovery evidence'
     $foreign = $previous | ConvertTo-Json | ConvertFrom-Json
     $foreign.PSObject.Properties.Remove('installation_channel')
     Write-NipatJsonAtomic $backendPath $foreign
@@ -170,7 +201,15 @@ try {
     Write-NipatJsonAtomic $backendPath $previous
     $roots = Get-NipatPreviousDataRoots $project (Join-Path $temporary 'default')
     Assert-Test ($roots.data_dir -ceq $data -and $roots.runs_dir -ceq $runs) 'custom data and result roots survive update'
-    $configuration = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_image = ('sha256:' + ('5' * 64)); data_dir = $roots.data_dir; runs_dir = $roots.runs_dir }
+    $earlierMetadata = $previous | ConvertTo-Json | ConvertFrom-Json
+    $earlierMetadata.wsl_distro = $previousPreviewName
+    $earlierMetadata.PSObject.Properties.Remove('rootfs_sha256')
+    $earlierMetadata.PSObject.Properties.Remove('runtime_dir')
+    Write-NipatJsonAtomic $backendPath $earlierMetadata
+    $earlierRoots = Get-NipatPreviousDataRoots $project (Join-Path $temporary 'default')
+    Assert-Test ($earlierRoots.data_dir -ceq $data -and $earlierRoots.runs_dir -ceq $runs) 'earlier Preview metadata without destination fields remains readable'
+    Write-NipatJsonAtomic $backendPath $previous
+    $configuration = [ordered]@{ schema_version = 1; installation_channel = (Get-NipatInstallationProfile).channel; backend = 'wsl'; wsl_distro = $target.Distro; rootfs_sha256 = $hash; runtime_dir = $wsl; runtime_image = ('sha256:' + ('5' * 64)); data_dir = $roots.data_dir; runs_dir = $roots.runs_dir }
     $foreignConfiguration = [pscustomobject]@{
         installation_channel = (Get-NipatInstallationProfile).channel
         wsl_distro = 'NIPAT-Runtime'; rootfs_sha256 = $hash
@@ -178,6 +217,11 @@ try {
     $foreignVerify = @{ called = $false }
     Assert-Rejected { Complete-NipatRuntimeActivation $project $statePath $state $foreignConfiguration { $foreignVerify.called = $true } } 'activation rejects stable distro even if channel field was copied'
     Assert-Test (-not $foreignVerify.called) 'foreign runtime is rejected before any verification command'
+    $mismatchedState = $state | ConvertTo-Json | ConvertFrom-Json
+    $mismatchedState.runtime_dir = $relocatedWsl
+    $mismatchedState.wsl_distro = $relocated.Distro
+    Assert-Rejected { Complete-NipatRuntimeActivation $project $statePath $mismatchedState $configuration { $foreignVerify.called = $true } } 'two individually valid runtimes cannot be mixed across preparation state and configuration'
+    Assert-Test (-not $foreignVerify.called) 'a destination mismatch is rejected before candidate tests or activation'
     $backendBefore = [Convert]::ToBase64String([IO.File]::ReadAllBytes($backendPath))
     $runtimeImageBefore = [IO.File]::ReadAllText($runtimeImagePath)
     $envBefore = [Environment]::GetEnvironmentVariable('NIPAT_WSL_DISTRO', 'Process')

@@ -30,7 +30,10 @@ I job `linux-checks` e `windows-checks` eseguono la suite Python su entrambi
 i sistemi. Il primo comprende i test della selezione CI, del publisher e la
 verifica sintattica dell'helper del motore. Il secondo comprende parsing con
 PowerShell 5.1, protezioni del bootstrap, identità delle immagini, configurazione
-WSL riprendibile e compilazione/prova del launcher.
+WSL riprendibile e compilazione/prova del launcher. I controlli relativi ai
+percorsi e alla rimozione devono verificare separazione delle destinazioni,
+identità delle risorse possedute e conservazione dei dati; non sostituiscono
+la prova dell'interfaccia del setup su Windows.
 
 Il job `scientific` costruisce il motore e avvia:
 
@@ -65,7 +68,10 @@ non vengono applicate automaticamente copiando i file del repository.
 ## Costruzione degli installatori
 
 La build esegue i controlli Windows prima delle operazioni più costose.
-Il medesimo `NIPAT.exe` compilato e verificato viene incorporato nell'installatore.
+Una compilazione Inno Setup con componenti minimi di prova controlla lo script
+dell'installatore prima di costruire il runtime; non esegue il setup né verifica
+la sua interfaccia grafica. Il medesimo `NIPAT.exe` compilato e verificato
+viene incorporato nell'installatore.
 Successivamente costruisce e verifica il motore scientifico e il filesystem
 WSL, esporta gli archivi e genera il manifest con commit, dimensioni e SHA-256.
 
@@ -164,8 +170,12 @@ Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede prove
 degli installatori effettivi su Windows e Ubuntu Desktop: prima installazione,
 riavvio e analisi, coesistenza della Preview con NIPAT stabile su Windows,
 Docker già presente su Ubuntu, reinstallazione dello stesso pacchetto e
-rimozione con conservazione dei dati. Gli aggiornamenti fra versioni
-differenti richiedono prove aggiuntive.
+rimozione con conservazione dei dati. Su Windows comprende cinque percorsi
+personalizzati, anche su dischi fissi diversi e con spazi o caratteri non ASCII,
+preferenze dopo la disinstallazione, cambio di destinazione senza trasferimento
+dei dati e rimozione facoltativa di ambiente/cache con protezione delle risorse
+estranee. Annullamento e fallimenti parziali richiedono evidenze distinte.
+Gli aggiornamenti fra versioni differenti richiedono prove aggiuntive.
 
 Il record di accettazione è sottoposto a revisione su `main` e identifica
 build, commit, manifest, archivio scientifico e checksum dei due installatori.
