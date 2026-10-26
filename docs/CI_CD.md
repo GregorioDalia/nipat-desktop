@@ -62,8 +62,8 @@ del contratto dei piani verificano struttura, riferimenti tipizzati,
 dipendenze e ordine deterministico. La suite dell'esecutore verifica inoltre
 stati dei passaggi, errori, interruzioni, output mancanti e rifiuto di una
 destinazione già utilizzata. Il confronto scientifico reale del workflow
-DNPcall → Contamination e dei piani con CPI è distinto da questi test
-unitari: viene eseguito nell'immagine con R e samtools. Nessuno di questi controlli attesta da solo
+DNPcall → Contamination, dei piani con CPI e delle attività SNPcall è
+distinto da questi test unitari: viene eseguito nell'immagine con R e samtools. Nessuno di questi controlli attesta da solo
 la validità biologica degli input.
 
 ## Controlli sui sorgenti
@@ -93,7 +93,8 @@ Il job `scientific` costruisce il motore e avvia:
   sorgenti applicativi montati, con aspettative numeriche e casi non validi;
   controlla inoltre il catalogo incorporato, la validazione dei piani e
   i workflow automatici DNPcall → Contamination, DNPcall → CPI e DNPcall →
-  Contamination e CPI tramite `scripts/verify_workflow_execution.py`;
+  Contamination e CPI tramite `scripts/verify_workflow_execution.py`, oltre
+  ai piani SNPcall tramite `scripts/verify_snp_workflow.py`;
 - `python -m nipat doctor --runtime`: compatibilità e identità del motore;
 - `python -m nipat self-test`: regressioni distribuite e modalità di input.
 
@@ -135,6 +136,19 @@ come filtro o trasformazione degli input CPI. La prova attraversa il client
 senza sorgenti R locali, richiede un solo comando container e controlla stati,
 parametri effettivi, checksum, campioni condivisi e conservazione degli input.
 Il confronto dei PDF ne verifica presenza e formato, non l'aspetto grafico.
+
+Le regressioni SNPcall dei piani eseguono i due percorsi BAM e pileup con
+risultati numerici attesi e confronto con le analisi singole. Il percorso
+BAM conserva BED, pileup e log samtools, verificando anche i checksum degli
+intermedi; quello importato verifica il riuso del pileup senza rigenerarlo. Il client viene esercitato con più campioni e
+nomi di file coincidenti in cartelle diverse, controllando l'associazione fra
+input originali, passaggi e tabelle. L'opzione SNPcall nei workflow DNPcall
+verifica la condivisione dei BAM e la separazione dei risultati delle due
+analisi. Un caso negativo reale verifica che un errore samtools impedisca
+l'avvio di R e blocchi il campione SNP successivo, anche se indipendente.
+Queste prove avvengono senza sorgenti scientifici del client montati.
+La suite dell'esecutore distingue errore samtools, pileup non valido, errore R
+e annullamento, verificando l'arresto dei passaggi non ancora avviati.
 
 La selezione delle verifiche scientifiche è definita in
 [`ci_changes.py`](../.github/scripts/ci_changes.py). Modifiche al motore, ai
@@ -323,8 +337,8 @@ di confine e i nuovi comportamenti. Per la 0.7 le priorità comprendono
 propagazione dei parametri, impostazioni scientifiche fisse, equivalenza
 tra analisi separate e workflow concatenati e gestione dei fallimenti tra
 passaggi dipendenti. La 0.7.0a1 comprende i controlli del catalogo e la catena
-DNPcall → Contamination e le composizioni CPI descritte sopra; SNPcall
-nei piani richiederà casi dedicati. Queste verifiche non vengono attribuite retroattivamente alla 0.6.
+DNPcall → Contamination, le composizioni CPI e i piani SNPcall descritti sopra.
+Queste verifiche non vengono attribuite retroattivamente alla 0.6.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
 regressione. Esiti, versioni e limiti sono registrati nella

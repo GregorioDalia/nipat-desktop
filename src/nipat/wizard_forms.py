@@ -312,7 +312,8 @@ class WorkflowForm:
                     item = (label, source)
                 else:
                     prompt = ("Altro file (Invio per continuare)" if current else
-                              "Percorso del primo BAM" if field.key == "bams" else "Percorso della prima tabella")
+                              "Percorso del primo BAM" if field.key == "bams" else
+                              "Percorso del primo pileup SNP" if field.key == "pileups" else "Percorso della prima tabella")
                     raw = navigation(self.ui.prompt(prompt, path=True))
                     if not raw:
                         if current:

@@ -30,11 +30,15 @@ BUNDLED_WORKFLOW_LABELS = {
     "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall", "cpi": "CPI",
     "workflow-plan": "Workflow automatico",
     "workflow-plan-cpi": "Workflow automatico con CPI",
+    "workflow-plan-snp": "Workflow SNPcall su piu' campioni",
+    "workflow-plan-with-snp": "Workflow automatico con SNPcall",
 }
 PLAN_EXECUTION_INTERFACE = "workflow-plan-execution-v1"
 PLAN_WORKFLOWS = {
     "workflow-plan": ("dnp-call", "contamination"),
     "workflow-plan-cpi": ("dnp-call", "contamination", "cpi"),
+    "workflow-plan-snp": ("snp-call",),
+    "workflow-plan-with-snp": ("dnp-call", "contamination", "cpi", "snp-call"),
 }
 
 

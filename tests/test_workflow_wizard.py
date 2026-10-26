@@ -30,12 +30,16 @@ class WorkflowWizardTests(unittest.TestCase):
         self.file("reference.fa.fai", "chr1\t4\t6\t4\t5\n")
         self.panel = self.file("dnp.tsv", "chr1\t2\t3\tCG\tAT\n")
         self.positions = self.file("positions.tsv", "chr\tpos1\tpos2\nchr1\t2\t3\n")
+        self.snp_panel = self.file("snps.tsv", "pos\tref\talt\nchr1:2\tC\tG\n")
+        self.pileup = self.file("first pileup.txt", "chr1\t2\tC\t1\t.\tI\tread1\n")
+        self.other_pileup = self.file("second pileup.txt", "chr1\t2\tC\t1\tG\tI\tread2\n")
         self.popfreq = self.file("population.tsv", "chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t2\t3\t0.5\t0.5\n")
         self.run = self.layout.runs_dir / "complete"
         (self.run / "output").mkdir(parents=True)
         self.workflows = Mock()
         self.workflows.dnp_contamination.return_value = self.run
         self.workflows.dnp_cpi.return_value = self.run
+        self.workflows.snp_batch.return_value = self.run
 
     def file(self, name, contents):
         result = self.root / name
@@ -45,6 +49,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def invoke(self, answers, **kwargs):
         messages = []
         reader = Mock(side_effect=[str(value) if isinstance(value, Path) else value for value in answers])
+        self.reader = reader
         result = run_wizard(
             self.workflows, self.layout, err_const=DEFAULT_ERR_CONST,
             read=reader, write=messages.append, **kwargs,
@@ -52,12 +57,12 @@ class WorkflowWizardTests(unittest.TestCase):
         return result, "\n".join(messages)
 
     def inputs(self, *, choice="W", name="chain"):
-        return [choice, "1", "1", f'"{self.bam}"', "", self.reference, self.panel, "1", "1", name]
+        return [choice, "1", "1", f'"{self.bam}"', "", self.reference, self.panel, "1", "1", "", name]
 
     def cpi_inputs(self, *, preset="2", name="cpi-chain"):
         return ["W", preset, "Pair1", self.bam, self.father, "",
                 self.reference, self.panel, "1"] + (["1"] if preset == "3" else []) + [
-                    self.popfreq, "0", "", name,
+                    self.popfreq, "0", "", "", name,
                 ]
 
     def assert_no_single_analysis(self):
@@ -75,7 +80,7 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.workflows.dnp_contamination.assert_called_once_with(
             bams=[self.bam], bamlist=None, reference=self.reference, panel=self.panel,
-            parallel=False, contamination_panel=None, run_name="chain",
+            parallel=False, contamination_panel=None, snp_panel=None, run_name="chain",
         )
         self.assert_no_single_analysis()
         self.assertEqual(output.count("Riepilogo prima dell'avvio"), 1)
@@ -88,12 +93,12 @@ class WorkflowWizardTests(unittest.TestCase):
         bamlist = self.file("bams.txt", '"sample with spaces.bam"\n')
         status, output = self.invoke([
             "w", "1", "2", bamlist, self.reference, self.panel, "2", "2", self.positions,
-            "", "1", "0", "0",
+            "", "", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.workflows.dnp_contamination.assert_called_once_with(
             bams=None, bamlist=bamlist, reference=self.reference, panel=self.panel,
-            parallel=True, contamination_panel=self.positions, run_name=None,
+            parallel=True, contamination_panel=self.positions, snp_panel=None, run_name=None,
         )
         self.assertIn("Indicare ora il file di coordinate", output)
         self.assert_no_single_analysis()
@@ -126,7 +131,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_empty_different_panel_waits_until_a_valid_path_is_supplied(self):
         status, output = self.invoke([
             "W", "1", "1", self.bam, "", self.reference, self.panel, "1", "2", "",
-            self.positions, "", "1", "0", "0",
+            self.positions, "", "", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.assertIn("Nessun valore inserito", output)
@@ -165,7 +170,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_submenu_cancel_and_invalid_choice_do_not_collect_or_execute(self):
         status, output = self.invoke(["W", "8", "", "0"])
         self.assertEqual(status, 0)
-        self.assertIn("Scegliere una sequenza da 1 a 3", output)
+        self.assertIn("Scegliere un workflow da 1 a 4", output)
         self.workflows.dnp_contamination.assert_not_called()
         self.workflows.dnp_cpi.assert_not_called()
 
@@ -176,7 +181,7 @@ class WorkflowWizardTests(unittest.TestCase):
             pairs=[("Pair1", self.bam, self.father)], reference=self.reference, panel=self.panel,
             parallel=False, popfreq=self.popfreq, err_const=DEFAULT_ERR_CONST,
             cpi_panel=None, cutoffs=None, cutoff_map=None, include_contamination=False,
-            contamination_panel=None, run_name="cpi-chain",
+            contamination_panel=None, snp_panel=None, run_name="cpi-chain",
         )
         self.workflows.dnp_contamination.assert_not_called()
         self.assert_no_single_analysis()
@@ -191,7 +196,7 @@ class WorkflowWizardTests(unittest.TestCase):
         status, output = self.invoke([
             "W", "2", "Pair1", self.bam, self.father,
             "Pair2", self.other_mother, self.father, "", self.reference, self.panel, "1",
-            self.popfreq, "0", "", "", "1", "0", "0",
+            self.popfreq, "0", "", "", "", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.assertEqual(self.workflows.dnp_cpi.call_args.kwargs["pairs"], [
@@ -205,7 +210,7 @@ class WorkflowWizardTests(unittest.TestCase):
         status, output = self.invoke([
             "W", "3", "Pair1", self.bam, self.father, "",
             self.reference, self.panel, "2", "2", self.positions,
-            self.popfreq, "2", "selected", self.positions, "", "0.001", "full",
+            self.popfreq, "2", "selected", self.positions, "", "0.001", "", "full",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -235,7 +240,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_backtracking_inside_pair_keeps_id_and_explicit_roles(self):
         status, _ = self.invoke([
             "W", "2", "Pair1", self.bam, ":indietro", self.other_mother, self.father, "",
-            self.reference, self.panel, "1", self.popfreq, "1", self.positions, "", "",
+            self.reference, self.panel, "1", self.popfreq, "1", self.positions, "", "", "",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -246,7 +251,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_invalid_id_and_same_bam_in_both_roles_are_corrected_before_dispatch(self):
         status, output = self.invoke([
             "W", "2", "", "123", "Pair1", self.bam, self.bam, self.father, "",
-            self.reference, self.panel, "1", self.popfreq, "0", "", "",
+            self.reference, self.panel, "1", self.popfreq, "0", "", "", "",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -280,7 +285,7 @@ class WorkflowWizardTests(unittest.TestCase):
         store.save(preferences)
         status, output = self.invoke([
             "W", "2", "Pair1", self.bam, self.father, "",
-            "", "", "", "", "", "", "", "", "1", "0", "0",
+            "", "", "", "", "", "", "", "", "", "1", "0", "0",
         ], preferences_store=store)
         self.assertEqual(status, 0)
         arguments = self.workflows.dnp_cpi.call_args.kwargs
@@ -296,7 +301,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_review_changing_cpi_cutoff_mode_to_all_does_not_reuse_hidden_panel(self):
         status, _ = self.invoke([
             "W", "2", "Pair1", self.bam, self.father, "",
-            self.reference, self.panel, "1", self.popfreq, "1", self.positions, "", "",
+            self.reference, self.panel, "1", self.popfreq, "1", self.positions, "", "", "",
             "2", "6", "0", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -304,6 +309,164 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertIsNone(arguments["cpi_panel"])
         self.assertIsNone(arguments["cutoffs"])
         self.assertIsNone(arguments["cutoff_map"])
+
+    def test_dnp_chain_can_add_independent_snp_with_explicit_panel(self):
+        answers = self.inputs()[:-2] + ["2", self.snp_panel, "with-snp", "1", "0", "0"]
+        status, output = self.invoke(answers)
+        self.assertEqual(status, 0)
+        arguments = self.workflows.dnp_contamination.call_args.kwargs
+        self.assertEqual(arguments["panel"], self.panel)
+        self.assertEqual(arguments["snp_panel"], self.snp_panel)
+        self.assertEqual(output.count("Riepilogo prima dell'avvio"), 1)
+        self.assertIn("Il pannello DNP non viene riutilizzato", output)
+        self.assertIn("non vengono usate da Contamination o CPI", output)
+        self.assertIn("Risultati SNPcall per campione:", output)
+        self.assert_no_single_analysis()
+
+    def test_each_cpi_preset_can_add_independent_snp_without_changing_pair_roles(self):
+        for preset in ("2", "3"):
+            with self.subTest(preset=preset):
+                self.workflows.reset_mock()
+                answers = self.cpi_inputs(preset=preset)[:-2] + [
+                    "2", self.snp_panel, "with-snp", "1", "0", "0",
+                ]
+                status, output = self.invoke(answers)
+                self.assertEqual(status, 0)
+                arguments = self.workflows.dnp_cpi.call_args.kwargs
+                self.assertEqual(arguments["snp_panel"], self.snp_panel)
+                self.assertEqual(arguments["pairs"], [("Pair1", self.bam, self.father)])
+                self.assertEqual(arguments["include_contamination"], preset == "3")
+                self.assertEqual(output.count("Riepilogo prima dell'avvio"), 1)
+
+    def test_review_can_enable_then_disable_snp_without_leaking_hidden_panel(self):
+        status, _ = self.invoke(self.inputs() + [
+            "2", "7", "2", self.snp_panel,
+            "2", "7", "1", "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        self.assertIsNone(self.workflows.dnp_contamination.call_args.kwargs["snp_panel"])
+        self.workflows.dnp_contamination.assert_called_once()
+
+    def test_cancel_while_selecting_optional_snp_panel_does_not_execute(self):
+        status, _ = self.invoke(self.inputs()[:-2] + ["2", ":annulla", "0"])
+        self.assertEqual(status, 0)
+        self.workflows.dnp_contamination.assert_not_called()
+        self.workflows.snp_batch.assert_not_called()
+
+    def test_snp_batch_bams_use_one_confirmation_and_separate_sample_results(self):
+        status, output = self.invoke([
+            "W", "4", "1", self.bam, self.father, "", self.reference,
+            self.snp_panel, "snp-batch", "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        self.workflows.snp_batch.assert_called_once_with(
+            bams=[self.bam, self.father], bamlist=None, pileups=None,
+            reference=self.reference, panel=self.snp_panel, run_name="snp-batch",
+        )
+        self.assertEqual(output.count("Riepilogo prima dell'avvio"), 1)
+        self.assertIn("non vengono uniti conteggi di campioni diversi", output)
+        self.assertIn("Risultati SNPcall per campione:", output)
+        self.assertNotIn("Risultati DNPcall:", output)
+        self.assert_no_single_analysis()
+
+    def test_snp_batch_pileups_omit_reference_and_keep_qname_guidance(self):
+        status, output = self.invoke([
+            "W", "4", "2", self.pileup, self.other_pileup, "", self.snp_panel,
+            "snp-pileups", "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        self.workflows.snp_batch.assert_called_once_with(
+            bams=None, bamlist=None, pileups=[self.pileup, self.other_pileup],
+            reference=None, panel=self.snp_panel, run_name="snp-pileups",
+        )
+        self.assertIn("QNAME", output)
+        self.assertTrue(any("Percorso del primo pileup SNP" in call.args[0]
+                            for call in self.reader.call_args_list))
+        self.assertIn("Il FASTA e i BAM delle altre modalita' non vengono usati", output)
+        self.assert_no_single_analysis()
+
+    def test_snp_batch_accepts_relative_bamlist(self):
+        bamlist = self.file("batch-list.txt", '"sample with spaces.bam"\npaternal sample.bam\n')
+        status, output = self.invoke([
+            "W", "4", "3", bamlist, self.reference, self.snp_panel,
+            "", "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        self.workflows.snp_batch.assert_called_once_with(
+            bams=None, bamlist=bamlist, pileups=None, reference=self.reference,
+            panel=self.snp_panel, run_name=None,
+        )
+        self.assertIn("relativi alla cartella della lista", output)
+
+    def test_snp_batch_mode_edit_to_pileup_does_not_forward_previous_bam_or_reference(self):
+        status, _ = self.invoke([
+            "W", "4", "1", self.bam, "", self.reference, self.snp_panel, "",
+            "2", "1", "2", self.pileup, "", "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        arguments = self.workflows.snp_batch.call_args.kwargs
+        self.assertEqual(arguments["pileups"], [self.pileup])
+        self.assertIsNone(arguments["bams"])
+        self.assertIsNone(arguments["bamlist"])
+        self.assertIsNone(arguments["reference"])
+
+    def test_snp_batch_mode_edit_to_bam_does_not_forward_previous_pileups(self):
+        status, _ = self.invoke([
+            "W", "4", "2", self.pileup, "", self.snp_panel, "",
+            "2", "1", "1", self.bam, "", self.reference, "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        arguments = self.workflows.snp_batch.call_args.kwargs
+        self.assertEqual(arguments["bams"], [self.bam])
+        self.assertEqual(arguments["reference"], self.reference)
+        self.assertIsNone(arguments["pileups"])
+
+    def test_snp_batch_rechecks_panel_when_switching_from_pileup_to_bam(self):
+        edge_panel = self.file("position-one.tsv", "pos\tref\talt\nchr1:1\tA\tC\n")
+        status, output = self.invoke([
+            "W", "4", "2", self.pileup, "", edge_panel, "",
+            "2", "1", "1", self.bam, "", self.reference, self.snp_panel,
+            "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        self.assertEqual(self.workflows.snp_batch.call_args.kwargs["panel"], self.snp_panel)
+        self.assertIn("La lista SNP precedente non e' compatibile", output)
+
+    def test_snp_batch_cancel_and_dry_run_never_claim_scientific_results(self):
+        answers = ["W", "4", "2", self.pileup, "", self.snp_panel, ""]
+        status, output = self.invoke(answers + ["", "0"])
+        self.assertEqual(status, 0)
+        self.workflows.snp_batch.assert_not_called()
+        self.assertIn("annullata prima dell'avvio", output)
+        status, output = self.invoke(answers + ["1", "0", "0"], dry_run=True)
+        self.assertEqual(status, 0)
+        self.workflows.snp_batch.assert_called_once()
+        self.assertIn("Esecuzione pianificata", output)
+        self.assertNotIn("Risultati SNPcall per campione:", output)
+        self.assertNotIn("Esecuzione completata", output)
+
+    def test_snp_batch_saved_defaults_preserve_standalone_pileup_mode(self):
+        store = PreferencesStore(self.root / "snp-preferences.json")
+        store.save(Preferences().with_workflow("2", {
+            "mode": "2", "reference": self.reference, "panel": self.snp_panel,
+        }))
+        status, _ = self.invoke([
+            "W", "4", "", self.pileup, "", "", "", "1", "0", "0",
+        ], preferences_store=store)
+        self.assertEqual(status, 0)
+        arguments = self.workflows.snp_batch.call_args.kwargs
+        self.assertEqual(arguments["panel"], self.snp_panel)
+        self.assertEqual(arguments["pileups"], [self.pileup])
+        self.assertIsNone(arguments["reference"])
+
+    def test_snp_batch_backtracking_preserves_selected_files(self):
+        status, output = self.invoke([
+            "W", "4", "1", self.bam, "", ":indietro", "1",
+            self.reference, self.snp_panel, "", "1", "0", "0",
+        ])
+        self.assertEqual(status, 0)
+        self.assertEqual(self.workflows.snp_batch.call_args.kwargs["bams"], [self.bam])
+        self.assertIn("Elenco gia' inserito", output)
 
 
 if __name__ == "__main__":

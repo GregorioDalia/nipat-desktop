@@ -47,7 +47,7 @@ al manifest scientifico incluso. `describe --json` restituisce:
 | `workflow_interfaces` | `dnp-call-v1`, `snp-call-v1`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
 | `preparation.interface` | `workflow-preparation-v1` |
 | `plan_execution.interface` | `workflow-plan-execution-v1` |
-| `plan_execution.workflows` | `dnp-call`, `contamination`, `cpi` |
+| `plan_execution.workflows` | `dnp-call`, `snp-call`, `contamination`, `cpi` |
 | `plan_execution.scheduling` | `sequential` |
 | `plan_execution.resume` | `false` |
 | Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
@@ -79,8 +79,9 @@ Al termine mostra l'esito e il percorso di `workflow-state.json`; `--json`
 restituisce invece il resoconto completo in formato JSON su stdout, con gli
 avvisi di avanzamento su stderr. In entrambe le modalità il codice di uscita
 riflette l'esito del piano.
-Sono supportati i passaggi DNPcall, Contamination e CPI; un piano che include
-SNPcall viene rifiutato prima di creare la destinazione o avviare analisi.
+Sono supportati i passaggi DNPcall, SNPcall, Contamination e CPI. SNPcall
+usa un BAM con riferimento oppure un pileup importato: non consuma risultati
+degli altri passaggi e non produce tabelle DNP compatibili con essi.
 Le dipendenze determinano l'ordine sequenziale. Ogni passaggio conserva la
 propria richiesta, i file preparati, i risultati e il log; lo stato complessivo
 è registrato in `workflow-state.json`. Il processo del motore rimane attivo
@@ -93,6 +94,12 @@ Per DNPcall, i BAM devono essere già esposti con alias `sample_0001.bam`,
 compatibili con l'interfaccia R. Il client NIPAT prepara questi mount senza
 copiare i BAM. I riferimenti ai risultati prodotti vengono risolti dal motore;
 il client non deve cercare file intermedi né comporre nomi di output futuri.
+Per SNPcall, ogni passaggio identifica un solo campione e un pannello SNP.
+La modalità BAM conserva BED e pileup in `work`, con il log samtools in
+`preparation.log`; un errore o un pileup non valido impedisce l'avvio di R.
+La modalità pileup legge direttamente l'input, senza eseguire samtools.
+Entrambe producono `output/SNPcall_output.txt`; `artifacts.snp-tables`
+associa la tabella all'ID del campione.
 Per CPI, i riferimenti materni/paterni e gli ID delle coppie vengono tradotti
 in nomi interni senza rinominare gli input originali. I genitori condivisi
 vengono preparati una sola volta. Gli output CPI comprendono il riepilogo CSV,

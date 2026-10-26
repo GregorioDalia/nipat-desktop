@@ -7,11 +7,12 @@ from pathlib import Path
 import re
 from typing import Any
 
-from nipat.adapters.panels import read_position_panel
+from nipat.adapters.panels import read_position_panel, read_snp_positions
 from nipat.errors import ValidationError
-from nipat.validation.files import require_file
+from nipat.validation.files import require_file, require_snp_pileup
 from nipat.wizard_forms import (
-    Back, Field, WorkflowForm, check_popfreq, navigation, unquote,
+    Back, Field, WorkflowForm, check_bamlist, check_popfreq, check_reference,
+    navigation, unquote,
 )
 
 
@@ -34,9 +35,48 @@ class DnpContaminationForm(WorkflowForm):
                 "contamination_panel", "Pannello di coordinate per Contamination", "file",
                 check=read_position_panel,
             ))
-        return fields[:-1] + panel_fields + fields[-1:]
+        return fields[:-1] + panel_fields + self._snp_fields() + fields[-1:]
+
+    def _snp_fields(self) -> list[Field]:
+        fields = [Field(
+            "include_snp", "Aggiungere SNPcall sui BAM selezionati?", "choice", "1",
+            options=(("1", "No", "Esegue solo le analisi DNP selezionate"),
+                     ("2", "Si", "Analisi SNP indipendente per ciascun BAM distinto")),
+        )]
+        if self.values.get("include_snp") == "2":
+            fields.append(Field(
+                "snp_panel", "Lista SNP (pos, ref, alt)", "file",
+                check=lambda path: read_snp_positions(path, for_bed=True),
+            ))
+        return fields
+
+    def _describe_snp(self) -> None:
+        if self.values.get("include_snp") == "2":
+            self.ui.message(
+                "SNPcall verra' eseguito anche su ciascun BAM distinto, con lo stesso FASTA "
+                "e la lista SNP indicata. Produce risultati separati; le tabelle SNP "
+                "non vengono usate da Contamination o CPI.", kind="muted",
+            )
 
     def _guide(self, field: Field, default: str = "") -> None:
+        if field.key == "snp_panel":
+            snp = WorkflowForm("2", self.ui, self.layout, self.err_const)
+            snp._guide(replace(field, key="panel"), default)
+            self.ui.message(
+                "Selezionare esplicitamente una lista SNP per la stessa assembly dei BAM. "
+                "Il pannello DNP non viene riutilizzato come lista SNP.", kind="muted",
+            )
+            return
+        if field.key == "include_snp":
+            self.ui.message(
+                "SNPcall puo' analizzare gli stessi BAM come attivita' indipendente. "
+                "Non utilizza le tabelle DNP e non produce input per Contamination o CPI. "
+                "Se si sceglie Si, occorre una lista SNP specifica; il FASTA resta quello gia' selezionato.",
+                kind="muted",
+            )
+            self.ui.message("Invio conferma la selezione proposta. Le analisi aggiunte saranno comprese nello stesso riepilogo e nella stessa conferma.", kind="muted")
+            self.ui.message(":indietro torna al campo precedente; :annulla torna al menu.", kind="muted")
+            return
         if field.key not in {"contamination_panel_mode", "contamination_panel"}:
             super()._guide(field, default)
             return
@@ -66,6 +106,14 @@ class DnpContaminationForm(WorkflowForm):
         self.ui.message(":indietro torna al campo precedente; :annulla torna al menu.", kind="muted")
 
     def _selected(self, field: Field, answer: str) -> None:
+        if field.key == "include_snp":
+            self.ui.message(
+                "Selezione: SNPcall non incluso."
+                if answer == "1" else
+                "Selezione: SNPcall incluso. Indicare ora la lista SNP da usare per tutti i BAM distinti.",
+                kind="muted",
+            )
+            return
         if field.key != "contamination_panel_mode":
             super()._selected(field, answer)
             return
@@ -86,6 +134,7 @@ class DnpContaminationForm(WorkflowForm):
             "di DNPcall e la verifica delle sue tabelle; non sono richieste altre conferme fra le fasi.",
             kind="muted",
         )
+        self._describe_snp()
         return super().review(dry_run=dry_run)
 
     def arguments(self) -> dict:
@@ -93,6 +142,7 @@ class DnpContaminationForm(WorkflowForm):
             **super().arguments(),
             "contamination_panel": self.values["contamination_panel"]
             if self.values["contamination_panel_mode"] == "2" else None,
+            "snp_panel": self.values["snp_panel"] if self.values.get("include_snp") == "2" else None,
         }
 
 
@@ -137,8 +187,8 @@ class DnpCpiForm(DnpContaminationForm):
             result.append(Field("cutoffs", "Cutoff con etichetta", "cutoffs"))
         elif mode == "3":
             result.append(Field("cutoff_map", "Mappa cutoff (etichetta=file,etichetta2=file2)"))
-        result += [Field("err_const", "Costante di errore", "number", str(self.err_const)),
-                   dnp_fields["run_name"]]
+        result += [Field("err_const", "Costante di errore", "number", str(self.err_const))]
+        result += self._snp_fields() + [dnp_fields["run_name"]]
         return result
 
     def _cpi_form(self) -> WorkflowForm:
@@ -325,6 +375,7 @@ class DnpCpiForm(DnpContaminationForm):
             self.ui.message("Contamination non filtra o modifica gli input CPI. Le fasi vengono eseguite in sequenza; un errore arresta il workflow.", kind="muted")
         self.ui.message("Controllare esplicitamente ID, file e ruoli di tutte le coppie. Una sola conferma avvia l'intero workflow; risultati e stato di ogni fase rimangono separati.", kind="muted")
         self.ui.message("NIPAT assegna automaticamente i nomi e i prefissi dei file CPI mantenendo le associazioni mostrate.", kind="muted")
+        self._describe_snp()
         return WorkflowForm.review(self, dry_run=dry_run)
 
     def arguments(self) -> dict:
@@ -337,9 +388,92 @@ class DnpCpiForm(DnpContaminationForm):
             "cutoffs": values["cutoffs"] if mode == "2" else None,
             "cutoff_map": values["cutoff_map"] if mode == "3" else None,
             "include_contamination": self.include_contamination,
+            "snp_panel": values["snp_panel"] if values.get("include_snp") == "2" else None,
             "contamination_panel": values["contamination_panel"]
             if self.include_contamination and values["contamination_panel_mode"] == "2" else None,
             "run_name": values["run_name"],
+        }
+
+
+class SnpBatchForm(WorkflowForm):
+    """Review independent per-sample SNP analyses as a single execution plan."""
+
+    def __init__(self, ui, layout, err_const: float, *, defaults: dict | None = None):
+        super().__init__("2", ui, layout, err_const, defaults=defaults)
+
+    @property
+    def title(self) -> str:
+        return "Workflow automatico / SNPcall su piu' campioni"
+
+    def fields(self) -> list[Field]:
+        mode = self.values.get("mode", "1")
+        fields = [Field("mode", "Input SNPcall", "choice", "1", options=(
+            ("1", "Uno o piu' BAM", "Un percorso per riga; preparazione automatica dei pileup"),
+            ("2", "Uno o piu' pileup esistenti", "Con QNAME nella settima colonna; senza FASTA"),
+            ("3", "File bamlist", "Percorsi relativi alla cartella della lista"),
+        ))]
+        if mode == "2":
+            fields.append(Field("pileups", "Pileup SNP", "files", check=require_snp_pileup))
+        else:
+            fields.append(Field("bamlist", "File bamlist", "file", check=check_bamlist)
+                          if mode == "3" else Field("bams", "BAM", "files"))
+            fields.append(Field("reference", "FASTA indicizzato (.fai; .gzi se BGZF)",
+                                "file", check=check_reference))
+        fields += [Field("panel", "Lista SNP (pos, ref, alt)", "file",
+                         check=lambda path: read_snp_positions(path, for_bed=mode != "2")),
+                   Field("run_name", "Nome nuova esecuzione (vuoto = automatico)", "run", required=False)]
+        return fields
+
+    def _guide(self, field: Field, default: str = "") -> None:
+        if field.key == "pileups":
+            super()._guide(replace(field, key="pileup"), default)
+            self.ui.message("Inserire un pileup per campione, un percorso alla volta. Dopo almeno un file, Invio conclude l'elenco.", kind="muted")
+            return
+        if field.key == "mode":
+            self.ui.message(
+                "Scegliere piu' BAM con un FASTA comune, una bamlist oppure pileup gia' disponibili. "
+                "Ogni campione viene analizzato separatamente con la stessa lista SNP; "
+                "non vengono uniti conteggi di campioni diversi.", kind="muted",
+            )
+            self.ui.message("Invio conferma la selezione proposta. :indietro torna al campo precedente; :annulla torna al menu.", kind="muted")
+            return
+        super()._guide(field, default)
+
+    def _selected(self, field: Field, answer: str) -> None:
+        if field.key != "mode":
+            super()._selected(field, answer)
+            return
+        previous = self.values.get("mode", "1")
+        if (previous == "2") != (answer == "2") and self.values.get("panel"):
+            try:
+                read_snp_positions(self.values["panel"], for_bed=answer != "2")
+            except (ValidationError, OSError, ValueError):
+                self.values.pop("panel")
+                self.ui.message("La lista SNP precedente non e' compatibile con la nuova modalita': selezionarla nuovamente.", kind="muted")
+        message = {
+            "1": "Inserire i BAM uno alla volta; saranno richiesti FASTA indicizzato e lista SNP.",
+            "2": "Inserire i pileup con QNAME uno alla volta. Il FASTA e i BAM delle altre modalita' non vengono usati.",
+            "3": "Scegliere la bamlist; saranno richiesti FASTA indicizzato e lista SNP.",
+        }[answer]
+        self.ui.message(f"Selezione: {message}", kind="muted")
+
+    def review(self, *, dry_run: bool = False) -> bool:
+        self.ui.message(
+            "Il workflow esegue SNPcall una volta per ciascun campione, in sequenza. "
+            "Una sola conferma avvia tutte le analisi; input, risultati e log restano separati. "
+            "Un errore o un'interruzione arresta anche le analisi non ancora avviate.", kind="muted",
+        )
+        return super().review(dry_run=dry_run)
+
+    def arguments(self) -> dict:
+        values = self.values
+        mode = values["mode"]
+        return {
+            "bams": values["bams"] if mode == "1" else None,
+            "bamlist": values["bamlist"] if mode == "3" else None,
+            "pileups": values["pileups"] if mode == "2" else None,
+            "reference": values["reference"] if mode != "2" else None,
+            "panel": values["panel"], "run_name": values["run_name"],
         }
 
 

@@ -134,7 +134,7 @@ def verify_bundle(bundle_root: Path) -> dict:
         "plan_execution": {
             "interface": "workflow-plan-execution-v1",
             "schema_version": 1,
-            "workflows": ["dnp-call", "contamination", "cpi"],
+            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
             "scheduling": "sequential",
             "resume": False,
         },
@@ -260,7 +260,7 @@ def main(argv: list[str] | None = None) -> int:
                     document, run_dir=arguments.run_dir,
                     script_paths={
                         workflow: BUNDLE_ROOT / description["workflows"][workflow]["script"]
-                        for workflow in ("dnp-call", "contamination", "cpi")
+                        for workflow in ("dnp-call", "snp-call", "contamination", "cpi")
                     },
                 )
                 if arguments.json:

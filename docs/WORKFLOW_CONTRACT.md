@@ -11,11 +11,12 @@ non avvia R o samtools, non crea risultati e non controlla esistenza,
 contenuto o compatibilità biologica dei file.
 
 Il comando distinto `execute-plan --plan FILE --run-dir DIR` esegue
-piani composti da DNPcall, Contamination e CPI. Un piano valido che contiene
-SNPcall non è ancora eseguibile e viene rifiutato prima dell'avvio dei passaggi.
+piani composti dalle quattro analisi. SNPcall è un'attività indipendente,
+con un BAM o pileup per passaggio; non produce input per Contamination o CPI.
 Le analisi singole restano disponibili tramite `execute`. Il menu e la CLI
-desktop offrono tre workflow predefiniti, senza richiedere la scrittura del JSON:
-DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI.
+desktop offrono DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination
+e CPI, con SNPcall facoltativo sugli stessi BAM, oltre a SNPcall su più campioni.
+Queste opzioni non richiedono la scrittura del JSON.
 
 ## Struttura della richiesta
 
@@ -212,7 +213,7 @@ e il percorso dello stato; `--json` scrive il resoconto completo su stdout,
 riservando stderr ai messaggi di avanzamento. Il codice di uscita non dipende
 dal formato di presentazione. Il descrittore del motore
 espone `plan_execution.interface: workflow-plan-execution-v1`, i workflow
-eseguibili `dnp-call`, `contamination` e `cpi`, la pianificazione `sequential` e
+eseguibili `dnp-call`, `snp-call`, `contamination` e `cpi`, la pianificazione `sequential` e
 `resume: false`.
 
 La destinazione deve essere nuova, con directory padre già esistente:
@@ -240,6 +241,29 @@ il riferimento al campione e al passaggio produttore. Lo staging di
 Contamination usa `table_0001.txt`, `table_0002.txt` e successivi nell'ordine
 dichiarato dal consumatore. Questi nomi interni non sostituiscono l'identità
 dei campioni registrata nello stato.
+
+### Preparazione SNPcall e identità dei campioni
+
+Un passaggio SNPcall seleziona un solo ID da `samples`, un pannello SNP e la
+modalità `bam` o `pileup`. Un BAM registrato può essere utilizzato sia da
+DNPcall sia da SNPcall: questa condivisione non crea una dipendenza fra i due
+passaggi. Il piano può contenere più attività SNPcall con risultati separati.
+Le tabelle SNP non sono accettate come riferimenti `dnp-tables`.
+
+Prima di creare la destinazione, il motore verifica i pannelli e gli input
+esterni di tutti i passaggi: in modalità BAM richiede il FASTA e i suoi indici;
+in modalità pileup controlla il formato con QNAME. Durante l'esecuzione usa
+lo stesso adattatore SNPcall delle analisi singole. La modalità BAM genera
+`work/snp_regions.bed`, esegue samtools per scrivere `work/pileup.txt` e ne
+verifica il formato prima di avviare R. Errori o interruzioni di samtools non
+permettono di proseguire con R. La modalità pileup non esegue samtools.
+
+Ogni passaggio produce `output/SNPcall_output.txt`, senza rinominare o
+riscrivere i risultati scientifici. La tabella completata è associata all'ID
+campione in `artifacts.snp-tables`, con percorso relativo e SHA-256.
+I file preparati da NIPAT sono elencati in `artifacts.preparation`, con tipo
+`regions-bed` o `pileup`, percorso e SHA-256. Per un pileup importato questa
+lista è vuota: l'input non viene presentato come file generato dal motore.
 
 ### Preparazione CPI e identità delle coppie
 
@@ -282,7 +306,8 @@ validità biologica o la plausibilità dei valori scientifici.
 | `plan.json` | Piano canonico effettivamente eseguito. |
 | `workflow-state.json` | Stato complessivo, stati e comandi dei passaggi, associazione degli output ai campioni. |
 | `steps/<id>/request.json` | Richiesta concreta preparata per l'adattatore del passaggio. |
-| `steps/<id>/command.log` | Output standard e messaggi di errore del processo scientifico. |
+| `steps/<id>/command.log` | Output standard e messaggi di errore del processo R. |
+| `steps/<id>/preparation.log` | Messaggi samtools, per i passaggi SNPcall da BAM. |
 | `steps/<id>/work` | Pannelli, liste e tabelle preparati per R. |
 | `steps/<id>/output` | Risultati scientifici del passaggio. |
 
@@ -295,6 +320,11 @@ nome interno, percorso relativo alla destinazione e SHA-256. Per Contamination
 è conservato anche il riferimento alla tabella sorgente; il riepilogo ha un
 percorso e un checksum distinti. Questi riferimenti evitano la deduzione
 dell'identità dei campioni dai soli nomi dei file.
+
+Per SNPcall da BAM, `preparation_command` e `preparation_log` identificano
+il comando samtools e il suo log. Dopo la preparazione valida, il campo
+`preparation_artifacts` conserva BED e pileup prima dell'avvio R. Queste
+evidenze rimangono consultabili anche se R non completa il passaggio.
 
 Prima di preparare i file o avviare R, il passaggio CPI registra `pair_mapping`,
 con `pair`, riferimenti `mother` e `father` e `native_pair`. La mappa rimane

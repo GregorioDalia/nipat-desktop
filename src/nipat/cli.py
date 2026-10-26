@@ -85,6 +85,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="parallelismo fra campioni in DNPcall; i due passaggi restano sequenziali",
     )
     dnp_contamination.add_argument("--run-name")
+    dnp_contamination.add_argument("--snp-panel", type=_path,
+                                    help="aggiunge SNPcall indipendente su ogni BAM, con questo pannello SNP")
 
     for preset in ("dnp-cpi", "dnp-contamination-cpi"):
         composed_cpi = workflow_presets.add_parser(
@@ -112,6 +114,19 @@ def build_parser() -> argparse.ArgumentParser:
         composed_cpi.add_argument("--parallel", action="store_true",
                                   help="parallelismo fra campioni in DNPcall; i passaggi restano sequenziali")
         composed_cpi.add_argument("--run-name")
+        composed_cpi.add_argument("--snp-panel", type=_path,
+                                  help="aggiunge SNPcall indipendente su ogni BAM, con questo pannello SNP")
+
+    snp_batch = workflow_presets.add_parser(
+        "snp-batch", help="esegue SNPcall in sequenza su piu' BAM o pileup, con risultati separati",
+    )
+    snp_batch_input = snp_batch.add_mutually_exclusive_group(required=True)
+    snp_batch_input.add_argument("--bam", type=_path, action="append", help="ripetibile per piu' BAM")
+    snp_batch_input.add_argument("--bamlist", type=_path, help="file con un percorso BAM per riga")
+    snp_batch_input.add_argument("--pileup", type=_path, action="append", help="ripetibile per piu' pileup SNP")
+    snp_batch.add_argument("--reference", type=_path, help="FASTA obbligatorio soltanto per input BAM")
+    snp_batch.add_argument("--panel", type=_path, required=True, help="pannello SNP comune ai campioni")
+    snp_batch.add_argument("--run-name")
 
     dnp = subparsers.add_parser("dnp-call", help="esegue DNPcall da BAM")
     dnp_input = dnp.add_mutually_exclusive_group(required=True)
@@ -213,7 +228,12 @@ def main(argv: list[str] | None = None) -> int:
                 run_dir = workflows.dnp_contamination(
                     bams=args.bam, bamlist=args.bamlist, reference=args.reference,
                     panel=args.panel, contamination_panel=args.contamination_panel,
-                    parallel=args.parallel, run_name=args.run_name,
+                    parallel=args.parallel, run_name=args.run_name, snp_panel=args.snp_panel,
+                )
+            elif args.preset == "snp-batch":
+                run_dir = workflows.snp_batch(
+                    bams=args.bam, bamlist=args.bamlist, pileups=args.pileup,
+                    reference=args.reference, panel=args.panel, run_name=args.run_name,
                 )
             else:
                 run_dir = workflows.dnp_cpi(
@@ -224,7 +244,7 @@ def main(argv: list[str] | None = None) -> int:
                     cutoffs=[(label, _path(path)) for label, path in args.cutoff] if args.cutoff else None,
                     cutoff_map=args.cutoff_map, include_contamination=args.preset == "dnp-contamination-cpi",
                     contamination_panel=getattr(args, "contamination_panel", None),
-                    parallel=args.parallel, run_name=args.run_name,
+                    parallel=args.parallel, run_name=args.run_name, snp_panel=args.snp_panel,
                 )
             print(f"{completion_label}: {run_dir}")
         elif args.command == "dnp-call":

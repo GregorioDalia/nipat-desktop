@@ -32,19 +32,21 @@ cartella distinta con risultati, intermedi conservati, metadati e log.
 I run esistenti non vengono sovrascritti. Le quattro analisi sono disponibili
 sia nel menu sia nella CLI diretta. I workflow automatici collegano
 **DNPcall → Contamination**, **DNPcall → CPI** oppure **DNPcall → Contamination
-e CPI**. Il motore elabora i BAM una sola volta, passa le tabelle individuali
-alle analisi selezionate e conserva lo stato di ogni passaggio. CPI richiede
-l'assegnazione esplicita delle coppie cfDNA materne/paterne.
+e CPI**. DNPcall produce una sola volta le tabelle individuali per le analisi
+selezionate. CPI richiede l'assegnazione esplicita delle coppie cfDNA materne/paterne.
+Si può aggiungere SNPcall sugli stessi BAM, con un pannello SNP scelto
+esplicitamente, oppure eseguire SNPcall su più BAM o pileup in un unico run.
+Ogni passaggio conserva risultati e stato distinti.
 L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
 e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
 scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
 input senza modificare gli algoritmi o avviare analisi.
 
 Il [contratto dei piani](docs/WORKFLOW_CONTRACT.md) identifica campioni,
-dipendenze e risultati. La validazione ammette le quattro analisi; l'esecutore
-supporta DNPcall, Contamination e CPI, in ordine sequenziale. SNPcall resta
-un'analisi singola; la sua esecuzione come attività indipendente di un piano
-non è ancora disponibile. Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
+dipendenze e risultati. Validatore ed esecutore supportano le quattro analisi
+in ordine sequenziale. SNPcall è un'attività indipendente: legge il BAM o il
+pileup selezionato e non fornisce tabelle compatibili con Contamination o CPI.
+Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
 modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
@@ -112,8 +114,8 @@ e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
 approvate su GitHub; download e installazione richiedono conferme distinte.
 In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
 all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
-**W — Workflow automatici** permette di scegliere una delle tre composizioni,
-con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
+**W — Workflow automatici** offre le tre composizioni DNPcall e SNPcall su più
+campioni, con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
 usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
@@ -173,6 +175,24 @@ di `--cpi-panel`, `--cutoff` o `--cutoff-map`. Le tabelle non devono essere
 copiate o rinominate: il motore conserva la corrispondenza fra coppie e risultati.
 Contamination non modifica i conteggi utilizzati da CPI.
 
+L'opzione `--snp-panel PATH` aggiunge a ciascuno dei tre workflow un passaggio
+SNPcall per ogni BAM distinto, usando lo stesso FASTA. Il pannello SNP deve
+essere selezionato esplicitamente. Per eseguire soltanto SNPcall su più campioni:
+
+```powershell
+.\nipat.cmd workflow snp-batch `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\SNPlist.txt"
+
+.\nipat.cmd workflow snp-batch `
+  --pileup "..\campioni\campione-a.pileup" --pileup "..\campioni\campione-b.pileup" `
+  --panel "..\pannelli\SNPlist.txt"
+```
+
+`--bamlist` è un'alternativa ai BAM ripetuti; i percorsi nel file sono relativi
+alla cartella della lista. La modalità pileup non accetta un FASTA e richiede
+file con QNAME. Le due modalità non si mescolano nello stesso comando.
+
 Le opzioni globali, come `--runs-dir` e `--dry-run`, precedono il sottocomando.
 `--dry-run` valida gli input e registra un'esecuzione `planned`, senza eseguire
 il motore scientifico. `nipat.cmd --help` e `nipat.cmd <workflow> --help`
@@ -213,7 +233,8 @@ conservare il checkout completo e seguire i requisiti della
 Ogni run contiene `output`, `work`, `run.json` ed `execution.log`.
 Nel workflow automatico, `output/workflow` conserva il piano, lo stato
 complessivo e le sottocartelle dei passaggi selezionati: `steps/dnp`,
-`steps/contamination` e `steps/cpi`, ciascuna con risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
+`steps/contamination`, `steps/cpi` e, quando richiesti, `steps/snp_0001` e
+successivi. Ogni passaggio conserva risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
 successivi; le evidenze già prodotte restano disponibili. Non è prevista
 la ripresa del run: una nuova prova usa una nuova cartella.
 Il record identifica input, parametri e immagine effettivamente usata;
@@ -225,7 +246,8 @@ concordanza scientifica richiede il confronto con risultati attesi appropriati.
 `self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
 modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
 La CI esegue inoltre regressioni DNPcall sintetiche e confronti fra workflow
-automatici e analisi separate, compresi CPI e le sue modalità di selezione dei siti;
+automatici e analisi separate, compresi CPI e le sue modalità di selezione dei siti,
+SNPcall da BAM o pileup e l'uso dello stesso BAM per DNPcall e SNPcall;
 la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
 verifica degli installatori e pubblicazione. La
 [scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove

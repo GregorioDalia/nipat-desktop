@@ -215,7 +215,7 @@ class WorkflowClientTests(unittest.TestCase):
             self.assertEqual(main(argv), 0)
         workflows.return_value.dnp_contamination.assert_called_once_with(
             bams=[self.bam], bamlist=None, reference=self.reference, panel=self.panel,
-            contamination_panel=self.panel, parallel=True, run_name="chosen",
+            contamination_panel=self.panel, parallel=True, run_name="chosen", snp_panel=None,
         )
         workflows.return_value.dnp_call.assert_not_called()
         workflows.return_value.contamination.assert_not_called()
@@ -412,10 +412,164 @@ class WorkflowClientTests(unittest.TestCase):
                     cutoffs=[("Full", self.panel)], cutoff_map=None,
                     include_contamination=preset == "dnp-contamination-cpi",
                     contamination_panel=self.panel if preset == "dnp-contamination-cpi" else None,
-                    parallel=True, run_name="chosen",
+                    parallel=True, run_name="chosen", snp_panel=None,
                 )
                 workflows.return_value.dnp_call.assert_not_called()
                 workflows.return_value.cpi.assert_not_called()
+
+    def snp_panel(self):
+        return self.write("SNP panel.tsv", b"pos\tref\talt\nchr1:100\tA\tC\n")
+
+    def test_optional_snp_steps_reuse_each_bam_once_without_changing_dnp_handoff(self):
+        panel = self.snp_panel()
+        second = self.write("other/sample.bam", b"second BAM\n")
+        run = self.invoke(bams=[self.bam, second], snp_panel=panel)
+        plan = self.plan(run)
+        self.assertEqual(validate_plan(plan)["execution_order"],
+                         ["dnp", "contamination", "snp_0001", "snp_0002"])
+        for number, step in enumerate(plan["steps"][2:], 1):
+            self.assertEqual(step, {"id": f"snp_{number:04d}", "workflow": "snp-call",
+                                   "inputs": {"sample": f"sample_{number:04d}",
+                                              "reference": "/workspace/inputs/reference/genome.fa",
+                                              "panel": "/workspace/inputs/snp-list.tsv"},
+                                   "parameters": {"mode": "bam"}})
+        self.assertEqual(plan["steps"][1]["inputs"]["samples"][0]["step"], "dnp")
+        record = self.runner.records[0][1]
+        self.assertEqual(record["bundled_workflow"], "workflow-plan-with-snp")
+        self.assertEqual(record["parameters"]["snp_panel"], str(panel))
+        self.assertEqual(record["parameters"]["expected_steps"][-1], {
+            "id": "snp_0002", "workflow": "snp-call", "sample": "sample_0002", "mode": "bam",
+        })
+        self.assertEqual(len(self.runner.calls), 1)
+        self.assertEqual(sum(item["host_path"] == str(self.bam)
+                             for item in record["mounts"].mappings), 1)
+
+    def test_cpi_shared_parent_generates_only_one_independent_snp_step(self):
+        arguments = self.cpi_arguments(include_contamination=True, snp_panel=self.snp_panel())
+        father = arguments["pairs"][0][2]
+        another = self.write("other_mother.bam", b"other maternal BAM\n")
+        arguments["pairs"].append(("FamilyB", another, father))
+        run = self.workflows.dnp_cpi(**arguments)
+        plan = self.plan(run)
+        self.assertEqual(validate_plan(plan)["execution_order"],
+                         ["dnp", "contamination", "cpi", "snp_0001", "snp_0002", "snp_0003"])
+        self.assertEqual([step["inputs"]["sample"] for step in plan["steps"][3:]],
+                         ["sample_0001", "sample_0002", "sample_0003"])
+        self.assertTrue(all(pair["father"]["step"] == "dnp" for pair in plan["steps"][2]["inputs"]["pairs"]))
+        self.assertEqual(self.runner.records[0][1]["bundled_workflow"], "workflow-plan-with-snp")
+
+    def test_invalid_snp_panel_is_rejected_before_any_dnp_run(self):
+        for invoke in (self.invoke, lambda **options: self.workflows.dnp_cpi(**self.cpi_arguments(**options))):
+            with self.assertRaisesRegex(ValidationError, "lista SNP"):
+                invoke(snp_panel=self.panel)
+            self.assert_not_started()
+
+    def test_snp_batch_bamlist_maps_duplicate_basenames_and_records_one_plan(self):
+        first = self.write("one/sample.bam", b"one\n")
+        second = self.write("two/sample.bam", b"two\n")
+        listing = self.write("batch.txt", b"two/sample.bam\none/sample.bam\n")
+        run = self.workflows.snp_batch(bamlist=listing, reference=self.reference,
+                                       panel=self.snp_panel(), run_name="snp-batch")
+        plan = self.plan(run)
+        self.assertEqual(validate_plan(plan)["execution_order"], ["snp_0001", "snp_0002"])
+        self.assertEqual([sample["kind"] for sample in plan["samples"]], ["bam", "bam"])
+        record = self.runner.records[0][1]
+        self.assertEqual(record["workflow"], "snp-batch")
+        self.assertEqual(record["bundled_workflow"], "workflow-plan-snp")
+        self.assertEqual(record["parameters"]["bams"], [str(second), str(first)])
+        self.assertEqual(record["parameters"]["pileups"], [])
+        self.assertIn(listing, record["inputs"])
+        self.assertTrue(all(item["read_only"] for item in record["mounts"].mappings))
+        self.assertEqual(len(self.runner.calls), 1)
+        self.assertFalse((run / "output" / "workflow").exists())
+
+    def test_snp_batch_pileups_need_no_reference_and_preserve_original_bytes(self):
+        first = self.write("a/snp.txt", b"chr1\t100\tA\t2\t.,\tII\tread1,read2\n")
+        second = self.write("b/snp.txt", b"chr1\t100\tA\t1\t.\tI\tread1\n")
+        originals = {first: first.read_bytes(), second: second.read_bytes()}
+        run = self.workflows.snp_batch(pileups=[first, second], panel=self.snp_panel())
+        plan = self.plan(run)
+        self.assertEqual([sample["kind"] for sample in plan["samples"]], ["snp-pileup", "snp-pileup"])
+        self.assertTrue(all(step["inputs"]["reference"] is None for step in plan["steps"]))
+        self.assertTrue(all(step["parameters"] == {"mode": "pileup"} for step in plan["steps"]))
+        record = self.runner.records[0][1]
+        self.assertEqual(record["parameters"]["reference"], None)
+        self.assertEqual(record["parameters"]["pileups"], [str(first), str(second)])
+        self.assertEqual({path: path.read_bytes() for path in originals}, originals)
+        self.assertEqual(len(self.runner.calls), 1)
+
+    def test_snp_batch_rejects_invalid_mode_reference_and_empty_selection_before_run(self):
+        pileup = self.write("snp.txt", b"chr1\t100\tA\t1\t.\tI\tread1\n")
+        panel = self.snp_panel()
+        options = [{}, {"bams": []}, {"bams": [self.bam]}, {"pileups": []},
+                   {"pileups": [pileup], "reference": self.reference},
+                   {"bams": [self.bam], "reference": self.reference, "pileups": [pileup]},
+                   {"pileups": [pileup, pileup]},
+                   {"bams": [self.bam, self.bam], "reference": self.reference}]
+        for selected in options:
+            with self.subTest(selected=selected), self.assertRaises(ValidationError):
+                self.workflows.snp_batch(panel=panel, **selected)
+            self.assert_not_started()
+        pileup.write_text("chr1\t100\tA\t1\t.\tI\n", encoding="utf-8")
+        with self.assertRaisesRegex(ValidationError, "7 colonne"):
+            self.workflows.snp_batch(panel=panel, pileups=[pileup])
+        self.assert_not_started()
+
+    def test_hardlink_duplicate_inputs_are_rejected_before_allocating_run(self):
+        alias = self.external / "same.bam"
+        try:
+            alias.hardlink_to(self.bam)
+        except (OSError, NotImplementedError):
+            self.skipTest("Platform does not permit hard links")
+        with self.assertRaisesRegex(ValidationError, "stesso BAM"):
+            self.workflows.snp_batch(bams=[self.bam, alias], reference=self.reference, panel=self.snp_panel())
+        self.assert_not_started()
+        with self.assertRaisesRegex(ValidationError, "stesso BAM"):
+            self.invoke(bams=[self.bam, alias])
+        self.assert_not_started()
+        pileup = self.write("original.txt", b"chr1\t100\tA\t1\t.\tI\tread1\n")
+        duplicate = self.external / "same.txt"
+        duplicate.hardlink_to(pileup)
+        with self.assertRaisesRegex(ValidationError, "stesso pileup"):
+            self.workflows.snp_batch(pileups=[pileup, duplicate], panel=self.snp_panel())
+        self.assert_not_started()
+
+    def test_snp_batch_dry_run_never_invokes_runtime_or_writes_results(self):
+        self.workflows = Workflows(self.layout, DockerComposeRunner(self.layout, dry_run=True,
+                                                                   transport=DockerTransport()))
+        with patch("nipat.execution.runner.subprocess.Popen") as popen, \
+                patch("nipat.execution.runner.subprocess.run") as process_run, redirect_stdout(io.StringIO()):
+            run = self.workflows.snp_batch(bams=[self.bam], reference=self.reference, panel=self.snp_panel())
+        popen.assert_not_called()
+        process_run.assert_not_called()
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "planned")
+        self.assertEqual(record["bundled_workflow"], "workflow-plan-snp")
+        self.assertEqual(len(record["commands"]), 1)
+        self.assertFalse((run / "output" / "workflow").exists())
+
+    def test_snp_cli_dispatches_batch_and_optional_panel_without_separate_analyses(self):
+        panel = self.snp_panel()
+        for options, expected in ((["--bam", str(self.bam), "--reference", str(self.reference)],
+                                   {"bams": [self.bam], "bamlist": None, "pileups": None,
+                                    "reference": self.reference}),
+                                  (["--pileup", "a.txt", "--pileup", "b.txt"],
+                                   {"bams": None, "bamlist": None, "pileups": [Path("a.txt"), Path("b.txt")],
+                                    "reference": None})):
+            argv = ["workflow", "snp-batch", *options, "--panel", str(panel), "--run-name", "batch"]
+            with patch("nipat.cli.ProjectLayout.discover", return_value=self.layout), \
+                    patch("nipat.cli.activity_session", return_value=nullcontext()), \
+                    patch("nipat.cli.DockerComposeRunner"), patch("nipat.cli.Workflows") as workflows, \
+                    redirect_stdout(io.StringIO()):
+                workflows.return_value.snp_batch.return_value = self.layout.runs_dir / "batch"
+                self.assertEqual(main(argv), 0)
+                workflows.return_value.snp_batch.assert_called_once_with(
+                    **expected, panel=panel, run_name="batch")
+                workflows.return_value.snp_call.assert_not_called()
+        args = build_parser().parse_args(["workflow", "dnp-contamination", "--bam", "a.bam",
+                                         "--reference", "ref.fa", "--panel", "dnp.tsv",
+                                         "--snp-panel", str(panel)])
+        self.assertEqual(args.snp_panel, panel)
 
 
 if __name__ == "__main__":

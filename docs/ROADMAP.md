@@ -15,10 +15,11 @@ La GUI grafica è successiva alla versione 0.7.
 Lo sviluppo 0.7.0a1 comprende il [catalogo scientifico](CATALOGO_SCIENTIFICO.md)
 bilingue, il [contratto dei piani](WORKFLOW_CONTRACT.md) e i workflow automatici
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI dal
-menu e dalla CLI. L'orchestrazione risiede nell'immagine e conserva risultati
-e stato di ogni passaggio, con ruoli CPI e coppie espliciti. L'esecutore
-supporta DNPcall, Contamination e CPI; il contratto descrive anche SNPcall
-come attività indipendente, la cui integrazione nell'esecutore resta da completare.
+menu e dalla CLI, con SNPcall facoltativo sugli stessi BAM. Il workflow
+SNPcall su più campioni accetta BAM oppure pileup importati. L'orchestrazione
+risiede nell'immagine e conserva risultati e stato di ogni passaggio, con
+ruoli CPI e coppie espliciti. Validatore ed esecutore supportano le quattro
+analisi; SNPcall resta indipendente dai risultati delle altre tre.
 Gli obiettivi seguenti comprendono le funzionalità necessarie per completare
 la 0.7, la cui release non è ancora disponibile.
 
@@ -58,7 +59,8 @@ un risultato identificabile per ciascun passaggio.
 | DNPcall → Contamination | Eseguibile automaticamente. | Tabelle individuali compatibili e pannello di coordinate selezionato. |
 | DNPcall → CPI | Eseguibile automaticamente. | Identificazione esplicita dei campioni cfDNA materni e paterni, coppie, frequenze di popolazione ed eventuali pannelli. |
 | DNPcall → Contamination e CPI | Eseguibile automaticamente, in sequenza. | Due elaborazioni dei conteggi prodotti, ciascuna con i propri input e parametri. La stima di contaminazione non modifica i dati usati dal CPI. |
-| SNPcall nel piano | Contratto validato; esecuzione da integrare. | Attività indipendente con un proprio pannello; il suo output non è un input diretto di Contamination o CPI. |
+| SNPcall nei workflow DNPcall | Eseguibile per ogni BAM distinto selezionato, con pannello SNP esplicito. | Stesso FASTA del passaggio DNPcall; l'output SNP non è un input di Contamination o CPI. |
+| SNPcall su più campioni | Eseguibile da BAM o pileup, con un passaggio per campione. | Un pannello SNP comune; FASTA indicizzato soltanto in modalità BAM. |
 
 La prima implementazione usa un ordine di esecuzione deterministico.
 La selezione delle dipendenze appartiene al motore nell'immagine; il client
@@ -70,8 +72,8 @@ Windows, client Linux o un futuro servizio.
 I ruoli biologici e le coppie non devono essere dedotti implicitamente dai
 nomi dei file. Gli adattatori devono conservare l'associazione tra campioni
 originali, nomi interni e risultati. Un passaggio fallito impedisce l'avvio
-dei passaggi che ne dipendono; i risultati parziali e i log rimangono
-disponibili. Gli input originali e i run esistenti non vengono sovrascritti.
+di tutti i passaggi non ancora avviati, anche indipendenti; i risultati
+parziali e i log rimangono disponibili. Gli input originali e i run esistenti non vengono sovrascritti.
 
 Ogni esecuzione deve registrare il piano, i parametri effettivi per passaggio,
 le dipendenze, gli stati e l'identità del motore. L'interruzione deve essere
@@ -129,6 +131,13 @@ chiavi di traduzione mancanti e collegamenti non validi. Le prove devono
 confermare che entrambe le lingue producano richieste scientifiche equivalenti.
 
 ## Incrementi successivi
+
+Prima della distribuzione 0.7 occorre confezionare i pacchetti Windows e
+Ubuntu dal medesimo motore, verificarne integrità e funzionamento e registrare
+le prove sul pacchetto destinato alla consegna. Le evidenze delle regressioni
+su sorgenti e container rimangono distinte da quelle degli installatori.
+La pubblicazione segue la [procedura di release](../.github/RELEASE.md);
+la 0.6 ufficiale rimane disponibile fino alla pubblicazione della successiva.
 
 Una possibile versione 0.7.5 comprende parallelismo controllato fra attività
 indipendenti e ripresa di esecuzioni interrotte. Il parallelismo deve rispettare

@@ -17,7 +17,7 @@ from nipat.results import show_results
 from nipat.terminal import Terminal
 from nipat.update_ui import HANDOFF_EXIT_CODE, run_updates
 from nipat.wizard_forms import Back, Cancelled, WorkflowForm
-from nipat.workflow_forms import DnpContaminationForm, DnpCpiForm
+from nipat.workflow_forms import DnpContaminationForm, DnpCpiForm, SnpBatchForm
 from nipat.wizard_settings import GuidedSettings
 
 
@@ -26,7 +26,7 @@ MAIN_MENU = [
     ("2", "SNPcall", "SNP da BAM o pileup esistente"),
     ("3", "Contamination", "Stima da tabelle compatibili"),
     ("4", "CPI", "Frazione fetale e indice di paternita'"),
-    ("W", "Workflow automatici", "DNPcall, Contamination e CPI in sequenza"),
+    ("W", "Workflow automatici", "Analisi collegate e SNPcall su piu' campioni"),
     ("5", "Configura", "Cartelle e parametri predefiniti"),
     ("6", "Ultima esecuzione", "Risultati e log della sessione"),
     ("7", "Guida e informazioni", "Cosa fa NIPAT e come utilizzarlo"),
@@ -41,18 +41,23 @@ def _select_workflow(ui: Terminal) -> str | None:
         "Scegliere la sequenza da eseguire. I risultati DNPcall sono forniti automaticamente "
         "alle analisi successive, senza selezionare o copiare file intermedi.", kind="muted",
     )
+    ui.message(
+        "SNPcall e' un'analisi indipendente: puo' essere aggiunta sui BAM dei workflow DNP "
+        "oppure eseguita su una lista di BAM o pileup. Le attivita' vengono eseguite in sequenza.", kind="muted",
+    )
     while True:
         selected = ui.menu("Workflow automatici", [
             ("1", "DNPcall -> Contamination", "Conteggi DNP e stima della contaminazione"),
             ("2", "DNPcall -> CPI", "Coppie cfDNA materno / campione paterno"),
             ("3", "DNPcall -> Contamination e CPI", "Entrambe le analisi sulle tabelle DNPcall"),
+            ("4", "SNPcall su piu' campioni", "BAM o pileup; risultati separati per campione"),
             ("0", "Torna al menu", ""),
         ], default="0").strip().casefold()
         if selected in {"0", ":annulla", ":indietro"}:
             return None
-        if selected in {"1", "2", "3"}:
+        if selected in {"1", "2", "3", "4"}:
             return selected
-        ui.message("Scegliere una sequenza da 1 a 3 oppure 0 per tornare al menu.", kind="muted")
+        ui.message("Scegliere un workflow da 1 a 4 oppure 0 per tornare al menu.", kind="muted")
 
 
 def _help(ui: Terminal, layout: ProjectLayout) -> None:
@@ -76,6 +81,7 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "Contamination: tabelle compatibili con l'output DNPcall e coordinate DNP; produce stime per sito e un riepilogo per campione.",
             "CPI: tabelle cfDNA materno e presunto padre, coppie e frequenze di popolazione; produce stime di frazione fetale, CPI e grafici.",
             "Workflow automatici: la voce W propone DNPcall seguito da Contamination, CPI oppure entrambe le analisi. Una sola conferma avvia la sequenza selezionata.",
+            "Dal menu W si puo' anche eseguire SNPcall su piu' BAM o pileup, oppure aggiungerlo ai workflow DNP con una lista SNP specifica. Ogni campione mantiene risultati separati.",
             "I pannelli e i riferimenti devono essere coerenti con i campioni. La verifica degli input non sostituisce la valutazione scientifica dei risultati.",
         )),
         "3": ("Cartelle e parametri", (
@@ -96,8 +102,11 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "Per i workflow CPI, indicare un ID per ogni coppia e assegnare esplicitamente i BAM del cfDNA materno e del campione paterno. Uno stesso campione puo' essere riutilizzato in piu' coppie nello stesso ruolo.",
             "NIPAT prepara automaticamente i nomi e i prefissi dei file CPI. I ruoli derivano dalle coppie dichiarate, senza deduzioni dal nome dei BAM; il riepilogo mostra ID, file e ruoli.",
             "Contamination e CPI usano le tabelle DNPcall: la stima di contaminazione non filtra o modifica gli input CPI. Le fasi sono eseguite in sequenza.",
+            "SNPcall analizza ogni BAM o pileup separatamente; i suoi risultati non sono input diretti di Contamination o CPI. Nei workflow DNP usa gli stessi BAM e FASTA, con una lista SNP scelta esplicitamente.",
+            "Un errore o un'interruzione arresta l'intero piano, comprese le analisi SNP indipendenti non ancora avviate. I risultati e i log gia' prodotti vengono conservati.",
             "Nel workflow automatico, output/workflow/workflow-state.json registra lo stato delle fasi; output/workflow/steps contiene una cartella per ciascuna fase, con work, output e log.",
             "Le tabelle individuali DNPcall si chiamano full_output_*.txt e si trovano nella sottocartella output/individual_outputs della fase DNPcall.",
+            "Ogni fase SNPcall si chiama snp_0001, snp_0002 e cosi' via. La relativa cartella output contiene SNPcall_output.txt; work conserva i file intermedi e command.log i comandi della fase.",
             "Le altre combinazioni richiedono la selezione esplicita dei risultati come input dell'analisi successiva. Verificare campioni, schema delle tabelle e pannelli pertinenti.",
         )),
         "5": ("Informazioni su NIPAT", (
@@ -219,6 +228,11 @@ def run_wizard(
                             "1", ui, layout, err_const,
                             defaults=settings.preferences.workflow_defaults("1"),
                         )
+                    elif preset == "4":
+                        form = SnpBatchForm(
+                            ui, layout, err_const,
+                            defaults=settings.preferences.workflow_defaults("2"),
+                        )
                     else:
                         form = DnpCpiForm(
                             ui, layout, err_const, include_contamination=preset == "3",
@@ -234,7 +248,10 @@ def run_wizard(
                     ui.message("I dettagli del processo vengono conservati anche in execution.log.")
                     started = time.monotonic()
                     try:
-                        method = (workflows.dnp_contamination if preset == "1" else workflows.dnp_cpi) if choice == "w" else {
+                        method = {
+                            "1": workflows.dnp_contamination, "2": workflows.dnp_cpi,
+                            "3": workflows.dnp_cpi, "4": workflows.snp_batch,
+                        }[preset] if choice == "w" else {
                             "1": workflows.dnp_call, "2": workflows.snp_call,
                             "3": workflows.contamination, "4": workflows.cpi,
                         }[choice]
@@ -251,13 +268,15 @@ def run_wizard(
                     if choice == "w" and not dry_run:
                         workflow_dir = run_dir / "output" / "workflow"
                         ui.message(f"Stati delle fasi: {workflow_dir / 'workflow-state.json'}")
-                        steps = [("dnp", "DNPcall")]
+                        steps = [] if preset == "4" else [("dnp", "DNPcall")]
                         if preset in {"1", "3"}:
                             steps.append(("contamination", "Contamination"))
                         if preset in {"2", "3"}:
                             steps.append(("cpi", "CPI"))
                         for step, label in steps:
                             ui.message(f"Risultati {label}: {workflow_dir / 'steps' / step / 'output'}")
+                        if preset == "4" or form.values.get("include_snp") == "2":
+                            ui.message(f"Risultati SNPcall per campione: {workflow_dir / 'steps'} (cartelle snp_0001, snp_0002, ...)")
                     show_results(ui, run_dir, dry_run=dry_run)
                     break
                 else:

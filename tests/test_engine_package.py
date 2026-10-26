@@ -70,7 +70,7 @@ class EnginePackageTests(unittest.TestCase):
         })
         self.assertEqual(metadata["plan_execution"], {
             "interface": "workflow-plan-execution-v1", "schema_version": 1,
-            "workflows": ["dnp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
+            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         hashes = metadata["preparation"]["file_sha256"]
@@ -365,7 +365,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(json.loads(output), report)
         execute.assert_called_once_with(document, run_dir=run_dir, script_paths={
             name: self.root / "scientific" / engine.SCRIPT_PATHS[name]
-            for name in ("dnp-call", "contamination", "cpi")
+            for name in ("dnp-call", "snp-call", "contamination", "cpi")
         })
         self.assertFalse(run_dir.exists())
 
@@ -681,6 +681,40 @@ class EnginePackageTests(unittest.TestCase):
     def snp_events(self):
         path = self.root / "events.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_relocated_snp_plan_preserves_preparation_and_r_failure_without_host_sources(self):
+        _, request = self.snp_request()
+        plan = {"schema_version": 1, "samples": [
+            {"id": "selected", "kind": "bam", "path": request["bam"]},
+        ], "steps": [
+            {"id": identifier, "workflow": "snp-call", "inputs": {
+                "sample": "selected", "reference": request["reference"], "panel": request["panel"],
+            }, "parameters": {"mode": "bam"}}
+            for identifier in ("first", "later")
+        ]}
+        plan_file = self.root / "plan.json"
+        plan_file.write_text(json.dumps(plan), encoding="utf-8")
+        environment = self.snp_tools(
+            "Path(sys.argv[sys.argv.index('-o') + 1]).write_text('chr1\\t100\\tA\\t1\\t.\\tI\\tread1\\n')\n"
+        )
+        run = self.root / "plan-run"
+        result = self.relocated_command("execute-plan", "--plan", str(plan_file),
+                                        "--run-dir", str(run), "--json", extra_env=environment)
+        self.assertEqual(result.returncode, 37, result.stderr)
+        state = json.loads(result.stdout)
+        self.assertEqual(state["status"], "failed")
+        self.assertEqual([step["status"] for step in state["steps"]], ["failed", "blocked"])
+        first = state["steps"][0]
+        self.assertEqual(first["preparation_exit_code"], 0)
+        self.assertEqual(first["exit_code"], 37)
+        self.assertEqual(first["sample_mapping"], {"sample": "selected", "mode": "bam", "path": request["bam"]})
+        self.assertEqual([Path(command[0]).name for command in self.snp_events()], ["samtools", "Rscript"])
+        self.assertEqual(self.snp_events()[1][1], str(self.root / "scientific" / engine.SCRIPT_PATHS["snp-call"]))
+        self.assertEqual({item["kind"] for item in first["preparation_artifacts"]}, {"regions-bed", "pileup"})
+        for artifact in first["preparation_artifacts"]:
+            self.assertEqual(artifact["sha256"], hashlib.sha256((run / artifact["path"]).read_bytes()).hexdigest())
+        self.assertFalse((run / "steps/later").exists())
 
     @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
     def test_relocated_snp_bam_executes_samtools_then_r_with_original_options(self):

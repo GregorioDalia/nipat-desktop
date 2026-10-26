@@ -1,7 +1,7 @@
-"""Execute typed DNPcall, Contamination and CPI plans in the scientific image.
+"""Execute typed scientific plans in the image, including independent SNPcall.
 
-The plan validator describes all scientific workflows. This executor deliberately
-supports a smaller, explicit subset. It never imports the desktop application,
+The plan validator and executor support the four bundled workflows.
+The executor never imports the desktop application,
 changes R sources, copies BAMs, executes shell fragments, or resumes an old run.
 """
 
@@ -27,19 +27,24 @@ from nipat_scientific.dnp import prepare_dnp
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.files import (
     DNP_OUTPUT_COLUMNS, require_columns, require_contamination_input,
-    require_file, require_sidecar,
+    require_file, require_sidecar, require_snp_pileup,
 )
-from nipat_scientific.panels import read_dnp_list, read_position_panel
+from nipat_scientific.panels import read_dnp_list, read_position_panel, read_snp_positions
 from nipat_scientific.plan import validate_plan
+from nipat_scientific.snp import prepare_snp
 
 
-SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "contamination", "cpi"})
+SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi"})
 INTERFACE = "workflow-plan-execution-v1"
 _NATIVE_PATH = re.compile(r"[A-Za-z0-9_./:-]+\Z")
 _CPI_COLUMNS = {
     "Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
     "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI",
     "Median_logCPI", "Mean_logCPI", "CPI_medianFF",
+}
+_SNP_COLUMNS = {
+    "chr", "pos", "Reference", "Alternative", "N_Reference", "N_Alternative",
+    "N_Altro", "total_count", "ratio",
 }
 
 
@@ -142,7 +147,22 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
             continue
         panel = require_file(Path(inputs["panel"]), "Plan panel")
         sources.append(panel)
-        if step["workflow"] == "dnp-call":
+        if step["workflow"] == "snp-call":
+            mode = step["parameters"]["mode"]
+            read_snp_positions(panel, for_bed=mode == "bam")
+            sample = samples[inputs["sample"]]
+            if mode == "pileup":
+                require_snp_pileup(sample)
+            else:
+                reference = require_file(Path(inputs["reference"]), "FASTA")
+                sources.extend((reference, require_sidecar(reference, ".fai", "FASTA index").resolve()))
+                if reference.suffix.lower() in {".gz", ".bgz", ".bgzf"}:
+                    sources.append(require_sidecar(reference, ".gzi", "FASTA BGZF index").resolve())
+                for suffix in (".bai", ".csi"):
+                    for sidecar in (Path(str(sample) + suffix), sample.with_suffix(suffix)):
+                        if sidecar.is_file():
+                            sources.append(sidecar.resolve())
+        elif step["workflow"] == "dnp-call":
             read_dnp_list(panel)
             reference = require_file(Path(inputs["reference"]), "FASTA")
             if not _NATIVE_PATH.fullmatch(reference.as_posix()):
@@ -323,6 +343,34 @@ def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path
 def _collect_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
     if step["workflow"] == "cpi":
         return _collect_cpi_outputs(step, request, root, output_dir)
+    if step["workflow"] == "snp-call":
+        path = output_dir / "SNPcall_output.txt"
+        artifact = _artifact(path, root, output_dir)
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            reader = csv.DictReader(handle, delimiter="\t")
+            columns = reader.fieldnames or []
+            if not _SNP_COLUMNS.issubset(columns) or len(columns) != len(set(columns)):
+                raise PlanExecutionError("execution.output", "SNPcall result columns are missing or duplicated.")
+            found = set()
+            for row in reader:
+                if None in row or any(value is None for value in row.values()):
+                    raise PlanExecutionError("execution.output", "Malformed SNPcall result row.")
+                try:
+                    found.add((row["chr"], int(row["pos"])))
+                except ValueError as exc:
+                    raise PlanExecutionError("execution.output", "Invalid SNPcall result coordinate.") from exc
+        expected = set(read_snp_positions(Path(request["panel"]), for_bed=request["mode"] == "bam"))
+        # R outer-joins the selected panel, retaining zero-coverage loci. A
+        # header-only file is therefore incomplete for every valid panel.
+        if found != expected:
+            raise PlanExecutionError("execution.output", "SNPcall result loci do not match the selected panel.")
+        preparation = []
+        if request["mode"] == "bam":
+            work = Path(request["work_dir"])
+            preparation = [{"kind": kind, **_artifact(work / name, root, work)}
+                           for kind, name in (("regions-bed", "snp_regions.bed"), ("pileup", "pileup.txt"))]
+        return {"snp-tables": [{"sample": step["inputs"]["sample"], **artifact}],
+                "preparation": preparation}
     if step["workflow"] == "dnp-call":
         directory = output_dir / "individual_outputs"
         expected = {f"full_output_sample_{number:04d}.txt" for number in range(1, len(request["samples"]) + 1)}
@@ -415,6 +463,47 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                 _atomic_json(directory / "request.json", request)
                 prepared = prepare_dnp(request)
                 native, cwd = prepared.native_arguments, prepared.working_dir
+            elif step["workflow"] == "snp-call":
+                mode = step["parameters"]["mode"]
+                path = samples[step["inputs"]["sample"]]["path"]
+                record["sample_mapping"] = {"sample": step["inputs"]["sample"], "mode": mode, "path": path}
+                request.update({"mode": mode, "panel": step["inputs"]["panel"],
+                                "bam": path if mode == "bam" else None,
+                                "pileup": path if mode == "pileup" else None,
+                                "reference": step["inputs"]["reference"]})
+                _atomic_json(directory / "request.json", request)
+                _atomic_json(root / "workflow-state.json", state)
+                prepared = prepare_snp(request)
+                native, cwd = prepared.native_arguments, work
+                if prepared.preparation_command is not None:
+                    if cancellation.signum is not None:
+                        raise KeyboardInterrupt
+                    record["preparation_command"] = prepared.preparation_command
+                    record["preparation_log"] = f"steps/{step['id']}/preparation.log"
+                    _atomic_json(root / "workflow-state.json", state)
+                    print(f"Workflow step {step['id']}: samtools preparation (log: {record['preparation_log']})",
+                          file=sys.stderr, flush=True)
+                    code = (run_process(prepared.preparation_command, cwd, directory / "preparation.log")
+                            if run_process is not None else
+                            _run_process(prepared.preparation_command, cwd, directory / "preparation.log", cancellation))
+                    if cancellation.signum is not None:
+                        raise KeyboardInterrupt
+                    if type(code) is not int or code < 0:
+                        raise PlanExecutionError("execution.process", "The preparation process returned an invalid exit code.")
+                    record["preparation_exit_code"] = code
+                    if code:
+                        record["exit_code"] = code
+                        raise PlanExecutionError("execution.process",
+                                                 f"{step['id']} preparation exited with code {code}; see {record['preparation_log']}.")
+                    # A zero exit from samtools does not guarantee usable data.
+                    # Keep its log and prevent R from consuming an empty or
+                    # structurally incompatible pileup.
+                    require_snp_pileup(prepared.generated_pileup)
+                    record["preparation_artifacts"] = [
+                        {"kind": kind, **_artifact(work / name, root, work)}
+                        for kind, name in (("regions-bed", "snp_regions.bed"), ("pileup", "pileup.txt"))
+                    ]
+                    _atomic_json(root / "workflow-state.json", state)
             elif step["workflow"] == "contamination":
                 selected = []
                 for number, reference in enumerate(step["inputs"]["samples"], 1):

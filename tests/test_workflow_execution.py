@@ -27,14 +27,14 @@ class UnsupportedExecutionTests(unittest.TestCase):
     def test_unsupported_step_rejects_whole_plan_before_any_file_access(self):
         plan = {"schema_version": 1, "samples": [
             {"id": "a", "kind": "snp-pileup", "path": "/missing/pileup.tsv"},
-        ], "steps": [{"id": "snp", "workflow": "snp-call", "inputs": {
+        ], "steps": [{"id": "snp", "workflow": "unregistered-analysis", "inputs": {
             "sample": "a", "reference": None, "panel": "/missing/panel.tsv",
         }, "parameters": {"mode": "pileup"}}]}
         with patch.object(Path, "is_file", side_effect=AssertionError("unexpected read")), \
                 patch.object(Path, "mkdir", side_effect=AssertionError("unexpected write")):
-            with self.assertRaises(PlanExecutionError) as caught:
+            with self.assertRaises(PlanValidationError) as caught:
                 execute_plan(plan, run_dir=Path("/new/run"), script_paths={})
-        self.assertEqual(caught.exception.code, "execution.workflow")
+        self.assertEqual(caught.exception.code, "plan.workflow")
 
 
 @unittest.skipUnless(os.name == "posix", "scientific execution runs inside the Linux image")

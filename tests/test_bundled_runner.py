@@ -184,6 +184,64 @@ class BundledRunnerTests(unittest.TestCase):
         self.assertEqual(execute.call_args_list[0].args[0],
                          ["docker", "stop", "--time", "10", "nipat-run-cpi"])
 
+    def test_snp_plan_rejects_image_with_only_standalone_snp_support(self):
+        for marker in ("workflow-plan-snp", "workflow-plan-with-snp"):
+            with self.subTest(marker=marker):
+                description = self.plan_metadata()
+                description["plan_execution"]["workflows"].append("cpi")
+                run, context = self.begin(marker + "-old", marker)
+                with redirect_stdout(self.stdout), patch.object(
+                    self.runner, "_capture", side_effect=self.captured(description),
+                ), patch("nipat.execution.runner.subprocess.Popen") as popen:
+                    with self.assertRaisesRegex(RuntimeExecutionError, "workflow-plan-execution-v1"):
+                        with context:
+                            self.fail("The preceding runtime cannot execute SNP plan steps.")
+                popen.assert_not_called()
+                self.assertEqual(json.loads((run / "run.json").read_text(encoding="utf-8"))["status"], "failed")
+
+    def test_snp_plans_record_verified_contract_and_one_container(self):
+        for marker in ("workflow-plan-snp", "workflow-plan-with-snp"):
+            with self.subTest(marker=marker):
+                description = self.plan_metadata()
+                description["plan_execution"]["workflows"] = (
+                    ["snp-call"] if marker == "workflow-plan-snp" else
+                    ["dnp-call", "contamination", "cpi", "snp-call"]
+                )
+                run, context = self.begin(marker, marker)
+                with redirect_stdout(self.stdout), patch.object(
+                    self.runner, "_capture", side_effect=self.captured(description),
+                ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process()) as popen:
+                    with context:
+                        self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute-plan"])
+                self.assertEqual(popen.call_count, 1)
+                record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+                self.assertEqual(record["status"], "succeeded")
+                self.assertEqual(record["bundled_workflow"], marker)
+                self.assertEqual(record["runtime"]["engine"]["plan_execution"], description["plan_execution"])
+
+    def test_snp_plan_checks_adapter_interface_and_preparation_identity(self):
+        for invalid in ("snp-interface", "snp-source", "executor-source"):
+            with self.subTest(invalid=invalid):
+                description = self.plan_metadata()
+                description["plan_execution"]["workflows"].append("snp-call")
+                if invalid == "snp-interface":
+                    description["workflow_interfaces"]["snp-call"] = "snp-call-v2"
+                else:
+                    module = "snp" if invalid == "snp-source" else "executor"
+                    del description["preparation"]["file_sha256"][f"lib/nipat_scientific/{module}.py"]
+                with self.assertRaises(RuntimeExecutionError):
+                    self.runner._validate_engine_description(description, "workflow-plan-snp")
+
+    def test_snp_plans_allow_graceful_cancellation_during_preparation(self):
+        for marker in ("workflow-plan-snp", "workflow-plan-with-snp"):
+            with self.subTest(marker=marker):
+                self.runner._bundled_workflow = marker
+                result = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+                with patch("nipat.execution.runner.subprocess.run", return_value=result) as execute:
+                    self.runner._stop_container("nipat-run-snp")
+                self.assertEqual(execute.call_args_list[0].args[0],
+                                 ["docker", "stop", "--time", "10", "nipat-run-snp"])
+
     def test_plan_rejects_legacy_or_partial_runtime_before_analysis(self):
         variants = [engine_metadata()]
         for key, value in (

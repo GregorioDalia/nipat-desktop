@@ -32,6 +32,7 @@ from verify_cpi_update import check_outputs as check_cpi
 from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_workflow
 from verify_cpi_engine import check_cpi_client_without_host_scripts, check_cpi_workflow
 from verify_workflow_execution import check_workflow_execution, check_cpi_chains, check_imported_cpi_plans
+from verify_snp_workflow import check_snp_plans
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -114,7 +115,7 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("The engine lacks the complete CPI interface.")
     if description.get("plan_execution") != {
         "interface": "workflow-plan-execution-v1", "schema_version": 1,
-        "workflows": ["dnp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
+        "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
     }:
         raise ValueError("Unexpected supported workflow plan execution interface.")
     preparation = description.get("preparation", {})
@@ -521,6 +522,9 @@ def main() -> int:
         dnp_inputs = check_dnp_workflow(identifier, root, run_container=run_container,
                                       run_image=run_image, write_request=write_request)
         check_dnp_client_without_host_scripts(identifier, root, dnp_inputs)
+        check_snp_plans(identifier, root, snp_inputs, snp_expected, dnp_inputs,
+                        run_image=run_image, run_container=run_container,
+                        check_snp_intermediates=check_snp_intermediates)
         check_workflow_execution(identifier, root, dnp_inputs, run_image=run_image,
                                  write_request=write_request)
         check_cpi_chains(identifier, root, dnp_inputs, run_image=run_image,
@@ -539,7 +543,7 @@ def main() -> int:
         return 1
     shutil.rmtree(root)
     print("PASS: numeric regressions and validation failures without application/source mounts or network.")
-    print("Complete DNPcall, SNPcall, Contamination and CPI, plus automatic DNPcall -> Contamination/CPI plans, verified inside the bundled engine.")
+    print("Complete DNPcall, SNPcall, Contamination and CPI, plus automatic DNPcall -> Contamination/CPI plans and independent SNP batches/tasks, verified inside the bundled engine.")
     return 0
 
 

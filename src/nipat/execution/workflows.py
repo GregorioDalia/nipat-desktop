@@ -85,9 +85,41 @@ def _select_bams(
     if not selected:
         raise ValidationError("La lista BAM è vuota.")
     checked = [require_file(path, "BAM") for path in selected]
-    if len(set(checked)) != len(checked):
+    if any(path.samefile(previous) for index, path in enumerate(checked)
+           for previous in checked[:index]):
         raise ValidationError("Lo stesso BAM compare più volte nella lista.")
     return checked, source_list
+
+
+def _snp_steps(samples: list[dict], *, panel: PurePosixPath,
+               reference: PurePosixPath | None, mode: str) -> list[dict]:
+    """Describe independent SNP analyses; never route SNP output into DNP analyses."""
+    return [{"id": f"snp_{number:04d}", "workflow": "snp-call",
+             "inputs": {"sample": sample["sample_id"], "panel": str(panel),
+                        "reference": str(reference) if reference is not None else None},
+             "parameters": {"mode": mode}}
+            for number, sample in enumerate(samples, 1)]
+
+
+def _expected_steps(plan: dict) -> list[dict]:
+    """Persist the expected identities before launching the scientific process."""
+    return [{"id": step["id"], "workflow": step["workflow"],
+             **({"sample": step["inputs"]["sample"], "mode": step["parameters"]["mode"]}
+                if step["workflow"] == "snp-call" else {})}
+            for step in plan["steps"]]
+
+
+def _append_snp_steps(plan: dict, *, samples: list[dict], panel: Path | None,
+                      reference: PurePosixPath, mounts: InputMounts,
+                      input_files: list[Path]) -> Path | None:
+    if panel is None:
+        return None
+    panel = require_file(panel, "Pannello SNP")
+    read_snp_positions(panel, for_bed=True)
+    target = mounts.bind_file(panel, target=INPUT_ROOT / "snp-list.tsv")
+    input_files.append(panel)
+    plan["steps"].extend(_snp_steps(samples, panel=target, reference=reference, mode="bam"))
+    return panel
 
 
 def _validate_error_constant(err_const: object) -> None:
@@ -199,6 +231,7 @@ class Workflows:
         self, *, bam: Path | None = None, bams: list[Path] | None = None,
         bamlist: Path | None = None, reference: Path, panel: Path,
         contamination_panel: Path | None = None, parallel: bool = False,
+        snp_panel: Path | None = None,
         run_name: str | None = None,
     ) -> Path:
         """Submit one DNPcall → Contamination plan to the bundled executor.
@@ -248,19 +281,23 @@ class Workflows:
                  "parameters": {}},
             ],
         }
+        snp_panel = _append_snp_steps(plan, samples=samples, panel=snp_panel,
+                                      reference=reference_path, mounts=mounts, input_files=input_files)
         # Reject invalid contracts before allocating an immutable run. The
         # bundled executor validates this same plan again against its version.
         plan = validate_plan(plan)["plan"]
         run_dir = self.layout.new_run_dir("dnp-contamination", run_name)
         with self.runner.record_run(
             run_dir, workflow="dnp-contamination", inputs=input_files, mounts=mounts,
-            bundled_workflow="workflow-plan",
+            bundled_workflow="workflow-plan-with-snp" if snp_panel else "workflow-plan",
             parameters={"preset": "dnp-contamination",
                         "bams": [str(path) for path in checked],
                         "bamlist": str(source_list) if source_list else None,
                         "reference": str(reference_inputs[0]), "panel": str(panel),
                         "contamination_panel": str(contamination_panel),
-                        "parallel": parallel, "sample_mapping": samples},
+                        "parallel": parallel, "sample_mapping": samples,
+                        "snp_panel": str(snp_panel) if snp_panel else None,
+                        "expected_steps": _expected_steps(plan)},
         ):
             plan_file = run_dir / "work" / "engine-plan.json"
             _write_engine_request(plan_file, plan)
@@ -278,6 +315,7 @@ class Workflows:
         cpi_panel: Path | None = None, cutoffs: list[tuple[str, Path]] | None = None,
         cutoff_map: str | None = None, include_contamination: bool = False,
         contamination_panel: Path | None = None, parallel: bool = False,
+        snp_panel: Path | None = None,
         run_name: str | None = None,
     ) -> Path:
         """Execute explicit maternal/paternal BAM pairs in one image-owned plan."""
@@ -377,17 +415,20 @@ class Workflows:
             "inputs": {"pairs": selected_pairs, "popfreq": str(popfreq_path), "cutoffs": mapped_cutoffs},
             "parameters": {"err_const": err_const, "cutoff_mode": cutoff_mode},
         })
-        plan = validate_plan({
+        plan = {
             "schema_version": 1,
             "samples": [{"id": sample["sample_id"], "kind": "bam", "path": sample["container_path"]}
                         for sample in samples],
             "steps": steps,
-        })["plan"]
+        }
+        snp_panel = _append_snp_steps(plan, samples=samples, panel=snp_panel,
+                                      reference=reference_path, mounts=mounts, input_files=input_files)
+        plan = validate_plan(plan)["plan"]
         preset = "dnp-contamination-cpi" if include_contamination else "dnp-cpi"
         run_dir = self.layout.new_run_dir(preset, run_name)
         with self.runner.record_run(
             run_dir, workflow=preset, inputs=list(dict.fromkeys(input_files)), mounts=mounts,
-            bundled_workflow="workflow-plan-cpi",
+            bundled_workflow="workflow-plan-with-snp" if snp_panel else "workflow-plan-cpi",
             parameters={"preset": preset, "bams": [str(path) for path in checked],
                         "reference": str(reference_inputs[0]), "panel": str(panel),
                         "popfreq": str(popfreq), "err_const": err_const,
@@ -396,7 +437,85 @@ class Workflows:
                                     for label, source in normalized_cutoffs],
                         "include_contamination": include_contamination,
                         "contamination_panel": str(contamination_panel) if contamination_panel else None,
-                        "parallel": parallel, "sample_mapping": samples, "pair_mapping": pair_mapping},
+                        "parallel": parallel, "sample_mapping": samples, "pair_mapping": pair_mapping,
+                        "snp_panel": str(snp_panel) if snp_panel else None,
+                        "expected_steps": _expected_steps(plan)},
+        ):
+            plan_file = run_dir / "work" / "engine-plan.json"
+            _write_engine_request(plan_file, plan)
+            self.runner.run(
+                ["python3", "/opt/nipat/engine/main.py", "execute-plan",
+                 "--plan", self.layout.container_path(plan_file),
+                 "--run-dir", self.layout.container_path(run_dir / "output" / "workflow")],
+                working_dir=self.layout.container_path(run_dir / "work"),
+            )
+        return run_dir
+
+    def snp_batch(
+        self, *, bams: list[Path] | None = None, bamlist: Path | None = None,
+        pileups: list[Path] | None = None, reference: Path | None = None,
+        panel: Path, run_name: str | None = None,
+    ) -> Path:
+        """Run independent per-sample SNP analyses in one sequential image-owned plan."""
+        if sum(value is not None for value in (bams, bamlist, pileups)) != 1:
+            raise ValidationError("Indicare --bam, --bamlist oppure --pileup per il workflow SNPcall.")
+        mode = "pileup" if pileups is not None else "bam"
+        if mode == "bam" and reference is None:
+            raise ValidationError("Con input BAM occorre indicare --reference.")
+        if mode == "pileup" and reference is not None:
+            raise ValidationError("--reference si usa soltanto con input BAM.")
+        source_list = None
+        if mode == "bam":
+            checked, source_list = _select_bams(bam=None, bams=bams, bamlist=bamlist)
+        else:
+            if not isinstance(pileups, list) or not pileups:
+                raise ValidationError("Indicare almeno un pileup SNP.")
+            checked = [require_file(path, "Pileup SNP") for path in pileups]
+            if any(path.samefile(previous) for index, path in enumerate(checked)
+                   for previous in checked[:index]):
+                raise ValidationError("Lo stesso pileup compare più volte nella lista.")
+            for path in checked:
+                require_snp_pileup(path)
+        panel = require_file(panel, "Pannello SNP")
+        read_snp_positions(panel, for_bed=mode == "bam")
+        mounts = InputMounts(self.layout)
+        panel_path = mounts.bind_file(panel, target=INPUT_ROOT / "snp-list.tsv")
+        input_files = [panel]
+        reference_path = None
+        if mode == "bam":
+            reference_path, reference_inputs = _bind_reference(mounts, reference)
+            reference = reference_inputs[0]
+            input_files.extend(reference_inputs)
+        if source_list is not None:
+            input_files.append(source_list)
+        samples = []
+        for number, path in enumerate(checked, 1):
+            identifier = f"sample_{number:04d}"
+            target = INPUT_ROOT / ("bams" if mode == "bam" else "pileups") / (
+                f"{identifier}.bam" if mode == "bam" else f"{identifier}.txt")
+            if mode == "bam":
+                input_files.extend(_bind_bam(mounts, path, target))
+            else:
+                mounts.bind_file(path, target=target)
+                input_files.append(path)
+            samples.append({"sample_id": identifier, "original_path": str(path),
+                            "container_path": str(target)})
+        plan = validate_plan({
+            "schema_version": 1,
+            "samples": [{"id": sample["sample_id"], "kind": "bam" if mode == "bam" else "snp-pileup",
+                         "path": sample["container_path"]} for sample in samples],
+            "steps": _snp_steps(samples, panel=panel_path, reference=reference_path, mode=mode),
+        })["plan"]
+        run_dir = self.layout.new_run_dir("snp-batch", run_name)
+        with self.runner.record_run(
+            run_dir, workflow="snp-batch", inputs=input_files, mounts=mounts,
+            bundled_workflow="workflow-plan-snp",
+            parameters={"preset": "snp-batch", "mode": mode,
+                        "bams": [str(path) for path in checked] if mode == "bam" else [],
+                        "pileups": [str(path) for path in checked] if mode == "pileup" else [],
+                        "bamlist": str(source_list) if source_list else None,
+                        "reference": str(reference) if reference else None, "panel": str(panel),
+                        "sample_mapping": samples, "expected_steps": _expected_steps(plan)},
         ):
             plan_file = run_dir / "work" / "engine-plan.json"
             _write_engine_request(plan_file, plan)

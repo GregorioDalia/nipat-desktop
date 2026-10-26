@@ -9,7 +9,10 @@ artefatti GitHub Actions sono destinati alla revisione tecnica.
 
 La release ufficiale disponibile è la 0.6.0. La versione documentata offre
 **W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
-CPI oppure entrambe le analisi con un'unica configurazione e conferma. Le quattro analisi singole rimangono disponibili.
+CPI oppure entrambe le analisi, con SNPcall facoltativo sugli stessi BAM.
+La stessa voce offre SNPcall su più BAM o pileup. Un'unica configurazione
+e conferma avvia i passaggi selezionati; le quattro analisi singole rimangono
+disponibili.
 **Guida e informazioni → Catalogo scientifico** e `nipat parameters`
 descrivono in italiano e inglese opzioni configurabili, regole interne e
 preparazione degli input. Il [riferimento del catalogo](CATALOGO_SCIENTIFICO.md)
@@ -102,7 +105,7 @@ semplice: un numero oppure `W` per i workflow automatici.
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
 | 9 | Verifica aggiornamenti: ricerca, download verificato e avvio dell'installatore dopo conferma. |
-| W | Workflow automatici: DNPcall seguito da Contamination, CPI oppure entrambe. |
+| W | Workflow automatici: composizioni DNPcall con Contamination/CPI e SNPcall facoltativo; SNPcall su più campioni. |
 | 0 | Uscita dal programma. |
 
 Ogni campo presenta indicazioni sul formato richiesto e sul significato di
@@ -496,7 +499,7 @@ Le quattro analisi non sono quattro passaggi obbligatori della stessa catena:
 | DNPcall → Contamination | Le tabelle in `output/individual_outputs` forniscono i conteggi necessari; scegliere un pannello coerente. |
 | DNPcall → CPI | Le tabelle individuali dei campioni appropriati forniscono i conteggi; occorre assegnare esplicitamente i ruoli cfDNA materno/paterno e fornire coppie e frequenze di popolazione. Nei workflow automatici il motore prepara i nomi interni. |
 | Contamination e CPI dopo DNPcall | Possono utilizzare le stesse tabelle DNPcall per analisi distinte; nessuna delle due richiede il risultato dell'altra. |
-| SNPcall sullo stesso BAM | È un'analisi separata con pannello SNP. Il suo output non è direttamente compatibile con gli schemi DNP di Contamination e CPI. |
+| SNPcall sullo stesso BAM | È un'attività indipendente, aggiungibile al workflow con un pannello SNP esplicito. Il suo output non è compatibile con gli schemi DNP di Contamination e CPI. |
 
 Contamination produce stime e filtra i siti secondo il proprio metodo: non
 modifica i conteggi DNPcall e non genera tabelle «decontaminate» da inviare a CPI.
@@ -512,7 +515,13 @@ Aprire **W — Workflow automatici** e selezionare:
 | 1 | DNPcall → Contamination | Conteggi DNP e stima della contaminazione. |
 | 2 | DNPcall → CPI | Conteggi DNP, frazione fetale e indice di paternità per le coppie dichiarate. |
 | 3 | DNPcall → Contamination e CPI | Conteggi DNP una sola volta, poi Contamination e CPI sugli stessi conteggi. |
+| 4 | SNPcall su più campioni | Un passaggio SNPcall per ogni BAM o pileup, con risultati separati. |
 | 0 | Indietro | Ritorno al menu principale senza avviare analisi. |
+
+Le prime tre scelte permettono di aggiungere SNPcall sugli stessi BAM con
+un pannello SNP selezionato esplicitamente. Il FASTA è quello del passaggio
+DNPcall; ogni BAM distinto viene analizzato una volta da SNPcall, anche
+quando compare in più coppie CPI. La scelta iniziale è di non aggiungerlo.
 
 Nel workflow combinato Contamination viene eseguito prima di CPI, ma i suoi
 risultati non diventano input CPI. Se Contamination fallisce, il piano si
@@ -526,7 +535,8 @@ sia la stima prodotta, non aggiunge un filtro sui campioni destinati a CPI.
    il pannello DNP. Scegliere l'esecuzione DNPcall seriale o parallela.
 3. Per Contamination, mantenere il pannello DNP oppure selezionare un diverso
    pannello di coordinate coerente con i conteggi da analizzare.
-4. Controllare i due passaggi, i file e la destinazione nel riepilogo, quindi
+4. Scegliere se includere SNPcall sugli stessi BAM e, in caso affermativo,
+   indicare il pannello SNP. Controllare passaggi, file e destinazione nel riepilogo, quindi
    scegliere **Avvia analisi**. È richiesta una sola conferma.
 5. Attendere il completamento. Il motore verifica le tabelle prodotte da DNPcall
    e le prepara automaticamente come input di Contamination.
@@ -565,7 +575,8 @@ parallelismo interno a DNPcall. Su Ubuntu usare `nipat` e percorsi Linux.
    Contamination oppure mantenere quello DNPcall.
 4. Selezionare le frequenze di popolazione, la costante d'errore CPI e i siti
    da analizzare: tutti quelli disponibili, un pannello o pannelli etichettati.
-5. Controllare coppie, ruoli, passaggi e parametri nel riepilogo, poi confermare
+5. Scegliere se includere SNPcall sugli stessi BAM e indicare il suo pannello.
+   Controllare coppie, ruoli, passaggi e parametri nel riepilogo, poi confermare
    **Avvia analisi**. Il motore elabora i campioni e prepara automaticamente
    le tabelle per CPI, senza copie o rinomine manuali.
 
@@ -609,12 +620,68 @@ selezionare un pannello diverso da quello DNPcall.
 | `--cutoff-map "LABEL=PATH,LABEL2=PATH2"` | Mappa di pannelli CPI; alternativa alle due opzioni precedenti. |
 | `--err-const NUMERO` | Costante d'errore CPI; valore iniziale `0.0000892303778101497`. |
 | `--parallel` | Parallelismo interno DNPcall, senza esecuzione simultanea dei passaggi. |
+| `--snp-panel PATH` | Aggiunge SNPcall per ogni BAM distinto usando questo pannello SNP e il FASTA del workflow. |
 
 Le tre forme di cutoff sono alternative. Un pannello CPI seleziona i loci
 fra quelli presenti nelle tabelle: non aggiunge conteggi per loci esclusi
 dal pannello DNPcall. Il pannello DNPcall non viene applicato implicitamente
 come cutoff CPI. I prefissi materno/paterno dei file sono gestiti dal motore;
 i ruoli sono quelli dichiarati con `--pair`, non nomi da interpretare.
+
+### SNPcall nei workflow DNPcall
+
+Per aggiungere SNPcall a uno dei tre workflow DNPcall, rispondere alla relativa
+scelta nel menu e selezionare un pannello SNP. Dalla CLI aggiungere
+`--snp-panel PATH`, per esempio:
+
+```powershell
+.\nipat.cmd workflow dnp-contamination `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --snp-panel "..\pannelli\SNPlist.txt"
+```
+
+Il pannello DNP non viene riutilizzato implicitamente come pannello SNP.
+SNPcall legge gli stessi BAM originali e lo stesso FASTA, preparando un proprio
+pileup per ciascun campione. Le sue tabelle rimangono risultati indipendenti;
+non sostituiscono gli input di Contamination o CPI. Nei preset i passaggi SNP
+seguono le analisi DNP, Contamination e CPI selezionate. Il piano è sequenziale:
+se un passaggio fallisce, quelli non ancora avviati vengono bloccati anche
+quando non ne dipendono scientificamente.
+
+### SNPcall su più campioni
+
+Scegliere **W → 4 — SNPcall su più campioni** e indicare la modalità:
+
+- **BAM:** selezionare più BAM, oppure un file elenco, un FASTA indicizzato
+  e un pannello SNP comune. Il motore prepara un pileup distinto per ogni BAM.
+- **Pileup:** selezionare più pileup con QNAME e un pannello SNP comune.
+  Non viene richiesto un FASTA e samtools non viene eseguito.
+
+Controllare file, modalità, pannello e destinazione nel riepilogo, quindi
+confermare una sola volta. Ogni file riceve un passaggio e una tabella di
+risultati propri, anche quando gli originali in cartelle diverse hanno lo
+stesso nome. Lo stesso file non può essere elencato più volte. Le modalità
+BAM e pileup non possono essere mescolate nello stesso run del menu o comando.
+Per il significato delle colonne e i requisiti degli input consultare
+[SNPcall](#snpcall).
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow snp-batch `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\SNPlist.txt" `
+  --run-name "snp-batch-01"
+
+.\nipat.cmd workflow snp-batch `
+  --pileup "..\campioni\campione-a.pileup" --pileup "..\campioni\campione-b.pileup" `
+  --panel "..\pannelli\SNPlist.txt" --run-name "snp-pileup-01"
+```
+
+`--bamlist PATH` è un'alternativa a `--bam` ripetuto; i percorsi relativi
+nell'elenco si risolvono rispetto alla cartella del file elenco. `--reference`
+è obbligatorio per BAM e non è ammesso per pileup.
+`nipat workflow snp-batch --help` elenca le opzioni; su Ubuntu usare `nipat`
+e percorsi Linux.
 
 ### Risultati dei workflow automatici
 
@@ -625,8 +692,10 @@ i ruoli sono quelli dichiarati con `--pair`, non nomi da interpretare.
 | `output/workflow/steps/dnp/output` | Tabelle, riepiloghi e grafici DNPcall. |
 | `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination, quando selezionato. |
 | `output/workflow/steps/cpi/output` | Riepilogo CSV e grafici PDF CPI, quando selezionato. |
+| `output/workflow/steps/snp_0001/output/SNPcall_output.txt` | Risultato del primo campione SNPcall; i successivi usano `snp_0002`, ecc. |
 | `output/workflow/steps/<id>/request.json` | Richiesta concreta del passaggio. |
-| `output/workflow/steps/<id>/command.log` | Messaggi scientifici del passaggio. |
+| `output/workflow/steps/<id>/command.log` | Messaggi R del passaggio; per DNPcall comprende anche i messaggi interni allo script. |
+| `output/workflow/steps/snp_0001/preparation.log` | Messaggi samtools del primo campione SNPcall da BAM; il comando è registrato nello stato. |
 | `output/workflow/steps/<id>/work` | Pannelli, liste e tabelle preparati per il passaggio. |
 
 Un errore o un'interruzione impediscono l'avvio dei passaggi successivi; risultati
@@ -635,6 +704,13 @@ dei singoli passaggi, senza dedurre il successo dalla sola presenza di file.
 Non è prevista la ripresa automatica: correggere la causa e avviare un nuovo run.
 La simulazione `--dry-run` prepara il piano e i mount, ma non esegue nessun
 passaggio e non produce risultati scientifici.
+
+Ogni passaggio SNPcall da BAM conserva `work/snp_regions.bed` e
+`work/pileup.txt`; in modalità pileup questi file non vengono rigenerati.
+La mappa dei campioni in `run.json` collega i nomi interni agli input originali;
+`artifacts.snp-tables` nello stato del passaggio collega la tabella al campione.
+Non attribuire le tabelle ai campioni usando soltanto il nome fisso
+`SNPcall_output.txt`: considerare il passaggio e la mappa registrata.
 
 Per usare **tabelle DNPcall già disponibili**, avviare invece **3 — Contamination**
 e selezionare i file richiesti in `output/individual_outputs` del run DNPcall,

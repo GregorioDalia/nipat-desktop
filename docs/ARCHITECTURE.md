@@ -27,7 +27,9 @@ negli script R; gli adattatori Python preparano le loro interfacce di file.
 Il comando `execute` avvia una singola analisi; `execute-plan` riceve un piano
 con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
-come workflow automatici, oltre ai quattro comandi singoli. La versione descritta è la 0.7.0a1 di sviluppo; la release ufficiale
+come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
+workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
+singoli. La versione descritta è la 0.7.0a1 di sviluppo; la release ufficiale
 rimane la 0.6.0.
 
 ### Confini dei workflow automatici
@@ -39,10 +41,12 @@ Non dipende dalla presenza della CLI o di una GUI dentro il container.
 Il contratto usa percorsi Linux assegnati dai mount e può essere utilizzato
 su Windows tramite WSL2, su Linux nativo e da un futuro servizio.
 
-Il validatore ammette le quattro analisi e ne controlla i collegamenti tipizzati;
-l'esecutore supporta DNPcall, Contamination e CPI. Un piano che include
-SNPcall viene rifiutato prima dell'esecuzione. I passaggi sono sequenziali;
-il parallelismo interno DNPcall rimane un'opzione distinta. Un errore interrompe
+Il validatore e l'esecutore supportano le quattro analisi e controllano i
+collegamenti tipizzati. SNPcall può condividere un BAM con DNPcall, ma non
+produce output utilizzabili da Contamination o CPI. Ogni campione SNPcall
+ha un passaggio distinto; da BAM, samtools prepara il pileup prima di R.
+I passaggi sono sequenziali; il parallelismo interno DNPcall rimane
+un'opzione distinta. Un errore interrompe
 il piano e blocca tutti i passaggi non ancora avviati. Non è prevista la ripresa.
 
 Interazione, preferenze locali, traduzione dei testi, avvio del runtime,
@@ -50,7 +54,7 @@ installazione e aggiornamenti restano responsabilità del client e dei pacchetti
 di piattaforma. Gli identificatori del contratto sono indipendenti dalla
 lingua dell'interfaccia. Il [contratto dei piani](WORKFLOW_CONTRACT.md)
 descrive schema, stati e limiti; il [piano di sviluppo](ROADMAP.md) riporta
-le composizioni e la localizzazione da completare.
+gli obiettivi di qualificazione, distribuzione e localizzazione.
 
 ## Ambienti di esecuzione
 

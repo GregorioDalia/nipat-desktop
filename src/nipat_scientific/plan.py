@@ -2,7 +2,8 @@
 
 Version 1 is a deliberately small contract for the four bundled workflows.
 Dependencies arise only from typed DNP output references. It is not a shell,
-template language, or generic task scheduler. Execution is a separate increment.
+template language, or generic task scheduler. The executor consumes this contract
+separately; validation itself never runs an analysis.
 """
 
 from __future__ import annotations

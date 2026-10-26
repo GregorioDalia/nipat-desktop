@@ -455,6 +455,7 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
     from nipat.execution.runner import DockerComposeRunner
     from nipat.execution.workflows import Workflows
     from nipat.paths import ProjectLayout
+    from nipat.validation.self_test import compare_snp_outputs
     from verify_cpi_engine import NO_SITES
 
     project = root / "workflow client without scientific sources"
@@ -472,6 +473,9 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
     ), encoding="utf-8")
     first = metadata / "first.tsv"
     first.write_text("chr\tpos1\tpos2\nchrDnpSynthetic\t50\t51\n", encoding="utf-8")
+    snp_panel = metadata / "explicit-first-base-SNPs.tsv"
+    snp_panel.write_text("pos\tref\talt\nchrDnpSynthetic:50\tA\tG\n"
+                         "chrDnpSynthetic:140\tT\tC\nchrDnpSynthetic:230\tG\tA\n", encoding="utf-8")
     originals = {path: path.read_bytes() for directory in (dnp_inputs, positive, metadata)
                  for path in directory.rglob("*") if path.is_file()}
     full_values = {
@@ -492,11 +496,13 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
                 pairs=[("family_a", maternal, paternal)], reference=source / "reference.fa",
                 panel=source / "DNP_list.txt", popfreq=population, include_contamination=full_chain,
                 cutoffs=[("Full", source / "DNP_list.txt"), ("First", first)] if full_chain else None,
+                snp_panel=snp_panel if full_chain else None,
                 run_name=label,
             )
         run = parent / "output/workflow"
         state = _state(run)
-        expected_order = ["dnp", "contamination", "cpi"] if full_chain else ["dnp", "cpi"]
+        expected_order = (["dnp", "contamination", "cpi", "snp_0001", "snp_0002"]
+                          if full_chain else ["dnp", "cpi"])
         if state["status"] != "succeeded" or state["execution_order"] != expected_order:
             raise ValueError("The public composed workflow did not run its expected steps exactly once.")
         record = json.loads((parent / "run.json").read_text(encoding="utf-8"))
@@ -515,6 +521,8 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
             check_dnp_outputs(run / "steps/dnp", ("A", "B"))
             compare_dnp_tables(root / "complete DNP results", run / "steps/dnp")
         else:
+            complete_plan = json.loads((run / "plan.json").read_text(encoding="utf-8"))
+            registered = {sample["id"]: sample for sample in complete_plan["samples"]}
             for number, expected_counts in ((1, (96, 4)), (2, (50, 50))):
                 rows = keyed_rows(run / f"steps/dnp/output/individual_outputs/full_output_sample_{number:04d}.txt")
                 if set(rows) != {("chrDnpSynthetic", str(pos), str(pos + 1)) for pos in (50, 140, 230)}:
@@ -522,6 +530,32 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
                 for row in rows.values():
                     if (int(row["N_REF"]), int(row["N_ALT"]), int(row["N_Other"]), int(row["total_count"])) != (*expected_counts, 0, 100):
                         raise ValueError("Positive CPI BAM counts differ from the synthetic read design.")
+                # All four scientific analyses share this plan. SNPcall reads
+                # the original BAM, with an explicit independent panel. Each
+                # synthetic dinucleotide differs at its first base, so the
+                # SNP oracle is 96/4 for the mother and 50/50 for the father.
+                step_id = f"snp_{number:04d}"
+                sample_id = f"sample_{number:04d}"
+                snp_step = next(step for step in complete_plan["steps"] if step["id"] == step_id)
+                snp_record, snp_request = _read_request(run, state, step_id)
+                if (snp_step["inputs"]["sample"] != sample_id or snp_record["status"] != "succeeded"
+                        or snp_request["mode"] != "bam"
+                        or snp_request["bam"] != registered[sample_id]["path"]):
+                    raise ValueError("The full plan reassigned a maternal/paternal BAM in its SNP task.")
+                snp_artifacts = snp_record["artifacts"]["snp-tables"]
+                if len(snp_artifacts) != 1 or snp_artifacts[0]["sample"] != sample_id:
+                    raise ValueError("The full plan lost the SNP result's sample identity.")
+                oracle = metadata / f"expected-{step_id}.tsv"
+                ref_count, alt_count = expected_counts
+                oracle.write_text(
+                    "chr\tpos\tReference\tAlternative\tN_Reference\tN_Alternative\tN_Altro\ttotal_count\tratio\n"
+                    + "".join(f"chrDnpSynthetic\t{position}\t{ref}\t{alt}\t{ref_count}\t{alt_count}\t0\t100\t{ref_count / 100}\n"
+                              for position, ref, alt in ((50, "A", "G"), (140, "T", "C"), (230, "G", "A"))),
+                    encoding="utf-8",
+                )
+                compare_snp_outputs(oracle, _artifact(run, snp_artifacts[0]))
+                for artifact in snp_record["artifacts"]["preparation"]:
+                    _artifact(run, artifact)
             contamination, _ = _read_request(run, state, "contamination")
             summary = {row["individuo"]: row for row in table(_artifact(run, contamination["artifacts"]["summary"]))}
             mapped = {item["sample"]: item for item in contamination["artifacts"]["contamination-tables"]}
@@ -543,4 +577,5 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
         raise ValueError("The source-free client directory was populated with scientific sources.")
     print("PASS: public DNPcall -> CPI and DNPcall -> Contamination + CPI presets; actual BAMs, "
           "positive 8% fetal fraction/log10 CPI 0.903 oracle, no-sites case, named panels, original DNP routing, "
+          "all four analyses in one plan with independent SNP 96/4 and 50/50 count oracles, "
           "one container call, independent step state and standalone CSV parity without host scientific sources.", flush=True)

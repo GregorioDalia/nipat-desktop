@@ -118,6 +118,7 @@ scripts/verify_input_modes.py
 scripts/verify_linux_dependencies.py
 scripts/verify_linux_installer.py
 scripts/verify_snp_example.py
+scripts/verify_snp_workflow.py
 scripts/windows/common.ps1
 scripts/windows/run.ps1
 scripts/windows/setup.ps1
@@ -159,6 +160,7 @@ src/nipat_scientific/errors.py
 src/nipat_scientific/files.py
 src/nipat_scientific/panels.py
 src/nipat_scientific/snp.py
+tests/test_snp_workflow_execution.py
 tests/fixtures/contamination/DNP_list.txt
 tests/fixtures/contamination/README.md
 tests/fixtures/contamination/samples/NoRatio.tsv
