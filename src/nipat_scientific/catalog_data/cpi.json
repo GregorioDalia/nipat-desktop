@@ -1,0 +1,1118 @@
+{
+  "schema_version": 1,
+  "workflow": "cpi",
+  "source": {
+    "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+    "sha256": "10ca01a476f5259b65a063aea95ff76e57c11567a304667065ea9c7b9206545a",
+    "line_count": 510
+  },
+  "public_parameters": [
+    {
+      "id": "pileup_dir",
+      "r_names": [
+        "--pileup_dir"
+      ],
+      "position": null,
+      "type": "directory",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--input-dir"
+        ],
+        "request_fields": [
+          "samples"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Cartella delle tabelle di conteggi DNP di cfDNA materno e presunto padre, non un pileup samtools grezzo. Nel menu si seleziona la cartella; NIPAT inoltra al motore soltanto i campioni richiesti dalle coppie e prepara una cartella interna. La cartella dei campioni non è salvata come parametro predefinito del workflow.",
+        "en": "Directory containing maternal cfDNA and alleged-father DNP count tables, not a raw samtools pileup. The menu selects this directory; NIPAT sends only samples required by the selected pairs to the engine and stages an internal directory. The sample directory is not saved as a workflow default."
+      },
+      "source_lines": [
+        16,
+        16
+      ]
+    },
+    {
+      "id": "out_dir",
+      "r_names": [
+        "--out_dir"
+      ],
+      "position": null,
+      "type": "directory",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--runs-dir",
+          "--run-name"
+        ],
+        "request_fields": [
+          "out_dir"
+        ],
+        "mapping": "managed"
+      },
+      "description": {
+        "it": "R richiede la cartella di destinazione. NIPAT la assegna a output nella nuova esecuzione; la radice dei risultati è configurabile e il nome del run è selezionabile. I nomi CSV/PDF sono definiti dallo script, non configurabili dal menu.",
+        "en": "R requires the output directory. NIPAT assigns output within a new run; the results root is configurable and the run name can be selected. CSV/PDF names are defined by the script and cannot be customized in the menu."
+      },
+      "source_lines": [
+        17,
+        17
+      ]
+    },
+    {
+      "id": "pairs",
+      "r_names": [
+        "--pairs"
+      ],
+      "position": null,
+      "type": "string",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--pairs"
+        ],
+        "request_fields": [
+          "pairs"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Elenco madre:padre separato da virgole. Identificativi e ruoli sono espliciti; il menu raccoglie le coppie a ogni analisi e non le salva nei predefiniti. NIPAT normalizza gli spazi e rifiuta coppie duplicate o nomi di output in conflitto.",
+        "en": "Comma-separated mother:father pairs. Identifiers and roles are explicit; the menu collects pairs for each analysis and does not save them as defaults. NIPAT normalizes whitespace and rejects duplicate pairs or colliding output names."
+      },
+      "source_lines": [
+        18,
+        18
+      ]
+    },
+    {
+      "id": "mother_prefix",
+      "r_names": [
+        "--mother_prefix"
+      ],
+      "position": null,
+      "type": "string",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--mother-prefix"
+        ],
+        "request_fields": [
+          "mother_prefix"
+        ],
+        "mapping": "direct",
+        "default": "Mother"
+      },
+      "description": {
+        "it": "Prefisso del file di cfDNA materno: prefisso + identificativo + .txt. È obbligatorio nell’interfaccia R; CLI e menu NIPAT propongono Mother, consentono un prefisso diverso o vuoto e permettono di salvarlo nei predefiniti.",
+        "en": "Maternal cfDNA filename prefix: prefix + identifier + .txt. It is required by the R interface; the NIPAT CLI and menu default to Mother, allow another or an empty prefix, and support saving it as a default."
+      },
+      "source_lines": [
+        19,
+        19
+      ]
+    },
+    {
+      "id": "father_prefix",
+      "r_names": [
+        "--father_prefix"
+      ],
+      "position": null,
+      "type": "string",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--father-prefix"
+        ],
+        "request_fields": [
+          "father_prefix"
+        ],
+        "mapping": "direct",
+        "default": "Father"
+      },
+      "description": {
+        "it": "Prefisso del file del presunto padre: prefisso + identificativo + .txt. È obbligatorio nell’interfaccia R; CLI e menu NIPAT propongono Father, consentono un prefisso diverso o vuoto e permettono di salvarlo nei predefiniti.",
+        "en": "Alleged-father filename prefix: prefix + identifier + .txt. It is required by the R interface; the NIPAT CLI and menu default to Father, allow another or an empty prefix, and support saving it as a default."
+      },
+      "source_lines": [
+        20,
+        20
+      ]
+    },
+    {
+      "id": "popfreq",
+      "r_names": [
+        "--popfreq"
+      ],
+      "position": null,
+      "type": "file",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--popfreq"
+        ],
+        "request_fields": [
+          "popfreq"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Tabella TSV con intestazione e colonne chr, pos1, pos2, Ref_f.pop, Alt_f.pop. Il file è selezionabile da CLI e menu e salvabile nei predefiniti. Le frequenze sono associate ai campioni tramite coordinate, non tramite confronto degli alleli.",
+        "en": "Headered TSV table with chr, pos1, pos2, Ref_f.pop and Alt_f.pop columns. The file is selectable in the CLI and menu and may be saved as a default. Frequencies are joined to sample data by coordinates, not by allele comparison."
+      },
+      "source_lines": [
+        21,
+        21
+      ]
+    },
+    {
+      "id": "cutoff_map",
+      "r_names": [
+        "--cutoff_map"
+      ],
+      "position": null,
+      "type": "string",
+      "default": null,
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--panel",
+          "--cutoff",
+          "--cutoff-map",
+          "--cutoff_map"
+        ],
+        "request_fields": [
+          "cutoff_mode",
+          "cutoffs"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Selezione opzionale di gruppi di coordinate, con etichetta=percorso oppure percorso nel parser R; senza selezione si usa ALL. Le etichette non sono soglie numeriche applicate ai dati. NIPAT offre ALL, pannello singolo, etichette/file e mappa; le selezioni sono salvabili. I file effettivamente letti sono tabelle di testo, non Excel, nonostante l’esempio .xlsx nel testo di aiuto R.",
+        "en": "Optional coordinate subsets, expressed as label=path or path in the R parser; omission selects ALL. Labels are not numerical thresholds applied to the data. NIPAT offers ALL, a single panel, labelled files and a map; these choices can be saved. The code actually reads text tables rather than Excel files, despite the .xlsx example in R help."
+      },
+      "source_lines": [
+        24,
+        25
+      ]
+    },
+    {
+      "id": "err_const",
+      "r_names": [
+        "--err_const"
+      ],
+      "position": null,
+      "type": "number",
+      "default": 8.92303778101497e-05,
+      "required": false,
+      "unit": "dimensionless",
+      "nipat": {
+        "cli": [
+          "--err-const"
+        ],
+        "request_fields": [
+          "err_const"
+        ],
+        "mapping": "direct",
+        "default": 8.92303778101497e-05
+      },
+      "description": {
+        "it": "Costante di errore usata nelle due formule PI dei genitori con rapporti omozigoti concordi. R dichiara il default come stringa e lo converte in numero. NIPAT espone lo stesso default in CLI e menu, consente di salvarlo e richiede un numero finito maggiore o uguale a zero, senza imporre un massimo.",
+        "en": "Error constant used in the two PI formulas for concordant homozygous parental ratios. R declares a string default and converts it to a number. NIPAT exposes the same default in the CLI and menu, allows saving it and requires a finite nonnegative number, without an upper bound."
+      },
+      "source_lines": [
+        26,
+        29
+      ]
+    }
+  ],
+  "fixed_settings": [
+    {
+      "id": "input_pair_naming",
+      "kind": "format",
+      "value": "<prefix><identifier>.txt",
+      "description": {
+        "it": "I nomi dei file si ottengono dai prefissi configurati e dagli identificativi; le tabelle hanno intestazione e sono lette con separatore whitespace. I nomi dei risultati restano Mother<id>-Father<id>_DNPs anche cambiando i prefissi degli input.",
+        "en": "Input filenames use the configured prefixes and identifiers; tables have headers and are read with whitespace separation. Result names remain Mother<id>-Father<id>_DNPs even when input prefixes change."
+      },
+      "source_lines": [
+        262,
+        271
+      ]
+    },
+    {
+      "id": "population_frequency_parsing",
+      "kind": "format",
+      "value": {
+        "separator": "tab",
+        "decimal_comma_replaced": true
+      },
+      "description": {
+        "it": "Le frequenze di popolazione sono lette da TSV; le virgole decimali nelle due colonne di frequenza vengono convertite in punti e i valori in numeri. Il codice R non impone esplicitamente frequenze positive, somma unitaria o unicità delle coordinate.",
+        "en": "Population frequencies are read from TSV; decimal commas in the two frequency columns are replaced by dots and values converted to numbers. R does not explicitly enforce positive frequencies, a unit sum or unique coordinates."
+      },
+      "source_lines": [
+        70,
+        76
+      ]
+    },
+    {
+      "id": "coordinate_join_key",
+      "kind": "assumption",
+      "value": [
+        "chr",
+        "pos1",
+        "pos2"
+      ],
+      "description": {
+        "it": "Pannelli, campioni materni/paterni e frequenze sono associati tramite chr, pos1 e pos2. REF e ALT non fanno parte della chiave; la coerenza fra assembly e orientamento degli alleli è quindi un requisito degli input. I join non contengono una deduplicazione esplicita dei campioni o delle frequenze.",
+        "en": "Panels, maternal/paternal samples and frequencies are associated by chr, pos1 and pos2. REF and ALT are not part of the key, so consistent assembly and allele orientation are input requirements. The joins do not explicitly deduplicate sample or frequency rows."
+      },
+      "source_lines": [
+        91,
+        117
+      ]
+    },
+    {
+      "id": "reference_ratio",
+      "kind": "formula",
+      "value": "N_REF / (N_REF + N_ALT)",
+      "description": {
+        "it": "Il rapporto REF viene ricalcolato separatamente per madre e padre dai conteggi. N_Other e una eventuale colonna ratio preesistente non entrano nel denominatore. Il rapporto non viene ricalcolato dopo l’azzeramento dei conteggi paterni minoritari.",
+        "en": "The REF ratio is recomputed separately for mother and father from counts. N_Other and any existing ratio column are excluded from the denominator. The ratio is not recomputed after minor paternal counts are set to zero."
+      },
+      "source_lines": [
+        276,
+        294
+      ]
+    },
+    {
+      "id": "other_fraction_filter",
+      "kind": "filter",
+      "value": {
+        "maximum": 0.1,
+        "inclusive": true,
+        "denominator": "total_count"
+      },
+      "description": {
+        "it": "Entrambi i campioni conservano i siti con N_Other/total_count <= 0.10. Il denominatore è la colonna total_count fornita: non viene ricostruito come somma dei conteggi in questo script. Il medesimo filtro è ripetuto nel calcolo del riepilogo finale.",
+        "en": "Both samples retain sites with N_Other/total_count <= 0.10. The denominator is the supplied total_count column; this script does not rebuild it as a sum of counts. The same filter is repeated when computing the final summary."
+      },
+      "source_lines": [
+        296,
+        301
+      ]
+    },
+    {
+      "id": "maternal_informative_selection",
+      "kind": "filter",
+      "value": {
+        "ref_ratio_high": 0.9,
+        "ref_ratio_low": 0.1,
+        "minimum_minor_reads": 2,
+        "inclusive": true
+      },
+      "description": {
+        "it": "Sono informativi i siti materni con rapporto REF >= 0.9 e almeno 2 ALT, oppure rapporto REF <= 0.1 e almeno 2 REF. Le fetal_reads sono rispettivamente ALT o REF. Tutti i limiti sono inclusivi e non sono opzioni pubbliche R.",
+        "en": "Maternal sites are informative when REF ratio >= 0.9 with at least 2 ALT reads, or REF ratio <= 0.1 with at least 2 REF reads. Fetal reads are ALT or REF, respectively. All boundaries are inclusive and are not public R options."
+      },
+      "source_lines": [
+        78,
+        89
+      ]
+    },
+    {
+      "id": "paternal_minor_count_zeroing",
+      "kind": "filter",
+      "value": {
+        "zero_ref_when_ratio_below": 0.1,
+        "zero_alt_when_ratio_above": 0.9,
+        "inclusive": false
+      },
+      "description": {
+        "it": "I conteggi REF paterni sono azzerati per rapporto REF < 0.1 e quelli ALT per rapporto REF > 0.9. Le disuguaglianze qui sono strette, diverse dai limiti inclusivi della classificazione PI. Il rapporto paterno usato dopo resta quello calcolato prima dell’azzeramento.",
+        "en": "Paternal REF counts are set to zero for REF ratio < 0.1 and ALT counts for REF ratio > 0.9. These inequalities are strict, unlike the inclusive PI classification thresholds. Subsequent steps retain the ratio computed before zeroing."
+      },
+      "source_lines": [
+        297,
+        301
+      ]
+    },
+    {
+      "id": "fetal_read_iteration",
+      "kind": "execution",
+      "value": {
+        "start": 2,
+        "end": "maximum maternal fetal_reads",
+        "step": 1,
+        "site_filter": "fetal_reads >= iteration"
+      },
+      "description": {
+        "it": "Il CPI viene calcolato per ogni soglia intera da 2 al massimo numero di fetal_reads dei siti materni selezionati. A ogni soglia sono mantenuti i siti con almeno quel numero di fetal_reads. Se il massimo non è finito o è minore di 2, l’iterazione restituisce risultati vuoti.",
+        "en": "CPI is computed at every integer threshold from 2 to the maximum fetal-read count among selected maternal sites. Each threshold retains sites with at least that many fetal reads. If the maximum is not finite or is below 2, the iteration returns no results."
+      },
+      "source_lines": [
+        101,
+        108
+      ]
+    },
+    {
+      "id": "paternal_informative_precondition",
+      "kind": "filter",
+      "value": {
+        "maternal_high": "Alt_father >= 0",
+        "maternal_low": "Ref_father >= 0"
+      },
+      "description": {
+        "it": "Dopo il join madre-padre, la precondizione informative richiede un conteggio paterno dell’allele opposto >= 0, non > 0. Il join con le frequenze di popolazione avviene successivamente. La classificazione del rapporto paterno e l’esclusione degli NA possono restringere ulteriormente i siti usati dal PI.",
+        "en": "After joining mother and father, the informative precondition requires the paternal opposite-allele count to be >= 0, not > 0. Joining population frequencies follows. Paternal-ratio classification and NA removal can further restrict the sites used in PI."
+      },
+      "source_lines": [
+        110,
+        117
+      ]
+    },
+    {
+      "id": "paternity_index_cases",
+      "kind": "formula",
+      "value": [
+        {
+          "maternal_ref_ratio": ">=0.9",
+          "paternal_ref_ratio": "<=0.1",
+          "pi": "1 / Alt_f.pop"
+        },
+        {
+          "maternal_ref_ratio": ">=0.9",
+          "paternal_ref_ratio": "[0.4,0.6]",
+          "pi": "0.5 / Alt_f.pop"
+        },
+        {
+          "maternal_ref_ratio": ">=0.9",
+          "paternal_ref_ratio": ">=0.9",
+          "pi": "err_const / Alt_f.pop"
+        },
+        {
+          "maternal_ref_ratio": "<=0.1",
+          "paternal_ref_ratio": "<=0.1",
+          "pi": "err_const / Ref_f.pop"
+        },
+        {
+          "maternal_ref_ratio": "<=0.1",
+          "paternal_ref_ratio": "[0.4,0.6]",
+          "pi": "0.5 / Ref_f.pop"
+        },
+        {
+          "maternal_ref_ratio": "<=0.1",
+          "paternal_ref_ratio": ">=0.9",
+          "pi": "1 / Ref_f.pop"
+        }
+      ],
+      "description": {
+        "it": "Le sei formule PI dipendono dai rapporti dei genitori. L’intervallo paterno 0.4–0.6 è inclusivo. I rapporti fuori dalle classi ammesse producono NA. Il fattore 0.5 e i limiti 0.1, 0.4, 0.6 e 0.9 sono fissi; soltanto err_const è configurabile.",
+        "en": "The six PI formulas depend on parental ratios. The paternal 0.4–0.6 interval is inclusive. Ratios outside the accepted classes produce NA. The factor 0.5 and boundaries 0.1, 0.4, 0.6 and 0.9 are fixed; only err_const is configurable."
+      },
+      "source_lines": [
+        119,
+        128
+      ]
+    },
+    {
+      "id": "pi_missing_value_removal",
+      "kind": "filter",
+      "value": "drop_na() over all columns",
+      "description": {
+        "it": "Dopo il calcolo del PI, drop_na() non specifica colonne e rimuove ogni riga con almeno un valore mancante nel dataframe risultante dal join, non soltanto le righe con PI mancante. Eventuali colonne aggiuntive delle frequenze possono quindi influire sull’esclusione se contengono NA.",
+        "en": "After PI calculation, drop_na() specifies no columns and removes every row containing a missing value in the joined dataframe, not just rows with missing PI. Extra frequency-table columns can therefore affect exclusion when they contain NA."
+      },
+      "source_lines": [
+        119,
+        128
+      ]
+    },
+    {
+      "id": "combined_paternity_index",
+      "kind": "formula",
+      "value": {
+        "CPI": "prod(Paternity_Index, na.rm=TRUE)",
+        "log_CPI": "log10(CPI) when non-missing and > 0; otherwise NA"
+      },
+      "description": {
+        "it": "Il CPI è il prodotto diretto dei PI dei siti mantenuti; con zero siti vale NA. log_CPI è il logaritmo in base 10 solo per CPI non mancante e positivo. Il prodotto non è calcolato sommando logaritmi; non sono presenti protezioni esplicite da overflow o underflow. Con err_const = 0, un PI di mismatch nullo può portare CPI a zero e log_CPI a NA.",
+        "en": "CPI is the direct product of retained per-site PIs; no retained sites gives NA. log_CPI is base-10 logarithm only for a non-missing positive CPI. The product is not calculated by summing logarithms and has no explicit overflow or underflow protection. With err_const = 0, a zero mismatch PI can make CPI zero and log_CPI NA."
+      },
+      "source_lines": [
+        130,
+        131
+      ]
+    },
+    {
+      "id": "mismatch_count",
+      "kind": "formula",
+      "value": {
+        "mismatch": "both REF ratios >=0.9 or both <=0.1",
+        "not_mismatch": "informative merged row count - mismatch"
+      },
+      "description": {
+        "it": "Mismatch conta le righe informative unite alle frequenze con rapporti di entrambi i genitori >= 0.9 oppure entrambi <= 0.1. NotMismatch è il numero di tali righe meno Mismatch. Questi conteggi precedono il filtro drop_na applicato al dataframe PI e non coincidono necessariamente con il numero di PI validi.",
+        "en": "Mismatch counts informative rows joined to frequencies where both parental ratios are >= 0.9 or both are <= 0.1. NotMismatch is the count of these rows minus Mismatch. These counts precede the drop_na filtering of the PI dataframe and need not equal the number of valid PIs."
+      },
+      "source_lines": [
+        133,
+        138
+      ]
+    },
+    {
+      "id": "median_read_cpi_selection",
+      "kind": "formula",
+      "value": "log_CPI at iteration nearest round(median(maternal fetal_reads))",
+      "description": {
+        "it": "CPI_medianFF seleziona log_CPI all’iterazione più vicina alla mediana arrotondata delle fetal_reads materne informative. La mediana è calcolata prima del join con padre e frequenze; which.min sceglie il primo minimo in caso di parità. Il valore rappresenta un log10(CPI), non il CPI grezzo né un CPI interpolato alla mediana della frazione fetale.",
+        "en": "CPI_medianFF selects log_CPI at the iteration nearest the rounded median of informative maternal fetal reads. The median is computed before joining father and frequencies; which.min selects the first minimum in a tie. This is log10(CPI), not raw CPI or CPI interpolated at the median fetal fraction."
+      },
+      "source_lines": [
+        154,
+        320
+      ]
+    },
+    {
+      "id": "median_read_target_rounding",
+      "kind": "formula",
+      "value": "round(median(fetal_reads, na.rm=TRUE))",
+      "description": {
+        "it": "Il target per CPI_medianFF è la mediana delle fetal_reads arrotondata con round() senza cifre decimali specificate. Se risultati o target non sono disponibili, closest_logCPI restituisce NA.",
+        "en": "The target for CPI_medianFF is median fetal reads rounded with round() without decimal digits specified. If results or target are unavailable, closest_logCPI returns NA."
+      },
+      "source_lines": [
+        315,
+        320
+      ]
+    },
+    {
+      "id": "fetal_fraction_formula",
+      "kind": "formula",
+      "value": {
+        "site": "2 * fetal_reads / (Ref_mother + Alt_mother)",
+        "summary": "median(site, na.rm=TRUE)",
+        "percent": "100 * median"
+      },
+      "description": {
+        "it": "La frazione fetale per sito è il doppio delle fetal_reads diviso REF+ALT materni; la stima del campione è la mediana, poi moltiplicata per 100 per la percentuale. N_Other è escluso dal denominatore. Questa stima usa i siti materni selezionati e non richiede la disponibilità di un PI paterno valido.",
+        "en": "Per-site fetal fraction is twice the fetal reads divided by maternal REF+ALT; the sample estimate is the median, multiplied by 100 for percentage. N_Other is excluded from the denominator. This estimate uses selected maternal sites and does not require a valid paternal PI."
+      },
+      "source_lines": [
+        327,
+        335
+      ]
+    },
+    {
+      "id": "summary_maternal_selection",
+      "kind": "filter",
+      "value": {
+        "fetal_fraction_non_missing": true,
+        "fetal_fraction_positive": true,
+        "minimum_fetal_reads": 2
+      },
+      "description": {
+        "it": "Nel riepilogo finale vengono ricostruite le fetal_reads con i limiti materni inclusivi 0.1/0.9 e sono mantenuti i siti con frazione fetale non mancante, strettamente positiva e almeno 2 fetal_reads.",
+        "en": "The final summary recomputes fetal reads using inclusive maternal boundaries 0.1/0.9 and retains sites with a non-missing, strictly positive fetal fraction and at least 2 fetal reads."
+      },
+      "source_lines": [
+        430,
+        438
+      ]
+    },
+    {
+      "id": "summary_site_counts",
+      "kind": "formula",
+      "value": {
+        "N_sites_mother": "rows in maternal subset after fetal fraction filter",
+        "N_sites_father": "informative mother-father joined rows before population-frequency join"
+      },
+      "description": {
+        "it": "N_sites_mother conta le righe materne selezionate. N_sites_father conta le righe informative dopo il join madre-padre e prima del join con le frequenze e della selezione dei PI validi. Non è quindi, in generale, il numero dei siti moltiplicati nel CPI.",
+        "en": "N_sites_mother counts selected maternal rows. N_sites_father counts informative rows after the mother-father join, before the population-frequency join and valid-PI selection. It is therefore not generally the number of sites multiplied into CPI."
+      },
+      "source_lines": [
+        440,
+        456
+      ]
+    },
+    {
+      "id": "summary_statistics",
+      "kind": "formula",
+      "value": [
+        "max(log_CPI)",
+        "min(log_CPI)",
+        "median(log_CPI)",
+        "mean(log_CPI)"
+      ],
+      "description": {
+        "it": "Max_logCPI, Min_logCPI, Median_logCPI e Mean_logCPI riassumono i log_CPI non NA su tutte le soglie di fetal_reads della coppia e del pannello. Se non ci sono valori, le statistiche sono NA. CPI_medianFF è selezionato separatamente usando il target della mediana delle letture.",
+        "en": "Max_logCPI, Min_logCPI, Median_logCPI and Mean_logCPI summarize non-NA log_CPI values across all fetal-read thresholds for the pair and panel. With no values these statistics are NA. CPI_medianFF is selected separately using the median-read target."
+      },
+      "source_lines": [
+        459,
+        471
+      ]
+    },
+    {
+      "id": "summary_rounding",
+      "kind": "presentation",
+      "value": {
+        "fetal_fraction_raw_digits": 4,
+        "fetal_fraction_percent_digits": 2,
+        "log_cpi_digits": 3
+      },
+      "description": {
+        "it": "Nel CSV la frazione fetale grezza è arrotondata a 4 decimali, quella percentuale a 2 e le statistiche log10(CPI), incluso CPI_medianFF, a 3. Sono impostazioni di presentazione, non parametri del calcolo dei PI.",
+        "en": "The CSV rounds raw fetal fraction to 4 decimal places, percentage to 2, and log10(CPI) statistics including CPI_medianFF to 3. These are presentation settings rather than PI calculation parameters."
+      },
+      "source_lines": [
+        473,
+        499
+      ]
+    },
+    {
+      "id": "summary_output",
+      "kind": "format",
+      "value": {
+        "filename": "Summary_FetalFraction_CPI.csv",
+        "row_names": false,
+        "cutoff_column": "present only when a cutoff map was supplied"
+      },
+      "description": {
+        "it": "Il riepilogo persistito è Summary_FetalFraction_CPI.csv, con una riga per coppia e gruppo di coordinate. La colonna Cutoff è presente solo quando sono selezionati pannelli; in modalità ALL è omessa. Le serie per iterazione non vengono esportate in una tabella dedicata.",
+        "en": "The persisted summary is Summary_FetalFraction_CPI.csv, with one row per pair and coordinate subset. Cutoff appears only when panels are selected; ALL mode omits it. Per-iteration series are not exported to a dedicated table."
+      },
+      "source_lines": [
+        473,
+        508
+      ]
+    },
+    {
+      "id": "plot_background_bands",
+      "kind": "presentation",
+      "value": {
+        "log10_cpi_boundaries": [
+          -4,
+          4
+        ],
+        "colors": [
+          "red",
+          "grey",
+          "green"
+        ],
+        "alpha": 0.05
+      },
+      "description": {
+        "it": "I grafici usano fasce di sfondo delimitate da log10(CPI) = -4 e 4. Sono soglie grafiche fisse: il codice non le applica come filtro ai risultati né produce da esse una decisione automatica.",
+        "en": "Plots use fixed background bands bounded by log10(CPI) = -4 and 4. These are graphical thresholds: the code does not filter results or produce an automatic decision from them."
+      },
+      "source_lines": [
+        204,
+        210
+      ]
+    },
+    {
+      "id": "plot_iteration_ticks",
+      "kind": "presentation",
+      "value": {
+        "up_to_20": "every integer from 2",
+        "up_to_100": "2, then multiples of 10 and maximum",
+        "up_to_500": "2, then multiples of 25 and maximum",
+        "above_500": "2, then multiples of 50 and maximum",
+        "x_limits": "2 to max(3, maximum iteration)"
+      },
+      "description": {
+        "it": "La densità delle tacche sull’asse delle fetal_reads dipende dalla massima iterazione: fino a 20 ogni intero, fino a 100 passi di 10, fino a 500 passi di 25, oltre 500 passi di 50. Questi passi riguardano soltanto il grafico; il calcolo continua a usare ogni soglia intera.",
+        "en": "Tick density on the fetal-read axis depends on the maximum iteration: every integer up to 20, steps of 10 up to 100, steps of 25 up to 500 and steps of 50 above 500. These steps affect the plot only; calculation still uses every integer threshold."
+      },
+      "source_lines": [
+        173,
+        183
+      ]
+    },
+    {
+      "id": "plot_annotation_and_axes",
+      "kind": "presentation",
+      "value": {
+        "cfDNA_digits": 2,
+        "log10_cpi_digits": 3,
+        "secondary_axis": "identity transformation for matching/mismatching counts"
+      },
+      "description": {
+        "it": "L’etichetta mostra cfDNA percentuale a 2 decimali e log10(CPI) a 3; valori non finiti sono mostrati come NA. Le curve dei conteggi matching/mismatching condividono la scala numerica del log10(CPI), con asse secondario identico, senza conversione tra le grandezze.",
+        "en": "The annotation shows cfDNA percentage to 2 decimal places and log10(CPI) to 3; non-finite values display as NA. Matching/mismatching count curves share the numerical log10(CPI) scale, with an identity secondary axis and no conversion between quantities."
+      },
+      "source_lines": [
+        185,
+        241
+      ]
+    },
+    {
+      "id": "plot_files_and_layout",
+      "kind": "presentation",
+      "value": {
+        "per_pair": "plots/Mother<id>-Father<id>_DNPs_CPIplot.pdf",
+        "combined": "plots/All_CPIplots.pdf",
+        "per_pair_width": "max(12, 4 * number of panels)",
+        "per_pair_height": 4,
+        "combined_width": 12,
+        "combined_height": "4 * number of pairs"
+      },
+      "description": {
+        "it": "Viene creato un PDF per coppia con i pannelli affiancati e un PDF complessivo con le coppie in verticale. Le dimensioni passate a ggsave sono 12 o più per la larghezza e 4 per riga; lo script non espone un’opzione di formato o dimensione.",
+        "en": "One PDF per pair places panels side by side, and a combined PDF stacks pairs vertically. Dimensions passed to ggsave are at least 12 in width and 4 per row; the script exposes no format or size option."
+      },
+      "source_lines": [
+        346,
+        375
+      ]
+    },
+    {
+      "id": "plot_theme",
+      "kind": "presentation",
+      "value": {
+        "theme": "theme_bw",
+        "base_size": 9,
+        "title_size": 9,
+        "axis_title_size": 8,
+        "x_label_size": 7,
+        "x_label_angle": 45,
+        "border_linewidth": 0.6,
+        "margins": [
+          8,
+          12,
+          8,
+          8
+        ]
+      },
+      "description": {
+        "it": "Tema, dimensioni del testo, rotazione delle etichette, bordo e margini dei grafici sono fissi. Non influenzano il calcolo scientifico.",
+        "en": "Plot theme, text sizes, label rotation, border and margins are fixed. They do not affect scientific calculations."
+      },
+      "source_lines": [
+        244,
+        255
+      ]
+    }
+  ],
+  "preparation_settings": [
+    {
+      "id": "error_constant_validation",
+      "value": "finite number >= 0",
+      "applies_to": "all CPI requests",
+      "origin": "NIPAT",
+      "description": {
+        "it": "NIPAT rifiuta valori negativi, non finiti e booleani prima di preparare i file. Zero è ammesso; il motore non impone un limite superiore e non converte il parametro in una percentuale.",
+        "en": "NIPAT rejects negative, non-finite and Boolean values before preparing files. Zero is allowed; the engine imposes no upper bound and does not convert this parameter to a percentage."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/cpi.py",
+        "source_lines": [
+          89,
+          95
+        ],
+        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+      }
+    },
+    {
+      "id": "selected_sample_staging",
+      "value": "copy each required table once without rewriting its contents",
+      "applies_to": "all CPI requests",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Le tabelle selezionate sono copiate nella cartella work/inputs mantenendone i byte. Un campione riutilizzato da più coppie è copiato una sola volta. I file originali non vengono modificati.",
+        "en": "Selected tables are copied into work/inputs without rewriting their bytes. A sample reused by multiple pairs is copied only once. Original files are not modified."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/cpi.py",
+        "source_lines": [
+          171,
+          188
+        ],
+        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+      }
+    },
+    {
+      "id": "required_sample_columns",
+      "value": [
+        "chr",
+        "pos1",
+        "pos2",
+        "REF",
+        "ALT",
+        "N_REF",
+        "N_ALT",
+        "N_Other",
+        "total_count"
+      ],
+      "applies_to": "all CPI sample tables",
+      "origin": "NIPAT",
+      "description": {
+        "it": "NIPAT verifica la presenza di queste colonne nell’intestazione delle tabelle prima di invocare R. Il controllo delle colonne non costituisce una validazione numerica integrale di tutte le righe.",
+        "en": "NIPAT checks these sample-table header columns before invoking R. Header checking does not constitute complete numerical validation of every row."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/files.py",
+        "source_lines": [
+          9,
+          19
+        ],
+        "sha256": "6c7eaa7425166e67552bb9be463380d0e333fe8c60ec3469e5895ce6077dded2"
+      }
+    },
+    {
+      "id": "coordinate_panel_normalization",
+      "value": [
+        "n°DNP",
+        "chr",
+        "pos1",
+        "pos2"
+      ],
+      "applies_to": "CPI panel or named-cutoff modes",
+      "origin": "NIPAT",
+      "description": {
+        "it": "I pannelli vengono riscritti come copie TSV normalizzate con identificativi DNP progressivi e coordinate. Gli alleli eventualmente presenti nel pannello originale non sono usati per la selezione dei siti CPI.",
+        "en": "Panels are written as normalized TSV copies with sequential DNP identifiers and coordinates. Alleles present in the original panel are not used for CPI site selection."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/panels.py",
+        "source_lines": [
+          76,
+          84
+        ],
+        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+      }
+    },
+    {
+      "id": "coordinate_panel_input_validation",
+      "value": "positive integer coordinates; nonempty chromosome; at least one site",
+      "applies_to": "CPI panel or named-cutoff modes",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Il lettore di coordinate accetta tabelle con intestazione, coordinate senza intestazione e pannelli DNP a cinque colonne. Richiede posizioni intere positive ma non impone adiacenza pos2=pos1+1 né unicità dei siti in questa interfaccia.",
+        "en": "The coordinate reader accepts headered tables, headerless coordinates and five-column DNP panels. It requires positive integer positions but does not enforce pos2=pos1+1 adjacency or unique sites in this interface."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/panels.py",
+        "source_lines": [
+          112,
+          151
+        ],
+        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+      }
+    },
+    {
+      "id": "cutoff_label_and_path_normalization",
+      "value": {
+        "modes": [
+          "all",
+          "panel",
+          "named"
+        ],
+        "single_panel_name": "DNPpanel.txt",
+        "named_panel_pattern": "cutoff_<number:03d>.tsv"
+      },
+      "applies_to": "CPI panel or named-cutoff modes",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Il motore valida la modalità e le etichette e usa nomi interni sicuri prima di comporre la mappa R. Le etichette nominate devono essere distinte e non contenere virgole, uguale o caratteri di controllo. ALL non passa --cutoff_map a R.",
+        "en": "The engine validates mode and labels and uses safe internal filenames before constructing the R map. Named labels must be distinct and contain no commas, equals signs or control characters. ALL passes no --cutoff_map to R."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/cpi.py",
+        "source_lines": [
+          118,
+          169
+        ],
+        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+      }
+    },
+    {
+      "id": "pair_identifier_validation",
+      "value": "explicit nonempty mother:father identifiers; duplicate/colliding pairs rejected",
+      "applies_to": "all CPI requests",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Le coppie devono contenere esattamente due identificativi non vuoti. Prefissi e identificativi non possono contenere separatori di percorso o caratteri di controllo. NIPAT rifiuta nomi di input ambigui per maiuscole/minuscole e nomi di output in conflitto.",
+        "en": "Pairs must contain exactly two nonempty identifiers. Prefixes and identifiers cannot contain path separators or control characters. NIPAT rejects case-ambiguous input names and colliding output names."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/cpi.py",
+        "source_lines": [
+          41,
+          78
+        ],
+        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+      }
+    },
+    {
+      "id": "persistent_cpi_defaults",
+      "value": [
+        "mother_prefix",
+        "father_prefix",
+        "popfreq",
+        "cutoff_mode",
+        "panel",
+        "cutoffs",
+        "cutoff_map",
+        "err_const"
+      ],
+      "applies_to": "guided menu defaults",
+      "origin": "NIPAT client",
+      "description": {
+        "it": "Questi valori possono essere salvati come predefiniti del menu. Cartella dei campioni, coppie e nome del run vengono scelti durante l’analisi. Le preferenze del menu non modificano automaticamente i comandi CLI diretti.",
+        "en": "These values can be saved as guided-menu defaults. Sample directory, pairs and run name are selected for each analysis. Menu preferences do not automatically alter direct CLI commands."
+      },
+      "evidence": {
+        "path": "src/nipat/preferences.py",
+        "source_lines": [
+          24,
+          30
+        ],
+        "sha256": "740e027be5cf1be89808ff433cfacabeae3def42e0c91458f37c20a8071e6bf8"
+      }
+    }
+  ],
+  "audit_sections": [
+    {
+      "start": 1,
+      "end": 12,
+      "summary": {
+        "it": "Interprete e caricamento delle librerie.",
+        "en": "Interpreter and library loading."
+      }
+    },
+    {
+      "start": 13,
+      "end": 30,
+      "summary": {
+        "it": "Definizione degli otto argomenti pubblici e conversione numerica di err_const.",
+        "en": "Definition of eight public arguments and numerical conversion of err_const."
+      }
+    },
+    {
+      "start": 31,
+      "end": 35,
+      "summary": {
+        "it": "Creazione della cartella risultati e della sottocartella plots.",
+        "en": "Creation of output and plots directories."
+      }
+    },
+    {
+      "start": 36,
+      "end": 43,
+      "summary": {
+        "it": "Parsing delle coppie madre:padre.",
+        "en": "Parsing of mother:father pairs."
+      }
+    },
+    {
+      "start": 44,
+      "end": 69,
+      "summary": {
+        "it": "Parsing delle etichette/file di coordinate o selezione ALL.",
+        "en": "Parsing of labelled coordinate files or ALL selection."
+      }
+    },
+    {
+      "start": 70,
+      "end": 77,
+      "summary": {
+        "it": "Lettura delle frequenze di popolazione e conversione dei separatori decimali.",
+        "en": "Population-frequency loading and decimal-separator conversion."
+      }
+    },
+    {
+      "start": 78,
+      "end": 90,
+      "summary": {
+        "it": "Selezione dei siti materni informativi e delle fetal_reads.",
+        "en": "Selection of informative maternal sites and fetal reads."
+      }
+    },
+    {
+      "start": 91,
+      "end": 118,
+      "summary": {
+        "it": "Selezione per pannello, soglie di letture, join madre-padre e frequenze.",
+        "en": "Panel selection, read thresholds, mother-father and frequency joins."
+      }
+    },
+    {
+      "start": 119,
+      "end": 132,
+      "summary": {
+        "it": "Formule PI, rimozione dei dati mancanti, prodotto CPI e logaritmo.",
+        "en": "PI formulas, missing-value removal, CPI product and logarithm."
+      }
+    },
+    {
+      "start": 133,
+      "end": 153,
+      "summary": {
+        "it": "Conteggi mismatch, risultati delle iterazioni e ritorno del calcolo.",
+        "en": "Mismatch counts, per-iteration results and calculation return."
+      }
+    },
+    {
+      "start": 154,
+      "end": 160,
+      "summary": {
+        "it": "Selezione del logCPI all’iterazione più vicina al target.",
+        "en": "Selection of logCPI at the iteration nearest the target."
+      }
+    },
+    {
+      "start": 161,
+      "end": 184,
+      "summary": {
+        "it": "Grafico vuoto e selezione delle tacche dell’asse delle letture.",
+        "en": "Empty plot and read-axis tick selection."
+      }
+    },
+    {
+      "start": 185,
+      "end": 203,
+      "summary": {
+        "it": "Formattazione dell’annotazione cfDNA e CPI.",
+        "en": "Formatting of cfDNA and CPI annotations."
+      }
+    },
+    {
+      "start": 204,
+      "end": 243,
+      "summary": {
+        "it": "Fasce grafiche, curve, annotazione e scale degli assi.",
+        "en": "Plot bands, curves, annotation and axis scales."
+      }
+    },
+    {
+      "start": 244,
+      "end": 257,
+      "summary": {
+        "it": "Titolo, tema, testo, bordo e margini del grafico.",
+        "en": "Plot title, theme, text, border and margins."
+      }
+    },
+    {
+      "start": 258,
+      "end": 275,
+      "summary": {
+        "it": "Iterazione sulle coppie e caricamento delle tabelle dei campioni.",
+        "en": "Pair iteration and sample-table loading."
+      }
+    },
+    {
+      "start": 276,
+      "end": 302,
+      "summary": {
+        "it": "Ricostruzione dei rapporti, filtro OTHER e azzeramento dei conteggi paterni.",
+        "en": "Ratio computation, OTHER filter and paternal count zeroing."
+      }
+    },
+    {
+      "start": 303,
+      "end": 345,
+      "summary": {
+        "it": "Calcolo per pannello, target di letture, frazione fetale e grafici.",
+        "en": "Per-panel calculation, read target, fetal fraction and plots."
+      }
+    },
+    {
+      "start": 346,
+      "end": 354,
+      "summary": {
+        "it": "Salvataggio del PDF per coppia e raccolta dei grafici.",
+        "en": "Per-pair PDF output and plot collection."
+      }
+    },
+    {
+      "start": 355,
+      "end": 370,
+      "summary": {
+        "it": "Riepilogo interno summary_table; nessuna esportazione di questo oggetto nel file.",
+        "en": "Internal summary_table aggregation; this object is not exported by this script."
+      }
+    },
+    {
+      "start": 371,
+      "end": 378,
+      "summary": {
+        "it": "Salvataggio del PDF aggregato per tutte le coppie.",
+        "en": "Combined PDF output for all pairs."
+      }
+    },
+    {
+      "start": 379,
+      "end": 395,
+      "summary": {
+        "it": "Secondo passaggio sulle coppie per il riepilogo finale.",
+        "en": "Second pair pass for the final summary."
+      }
+    },
+    {
+      "start": 396,
+      "end": 422,
+      "summary": {
+        "it": "Ricostruzione dei conteggi/rapporti e applicazione dei medesimi filtri.",
+        "en": "Rebuilding counts/ratios and applying the same filters."
+      }
+    },
+    {
+      "start": 423,
+      "end": 441,
+      "summary": {
+        "it": "Selezione dei pannelli, frazione fetale per sito e conteggio materno.",
+        "en": "Panel selection, per-site fetal fraction and maternal count."
+      }
+    },
+    {
+      "start": 442,
+      "end": 458,
+      "summary": {
+        "it": "Conteggio paterno prima dell’associazione alle frequenze di popolazione.",
+        "en": "Paternal counting before population-frequency association."
+      }
+    },
+    {
+      "start": 459,
+      "end": 472,
+      "summary": {
+        "it": "Statistiche delle frazioni fetali e dei logCPI; CPI alla mediana delle letture.",
+        "en": "Fetal-fraction and logCPI statistics; CPI at median reads."
+      }
+    },
+    {
+      "start": 473,
+      "end": 503,
+      "summary": {
+        "it": "Costruzione delle righe riepilogative con arrotondamenti e colonna Cutoff condizionale.",
+        "en": "Summary rows with rounding and a conditional Cutoff column."
+      }
+    },
+    {
+      "start": 504,
+      "end": 510,
+      "summary": {
+        "it": "Esportazione CSV e messaggio di completamento.",
+        "en": "CSV export and completion message."
+      }
+    }
+  ]
+}

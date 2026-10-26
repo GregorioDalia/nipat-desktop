@@ -1,5 +1,6 @@
 import copy
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -128,7 +129,7 @@ class AcceptanceTests(unittest.TestCase):
                     acceptance.validate(record, "0.5.0a1", COMMIT, 123)
 
     def test_future_distribution_contracts_are_not_implicitly_authorized(self):
-        for version in ("0.4.1", "0.7.0", "1.0.0", "../0.5.0a1"):
+        for version in ("0.4.1", "0.8.0", "1.0.0", "../0.5.0a1"):
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, "only for the 0.5"):
                 acceptance.acceptance_path(version)
 
@@ -328,6 +329,119 @@ class ResearchAcceptanceTests(unittest.TestCase):
         changed = dict(self.record, schema_version=1)
         with self.assertRaises(ValueError):
             self.validate(changed)
+
+
+class ReviewedResearchAcceptanceTests(unittest.TestCase):
+    def setUp(self):
+        self.record = research_record()
+        self.record.update(schema_version=3, version="0.7.1", reviewed_source_changes=[],
+                           domain_validation="pending-domain-researchers")
+        self.record["observed_baseline"].update(
+            observations=["installation_ready", "automatic_workflow_sample_analysis"],
+            source_equivalence_scope=acceptance.REVIEWED_SOURCE_SCOPE,
+        )
+        self.pair = dict(SET, version="0.7.1")
+        paths = acceptance.REQUIRED_OPERATIVE_PATHS | {
+            "src/nipat/wizard.py", "src/nipat_scientific/executor.py", "scientific/vendor/example.R",
+            "installer/windows/bootstrap-common.ps1", "tests/test_cli_validation.py",
+        }
+        common = {path: ("fixture bytes: " + path).encode() for path in paths}
+        common["distribution-files.txt"] = ResearchAcceptanceTests.allowlist(common)
+        self.sources = {COMMIT: copy.deepcopy(common), "c" * 40: copy.deepcopy(common)}
+
+    def read_source(self, commit, path):
+        return self.sources[commit][path]
+
+    def validate(self, record=None):
+        acceptance.validate(record or self.record, "0.7.1", COMMIT, 123, self.pair)
+
+    def change(self, path, new=b"reviewed client change"):
+        before = self.sources["c" * 40].get(path)
+        if new is None:
+            del self.sources[COMMIT][path]
+        else:
+            self.sources[COMMIT][path] = new
+        self.sources[COMMIT]["distribution-files.txt"] = ResearchAcceptanceTests.allowlist(self.sources[COMMIT])
+        return {"path": path,
+                "before_sha256": hashlib.sha256(before).hexdigest() if before is not None else None,
+                "after_sha256": hashlib.sha256(new).hexdigest() if new is not None else None}
+
+    def test_exact_build_identity_and_research_scope_remain_required(self):
+        self.validate()
+        self.assertEqual(acceptance.acceptance_path("0.7.1"), ".github/release-acceptance/v0.7.1.json")
+        for field, value in (("source_commit", "f" * 40), ("build_run_id", 124),
+                             ("decision", "pending"), ("domain_validation", "passed"),
+                             ("windows_installer_sha256", "f" * 64), ("reviewed_source_changes", None)):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.validate(dict(self.record, **{field: value}))
+        for version in ("0.6.0", "0.8.0", "1.0.0"):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                acceptance.validate(dict(self.record, version=version), version, COMMIT, 123)
+        with self.assertRaises(ValueError):
+            self.validate(dict(self.record, deferred_desktop_scenarios=[]))
+
+    def test_reviewed_delta_uses_actual_bytes_and_does_not_claim_new_installation(self):
+        paths = ("src/nipat/wizard.py", "installer/windows/bootstrap-common.ps1", "tests/new_case.py")
+        self.record["reviewed_source_changes"] = sorted([self.change(path) for path in paths], key=lambda item: item["path"])
+        self.validate()
+        result = acceptance.verify_baseline(self.record, self.read_source)
+        self.assertEqual(result["reviewed_source_changes"], self.record["reviewed_source_changes"])
+        self.assertEqual(result["scope"], acceptance.REVIEWED_SOURCE_SCOPE)
+        self.assertFalse(result["candidate_windows_installation_claimed"])
+        self.assertGreater(result["unchanged_files_verified"], 0)
+
+    def test_unreported_extra_missing_or_wrongly_hashed_changes_fail(self):
+        delta = self.change("src/nipat/wizard.py")
+        for changes in ([], [dict(delta, after_sha256="f" * 64)],
+                        [dict(delta, before_sha256=None)], [dict(delta, path="src/nipat/cli.py")]):
+            self.record["reviewed_source_changes"] = changes
+            with self.subTest(changes=changes), self.assertRaisesRegex(ValueError, "exact baseline-to-candidate"):
+                acceptance.verify_baseline(self.record, self.read_source)
+        self.record["reviewed_source_changes"] = [delta]
+        acceptance.verify_baseline(self.record, self.read_source)
+        self.change("src/nipat/cli.py")
+        with self.assertRaisesRegex(ValueError, "exact baseline-to-candidate"):
+            acceptance.verify_baseline(self.record, self.read_source)
+
+    def test_scientific_and_runtime_changes_cannot_be_approved_as_client_changes(self):
+        original = copy.deepcopy(self.sources)
+        for path in ("engine/main.py", "src/nipat_scientific/executor.py", "scientific/vendor/example.R",
+                     "docker/scientific-runtime/Dockerfile", "installer/runtime/nipat-engine", "compose.yaml"):
+            self.sources = copy.deepcopy(original)
+            delta = self.change(path)
+            self.record["reviewed_source_changes"] = [delta]
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "Only explicit client"):
+                self.validate()
+            self.record["reviewed_source_changes"] = []
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "Protected scientific or runtime"):
+                acceptance.verify_baseline(self.record, self.read_source)
+
+    def test_client_additions_and_removals_require_exact_null_digest(self):
+        added = self.change("tests/new_case.py")
+        removed = self.change("tests/test_cli_validation.py", None)
+        self.assertIsNone(added["before_sha256"])
+        self.assertIsNone(removed["after_sha256"])
+        self.record["reviewed_source_changes"] = sorted([added, removed], key=lambda item: item["path"])
+        acceptance.verify_baseline(self.record, self.read_source)
+        self.record["reviewed_source_changes"].pop()
+        with self.assertRaises(ValueError):
+            acceptance.verify_baseline(self.record, self.read_source)
+
+    def test_invalid_duplicate_or_unreviewable_delta_entries_fail(self):
+        delta = self.change("src/nipat/wizard.py")
+        for changes in ([delta, delta], [dict(delta, path="../outside.py")],
+                        [dict(delta, path="/tmp/source.py")], [dict(delta, path="README.md")],
+                        [dict(delta, before_sha256=True)], [dict(delta, extra=True)],
+                        [dict(delta, before_sha256=delta["after_sha256"])],
+                        [dict(delta, before_sha256=None, after_sha256=None)]):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                self.validate(dict(self.record, reviewed_source_changes=changes))
+
+    def test_documentation_changes_do_not_need_a_source_delta(self):
+        self.sources[COMMIT]["docs/review.md"] = b"review evidence, not executable application input"
+        self.sources[COMMIT]["distribution-files.txt"] = ResearchAcceptanceTests.allowlist(self.sources[COMMIT])
+        result = acceptance.verify_baseline(self.record, self.read_source)
+        self.assertEqual(result["reviewed_source_changes"], [])
 
 
 if __name__ == "__main__":

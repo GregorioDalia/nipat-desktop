@@ -4,10 +4,10 @@ NIPAT distribuisce artefatti costruiti e verificati da GitHub Actions. La
 pubblicazione non ricompila applicazione o runtime e non richiede al manutentore
 di trasferire manualmente gli archivi dal proprio computer.
 
-La versione 0.6 richiede installatori Windows e Ubuntu dello stesso commit
+La distribuzione desktop richiede installatori Windows e Ubuntu dello stesso commit
 e con lo stesso archivio scientifico. La procedura verifica entrambi i
 pacchetti e richiede una decisione di distribuzione riferita ai file esatti.
-Per la 0.6 è ammessa l'accettazione per ricerca pre-1.0: integra una prova
+È ammessa l'accettazione per ricerca pre-1.0: integra una prova
 manuale documentata di installazione e funzionamento con i controlli automatici,
 rendendo espliciti i collaudi estesi ancora da svolgere. Le versioni
 pubblicate e le relative evidenze sono disponibili nella pagina
@@ -46,7 +46,7 @@ Gli artefatti da conservare per la verifica dei pacchetti sono:
 
 | Artefatto | Evidenze |
 | --- | --- |
-| `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json` e launcher verificato. |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json`, `windows-client-check.json` e launcher verificato. |
 | `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e relativi checksum. |
 | `nipat-linux-setup` | `.deb`, manifest comune, checksum, `linux-installer-build.json`, `linux-installation-check.json` e `linux-dependency-check.json`. |
 | `nipat-scientific-check-logs` | Metadati e registri delle regressioni conservati dalla build. |
@@ -86,6 +86,17 @@ artefatti Docker Desktop. Questi controlli legano l'EXE alla build e ai suoi
 input; non costituiscono una verifica ottenuta installando o estraendo
 indipendentemente l'eseguibile finale.
 
+Per la serie 0.7, `windows-client-check.json` registra anche una prova
+del payload applicativo preparato per il setup, copiato in una destinazione
+isolata con spazi e caratteri non ASCII. Usa il Python portabile incluso
+per verificare import, catalogo, menu e pianificazione `--dry-run` dei
+workflow automatici, con mount in sola lettura e input invariati.
+Il report collega versione e commit agli hash di installatore, manifest,
+launcher e inventario, ma dichiara lo scenario
+`staged-embedded-python-client`: non esegue l'installazione Inno Setup,
+la preparazione WSL o i calcoli R. Questi ultimi restano coperti dalle
+prove scientifiche separate e dal collaudo del pacchetto sul dispositivo.
+
 Gli archivi runtime separati servono a recupero e verifica. La normale
 installazione Windows usa soltanto l'EXE; non richiede che l'utente disponga
 gli archivi accanto all'installatore.
@@ -105,6 +116,16 @@ un utente non root. I controlli comprendono i casi distribuiti di SNPcall, CPI
 e Contamination e un caso DNPcall sintetico, proprietà dei risultati e
 conservazione dei dati dopo reinstallazione dello stesso pacchetto e
 rimozione. Non attestano un aggiornamento fra versioni differenti.
+
+La verifica 0.7 aggiunge un piano automatico completo DNPcall →
+Contamination e CPI, con SNPcall indipendente sugli stessi BAM sintetici.
+Il piano viene avviato dal client installato come utente non root e verifica
+risultati numerici, associazioni dei campioni, identità dell'immagine,
+intermedi e hash degli output. I campi `automatic_workflow_plan` e
+`preferences_preserved` registrano rispettivamente l'esito del piano e la
+conservazione delle preferenze durante analisi, reinstallazione e rimozione.
+Si tratta di una prova sul runner Ubuntu configurato, non di un'installazione
+su Ubuntu Desktop pulito.
 
 Una prova distinta installa il `.deb` in un container Ubuntu 24.04
 inizialmente privo delle dipendenze. `linux-dependency-check.json` identifica
@@ -130,16 +151,30 @@ attive, inclusi eventuali blocchi del browser, di Smart App Control o antivirus.
 Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
 le prove sui sistemi destinatari. Una scheda generata con
 `release_acceptance.py` parte da `pending` e non costituisce un’autorizzazione.
-Il record distingue due modalità:
+Il record distingue tre modalità:
 
 - **Schema 1, qualificazione completa:** richiede tutti i sei scenari desktop
   superati sugli installatori esatti della build.
-- **Schema 2, distribuzione per ricerca pre-1.0:** richiede una decisione
+- **Schema 2, ricerca pre-1.0 per la serie 0.6:** richiede una decisione
   esplicita del manutentore, una prova manuale osservata di installazione e
   funzionamento, le evidenze automatiche e l'elenco delle prove rinviate.
-  La 0.6 usa questa modalità; la valutazione con le esperte di dominio è
-  pianificata sulla 0.7. Il numero di versione o il canale `stable` non
-  trasformano questa accettazione in una validazione scientifica.
+  Il riuso di una prova su una build precedente richiede l'equivalenza
+  dei sorgenti operativi distribuiti.
+- **Schema 3, ricerca pre-1.0 per la serie 0.7:** conserva la prova manuale
+  osservata sulla build identificata e permette differenze revisionate nel
+  client, negli installatori e nei test. Ogni differenza operativa deve
+  essere dichiarata in `reviewed_source_changes` con percorso e SHA-256
+  prima e dopo la modifica; un lato assente è indicato con `null`.
+  La procedura confronta l'elenco con i byte effettivi dei due commit.
+  I sorgenti scientifici, l'orchestrazione nell'immagine, le definizioni
+  del runtime e `compose.yaml` devono restare invariati. Il record mantiene
+  `domain_validation: pending-domain-researchers` e rinvia esplicitamente
+  i sei scenari desktop estesi.
+
+Il numero di versione o il canale `stable` non trasformano l'accettazione
+per ricerca in una validazione scientifica. Lo schema 3 richiede comunque
+le verifiche automatiche 0.7 sugli installatori esatti: client Windows con
+Python incorporato, piano automatico Ubuntu e controlli congiunti.
 
 Quando la prova manuale riguarda una build precedente, il record ne conserva
 il commit effettivo. La procedura confronta i sorgenti operativi di quella
@@ -149,7 +184,7 @@ ma non attesta che il nuovo EXE sia stato installato né che i due pacchetti
 siano identici. Il confronto e i limiti sono parte delle evidenze della release.
 
 Il record viene sottoposto a revisione in
-`.github/release-acceptance/v0.6.0.json` e integrato in `main` prima della
+`.github/release-acceptance/v<VERSIONE>.json` e integrato in `main` prima della
 pubblicazione, insieme al sorgente accettato. Può essere preparato e
 revisionato sul branch di sviluppo dopo le prove. È separato dai file
 incorporati negli installatori e dal commit della build provata. Collega versione,
@@ -172,9 +207,9 @@ opera su `main`. Richiede l'ID della build, il suo commit completo e il canale
 `testing` o `stable`. `testing` è predefinito e pubblica una pre-release;
 `stable` pubblica una release stabile e accetta soltanto versioni numeriche
 `MAJOR.MINOR.PATCH`. La scelta del canale non modifica i requisiti della
-modalità di accettazione selezionata. Lo schema pre-1.0 attuale è limitato
-alla serie 0.6; i criteri delle versioni successive richiedono una revisione
-esplicita. Per la 0.6, avviare manualmente **Installers (review build)** su un commit
+modalità di accettazione selezionata. Gli schemi pre-1.0 sono limitati alle
+serie 0.6 e 0.7; i criteri delle versioni successive richiedono una revisione
+esplicita. Avviare manualmente **Installers (review build)** su un commit
 revisionato di questo repository: può essere il branch di sviluppo, così
 che le prove e l’accettazione precedano l’integrazione in `main`.
 
@@ -200,7 +235,7 @@ il suo `source_commit` completo e il canale scelto. Lasciare
 3. confronta pacchetti, manifest e archivio scientifico con il record di
    accettazione e prepara un elenco combinato dei checksum;
 4. usa le note `docs/RELEASE_<versione>.md` del commit compilato per lo
-   schema 1; nello schema 2 usa quelle del commit di preparazione, che
+   schema 1; negli schemi 2 e 3 usa quelle del commit di preparazione, che
    descrivono la decisione di ricerca e i limiti correnti;
 5. crea una bozza sul commit verificato e carica gli asset;
 6. verifica dimensioni e digest restituiti da GitHub;
@@ -220,7 +255,7 @@ diversi.
 
 La procedura ripete le verifiche del set, richiede che il record di accettazione
 sia invariato rispetto alla preparazione e controlla che la bozza contenga
-esattamente gli asset approvati. Per lo schema 2 mantiene le note del commit
+esattamente gli asset approvati. Per gli schemi 2 e 3 mantiene le note del commit
 di preparazione, anche se `main` avanza. Non crea una bozza mancante, non carica asset
 e non corregge contenuti alterati. Un avanzamento di `main` è ammesso soltanto
 se le condizioni verificate rimangono soddisfatte.
@@ -236,8 +271,11 @@ dell’EXE, gli archivi incorporati e le prove Linux. Non ricompila
 applicazione o immagine. La release conserva i due installatori, il manifest
 comune, gli archivi runtime, le evidenze di costruzione e prova,
 `desktop-acceptance.json`, `release-provenance.json`, `update-manifest.json`
-e `SHA256SUMS`. Lo schema 2 include anche `baseline-source-check.json`,
-che registra l'esito e l'ambito del confronto con il riferimento manuale.
+e `SHA256SUMS`. La serie 0.7 conserva inoltre `windows-client-check.json`
+e `application-files.json`. Gli schemi 2 e 3 includono anche
+`baseline-source-check.json`, che registra l'esito e l'ambito del confronto
+con il riferimento manuale; nello schema 3 elenca le differenze revisionate
+e dichiara che l'installazione manuale del candidato Windows non è attestata.
 `release-provenance.json` identifica separatamente il commit del pacchetto,
 quello della procedura e quello delle note tramite `release_notes_commit`.
 I collegamenti delle note puntano alla revisione documentale corrispondente;

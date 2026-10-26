@@ -12,7 +12,7 @@ on:
           - prepare
           - publish
       run_id:
-        description: Successful installer build run ID (Windows and Ubuntu for 0.6)
+        description: Successful paired Windows and Ubuntu installer build run ID
         required: true
         type: string
       source_commit:

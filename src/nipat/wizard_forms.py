@@ -9,16 +9,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from nipat.adapters.panels import read_dnp_list, read_position_panel, read_snp_positions
-from nipat.errors import ValidationError
+from nipat.errors import Cancelled, ValidationError
 from nipat.paths import ProjectLayout, _SAFE_RUN_NAME
 from nipat.validation.files import (
     require_columns, require_contamination_input, require_directory, require_file,
     require_sidecar, require_snp_pileup,
 )
-
-
-class Cancelled(Exception):
-    """Return to the main menu before starting an analysis."""
 
 
 class Back(Exception):
@@ -52,6 +48,13 @@ def navigation(value: str) -> str:
 
 
 def check_reference(path: Path) -> None:
+    if path.suffix.lower() in {".fai", ".gzi"}:
+        candidate = path.with_suffix("")
+        raise ValidationError(
+            f"E' stato selezionato un indice {path.suffix}, non il file FASTA delle sequenze. "
+            f"Verificare e inserire il riferimento corrispondente: {candidate}. "
+            "Il percorso non viene sostituito automaticamente."
+        )
     require_sidecar(path, ".fai", "Indice FASTA")
     if path.suffix.lower() in {".gz", ".bgz", ".bgzf"}:
         require_sidecar(path, ".gzi", "Indice FASTA BGZF")
@@ -117,7 +120,7 @@ class WorkflowForm:
             ))]
             result += ([Field("bamlist", "File bamlist", "file", check=check_bamlist)]
                        if values.get("mode") == "2" else [Field("bams", "BAM", "files")])
-            result += [Field("reference", "FASTA indicizzato (.fai; .gzi se BGZF)", "file", check=check_reference),
+            result += [Field("reference", "File FASTA di riferimento", "file", check=check_reference),
                        Field("panel", "Pannello DNP", "file", check=read_dnp_list),
                        Field("parallel", "Modalita' di esecuzione", "choice", "1", options=(
                            ("1", "Seriale", "Impostazione predefinita"),
@@ -131,7 +134,7 @@ class WorkflowForm:
                 result += [Field("pileup", "Pileup SNP", "file", check=require_snp_pileup)]
             else:
                 result += [Field("bam", "BAM", "file"),
-                           Field("reference", "FASTA indicizzato (.fai; .gzi se BGZF)", "file", check=check_reference)]
+                           Field("reference", "File FASTA di riferimento", "file", check=check_reference)]
             result += [Field("panel", "Lista SNP (pos, ref, alt)", "file",
                              check=lambda path: read_snp_positions(path, for_bed=values.get("mode") != "2"))]
         elif self.choice == "3":
@@ -170,7 +173,7 @@ class WorkflowForm:
             "bams": "Selezionare uno o piu' file BAM: incollare un percorso per volta e premere Invio.",
             "bam": "Incollare il percorso di un singolo file BAM. NIPAT preparera' il pileup per SNPcall.",
             "bamlist": "Scegliere un file di testo con un percorso BAM per riga, senza intestazione. I percorsi nella lista sono relativi alla cartella della lista stessa, oppure completi.",
-            "reference": "Usare il FASTA della stessa assembly del BAM e del pannello. Accanto al FASTA deve essere presente il suo indice .fai; per FASTA BGZF serve anche .gzi.",
+            "reference": "Selezionare il file FASTA delle sequenze, per esempio genome.fa, non il suo indice .fai o .gzi. Usare la stessa assembly del BAM e del pannello. L'indice .fai deve trovarsi accanto al FASTA; per FASTA compresso BGZF serve anche .gzi.",
             "pileup": "Scegliere un pileup separato da tabulazioni, senza intestazione, con i nomi delle letture (QNAME) nella settima colonna; e' il formato samtools --output-QNAME.",
             "inputs": "Scegliere le tabelle dei campioni, una per volta. Colonne richieste: chr, pos1, pos2, N_REF, N_ALT, N_Other; separatore: tabulazione. La colonna ratio e' facoltativa.",
             "pairs": "Indicare gli identificativi madre:padre, separando le coppie con una virgola. Esempio: A1:A1,A2:A2. Con i prefissi predefiniti, A1:A1 usa MotherA1.txt e FatherA1.txt.",
@@ -196,11 +199,11 @@ class WorkflowForm:
                     if self.choice == "3" else
                     "Scegliere la cartella delle tabelle cfDNA materno e presunto padre. I file devono chiamarsi prefisso + identificativo + .txt, per esempio MotherA1.txt e FatherA1.txt. Coppie e prefissi saranno richiesti nei passaggi successivi.")
         elif field.key == "panel":
-            text = ("Scegliere un pannello DNP senza intestazione: cinque colonne chr, pos1, pos2, REF, ALT. Le due posizioni devono essere adiacenti e gli alleli di due basi."
+            text = ("Il pannello DNP indica le posizioni e gli alleli da analizzare. Scegliere un file senza intestazione: cinque colonne chr, pos1, pos2, REF, ALT. Le due posizioni devono essere adiacenti e gli alleli di due basi. DNP_list.txt e' un nome di esempio: il file puo' avere un altro nome."
                     if self.choice == "1" else
                     "Scegliere una tabella separata da tabulazioni con intestazione pos, ref, alt. Esempio di riga: chr1:1770788, C, G (con tabulazioni tra i valori)."
                     if self.choice == "2" else
-                    "Scegliere le coordinate DNP: colonne chr, pos1, pos2, con o senza intestazione. E' accettato anche il pannello DNP a cinque colonne.")
+                    "Scegliere le coordinate DNP da includere nell'analisi: colonne chr, pos1, pos2, con o senza intestazione. E' accettato anche il pannello DNP a cinque colonne. DNP_list.txt e' un nome di esempio: il file puo' avere un altro nome.")
         else:
             text = guides[field.key]
         self.ui.message(text, kind="muted")
@@ -239,8 +242,15 @@ class WorkflowForm:
             detail = "La modalita' scelta sara' riportata nel riepilogo prima dell'avvio."
         self.ui.message(f"Selezione: {label}. {detail}", kind="muted")
 
+    def _path_guide(self) -> None:
+        """Expose the actual resolution base without changing path semantics."""
+        self.ui.message(f"Base dei percorsi relativi: {Path.cwd()}", kind="muted")
+        self.ui.message("L'impostazione Dati non cambia questa base. Un percorso completo evita ambiguita'.", kind="muted")
+
     def _text(self, field: Field, default: str) -> str:
         while True:
+            if field.kind in {"file", "directory"} or field.key == "cutoff_map":
+                self._path_guide()
             answer = navigation(self.ui.prompt(field.label, default=default,
                                                path=field.kind in {"file", "directory"}))
             if answer.casefold() == ":vuoto":
@@ -312,7 +322,9 @@ class WorkflowForm:
                     item = (label, source)
                 else:
                     prompt = ("Altro file (Invio per continuare)" if current else
-                              "Percorso del primo BAM" if field.key == "bams" else "Percorso della prima tabella")
+                              "Percorso del primo BAM" if field.key == "bams" else
+                              "Percorso del primo pileup SNP" if field.key == "pileups" else "Percorso della prima tabella")
+                    self._path_guide()
                     raw = navigation(self.ui.prompt(prompt, path=True))
                     if not raw:
                         if current:

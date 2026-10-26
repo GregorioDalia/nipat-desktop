@@ -25,11 +25,14 @@ from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
 from nipat.validation.self_test import compare_snp_outputs
 from nipat.validation.files import require_snp_pileup
+from nipat_scientific.catalog import load_catalog
 from verify_contamination_update import check_bundled_run
 from verify_contamination_update import check_outputs as check_contamination
 from verify_cpi_update import check_outputs as check_cpi
 from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_workflow
 from verify_cpi_engine import check_cpi_client_without_host_scripts, check_cpi_workflow
+from verify_workflow_execution import check_workflow_execution, check_cpi_chains, check_imported_cpi_plans
+from verify_snp_workflow import check_snp_plans
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -110,11 +113,20 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("The engine lacks the complete DNPcall interface.")
     if description.get("workflow_interfaces", {}).get("cpi") != "cpi-v1":
         raise ValueError("The engine lacks the complete CPI interface.")
+    if description.get("plan_execution") != {
+        "interface": "workflow-plan-execution-v1", "schema_version": 1,
+        "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
+    }:
+        raise ValueError("Unexpected supported workflow plan execution interface.")
     preparation = description.get("preparation", {})
     if preparation.get("interface") != "workflow-preparation-v1":
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
-    for name in ("__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py"):
+    for name in (
+        "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
+        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "catalog_data/dnp-call.json",
+        "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
+    ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
     expected_sources = {
         name: hashlib.sha256(path.read_bytes()).hexdigest()
@@ -123,6 +135,56 @@ def check_metadata(identifier: str) -> dict:
     if preparation.get("file_sha256") != expected_sources:
         raise ValueError("Bundled preparation sources differ from this checkout.")
     return description
+
+
+def check_catalog(identifier: str) -> None:
+    """Read the actual bundled catalog, with no source or client mounts."""
+    actual = json.loads(run_image(identifier, ["catalog", "--json"]))
+    expected = load_catalog(source_root=PROJECT)
+    if actual != expected:
+        raise ValueError("The image catalog differs from the source-verified catalog in this checkout.")
+    for workflow in expected["workflows"]:
+        selected = json.loads(run_image(identifier, ["catalog", workflow, "--json"]))
+        if selected.get("workflows") != {workflow: expected["workflows"][workflow]}:
+            raise ValueError(f"The image returned an incorrect catalog selection: {workflow}.")
+    print("PASS: source-verified catalog for four R scripts, without host source mounts.", flush=True)
+
+
+def check_plan_contract(identifier: str, root: Path) -> None:
+    """Check plan validation only: this does not execute composed workflows."""
+    inputs = root / "plan-contract-inputs"
+    inputs.mkdir()
+    plan = {
+        "schema_version": 1,
+        "samples": [{"id": "sample_a", "kind": "bam", "path": "/absent/sample_a.bam"}],
+        # Deliberately declare the consumer first: order comes from dependencies.
+        "steps": [
+            {"id": "contamination", "workflow": "contamination", "inputs": {
+                "samples": [{"step": "dnp", "output": "dnp-tables", "sample": "sample_a"}],
+                "panel": "/absent/dnp.tsv",
+            }, "parameters": {}},
+            {"id": "dnp", "workflow": "dnp-call", "inputs": {
+                "samples": ["sample_a"], "reference": "/absent/reference.fa",
+                "panel": "/absent/dnp.tsv",
+            }, "parameters": {"parallel": False}},
+        ],
+    }
+    plan_file = inputs / "plan.json"
+    plan_file.write_text(json.dumps(plan), encoding="utf-8")
+    before = plan_file.read_bytes()
+    report = json.loads(run_image(
+        identifier, ["validate-plan", "--plan", "/inputs/plan.json"], inputs=inputs,
+    ))
+    expected_plan = {**plan, "steps": list(reversed(plan["steps"]))}
+    if report.get("execution_order") != ["dnp", "contamination"] or report.get("plan") != expected_plan:
+        raise ValueError("The bundled validator returned an unexpected plan or execution order.")
+    if plan_file.read_bytes() != before:
+        raise ValueError("Plan validation changed the input file.")
+    plan["steps"][0]["inputs"]["samples"][0]["output"] = "snp-counts"
+    plan_file.write_text(json.dumps(plan), encoding="utf-8")
+    run_image(identifier, ["validate-plan", "--plan", "/inputs/plan.json"],
+              inputs=inputs, expected_returncode=2)
+    print("PASS: bundled workflow plan validation and rejection, without executing analyses.", flush=True)
 
 
 def check_snp(identifier: str, root: Path) -> None:
@@ -449,8 +511,10 @@ def main() -> int:
     try:
         identifier = image_id(args.image)
         check_metadata(identifier)
+        check_catalog(identifier)
         print(f"PASS: bundled code integrity, image {identifier}", flush=True)
         root = Path(tempfile.mkdtemp(prefix="nipat engine package ")).resolve()
+        check_plan_contract(identifier, root)
         check_doctor_without_host_scripts(identifier, root)
         check_snp(identifier, root)
         snp_inputs, snp_expected = check_snp_workflow(identifier, root)
@@ -458,6 +522,14 @@ def main() -> int:
         dnp_inputs = check_dnp_workflow(identifier, root, run_container=run_container,
                                       run_image=run_image, write_request=write_request)
         check_dnp_client_without_host_scripts(identifier, root, dnp_inputs)
+        check_snp_plans(identifier, root, snp_inputs, snp_expected, dnp_inputs,
+                        run_image=run_image, run_container=run_container,
+                        check_snp_intermediates=check_snp_intermediates)
+        check_workflow_execution(identifier, root, dnp_inputs, run_image=run_image,
+                                 write_request=write_request)
+        check_cpi_chains(identifier, root, dnp_inputs, run_image=run_image,
+                         run_container=run_container, write_request=write_request)
+        check_imported_cpi_plans(identifier, root, run_image=run_image, write_request=write_request)
         check_contamination_fixture(identifier, root)
         check_contamination_workflow(identifier, root)
         check_cpi_fixture(identifier, root)
@@ -471,7 +543,7 @@ def main() -> int:
         return 1
     shutil.rmtree(root)
     print("PASS: numeric regressions and validation failures without application/source mounts or network.")
-    print("Complete DNPcall, SNPcall, Contamination and CPI workflows verified inside the bundled engine.")
+    print("Complete DNPcall, SNPcall, Contamination and CPI, plus automatic DNPcall -> Contamination/CPI plans and independent SNP batches/tasks, verified inside the bundled engine.")
     return 0
 
 

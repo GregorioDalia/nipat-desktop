@@ -1,0 +1,1268 @@
+{
+  "schema_version": 1,
+  "workflow": "dnp-call",
+  "source": {
+    "path": "scientific/vendor/DNPcall/DNPcall.R",
+    "sha256": "d0600427d058a141da8683d98904c51be95ec09ebd5804ea879164d1f5ce7e36",
+    "line_count": 831
+  },
+  "public_parameters": [
+    {
+      "id": "bamlist",
+      "r_names": [
+        "--bamlist"
+      ],
+      "position": null,
+      "type": "path",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--bam",
+          "--bamlist"
+        ],
+        "request_fields": [
+          "samples"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Elenco dei BAM senza intestazione, passato a R come --bamlist=percorso. NIPAT accetta uno o più BAM oppure una lista e genera un elenco di alias sicuri nel container. Il menu offre entrambe le modalità; i campioni si scelgono per ogni esecuzione.",
+        "en": "Headerless BAM list, passed to R as --bamlist=path. NIPAT accepts one or more BAMs or a list and generates a list of safe container aliases. The menu offers both modes; samples are selected for each execution."
+      },
+      "source_lines": [
+        37,
+        41
+      ]
+    },
+    {
+      "id": "dnp_panel",
+      "r_names": [
+        "--DNPs"
+      ],
+      "position": null,
+      "type": "path",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--panel"
+        ],
+        "request_fields": [
+          "panel"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Pannello senza intestazione con chr, pos1, pos2, REF e ALT. NIPAT valida e riscrive una copia normalizzata, selezionabile da CLI e menu; il percorso del pannello può essere salvato nelle preferenze.",
+        "en": "Headerless panel containing chr, pos1, pos2, REF and ALT. NIPAT validates and writes a normalized copy, selectable through the CLI and menu; its path can be saved in preferences."
+      },
+      "source_lines": [
+        42,
+        46
+      ]
+    },
+    {
+      "id": "reference",
+      "r_names": [
+        "--reference"
+      ],
+      "position": null,
+      "type": "path",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--reference"
+        ],
+        "request_fields": [
+          "reference"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Riferimento genomico FASTA. NIPAT monta il file e gli indici con un alias sicuro. CLI e menu consentono di selezionarlo; il riferimento può essere salvato nelle preferenze.",
+        "en": "FASTA reference genome. NIPAT mounts the file and indexes using a safe alias. The CLI and menu allow selection, and the reference can be saved in preferences."
+      },
+      "source_lines": [
+        47,
+        51
+      ]
+    },
+    {
+      "id": "output_directory",
+      "r_names": [
+        "--out"
+      ],
+      "position": null,
+      "type": "path",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--runs-dir",
+          "--run-name"
+        ],
+        "request_fields": [
+          "work_dir",
+          "out_dir"
+        ],
+        "mapping": "managed"
+      },
+      "description": {
+        "it": "R richiede la directory di output. NIPAT gestisce la destinazione mediante cartella risultati e nome del run, passando a R --out=output dalla radice del run. Non espone liberamente il valore nativo: questa convenzione stabilizza anche il nome del riepilogo.",
+        "en": "R requires an output directory. NIPAT manages it through the results directory and run name, passing --out=output from the run root. The native value is not freely exposed; this convention also stabilizes the summary filename."
+      },
+      "source_lines": [
+        52,
+        56
+      ]
+    },
+    {
+      "id": "parallel",
+      "r_names": [
+        "--parallel"
+      ],
+      "position": null,
+      "type": "boolean",
+      "default": false,
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--parallel"
+        ],
+        "request_fields": [
+          "parallel"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Abilita l’elaborazione parallela dei campioni. L’assenza dell’opzione esegue il calcolo in serie. CLI e menu espongono la scelta, salvabile nelle preferenze; il numero di processi non è un’opzione pubblica R.",
+        "en": "Enables parallel sample processing. Omitting the flag runs samples sequentially. The CLI and menu expose this choice, which can be saved in preferences; the process count is not a public R option."
+      },
+      "source_lines": [
+        86,
+        94
+      ]
+    }
+  ],
+  "fixed_settings": [
+    {
+      "id": "argument_syntax",
+      "kind": "format",
+      "value": {
+        "separator": "=",
+        "options": [
+          "--bamlist",
+          "--DNPs",
+          "--reference",
+          "--out"
+        ],
+        "help_option": false
+      },
+      "description": {
+        "it": "Le opzioni con valore usano il segno =. Il parser cerca sottostringhe non ancorate e prende il primo risultato: non è un parser generico di opzioni. Lo script non implementa --help.",
+        "en": "Valued options use =. The parser searches unanchored substrings and takes the first result; it is not a general option parser. The script does not implement --help."
+      },
+      "source_lines": [
+        33,
+        62
+      ]
+    },
+    {
+      "id": "parallel_workers",
+      "kind": "execution",
+      "value": {
+        "serial": 1,
+        "parallel": "parallel::detectCores()",
+        "parallel_function": "mclapply"
+      },
+      "description": {
+        "it": "La modalità seriale usa un processo di elaborazione dei campioni. Con --parallel il numero di worker è il valore restituito da detectCores(); lo script non offre un limite numerico selezionabile.",
+        "en": "Serial mode uses one sample-processing worker. With --parallel, the worker count is returned by detectCores(); the script exposes no selectable numeric limit."
+      },
+      "source_lines": [
+        86,
+        94
+      ]
+    },
+    {
+      "id": "input_tables",
+      "kind": "format",
+      "value": {
+        "bamlist_header": false,
+        "panel_header": false,
+        "panel_columns": [
+          "chr",
+          "pos1",
+          "pos2",
+          "REF",
+          "ALT"
+        ]
+      },
+      "description": {
+        "it": "Le tabelle sono lette con read.table e separazione su spazi bianchi. Il pannello R ha cinque colonne in questo ordine; NIPAT ne valida lo schema prima dell’avvio.",
+        "en": "Tables are read with read.table using whitespace separation. The R panel has five columns in this order; NIPAT validates its schema before execution."
+      },
+      "source_lines": [
+        98,
+        100
+      ]
+    },
+    {
+      "id": "pileup_window",
+      "kind": "format",
+      "value": {
+        "bed_start": "pos1 - 2",
+        "bed_end": "pos2 + 1",
+        "one_based_positions": [
+          "pos1 - 1",
+          "pos1",
+          "pos2",
+          "pos2 + 1"
+        ]
+      },
+      "description": {
+        "it": "Per due posizioni adiacenti, il BED copre quattro basi: le due del DNP e una base per lato. Coordinate e offset sono accoppiati alla successiva estrazione delle due basi centrali e non sono soglie indipendenti.",
+        "en": "For two adjacent positions, the BED covers four bases: the DNP and one flanking base on each side. Coordinates and offsets are coupled to subsequent extraction of the two central bases and are not independent thresholds."
+      },
+      "source_lines": [
+        108,
+        123
+      ]
+    },
+    {
+      "id": "samtools_arguments",
+      "kind": "execution",
+      "value": {
+        "command": "samtools mpileup",
+        "explicit_options": [
+          "-b",
+          "-l",
+          "-f",
+          "--output-QNAME",
+          "--no-output-ins",
+          "--no-output-del",
+          "--no-output-ends"
+        ],
+        "output": "mpileup.txt",
+        "stderr_ignored": true
+      },
+      "description": {
+        "it": "Il pileup include QNAME. --no-output-ins e --no-output-del, presenti una volta ciascuno, omettono le sequenze inserite/eliminate ma conservano +lunghezza e -lunghezza; --no-output-ends rimuove i marcatori di inizio/fine. I filtri ereditati sono descritti nel profilo samtools. R non controlla esplicitamente il valore restituito da system.",
+        "en": "The pileup includes QNAME. --no-output-ins and --no-output-del, each specified once, omit inserted/deleted sequences but retain +length and -length; --no-output-ends removes start/end markers. Inherited filters are documented in the samtools profile. R does not explicitly check the return value of system."
+      },
+      "source_lines": [
+        145,
+        152
+      ]
+    },
+    {
+      "id": "pileup_sample_columns",
+      "kind": "format",
+      "value": {
+        "common_columns": 3,
+        "columns_per_sample": 4,
+        "sample_fields": [
+          "depth",
+          "bases",
+          "base_quality",
+          "qname"
+        ]
+      },
+      "description": {
+        "it": "Il pileup è interpretato come tre colonne comuni seguite da quattro colonne per campione. La scelta delle colonne dipende dall’ordine dei BAM nella lista.",
+        "en": "The pileup is interpreted as three common columns followed by four columns per sample. Column selection depends on BAM-list order."
+      },
+      "source_lines": [
+        163,
+        216
+      ]
+    },
+    {
+      "id": "reference_marker_expansion",
+      "kind": "format",
+      "value": {
+        "markers": [
+          ".",
+          ","
+        ],
+        "replacement": "reference base from pileup column V3"
+      },
+      "description": {
+        "it": "I marcatori di corrispondenza al riferimento sono sostituiti con la base della terza colonna del pileup, prima di ricostruire gli aplotipi. La classificazione REF/ALT successiva usa gli alleli del pannello.",
+        "en": "Reference-match markers are replaced by the base in pileup column three before haplotypes are reconstructed. Subsequent REF/ALT classification uses panel alleles."
+      },
+      "source_lines": [
+        220,
+        227
+      ]
+    },
+    {
+      "id": "indel_markers",
+      "kind": "filter",
+      "value": {
+        "replacement": "@",
+        "patterns": [
+          "\\*",
+          "[actgACTG]([+-]\\d+)+"
+        ]
+      },
+      "description": {
+        "it": "Il carattere * e i pattern indicati sono trasformati in @. Si tratta della regola testuale implementata dallo script, non di una ricostruzione generale di tutti i possibili eventi indel.",
+        "en": "The * character and listed patterns are replaced with @. This is the script’s implemented textual rule, not a general reconstruction of every possible indel event."
+      },
+      "source_lines": [
+        229,
+        248
+      ]
+    },
+    {
+      "id": "nonempty_read_names",
+      "kind": "filter",
+      "value": {
+        "qname_must_be_nonempty": true
+      },
+      "description": {
+        "it": "Dopo la separazione delle osservazioni, le righe con QNAME vuoto vengono escluse.",
+        "en": "After observations are separated, rows with an empty QNAME are excluded."
+      },
+      "source_lines": [
+        253,
+        262
+      ]
+    },
+    {
+      "id": "read_grouping",
+      "kind": "assumption",
+      "value": {
+        "key": "QNAME + \"_\" + panel row identifier"
+      },
+      "description": {
+        "it": "Ogni osservazione riceve l’identificatore del DNP associato alla coordinata; basi, coordinate e qualità sono aggregate per QNAME e identificatore del DNP. Il suffisso distingue loci vicini coperti dalla stessa lettura.",
+        "en": "Each observation receives the DNP identifier associated with its coordinate; bases, coordinates and qualities are grouped by QNAME and DNP identifier. The suffix distinguishes nearby loci covered by the same read."
+      },
+      "source_lines": [
+        266,
+        299
+      ]
+    },
+    {
+      "id": "phred_encoding",
+      "kind": "formula",
+      "value": {
+        "quality": "ASCII(base-quality character) - 33"
+      },
+      "description": {
+        "it": "Le qualità delle basi sono interpretate come Phred+33, sottraendo 33 al valore del carattere. La codifica non è selezionabile.",
+        "en": "Base qualities are interpreted as Phred+33 by subtracting 33 from the character value. The encoding is not selectable."
+      },
+      "source_lines": [
+        276,
+        277
+      ]
+    },
+    {
+      "id": "strand_normalization",
+      "kind": "format",
+      "value": {
+        "lowercase_bases": "uppercase"
+      },
+      "description": {
+        "it": "Le basi minuscole sono convertite in maiuscole prima del confronto degli aplotipi; il risultato non mantiene conteggi distinti per orientamento.",
+        "en": "Lowercase bases are converted to uppercase before haplotype comparison; output counts are not separated by orientation."
+      },
+      "source_lines": [
+        301,
+        311
+      ]
+    },
+    {
+      "id": "indel_summary",
+      "kind": "formula",
+      "value": {
+        "minimum_serialized_length_exclusive": 6,
+        "central_substring": [
+          3,
+          5
+        ],
+        "count_condition": "@ in central substring",
+        "ratio": "central-indel count / grouped observation count"
+      },
+      "description": {
+        "it": "Il riepilogo indel usa osservazioni con stringa di basi lunga più di sei caratteri e conta @ nelle due basi centrali. Il rapporto usa queste osservazioni come denominatore. È diverso dal filtro successivo, che esclude @ in qualunque colonna e quindi anche nelle basi laterali.",
+        "en": "The indel summary uses observations whose serialized base string exceeds six characters and counts @ in the two central bases. Its denominator is this observation count. This differs from the following filter, which excludes @ in any column, including flanking bases."
+      },
+      "source_lines": [
+        315,
+        366
+      ]
+    },
+    {
+      "id": "indel_exclusion",
+      "kind": "filter",
+      "value": {
+        "condition": "no @ in any column of grouped observation"
+      },
+      "description": {
+        "it": "Una riga aggregata viene esclusa se una qualsiasi colonna contiene @. Il filtro non è limitato alle due basi centrali: il conteggio reads_discarded_for_indels non descrive necessariamente tutte le righe eliminate da questa condizione.",
+        "en": "A grouped row is excluded when any column contains @. The filter is not restricted to the two central bases, so reads_discarded_for_indels does not necessarily describe every row removed by this condition."
+      },
+      "source_lines": [
+        370,
+        372
+      ]
+    },
+    {
+      "id": "central_haplotype_extraction",
+      "kind": "assumption",
+      "value": {
+        "minimum_serialized_length_exclusive": 6,
+        "base_substring": [
+          3,
+          5
+        ],
+        "quality_indices": [
+          2,
+          3
+        ],
+        "coordinate_indices": [
+          2,
+          3
+        ]
+      },
+      "description": {
+        "it": "Dopo il filtro indel, sono mantenute le stringhe di basi lunghe più di sei caratteri. Il codice estrae i caratteri 3–5 della rappresentazione base|base|base|base e gli elementi 2–3 di qualità e coordinate. Il formato atteso contiene le quattro posizioni della finestra; il controllo di lunghezza non impone esattamente quattro osservazioni.",
+        "en": "After indel filtering, serialized base strings longer than six characters are retained. The code extracts characters 3–5 from base|base|base|base and elements 2–3 from qualities and coordinates. The expected format contains the window’s four positions; the length check does not require exactly four observations."
+      },
+      "source_lines": [
+        374,
+        391
+      ]
+    },
+    {
+      "id": "haplotype_quality",
+      "kind": "formula",
+      "value": {
+        "value": "arithmetic mean of the two selected Phred qualities",
+        "na_rm": false
+      },
+      "description": {
+        "it": "La qualità assegnata al dinucleotide è la media aritmetica delle qualità Phred delle due basi selezionate. Non viene usato un parametro di qualità aggiuntivo in R.",
+        "en": "Dinucleotide quality is the arithmetic mean of the two selected Phred base qualities. R applies no additional configurable quality parameter."
+      },
+      "source_lines": [
+        393,
+        398
+      ]
+    },
+    {
+      "id": "observed_haplotype_counts",
+      "kind": "formula",
+      "value": {
+        "grouping": [
+          "DNP coordinate pair",
+          "observed dinucleotide"
+        ],
+        "total_count": "sum of grouped counts",
+        "combined_separator": "-"
+      },
+      "description": {
+        "it": "Le osservazioni rimaste sono contate per DNP e dinucleotide; combined_bases e combined_counts elencano le combinazioni con separatore -, mentre total_count ne somma i conteggi.",
+        "en": "Remaining observations are counted by DNP and dinucleotide; combined_bases and combined_counts list combinations using -, while total_count sums their counts."
+      },
+      "source_lines": [
+        401,
+        419
+      ]
+    },
+    {
+      "id": "other_allele_definition",
+      "kind": "formula",
+      "value": {
+        "condition": "observed haplotype != panel REF and != panel ALT"
+      },
+      "description": {
+        "it": "N_Other conta i dinucleotidi diversi sia da REF sia da ALT del pannello. Queste osservazioni sono escluse dal calcolo delle likelihood dei genotipi.",
+        "en": "N_Other counts dinucleotides differing from both panel REF and ALT. These observations are excluded from genotype-likelihood calculation."
+      },
+      "source_lines": [
+        421,
+        455
+      ]
+    },
+    {
+      "id": "ploidy",
+      "kind": "formula",
+      "value": 2,
+      "description": {
+        "it": "Il modello è diploide: la chiamata alla funzione delle likelihood passa esplicitamente ploidy=2. Il valore non è un parametro pubblico dello script.",
+        "en": "The model is diploid: the likelihood function is explicitly called with ploidy=2. This value is not a public script parameter."
+      },
+      "source_lines": [
+        481,
+        498
+      ]
+    },
+    {
+      "id": "genotype_likelihood",
+      "kind": "formula",
+      "value": {
+        "epsilon": "10^(-Qavg/10)",
+        "p_ref": "(2-g)/2*(1-epsilon) + g/2*epsilon",
+        "p_alt": "(2-g)/2*epsilon + g/2*(1-epsilon)",
+        "g": [
+          0,
+          1,
+          2
+        ],
+        "log_likelihood": "sum(log(p_observation))",
+        "log_base": "e"
+      },
+      "description": {
+        "it": "Le likelihood GL0, GL1 e GL2 sommano logaritmi naturali delle probabilità per lettura, usando il modello REF/ALT e l’errore derivato dalla qualità media. Non sono valori log10 né punteggi Phred. Il codice non applica un limite minimo esplicito alle probabilità prima del logaritmo.",
+        "en": "GL0, GL1 and GL2 sum natural logarithms of per-read probabilities, using the REF/ALT model and the error derived from mean quality. They are neither log10 values nor Phred scores. The code applies no explicit probability floor before the logarithm."
+      },
+      "source_lines": [
+        459,
+        479
+      ]
+    },
+    {
+      "id": "genotype_selection",
+      "kind": "formula",
+      "value": {
+        "rule": "which.max(logL)",
+        "ordered_genotypes": [
+          "0/0",
+          "0/1",
+          "1/1"
+        ]
+      },
+      "description": {
+        "it": "Il genotipo è quello con likelihood massima nell’ordine 0/0, 0/1, 1/1; which.max seleziona il primo massimo in caso di parità. Non è richiesta una distanza minima tra la migliore e la seconda likelihood.",
+        "en": "The genotype has the highest likelihood in the order 0/0, 0/1, 1/1; which.max chooses the first maximum on a tie. No minimum separation between the best and second-best likelihood is required."
+      },
+      "source_lines": [
+        497,
+        512
+      ]
+    },
+    {
+      "id": "panel_completion",
+      "kind": "format",
+      "value": {
+        "merge": "full outer joins including panel",
+        "missing_value_replacement": 0
+      },
+      "description": {
+        "it": "Il codice unisce conteggi, pannello e likelihood con join esterni completi, poi sostituisce globalmente i valori mancanti con zero. Questa sostituzione avviene prima della regola che rende non assegnabile il genotipo.",
+        "en": "Counts, panel and likelihoods are combined with full outer joins, then missing values are globally replaced with zero. This replacement precedes the rule that marks a genotype as unassigned."
+      },
+      "source_lines": [
+        555,
+        573
+      ]
+    },
+    {
+      "id": "genotype_other_fraction",
+      "kind": "filter",
+      "value": {
+        "numerator": "N_Other",
+        "denominator": "N_Other + N_REF + N_ALT",
+        "operator": ">=",
+        "threshold": 0.1,
+        "result": "GT = NA"
+      },
+      "description": {
+        "it": "Il genotipo è reso NA quando almeno il 10% delle osservazioni conteggiate appartiene ad alleli diversi da REF e ALT. La soglia include l’uguaglianza ed è fissa nel codice R; non elimina il sito o i relativi conteggi.",
+        "en": "The genotype becomes NA when at least 10% of counted observations belong to alleles other than REF and ALT. Equality is included and the threshold is fixed in R; the site and its counts are not removed."
+      },
+      "source_lines": [
+        575,
+        577
+      ]
+    },
+    {
+      "id": "output_columns",
+      "kind": "format",
+      "value": [
+        "chr",
+        "pos1",
+        "pos2",
+        "REF",
+        "ALT",
+        "N_REF",
+        "N_ALT",
+        "N_Other",
+        "GL0",
+        "GL1",
+        "GL2",
+        "GT",
+        "combined_bases",
+        "combined_counts",
+        "total_count",
+        "reads_discarded_for_indels",
+        "ratio_reads_discarded_for_indels"
+      ],
+      "description": {
+        "it": "La tabella individuale espone queste colonne in ordine. Le coordinate sono numeriche e i separatori interni | sono rimossi dagli alleli; il riepilogo indel viene associato tramite chr, pos1 e pos2.",
+        "en": "The individual table exposes these columns in order. Coordinates are numeric and internal | separators are removed from alleles; the indel summary is joined by chr, pos1 and pos2."
+      },
+      "source_lines": [
+        579,
+        607
+      ]
+    },
+    {
+      "id": "numeric_output_rounding",
+      "kind": "presentation",
+      "value": {
+        "decimal_places": 3,
+        "whole_numbers": "unchanged"
+      },
+      "description": {
+        "it": "Prima della scrittura delle tabelle, i valori numerici non interi sono arrotondati a tre decimali; i numeri interi restano tali. L’arrotondamento riguarda la serializzazione, non la scelta del genotipo.",
+        "en": "Before tables are written, non-integer numeric values are rounded to three decimal places; integers remain unchanged. Rounding affects serialization, not genotype selection."
+      },
+      "source_lines": [
+        70,
+        82
+      ]
+    },
+    {
+      "id": "individual_output_files",
+      "kind": "format",
+      "value": {
+        "table": "individual_outputs/full_output_<sample>.txt",
+        "separator": "tab",
+        "row_names": false,
+        "quotes": false,
+        "plot_directory": "plots/<sample>"
+      },
+      "description": {
+        "it": "Ogni campione produce una tabella TSV e una cartella di grafici. Nel percorso NIPAT il nome campione è l’alias interno; l’associazione al BAM originale è conservata nei metadati del run.",
+        "en": "Each sample produces a TSV table and a plot directory. In NIPAT, the sample name is the internal alias; run metadata retain its association with the original BAM."
+      },
+      "source_lines": [
+        629,
+        639
+      ]
+    },
+    {
+      "id": "individual_plot_layout",
+      "kind": "presentation",
+      "value": {
+        "width_inches": 11,
+        "height_inches": 5,
+        "read_count_colours": {
+          "reference": "green3",
+          "alternative": "red3",
+          "other": "steelblue"
+        },
+        "read_count_x_text": {
+          "angle": 90,
+          "size": 5,
+          "label_stride": 5
+        }
+      },
+      "description": {
+        "it": "Il grafico dei genotipi e i tre grafici dei conteggi sono PDF di 11×5 pollici. Colori, rotazione e densità delle etichette sono impostazioni di presentazione fisse, senza effetto sui conteggi.",
+        "en": "The genotype plot and three count plots are 11×5-inch PDFs. Colours, rotation and label density are fixed presentation settings that do not affect counts."
+      },
+      "source_lines": [
+        642,
+        710
+      ]
+    },
+    {
+      "id": "read_count_plot_bins",
+      "kind": "presentation",
+      "value": {
+        "first_break": 1,
+        "break_step": 5,
+        "final_break": "Inf",
+        "max_break": "ceiling((maximum count + 10)/10)*10",
+        "labels": "break to break+4",
+        "right_closed": true,
+        "include_lowest": true
+      },
+      "description": {
+        "it": "I grafici raggruppano i conteggi con cut usando questi estremi e queste etichette. Lo zero è sotto il primo estremo e non entra nelle classi. Le etichette sono costruite separatamente dagli intervalli effettivi di cut.",
+        "en": "Count plots group values with cut using these boundaries and labels. Zero lies below the first boundary and does not enter a bin. Labels are constructed separately from the actual cut intervals."
+      },
+      "source_lines": [
+        648,
+        668
+      ]
+    },
+    {
+      "id": "summary_output",
+      "kind": "format",
+      "value": {
+        "merge_keys": [
+          "chr",
+          "pos1",
+          "pos2",
+          "REF",
+          "ALT"
+        ],
+        "merge": "full outer join",
+        "genotype_column_prefix": "GT_",
+        "native_filename": "summary/<out>_AllGenotypes.txt"
+      },
+      "description": {
+        "it": "Il riepilogo unisce i genotipi dei campioni sulle coordinate e sugli alleli. Il nome nativo incorpora il valore --out; con la convenzione NIPAT --out=output il file è output/summary/output_AllGenotypes.txt.",
+        "en": "The summary joins sample genotypes on coordinates and alleles. Its native filename incorporates --out; under NIPAT’s --out=output convention, the file is output/summary/output_AllGenotypes.txt."
+      },
+      "source_lines": [
+        737,
+        753
+      ]
+    },
+    {
+      "id": "memory_reporting",
+      "kind": "execution",
+      "value": {
+        "source": "/proc/self/status: VmRSS",
+        "kb_divisor": 1024,
+        "decimal_places": 2
+      },
+      "description": {
+        "it": "La memoria riportata deriva da misure puntuali della RSS del processo R. Il massimo osservato durante i controlli non è una misura continua della memoria totale di R, worker e samtools.",
+        "en": "Reported memory comes from point-in-time R-process RSS measurements. The maximum observed during checks is not a continuous measurement of the combined memory of R, workers and samtools."
+      },
+      "source_lines": [
+        4,
+        21
+      ]
+    },
+    {
+      "id": "unassigned_genotype_plot",
+      "kind": "presentation",
+      "value": {
+        "count": "row sum of is.na across GT columns",
+        "width_inches": "number of DNP rows",
+        "height_inches": 5,
+        "limitsize": false
+      },
+      "description": {
+        "it": "Il PDF dei genotipi non assegnati conta i valori NA per DNP nelle colonne GT; la larghezza dipende dal numero di DNP, con altezza fissa di cinque pollici.",
+        "en": "The unassigned-genotype PDF counts NA values per DNP across GT columns; its width depends on the number of DNPs, with a fixed five-inch height."
+      },
+      "source_lines": [
+        766,
+        784
+      ]
+    },
+    {
+      "id": "upset_plot",
+      "kind": "presentation",
+      "value": {
+        "minimum_samples": 2,
+        "binary_encoding": {
+          "NA": 0,
+          "non_NA": 1
+        },
+        "minimum_intersection_size": 0,
+        "width_inches": "sample count * 30",
+        "height_inches": "sample count * 2",
+        "limitsize": false
+      },
+      "description": {
+        "it": "L’UpSet viene prodotto soltanto con almeno due campioni. La copertura visualizzata è definita come genotipo non NA, non come semplice presenza di letture; le dimensioni del PDF dipendono dal numero di campioni.",
+        "en": "The UpSet plot is produced only with at least two samples. Displayed coverage means a non-NA genotype, not simply the presence of reads; PDF dimensions depend on sample count."
+      },
+      "source_lines": [
+        789,
+        819
+      ]
+    },
+    {
+      "id": "temporary_file_cleanup",
+      "kind": "execution",
+      "value": [
+        "mpileup.txt",
+        "bedfile_for_mpileup.bed"
+      ],
+      "description": {
+        "it": "Alla fine dello script, il pileup e il BED temporanei nella directory di lavoro R vengono rimossi. Non sono quindi risultati intermedi conservati da questa implementazione DNPcall.",
+        "en": "At the end of the script, the temporary pileup and BED in the R working directory are removed. They are therefore not retained intermediate results in this DNPcall implementation."
+      },
+      "source_lines": [
+        824,
+        831
+      ]
+    }
+  ],
+  "preparation_settings": [
+    {
+      "id": "normalized_panel",
+      "value": {
+        "columns": [
+          "chr",
+          "pos1",
+          "pos2",
+          "REF",
+          "ALT"
+        ],
+        "adjacency": "pos2 = pos1 + 1",
+        "minimum_pos1": 1,
+        "allele_length": 2,
+        "allele_alphabet": "ACGT",
+        "duplicate_coordinates": "rejected"
+      },
+      "applies_to": "dnp-call",
+      "origin": "NIPAT",
+      "description": {
+        "it": "NIPAT richiede coordinate adiacenti positive, dinucleotidi A/C/G/T e coordinate non duplicate; normalizza gli alleli in maiuscolo e scrive una copia TSV senza intestazione. Il controllo minimo è pos1≥1: non garantisce che l’offset BED pos1−2 sia non negativo.",
+        "en": "NIPAT requires positive adjacent coordinates, A/C/G/T dinucleotides and no duplicate coordinates; it uppercases alleles and writes a headerless TSV copy. The minimum check is pos1≥1, which does not guarantee that BED offset pos1−2 is nonnegative."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/panels.py",
+        "source_lines": [
+          20,
+          73
+        ],
+        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+      }
+    },
+    {
+      "id": "reference_indexes",
+      "value": {
+        "required": [
+          ".fai"
+        ],
+        "compressed_extensions": [
+          ".gz",
+          ".bgz",
+          ".bgzf"
+        ],
+        "compressed_additional_index": ".gzi"
+      },
+      "applies_to": "dnp-call",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Il FASTA richiede l’indice .fai; i riferimenti compressi con estensione riconosciuta richiedono anche .gzi. NIPAT verifica la presenza dei file senza generarli accanto agli input.",
+        "en": "The FASTA requires a .fai index; references with a recognized compressed extension also require .gzi. NIPAT checks file presence without creating indexes beside inputs."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/dnp.py",
+        "source_lines": [
+          68,
+          74
+        ],
+        "sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7"
+      }
+    },
+    {
+      "id": "sample_aliases",
+      "value": {
+        "format": "sample_<four-digit sequential number>.bam",
+        "duplicate_bams": "rejected",
+        "bam_indexes": "optional"
+      },
+      "applies_to": "dnp-call",
+      "origin": "NIPAT",
+      "description": {
+        "it": "I BAM ricevono alias progressivi sicuri, evitando l’uso dei nomi originali nei comandi shell dello script. BAM ripetuti sono rifiutati; indici BAM esistenti sono ammessi ma non obbligatori.",
+        "en": "BAMs receive safe sequential aliases, avoiding original names in the script’s shell commands. Repeated BAMs are rejected; existing BAM indexes are allowed but not required."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/dnp.py",
+        "source_lines": [
+          76,
+          98
+        ],
+        "sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7"
+      }
+    },
+    {
+      "id": "output_layout",
+      "value": {
+        "working_directory": "run root",
+        "work_subdirectory": "work",
+        "output_subdirectory": "output",
+        "nonempty_output": "rejected",
+        "native_out": "output"
+      },
+      "applies_to": "dnp-call",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Preparazione e risultati sono isolati nel run; gli input non possono essere dentro work o output. File di preparazione preesistenti e directory risultati non vuote sono rifiutati prima della scrittura.",
+        "en": "Preparation and results are isolated in the run; inputs cannot reside inside work or output. Existing preparation files and nonempty results directories are rejected before writing."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/dnp.py",
+        "source_lines": [
+          100,
+          136
+        ],
+        "sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7"
+      }
+    },
+    {
+      "id": "original_sample_mapping",
+      "value": {
+        "metadata": "run parameters: sample_mapping",
+        "fields": [
+          "sample_id",
+          "original_path",
+          "container_path"
+        ]
+      },
+      "applies_to": "dnp-call",
+      "origin": "NIPAT",
+      "description": {
+        "it": "Il client registra l’associazione fra alias, BAM originale e percorso nel container nei parametri del run. I nomi delle tabelle R continuano a usare l’alias del campione.",
+        "en": "The client records the association among alias, original BAM and container path in run parameters. R table filenames continue to use the sample alias."
+      },
+      "evidence": {
+        "path": "src/nipat/execution/workflows.py",
+        "source_lines": [
+          193,
+          209
+        ],
+        "sha256": "bd7a4a3a8801280cd078682771cb52cd92dc726c2ed9376461e49a4d83623b7e"
+      }
+    },
+    {
+      "id": "mpileup_inherited_defaults",
+      "value": {
+        "samtools_version": "1.21",
+        "minimum_mapping_quality": 0,
+        "minimum_base_quality": 13,
+        "maximum_depth_per_file_per_position": 8000,
+        "baq_with_reference": true,
+        "excluded_flags": [
+          "SECONDARY",
+          "QCFAIL",
+          "DUP"
+        ],
+        "unmapped_reads": "excluded",
+        "anomalous_pairs": "excluded",
+        "overlap_removal": true
+      },
+      "applies_to": "dnp-call",
+      "origin": "samtools_documented_defaults",
+      "description": {
+        "it": "Default documentati di samtools 1.21 ereditati dal comando DNPcall: non imposta -q, -Q, -d, -B, -A, --ff o -x. Le qualità sono Phred; la profondità massima è per file e posizione.",
+        "en": "Documented samtools 1.21 defaults inherited by DNPcall: its command sets none of -q, -Q, -d, -B, -A, --ff or -x. Qualities are Phred scores; maximum depth applies per file and position."
+      },
+      "evidence": {
+        "path": "scientific/vendor/DNPcall/DNPcall.R",
+        "source_lines": [
+          147,
+          152
+        ],
+        "url": "https://www.htslib.org/doc/1.21/samtools-mpileup.html",
+        "sha256": "d0600427d058a141da8683d98904c51be95ec09ebd5804ea879164d1f5ce7e36",
+        "dependencies": [
+          {
+            "path": "docker/scientific-runtime/Dockerfile",
+            "source_lines": [
+              5,
+              6
+            ],
+            "sha256": "634387bdd5f496131b58cc0752b3e09b4118a0469a943e631d0f3ff67b3386a4"
+          }
+        ]
+      }
+    }
+  ],
+  "audit_sections": [
+    {
+      "start": 1,
+      "end": 25,
+      "summary": {
+        "it": "Avvio e campionamento della memoria RSS del processo R.",
+        "en": "Startup and sampling of R-process RSS memory."
+      }
+    },
+    {
+      "start": 26,
+      "end": 32,
+      "summary": {
+        "it": "Caricamento delle librerie R.",
+        "en": "Loading R libraries."
+      }
+    },
+    {
+      "start": 33,
+      "end": 63,
+      "summary": {
+        "it": "Lettura delle quattro opzioni obbligatorie con valore e controllo delle opzioni mancanti.",
+        "en": "Reading the four required valued options and checking for missing options."
+      }
+    },
+    {
+      "start": 64,
+      "end": 69,
+      "summary": {
+        "it": "Creazione delle directory dei risultati.",
+        "en": "Creating result directories."
+      }
+    },
+    {
+      "start": 70,
+      "end": 85,
+      "summary": {
+        "it": "Funzione di arrotondamento delle colonne numeriche.",
+        "en": "Numeric-column rounding function."
+      }
+    },
+    {
+      "start": 86,
+      "end": 97,
+      "summary": {
+        "it": "Selezione della modalità parallela e del numero di worker.",
+        "en": "Selecting parallel mode and worker count."
+      }
+    },
+    {
+      "start": 98,
+      "end": 107,
+      "summary": {
+        "it": "Lettura della lista BAM e del pannello e stampa dei campioni.",
+        "en": "Reading the BAM list and panel and displaying samples."
+      }
+    },
+    {
+      "start": 108,
+      "end": 130,
+      "summary": {
+        "it": "Generazione del BED e associazione delle quattro posizioni a ciascun DNP.",
+        "en": "Generating the BED and associating four positions with each DNP."
+      }
+    },
+    {
+      "start": 131,
+      "end": 144,
+      "summary": {
+        "it": "Preparazione delle coordinate e degli alleli dinucleotidici del pannello.",
+        "en": "Preparing panel coordinates and dinucleotide alleles."
+      }
+    },
+    {
+      "start": 145,
+      "end": 153,
+      "summary": {
+        "it": "Comando samtools mpileup e invocazione shell.",
+        "en": "samtools mpileup command and shell invocation."
+      }
+    },
+    {
+      "start": 154,
+      "end": 170,
+      "summary": {
+        "it": "Derivazione dei nomi campione e lettura del pileup tabulare.",
+        "en": "Deriving sample names and reading the tabular pileup."
+      }
+    },
+    {
+      "start": 171,
+      "end": 218,
+      "summary": {
+        "it": "Inizio dell’elaborazione individuale, memoria e selezione delle colonne del campione.",
+        "en": "Starting individual processing, memory sampling and sample-column selection."
+      }
+    },
+    {
+      "start": 219,
+      "end": 250,
+      "summary": {
+        "it": "Espansione dei marcatori del riferimento e normalizzazione testuale di basi, QNAME e qualità.",
+        "en": "Expanding reference markers and text normalization of bases, QNAMEs and qualities."
+      }
+    },
+    {
+      "start": 251,
+      "end": 264,
+      "summary": {
+        "it": "Separazione delle osservazioni ed esclusione dei QNAME vuoti.",
+        "en": "Separating observations and excluding empty QNAMEs."
+      }
+    },
+    {
+      "start": 265,
+      "end": 299,
+      "summary": {
+        "it": "Associazione QNAME-DNP, conversione Phred e aggregazione delle osservazioni.",
+        "en": "QNAME-DNP association, Phred conversion and observation grouping."
+      }
+    },
+    {
+      "start": 300,
+      "end": 314,
+      "summary": {
+        "it": "Normalizzazione dell’orientamento delle basi.",
+        "en": "Normalizing base orientation."
+      }
+    },
+    {
+      "start": 315,
+      "end": 369,
+      "summary": {
+        "it": "Calcolo dei conteggi e del rapporto indel sulle posizioni centrali.",
+        "en": "Calculating indel counts and fraction at central positions."
+      }
+    },
+    {
+      "start": 370,
+      "end": 400,
+      "summary": {
+        "it": "Filtro indel, selezione del dinucleotide centrale e qualità media.",
+        "en": "Indel filtering, central dinucleotide selection and mean quality."
+      }
+    },
+    {
+      "start": 401,
+      "end": 420,
+      "summary": {
+        "it": "Conteggi delle combinazioni osservate e del totale per DNP.",
+        "en": "Counting observed combinations and totals per DNP."
+      }
+    },
+    {
+      "start": 421,
+      "end": 456,
+      "summary": {
+        "it": "Join con il pannello, conteggio OTHER e selezione delle osservazioni REF/ALT.",
+        "en": "Joining the panel, counting OTHER and selecting REF/ALT observations."
+      }
+    },
+    {
+      "start": 457,
+      "end": 480,
+      "summary": {
+        "it": "Definizione del modello di likelihood diploide.",
+        "en": "Defining the diploid likelihood model."
+      }
+    },
+    {
+      "start": 481,
+      "end": 522,
+      "summary": {
+        "it": "Calcolo delle likelihood per sito e scelta del genotipo.",
+        "en": "Calculating per-site likelihoods and selecting the genotype."
+      }
+    },
+    {
+      "start": 523,
+      "end": 554,
+      "summary": {
+        "it": "Conteggi dei dinucleotidi REF e ALT.",
+        "en": "Counting REF and ALT dinucleotides."
+      }
+    },
+    {
+      "start": 555,
+      "end": 574,
+      "summary": {
+        "it": "Unione delle tabelle, completamento dei valori mancanti e schema intermedio.",
+        "en": "Joining tables, filling missing values and defining the intermediate schema."
+      }
+    },
+    {
+      "start": 575,
+      "end": 578,
+      "summary": {
+        "it": "Invalidazione del genotipo alla soglia OTHER del 10%.",
+        "en": "Marking the genotype unassigned at the 10% OTHER threshold."
+      }
+    },
+    {
+      "start": 579,
+      "end": 628,
+      "summary": {
+        "it": "Costruzione della tabella finale, join del riepilogo indel e memoria.",
+        "en": "Building the final table, joining the indel summary and memory sampling."
+      }
+    },
+    {
+      "start": 629,
+      "end": 641,
+      "summary": {
+        "it": "Nome della colonna GT, arrotondamento e scrittura dell’output individuale.",
+        "en": "GT-column naming, rounding and writing individual output."
+      }
+    },
+    {
+      "start": 642,
+      "end": 668,
+      "summary": {
+        "it": "Grafico dei genotipi e funzione di classificazione dei conteggi per i grafici.",
+        "en": "Genotype plot and count-binning function for plots."
+      }
+    },
+    {
+      "start": 669,
+      "end": 711,
+      "summary": {
+        "it": "Grafici dei conteggi REF, ALT e OTHER.",
+        "en": "REF, ALT and OTHER count plots."
+      }
+    },
+    {
+      "start": 712,
+      "end": 725,
+      "summary": {
+        "it": "Resoconto temporale e di memoria e ritorno dei risultati individuali.",
+        "en": "Timing and memory summary and return of individual results."
+      }
+    },
+    {
+      "start": 726,
+      "end": 736,
+      "summary": {
+        "it": "Esecuzione seriale o parallela dell’elaborazione per campione.",
+        "en": "Sequential or parallel execution of sample processing."
+      }
+    },
+    {
+      "start": 737,
+      "end": 755,
+      "summary": {
+        "it": "Unione dei genotipi fra campioni e scrittura della tabella di riepilogo.",
+        "en": "Joining sample genotypes and writing the summary table."
+      }
+    },
+    {
+      "start": 756,
+      "end": 765,
+      "summary": {
+        "it": "Resoconto complessivo di tempi, memoria e numero di campioni.",
+        "en": "Overall timing, memory and sample-count summary."
+      }
+    },
+    {
+      "start": 766,
+      "end": 788,
+      "summary": {
+        "it": "Conteggio e grafico dei genotipi non assegnati.",
+        "en": "Counting and plotting unassigned genotypes."
+      }
+    },
+    {
+      "start": 789,
+      "end": 820,
+      "summary": {
+        "it": "Matrice binaria dei genotipi assegnati e grafico UpSet condizionale.",
+        "en": "Binary assigned-genotype matrix and conditional UpSet plot."
+      }
+    },
+    {
+      "start": 821,
+      "end": 831,
+      "summary": {
+        "it": "Rimozione dei file temporanei e messaggio finale.",
+        "en": "Removing temporary files and final message."
+      }
+    }
+  ]
+}

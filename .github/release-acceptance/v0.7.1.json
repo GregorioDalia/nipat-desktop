@@ -1,0 +1,133 @@
+{
+  "schema_version": 3,
+  "version": "0.7.1",
+  "source_commit": "9bbdb8bf1163302c77ce94be687596b07e9d1250",
+  "installer_manifest_sha256": "a02a4fde9e5d1939020e2da9e53b5e2c7faa0056dda26835d75199c4dacf101d",
+  "scientific_archive_sha256": "c0c514a686e98c70afcd28e08ab4084167acdc6dbf321c73bc350c73d04ec40a",
+  "windows_installer_sha256": "1e4987a8fc37c2712fe865b832f4a8498ce964107f5cc7c950ae4ffb61844934",
+  "linux_installer_sha256": "4f0a43710ed92fe0299a182814c93ee6f215f43e00c9050a7cfc5e697846edd5",
+  "build_run_id": 40331221644,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "Codex, revisione tecnica su incarico di Gregorio Dalia",
+    "reviewed_at": "2026-10-26T13:57:18Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/1603d998e036ba73d37f015338c1200c1ea12c65/.github/release-acceptance/v0.7.1-evidence.md",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/40331221644",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/40331065857"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "1b601081a4aff9efe1806c921fd7ac963feea7b7",
+    "observations": [
+      "installation_ready",
+      "automatic_workflow_sample_analysis"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/1603d998e036ba73d37f015338c1200c1ea12c65/.github/release-acceptance/v0.7.1-evidence.md"
+    ],
+    "source_equivalence_scope": "scientific-runtime-equivalence-with-reviewed-client-changes-v1"
+  },
+  "reviewed_source_changes": [
+    {
+      "path": "installer/windows/bootstrap-common.ps1",
+      "before_sha256": "836c8f0071e8f229dda6011792a8bbbd362fd78f9a3b4bbb700262b2440055b7",
+      "after_sha256": "d30af7b328937223718dc45c0f35e3cf332e979fba02fa636b9b5875058205c7"
+    },
+    {
+      "path": "installer/windows/test-bootstrap.ps1",
+      "before_sha256": "f5a77570672c9ee586a5f66756ed0d94aca3b17e8d09b4a00765aa868d216112",
+      "after_sha256": "57e42dd273bc5a5806a6e8cf9a92ca06e631ccd9e8b8a5edd614e6861dafb943"
+    },
+    {
+      "path": "pyproject.toml",
+      "before_sha256": "8926a6c0809b40fe7c4edc760530f63dbfb3ae21075af307e8fdea745d8ad321",
+      "after_sha256": "cfe3386e3a5584dd671e85aac979dac6543574afdeacb9ae84fb1a7f4e761667"
+    },
+    {
+      "path": "scripts/verify_windows_payload.py",
+      "before_sha256": "21c4894da194ff4e5e22ae502d15962ab9ae05fb0561eb347b625e139582efd1",
+      "after_sha256": "4462dc87c047aa64f70b26e704f784d8a42f17fc789ded853c5acbd2c5afefff"
+    },
+    {
+      "path": "src/nipat/__init__.py",
+      "before_sha256": "def754c170a99a8c515be3b86a12243269aac2c647904a1e745903665b2b3ada",
+      "after_sha256": "2e1890fbe8acbc394f3460a3b2f0fe8bd85977f6404a080a15538322561831bb"
+    },
+    {
+      "path": "src/nipat/errors.py",
+      "before_sha256": "847da0e36f07d75dad4fb0d78448a649bcb711a8ba159766aca158659d6addf4",
+      "after_sha256": "45849c4e14863bc3e74e9722a53e4b015998b58ce6d481795ad3688e6b51b364"
+    },
+    {
+      "path": "src/nipat/execution/runner.py",
+      "before_sha256": "0d70c74e22a6fa8e0f8a5113b57be0683b2a5dc7bd209ec8e40e17170a94c8cf",
+      "after_sha256": "0a26f78e7dc1de87864605cda363369cbb2d6a032430f0a5773465eb8dcddb95"
+    },
+    {
+      "path": "src/nipat/terminal.py",
+      "before_sha256": "f24848d81511692bff0bffabf7692f5bfa1a12dd4b60b069ff254311dc7d9adc",
+      "after_sha256": "180e56a433d01077ec95bbdc9d2c5c822d81ac5c04596c87a32b7920e3d5a983"
+    },
+    {
+      "path": "src/nipat/wizard.py",
+      "before_sha256": "3231646d0bcf0971f59b0ac78ef84f46fb7a41d7940c64ccd9c09c9ba4e62ebf",
+      "after_sha256": "d59197818b493502ff3f02d46fe375523fbb04961f9e1509b63b8089a60963f0"
+    },
+    {
+      "path": "src/nipat/wizard_forms.py",
+      "before_sha256": "83108041fefc2f1d162f44f6718c3004016718f733e1f252159e77b60b5afd6d",
+      "after_sha256": "edcb83f477e55cadc5b15506d5cd7b15ec8f6b9c2f35f32d5a9ca18d229a0d9c"
+    },
+    {
+      "path": "src/nipat/wizard_settings.py",
+      "before_sha256": "92ca11c360ca91b42e1b16487d4e7a9be910799840c1b21dd2ee6306e59143d8",
+      "after_sha256": "fe5fb9ba2c37e1be70f061259a50ad742980019041df585257431e0aea156ca6"
+    },
+    {
+      "path": "src/nipat/workflow_forms.py",
+      "before_sha256": "27b8308b5515be8cc9727be1190423af016608c6af6c0a5d311ff8f6005b8f9c",
+      "after_sha256": "ac9f17ac785c65e0c158959c501ae339f0a01cca00116454aae963f7d68abf06"
+    },
+    {
+      "path": "tests/test_cli_validation.py",
+      "before_sha256": "8ce391928c207fb7c38d96b747a540e2202659de4d6f756513412fa412ac84cf",
+      "after_sha256": "5269eddbe0ef46274a182bb9fb5f9dbe60b4d754bc9f497b749256e2507c73a6"
+    },
+    {
+      "path": "tests/test_run_tracking.py",
+      "before_sha256": "3c1b72221dfe7ba05c08669b0241f32e5f325ebb7acf9d42899d9c6b9ab391e9",
+      "after_sha256": "f706556a3a386251009dd72870daefdf0ed4ee3cb8d5b2a68f0dd49713e3e68d"
+    },
+    {
+      "path": "tests/test_terminal.py",
+      "before_sha256": "0a7252383e24880f899d276bef1ad07bdcac3b829b09fd99374b34b0936595c8",
+      "after_sha256": "b9bcf3452cba965fc8531013f46d27add77be8c1a3a948bb4ea9a3a1d658c29b"
+    },
+    {
+      "path": "tests/test_wizard_guidance.py",
+      "before_sha256": "4c601c995588a7d335b03d6bace43c12e0a22c7e3a24d9c23dd8b20d52654967",
+      "after_sha256": "13d3c8a3fbf4930fed8dcfcaae85693de4832c3efe1047997a84257378376ec7"
+    },
+    {
+      "path": "tests/test_wizard_settings.py",
+      "before_sha256": "56ef04c159f41aa11333bffbd04c47f4f6924b7de22aabb2ee33354eec857d09",
+      "after_sha256": "d38b088d672e85e88d655cdc93bbdd5e620f1991d462617051cfbc4919e7ccb9"
+    },
+    {
+      "path": "tests/test_workflow_wizard.py",
+      "before_sha256": "34ea60fc6168e53336da12c869c52344812a66ddce95778c330db481b814f626",
+      "after_sha256": "5cbfccd0d0114196324a3d5a9696496bc28b8e1859db485a96bc13c9e85f594e"
+    }
+  ],
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "pending-domain-researchers"
+}

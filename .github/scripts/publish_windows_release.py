@@ -158,7 +158,7 @@ def require_publication_supported(version, acceptance=None, commit=None, run_id=
 
 def verify_research_baseline(record, validator):
     """Fetch an observed PR checkout if necessary, then compare actual source bytes."""
-    if record.get("schema_version") != 2:
+    if record.get("schema_version") not in (2, 3):
         return None
     baseline = record["observed_baseline"]["source_commit"]
     require(re.fullmatch(r"[0-9a-f]{40}", baseline), "Invalid baseline source commit")
@@ -173,7 +173,7 @@ def verify_research_baseline(record, validator):
 def release_notes(commit, publication_commit, version, acceptance):
     # Research acceptance can be reviewed after the immutable installers were built.
     # Pin its explanatory documentation to the same preparation commit in both phases.
-    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") == 2 else commit
+    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3) else commit
     notes = source_bytes(notes_commit, f"docs/RELEASE_{version}.md").decode("utf-8").strip()
     return re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
         f"https://github.com/{REPO}/blob/{notes_commit}/docs/", m[1]) + ")", notes)
@@ -205,7 +205,7 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
     validator.validate(acceptance, actual["version"], commit, run_id, installer_set=actual)
     require(json.loads(acceptance_bytes) == acceptance, "Acceptance bytes differ from the validated record")
     baseline_check = validator.verify_baseline(acceptance, source_bytes) \
-        if acceptance.get("schema_version") == 2 else None
+        if acceptance.get("schema_version") in (2, 3) else None
     manifest = prepare_assets(setup, runtime, output, commit)
     additions = {
         actual["linux"]["file"]: linux / actual["linux"]["file"],
@@ -215,6 +215,9 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
         "linux-dependency-check.json": linux / "linux-dependency-check.json",
         "installer-set-check.json": recorded_path,
     }
+    if manifest["version"].startswith("0.7."):
+        additions.update({"windows-client-check.json": setup / "windows-client-check.json",
+                          "application-files.json": setup / "application-files.json"})
     for name, path in additions.items():
         require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
                 f"Missing or invalid joint release asset: {name}")

@@ -4,8 +4,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import uuid
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
@@ -28,7 +30,40 @@ BUNDLED_WORKFLOW_INTERFACES = {
 }
 BUNDLED_WORKFLOW_LABELS = {
     "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall", "cpi": "CPI",
+    "workflow-plan": "Workflow automatico",
+    "workflow-plan-cpi": "Workflow automatico con CPI",
+    "workflow-plan-snp": "Workflow SNPcall su piu' campioni",
+    "workflow-plan-with-snp": "Workflow automatico con SNPcall",
 }
+PLAN_EXECUTION_INTERFACE = "workflow-plan-execution-v1"
+PLAN_WORKFLOWS = {
+    "workflow-plan": ("dnp-call", "contamination"),
+    "workflow-plan-cpi": ("dnp-call", "contamination", "cpi"),
+    "workflow-plan-snp": ("snp-call",),
+    "workflow-plan-with-snp": ("dnp-call", "contamination", "cpi", "snp-call"),
+}
+
+
+@contextmanager
+def _finish_cleanup() -> Iterator[None]:
+    """Do not let a repeated Ctrl+C abandon a bounded stop or its evidence."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+def _cleanup_process_options() -> dict[str, Any]:
+    # Cleanup commands must survive a repeated console Ctrl+C too. They have
+    # explicit timeouts and never read the user's input.
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
 
 
 class DockerComposeRunner:
@@ -48,6 +83,7 @@ class DockerComposeRunner:
             dry_run=dry_run,
         )
         self._backend_ready = False
+        self.last_run_dir: Path | None = None
 
     def _base_command(self) -> list[str]:
         if self._engine_compose_file is not None:
@@ -112,8 +148,15 @@ class DockerComposeRunner:
             return (isinstance(value, str) and value.startswith(prefix) and "\\" not in value
                     and all(part not in ("", ".", "..") for part in value.split("/")))
 
+        is_plan = workflow in PLAN_WORKFLOWS
+        if is_plan:
+            required_preparation.update({
+                "lib/nipat_scientific/plan.py", "lib/nipat_scientific/executor.py",
+            })
         expected_interfaces = (
             BUNDLED_WORKFLOW_INTERFACES if workflow is None else
+            {name: BUNDLED_WORKFLOW_INTERFACES[name] for name in PLAN_WORKFLOWS[workflow]}
+            if is_plan else
             {workflow: BUNDLED_WORKFLOW_INTERFACES.get(workflow)}
         )
         valid = isinstance(description, dict) and all(expected_interfaces.values())
@@ -147,10 +190,26 @@ class DockerComposeRunner:
                     (path == "engine/main.py" or relative_path(path, "lib/nipat_scientific/"))
                     and has_digest(value) for path, value in files.items()
                 )
+            if valid and is_plan:
+                execution = description.get("plan_execution")
+                valid = (
+                    isinstance(execution, dict)
+                    and execution.get("interface") == PLAN_EXECUTION_INTERFACE
+                    and type(execution.get("schema_version")) is int
+                    and execution["schema_version"] == 1
+                    and isinstance(execution.get("workflows"), list)
+                    and set(PLAN_WORKFLOWS[workflow]).issubset(
+                        value for value in execution["workflows"] if isinstance(value, str)
+                    )
+                    and execution.get("scheduling") == "sequential"
+                    and execution.get("resume") is False
+                )
         if not valid:
             label = (BUNDLED_WORKFLOW_LABELS.get(workflow, workflow)
                      if workflow is not None else "dei quattro workflow")
             contracts = ", ".join(str(value) for value in expected_interfaces.values())
+            if is_plan:
+                contracts = PLAN_EXECUTION_INTERFACE + ", " + contracts
             raise RuntimeExecutionError(
                 f"L'immagine non offre il contratto {label} "
                 f"incorporato richiesto ({contracts}), con metadati scientifici completi. "
@@ -259,11 +318,12 @@ class DockerComposeRunner:
                 + self._transport.unavailable_message
             ) from exc
         finally:
-            if container_name is not None and check["returncode"] != 0:
-                check["container_cleanup"] = self._stop_container(container_name)
-            check["finished_at"] = utc_now()
-            if self._record:
-                self._record.save()
+            with _finish_cleanup():
+                if container_name is not None and check["returncode"] != 0:
+                    check["container_cleanup"] = self._stop_container(container_name)
+                check["finished_at"] = utc_now()
+                if self._record:
+                    self._record.save()
 
     def _prepare_runtime(self) -> None:
         os_type = self._capture(["docker", "info", "--format", "{{.OSType}}"])
@@ -325,9 +385,11 @@ class DockerComposeRunner:
     ) -> Iterator[RunRecord]:
         if self._record is not None:
             raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
-        if bundled_workflow is not None and bundled_workflow not in BUNDLED_WORKFLOW_INTERFACES:
+        if (bundled_workflow is not None and bundled_workflow not in BUNDLED_WORKFLOW_INTERFACES
+                and bundled_workflow not in PLAN_WORKFLOWS):
             raise ValidationError(f"Workflow incorporato non supportato: {bundled_workflow}")
         record = RunRecord(run_dir, workflow, parameters)
+        self.last_run_dir = run_dir
         self._record = record
         self._bundled_workflow = bundled_workflow
         # A wizard can reuse this runner after WSL has stopped between analyses.
@@ -374,18 +436,20 @@ class DockerComposeRunner:
                     record.save()
                     yield record
                 except BaseException as exc:
-                    record.data["status"] = (
-                        "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
-                    )
-                    record.data["error"] = {"type": type(exc).__name__, "message": str(exc)}
-                    self._write(f"{record.data['status']}: {type(exc).__name__}: {exc}\n")
+                    with _finish_cleanup():
+                        record.data["status"] = (
+                            "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
+                        )
+                        record.data["error"] = {"type": type(exc).__name__, "message": str(exc)}
+                        self._write(f"{record.data['status']}: {type(exc).__name__}: {exc}\n")
                     raise
                 else:
                     record.data["status"] = "planned" if self.dry_run else "succeeded"
                     self._write(f"{record.data['status']}: {workflow}\n")
                 finally:
-                    record.data["finished_at"] = utc_now()
-                    record.save()
+                    with _finish_cleanup():
+                        record.data["finished_at"] = utc_now()
+                        record.save()
         finally:
             self._log = None
             self._record = None
@@ -449,29 +513,58 @@ class DockerComposeRunner:
             raise RuntimeExecutionError(self._transport.unavailable_message) from exc
         except BaseException as exc:
             interrupted = isinstance(exc, (KeyboardInterrupt, SystemExit))
-            if interrupted or (process is not None and process.poll() is None):
-                # Stopping the client alone can leave its container running in the engine.
-                stage["container_cleanup"] = self._stop_container(container_name)
-            if process is not None and process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-            stage["status"] = (
-                "interrupted" if interrupted else "failed"
-            )
-            if process is not None:
-                stage["returncode"] = process.poll()
+            with _finish_cleanup():
+                if interrupted:
+                    self._write("Annullamento richiesto. Attendere l'arresto del calcolo e il salvataggio dei log.\n")
+                if interrupted or (process is not None and process.poll() is None):
+                    # Stopping the client alone can leave its container running in the engine.
+                    stage["container_cleanup"] = self._stop_container(container_name)
+                if process is not None and process.poll() is None:
+                    try:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=5)
+                    except (OSError, subprocess.SubprocessError) as cleanup_error:
+                        stage["client_cleanup_error"] = str(cleanup_error)
+                        self._write("Arresto del processo di collegamento al runtime non confermato; consultare execution.log.\n")
+                stage["status"] = (
+                    "interrupted" if interrupted else "failed"
+                )
+                if process is not None:
+                    stage["returncode"] = process.poll()
             raise
         finally:
-            stage["finished_at"] = utc_now()
-            if self._record:
-                self._record.save()
+            with _finish_cleanup():
+                stage["finished_at"] = utc_now()
+                if self._record:
+                    self._record.save()
 
     def _stop_container(self, container_name: str) -> dict[str, Any]:
+        with _finish_cleanup():
+            return self._stop_container_protected(container_name)
+
+    def _stop_container_protected(self, container_name: str) -> dict[str, Any]:
         command = None
+        graceful = None
+        if self._bundled_workflow in PLAN_WORKFLOWS:
+            # The plan coordinator must receive SIGTERM before removal so it
+            # can stop its child process group and persist cancelled/blocked
+            # step states. Forced removal remains a bounded fallback.
+            try:
+                stop_command = self._transport.command(
+                    ["docker", "stop", "--time", "10", container_name], self._environment(),
+                )
+                stopped = subprocess.run(
+                    stop_command, env=self._environment(), capture_output=True,
+                    text=True, encoding="utf-8", errors="replace", timeout=20, check=False,
+                    stdin=subprocess.DEVNULL, **_cleanup_process_options(),
+                )
+                graceful = {"returncode": stopped.returncode, "message": stopped.stderr.strip()}
+            except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
+                graceful = {"returncode": None, "message": str(exc)}
         try:
             command = self._transport.command(
                 ["docker", "rm", "--force", container_name], self._environment(),
@@ -480,14 +573,19 @@ class DockerComposeRunner:
                 command, env=self._environment(),
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=15, check=False,
+                stdin=subprocess.DEVNULL, **_cleanup_process_options(),
             )
             cleanup = {
-                "status": "removed" if result.returncode == 0 else "not_confirmed",
+                "status": ("removed" if result.returncode == 0 else
+                           "stopped" if graceful and graceful["returncode"] == 0 else "not_confirmed"),
                 "returncode": result.returncode, "message": result.stderr.strip(),
             }
         except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
-            cleanup = {"status": "not_confirmed", "returncode": None, "message": str(exc)}
+            cleanup = {"status": "stopped" if graceful and graceful["returncode"] == 0 else "not_confirmed",
+                       "returncode": None, "message": str(exc)}
         cleanup["argv"] = command
+        if graceful is not None:
+            cleanup["graceful_stop"] = graceful
         if cleanup["status"] == "not_confirmed":
             self._write(
                 f"Arresto del container {container_name} non confermato; "

@@ -16,6 +16,12 @@ INSTALLATION_CHECKS = {
     "repeated_launch", "package_reinstallation",
     "package_removal_preserves_user_data", "shared_docker_unchanged",
 }
+WORKFLOW_INSTALLATION_CHECKS = {"automatic_workflow_plan", "preferences_preserved"}
+WINDOWS_CLIENT_CHECKS = {
+    "payload_integrity", "embedded_python", "packaged_imports", "scientific_catalog",
+    "wizard_navigation", "composed_workflow_plans", "snp_batch_plans",
+    "read_only_input_mounts", "original_inputs_unchanged",
+}
 DEPENDENCY_CHECKS = {
     "dependencies_initially_absent", "apt_installs_required_packages",
     "installed_cli_help_and_version", "no_automatic_docker_access",
@@ -33,6 +39,13 @@ def load_module(name, path):
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def installation_checks(version):
+    require(isinstance(version, str) and re.fullmatch(
+        r"0\.[67]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+        "This review contract supports NIPAT 0.6 and 0.7")
+    return INSTALLATION_CHECKS | (WORKFLOW_INSTALLATION_CHECKS if version.startswith("0.7.") else set())
 
 
 def read_json(path):
@@ -60,7 +73,7 @@ def verify_installation_check(evidence, manifest, manifest_bytes, package_record
         r"sha256:[0-9a-f]{64}", evidence["resolved_runtime_image"]),
         "Missing immutable image ID from the installed Linux runtime")
     checks = evidence.get("checks")
-    require(isinstance(checks, dict) and set(checks) == INSTALLATION_CHECKS
+    require(isinstance(checks, dict) and set(checks) == installation_checks(manifest.get("version"))
             and all(value is True for value in checks.values()),
             "A required Linux installation check is missing or failed")
 
@@ -91,6 +104,54 @@ def verify_dependency_check(evidence, manifest, manifest_bytes, package_record):
             "A required Linux dependency check is missing or failed")
 
 
+def verify_windows_client_check(evidence, manifest, manifest_bytes, *, installer_sha256,
+                                launcher_sha256, inventory_bytes):
+    """Bind staged Windows client checks without claiming WSL or installed-desktop execution."""
+    expected = {
+        "schema_version": 1, "platform": "windows-amd64",
+        "scenario": "staged-embedded-python-client", "version": manifest["version"],
+        "source_commit": manifest["source_commit"],
+        "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "installer_sha256": installer_sha256, "launcher_sha256": launcher_sha256,
+        "application_inventory_sha256": hashlib.sha256(inventory_bytes).hexdigest(),
+        "python_version": "3.12.10", "scientific_execution": False, "wsl_execution": False,
+    }
+    require(isinstance(evidence, dict) and set(evidence) == set(expected) | {"checks"}
+            and all(type(evidence.get(key)) is type(value) and evidence.get(key) == value
+                    for key, value in expected.items()), "Windows client evidence mismatch")
+    checks = evidence["checks"]
+    require(isinstance(checks, dict) and set(checks) == WINDOWS_CLIENT_CHECKS
+            and all(value is True for value in checks.values()),
+            "A required Windows client check is missing or failed")
+    inventory = json.loads(inventory_bytes.decode("utf-8-sig"))
+    require(isinstance(inventory, dict)
+            and set(inventory) == {"schema_version", "installation_channel", "source_commit", "files"}
+            and type(inventory["schema_version"]) is int and inventory["schema_version"] == 1
+            and inventory["installation_channel"] == "desktop"
+            and inventory["source_commit"] == manifest["source_commit"],
+            "Windows application inventory identity mismatch")
+    files = inventory["files"]
+    require(isinstance(files, list) and all(
+        isinstance(item, dict) and set(item) == {"path", "sha256"}
+        and isinstance(item["path"], str) and isinstance(item["sha256"], str)
+        and re.fullmatch(r"[0-9a-f]{64}", item["sha256"]) for item in files),
+        "Windows application inventory entries are invalid")
+    require(len({item["path"].casefold() for item in files}) == len(files),
+            "Windows application inventory contains ambiguous paths")
+    hashes = {item["path"]: item["sha256"] for item in files}
+    sources = manifest.get("source_sha256")
+    require(isinstance(sources, dict) and sources, "Windows source inventory is missing")
+    bundle = load_module("nipat_review_distribution", PROJECT / "scripts/distribution_support.py")
+    generated = {"release.json", "NIPAT.exe", "installer/windows/EnableWsl.exe",
+                 ".distribution/installer-manifest.json", f".distribution/{bundle.PYTHON_NAME}"}
+    require(set(hashes) == set(sources) | generated
+            and all(hashes.get(path) == digest for path, digest in sources.items())
+            and hashes["NIPAT.exe"] == launcher_sha256
+            and hashes[".distribution/installer-manifest.json"] == expected["installer_manifest_sha256"]
+            and hashes[f".distribution/{bundle.PYTHON_NAME}"] == bundle.PYTHON_SHA256,
+            "Windows application inventory differs from the verified source and embedded client")
+
+
 def verify_set(windows, linux, assets, output, commit, project=PROJECT):
     require(re.fullmatch(r"[0-9a-f]{40}", commit) is not None, "Invalid source commit")
     require(not output.exists(), "Evidence output directory must not already exist")
@@ -106,7 +167,7 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
     # to the exact commit. It does not publish, create tags or contact GitHub.
     with tempfile.TemporaryDirectory(prefix="nipat-review-") as temporary:
         manifest = publisher.prepare_assets(windows, assets, Path(temporary) / "verified", commit)
-    require(manifest["version"].startswith("0.6."), "This review contract is for NIPAT 0.6")
+    installation_checks(manifest["version"])
     record = read_json(linux / "linux-installer-build.json")
     name = record.get("file", "")
     require(isinstance(name, str) and re.fullmatch(
@@ -121,13 +182,25 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
     verify_installation_check(installation, manifest, manifest_bytes, record)
     dependencies = read_json(linux / "linux-dependency-check.json")
     verify_dependency_check(dependencies, manifest, manifest_bytes, record)
+    windows_record = {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(windows / "NIPAT-Setup.exe")}
+    if manifest["version"].startswith("0.7."):
+        client_check = read_json(windows / "windows-client-check.json")
+        inventory_path = windows / "application-files.json"
+        require(inventory_path.is_file() and not inventory_path.is_symlink(),
+                "Missing Windows application inventory evidence")
+        verify_windows_client_check(
+            client_check, manifest, manifest_bytes, installer_sha256=windows_record["sha256"],
+            launcher_sha256=publisher.sha256(windows / "NIPAT.exe"),
+            inventory_bytes=inventory_path.read_bytes(),
+        )
+        windows_record["client_check"] = client_check
     result = {
         "schema_version": 1, "version": manifest["version"], "source_commit": commit,
         "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "scientific_archive": {
             key: manifest["assets"]["scientific_image"][key] for key in ("file", "sha256", "size")
         },
-        "windows": {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(windows / "NIPAT-Setup.exe")},
+        "windows": windows_record,
         "linux": {"file": name, "sha256": record["sha256"], "installation_check": installation,
                   "dependency_check": dependencies},
         "publication_authorized": False,

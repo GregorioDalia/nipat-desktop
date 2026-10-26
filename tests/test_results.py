@@ -119,6 +119,302 @@ class ResultsTests(unittest.TestCase):
                 opener.assert_not_called()
 
 
+    def prepare_workflow(self, *, status="succeeded", dnp="succeeded", contamination="succeeded"):
+        self.metadata.update(workflow="dnp-contamination", status=status)
+        self.save_metadata()
+        root = self.run / "output" / "workflow"
+        root.mkdir(exist_ok=True)
+        state = {
+            "schema_version": 1, "interface": "workflow-plan-execution-v1",
+            "status": "cancelled" if status == "interrupted" else status,
+            "steps": [
+                {"id": "dnp", "workflow": "dnp-call", "status": dnp},
+                {"id": "contamination", "workflow": "contamination", "status": contamination},
+            ],
+        }
+        path = root / "workflow-state.json"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return root, path, state
+
+    def test_composed_summary_shows_both_steps_and_fixed_result_locations(self):
+        root, path, state = self.prepare_workflow()
+        for step in ("dnp", "contamination"):
+            (root / "steps" / step / "output").mkdir(parents=True)
+        state["steps"][0]["output_dir"] = str(self.run.parent / "outside")
+        state["steps"][1]["log"] = "../../bad.cmd"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        ui, opener = FakeTerminal(["2", "0"]), Mock()
+        show_results(ui, self.run, open_path=opener)
+        self.assertIn("Esecuzione completata", ui.lines)
+        self.assertIn("  DNPcall: Completata", ui.lines)
+        self.assertIn("  Contamination: Completata", ui.lines)
+        text = "\n".join(ui.lines)
+        self.assertIn(str(root / "steps" / "dnp" / "output"), text)
+        self.assertIn(str(root / "steps" / "contamination" / "output"), text)
+        self.assertNotIn("outside", text)
+        self.assertNotIn("bad.cmd", text)
+        opener.assert_not_called()
+
+    def test_failed_or_cancelled_step_is_not_presented_as_completed(self):
+        for status, dnp, expected in (("failed", "failed", "Esecuzione non riuscita"),
+                                      ("interrupted", "cancelled", "Esecuzione interrotta")):
+            with self.subTest(status=status):
+                self.prepare_workflow(status=status, dnp=dnp, contamination="blocked")
+                ui = FakeTerminal(["2", "0"])
+                show_results(ui, self.run)
+                self.assertIn(expected, ui.lines)
+                self.assertNotIn("Esecuzione completata", ui.lines)
+                self.assertIn("  Contamination: Non avviata: workflow arrestato", ui.lines)
+
+    def test_failed_step_report_overrides_success_title_from_parent_record(self):
+        _, path, state = self.prepare_workflow()
+        state["status"] = "failed"
+        state["steps"][0]["status"] = "failed"
+        state["steps"][1]["status"] = "blocked"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertIn("Esecuzione non riuscita", ui.lines)
+        self.assertNotIn("Esecuzione completata", ui.lines)
+
+    def test_missing_or_malformed_step_state_keeps_navigation_available(self):
+        _, path, good = self.prepare_workflow()
+        malformed = [None, "not json", "[]", json.dumps({**good, "schema_version": True}),
+                     json.dumps({**good, "steps": []}), json.dumps({**good, "status": []}),
+                     json.dumps({**good, "steps": [good["steps"][0], good["steps"][0]]}),
+                     json.dumps({**good, "steps": [{**good["steps"][0], "status": "failed"},
+                                                    good["steps"][1]]})]
+        for content in malformed:
+            with self.subTest(content=content):
+                if content is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_text(content, encoding="utf-8")
+                ui, opener = FakeTerminal(["2", "4", "0"]), Mock()
+                show_results(ui, self.run, open_path=opener)
+                self.assertTrue(any("Stato dei passaggi non consultabile" in line for line in ui.lines))
+                self.assertNotIn("Esecuzione completata", ui.lines)
+                opener.assert_called_once_with(self.run)
+
+    def test_step_metadata_read_is_bounded(self):
+        _, path, _ = self.prepare_workflow()
+        path.write_bytes(b" " * (2 * 1024 * 1024 + 1))
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertTrue(any("supera il limite" in line for line in ui.lines))
+        self.assertNotIn("Esecuzione completata", ui.lines)
+
+    def test_symlinked_step_state_is_not_followed(self):
+        _, path, state = self.prepare_workflow()
+        external = self.run.parent / "external-state.json"
+        external.write_text(json.dumps(state), encoding="utf-8")
+        path.unlink()
+        try:
+            path.symlink_to(external)
+        except (NotImplementedError, OSError):
+            self.skipTest("Platform does not permit symbolic links")
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertTrue(any("Percorso collegato non consultabile" in line for line in ui.lines))
+        self.assertNotIn("  DNPcall: Completata", ui.lines)
+
+    def test_dry_run_does_not_read_or_claim_step_results(self):
+        self.prepare_workflow()
+        ui = FakeTerminal(["2", "0"])
+        with patch("nipat.results._workflow_state") as read:
+            show_results(ui, self.run, dry_run=True)
+        read.assert_not_called()
+        self.assertNotIn("Passaggi del workflow automatico:", ui.lines)
+        self.assertIn("Esecuzione pianificata", ui.lines)
+
+
+    def prepare_cpi_workflow(self, *, full=False):
+        root, path, state = self.prepare_workflow()
+        self.metadata["workflow"] = "dnp-contamination-cpi" if full else "dnp-cpi"
+        self.metadata["parameters"] = {"pair_mapping": [{
+            "pair_id": "FamilyA", "mother_sample_id": "sample_0001", "father_sample_id": "sample_0002",
+            "mother_bam": "/external/maternal.bam", "father_bam": "/external/paternal.bam",
+        }]}
+        self.save_metadata()
+        if not full:
+            state["steps"] = state["steps"][:1]
+        state["steps"].append({"id": "cpi", "workflow": "cpi", "status": "succeeded"})
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return root, path, state
+
+    def test_cpi_workflow_summaries_show_only_their_expected_steps_and_roles(self):
+        for full in (False, True):
+            with self.subTest(full=full):
+                root, _, state = self.prepare_cpi_workflow(full=full)
+                for step in state["steps"]:
+                    (root / "steps" / step["id"] / "output").mkdir(parents=True, exist_ok=True)
+                ui, opener = FakeTerminal(["2", "0"]), Mock()
+                show_results(ui, self.run, open_path=opener)
+                self.assertIn("Esecuzione completata", ui.lines)
+                self.assertIn("  DNPcall: Completata", ui.lines)
+                self.assertIn("  CPI: Completata", ui.lines)
+                self.assertEqual("  Contamination: Completata" in ui.lines, full)
+                self.assertIn("Coppie CPI registrate: 1", ui.lines)
+                self.assertIn("  Coppia FamilyA", ui.lines)
+                self.assertIn("    cfDNA materno (sample_0001): /external/maternal.bam", ui.lines)
+                self.assertIn("    Campione paterno (sample_0002): /external/paternal.bam", ui.lines)
+                self.assertTrue(any(str(root / "steps/cpi/output") in line for line in ui.lines))
+                opener.assert_not_called()
+
+    def test_cpi_missing_or_failed_step_cannot_receive_success_title(self):
+        for missing in (True, False):
+            with self.subTest(missing=missing):
+                _, path, state = self.prepare_cpi_workflow(full=True)
+                if missing:
+                    state["steps"].pop()
+                else:
+                    state["status"] = "failed"
+                    state["steps"][-1]["status"] = "failed"
+                path.write_text(json.dumps(state), encoding="utf-8")
+                ui = FakeTerminal(["2", "0"])
+                show_results(ui, self.run)
+                self.assertNotIn("Esecuzione completata", ui.lines)
+                if missing:
+                    self.assertTrue(any("Stato dei passaggi non consultabile" in line for line in ui.lines))
+                else:
+                    self.assertIn("  CPI: Non riuscita", ui.lines)
+
+    def test_cpi_pair_mapping_is_bounded_and_never_opened_as_a_path(self):
+        self.prepare_cpi_workflow()
+        self.metadata["parameters"]["pair_mapping"] = [
+            {"pair_id": f"Family{number}", "mother_sample_id": f"sample_{number}",
+             "father_sample_id": "father", "mother_bam": "/outside/analysis.cmd",
+             "father_bam": "/outside/father.bam"} for number in range(20)
+        ]
+        self.save_metadata()
+        ui, opener = FakeTerminal(["2", "4", "0"]), Mock()
+        show_results(ui, self.run, open_path=opener)
+        self.assertEqual(sum(line.startswith("  Coppia ") for line in ui.lines), 12)
+        self.assertIn("Coppie CPI registrate: 20", ui.lines)
+        self.assertIn("Altre coppie disponibili in run.json.", ui.lines)
+        opener.assert_called_once_with(self.run)
+
+    def test_malformed_cpi_pair_mapping_does_not_hide_step_status(self):
+        self.prepare_cpi_workflow()
+        self.metadata["parameters"]["pair_mapping"] = [{"pair_id": "FamilyA", "mother_bam": []}]
+        self.save_metadata()
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertIn("  CPI: Completata", ui.lines)
+        self.assertIn("Associazioni delle coppie CPI non consultabili in run.json.", ui.lines)
+
+    def prepare_snp_workflow(self, *, batch=False, mode="bam", count=2):
+        root, path, state = self.prepare_workflow()
+        if batch:
+            self.metadata["workflow"] = "snp-batch"
+            state["steps"] = []
+        expected = [{"id": step["id"], "workflow": step["workflow"]} for step in state["steps"]]
+        samples = []
+        for number in range(1, count + 1):
+            identifier = f"sample_{number:04d}"
+            source = f"/inputs/{identifier}.bam" if mode == "bam" else f"/inputs/{identifier}.txt"
+            samples.append({"sample_id": identifier, "original_path": f"/user/selected/{number}",
+                            "container_path": source})
+            expected.append({"id": f"snp_{number:04d}", "workflow": "snp-call",
+                             "sample": identifier, "mode": mode})
+            state["steps"].append({"id": f"snp_{number:04d}", "workflow": "snp-call", "status": "succeeded",
+                                   "sample_mapping": {"sample": identifier, "mode": mode, "path": source},
+                                   "artifacts": {"snp-tables": [{"sample": identifier, "path": "ignored.txt"}]}})
+            (root / "steps" / f"snp_{number:04d}" / "output").mkdir(parents=True, exist_ok=True)
+        self.metadata["parameters"] = {"expected_steps": expected, "sample_mapping": samples,
+                                        **({"mode": mode} if batch else {"snp_panel": "/user/panel.tsv"})}
+        self.save_metadata()
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return root, path, state
+
+    def test_snp_results_show_each_original_input_and_fixed_step_directory(self):
+        for batch, mode in ((False, "bam"), (True, "bam"), (True, "pileup")):
+            with self.subTest(batch=batch, mode=mode):
+                root, _, _ = self.prepare_snp_workflow(batch=batch, mode=mode)
+                ui, opener = FakeTerminal(["2", "0"]), Mock()
+                show_results(ui, self.run, open_path=opener)
+                self.assertIn("Esecuzione completata", ui.lines)
+                self.assertIn(f"  SNPcall sample_0001 ({mode}): Completata", ui.lines)
+                self.assertIn(f"  SNPcall sample_0002 ({mode}): Completata", ui.lines)
+                self.assertIn("    Input: /user/selected/1", ui.lines)
+                self.assertIn("    Input: /user/selected/2", ui.lines)
+                self.assertTrue(any(str(root / "steps/snp_0002/output") in line for line in ui.lines))
+                self.assertEqual("  DNPcall: Completata" in ui.lines, not batch)
+                opener.assert_not_called()
+
+    def test_snp_results_reject_missing_extra_or_wrong_sample_states(self):
+        mutations = [lambda state: state["steps"].pop(),
+                     lambda state: state["steps"].append(state["steps"][-1]),
+                     lambda state: state["steps"][-1].update(id="../../outside"),
+                     lambda state: state["steps"][-1]["sample_mapping"].update(mode="pileup"),
+                     lambda state: state["steps"][-1]["sample_mapping"].update(path="/another/input.bam"),
+                     lambda state: state["steps"][-1]["artifacts"]["snp-tables"][0].update(sample="sample_0001")]
+        for mutate in mutations:
+            _, path, state = self.prepare_snp_workflow()
+            mutate(state)
+            path.write_text(json.dumps(state), encoding="utf-8")
+            ui = FakeTerminal(["2", "0"])
+            show_results(ui, self.run)
+            self.assertNotIn("Esecuzione completata", ui.lines)
+            self.assertTrue(any("Stato dei passaggi non consultabile" in line for line in ui.lines))
+            self.assertNotIn("../../outside", "\n".join(ui.lines))
+
+    def test_snp_expected_mapping_cannot_supply_arbitrary_or_incomplete_step_ids(self):
+        mutations = [lambda params: params.update(expected_steps=None),
+                     lambda params: params["expected_steps"].pop(),
+                     lambda params: params["expected_steps"][-1].update(id="../../outside"),
+                     lambda params: params["expected_steps"][-1].update(workflow="cpi"),
+                     lambda params: params["expected_steps"][-1].update(sample="sample_0001"),
+                     lambda params: params["sample_mapping"][-1].update(sample_id="sample_0001"),
+                     lambda params: params.update(sample_mapping=None),
+                     lambda params: params.update(mode="unknown")]
+        for mutate in mutations:
+            self.prepare_snp_workflow(batch=True)
+            mutate(self.metadata["parameters"])
+            self.save_metadata()
+            ui = FakeTerminal(["2", "0"])
+            show_results(ui, self.run)
+            self.assertNotIn("Esecuzione completata", ui.lines)
+            self.assertTrue(any("Stato dei passaggi non consultabile" in line for line in ui.lines))
+            self.assertNotIn("../../outside", "\n".join(ui.lines))
+
+    def test_failed_snp_and_blocked_remaining_sample_are_visible(self):
+        _, path, state = self.prepare_snp_workflow(batch=True)
+        state["status"] = "failed"
+        state["steps"][0].update(status="failed", artifacts={})
+        state["steps"][1].update(status="blocked", artifacts={})
+        state["steps"][1].pop("sample_mapping")
+        path.write_text(json.dumps(state), encoding="utf-8")
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertIn("Esecuzione non riuscita", ui.lines)
+        self.assertIn("  SNPcall sample_0001 (bam): Non riuscita", ui.lines)
+        self.assertIn("  SNPcall sample_0002 (bam): Non avviata: workflow arrestato", ui.lines)
+
+    def test_snp_summary_is_bounded_without_omitting_validation_of_later_steps(self):
+        _, path, state = self.prepare_snp_workflow(batch=True, count=30)
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertEqual(sum(line.startswith("  SNPcall ") for line in ui.lines), 24)
+        self.assertIn("Altri 6 passaggi disponibili in workflow-state.json.", ui.lines)
+        state["steps"][-1]["artifacts"]["snp-tables"][0]["sample"] = "wrong"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertNotIn("Esecuzione completata", ui.lines)
+
+    def test_legacy_parameters_null_or_list_do_not_crash_fixed_step_summary(self):
+        for parameters in (None, []):
+            self.prepare_workflow()
+            self.metadata["parameters"] = parameters
+            self.save_metadata()
+            ui = FakeTerminal(["2", "0"])
+            show_results(ui, self.run)
+            self.assertIn("  DNPcall: Completata", ui.lines)
+            self.assertIn("  Contamination: Completata", ui.lines)
+
+
+
 class DesktopOpenerTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

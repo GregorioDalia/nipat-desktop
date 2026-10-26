@@ -1,7 +1,8 @@
 # Installazione di NIPAT su Ubuntu
 
-Il pacchetto Linux di **NIPAT Desktop 0.6.0** è un unico file
-`nipat-desktop_0.6.0_amd64.deb`. Contiene applicazione, documentazione
+Il pacchetto Linux di **NIPAT Desktop** è un unico file `.deb`, con versione
+nel nome: `nipat-desktop_0.7.1_amd64.deb` per la versione 0.7.1.
+Contiene applicazione, documentazione
 e immagine scientifica con R, samtools, dipendenze e preparazione dei workflow.
 Il motore è lo stesso archivio verificato incluso nel pacchetto Windows.
 Non è necessario scaricare o spostare separatamente l'immagine.
@@ -12,6 +13,9 @@ relativi pacchetti sono elencati nella pagina
 I pacchetti degli artefatti GitHub Actions servono alla revisione tecnica.
 Le istruzioni si riferiscono a una build identificata; un archivio
 **Source code** di GitHub non è un installatore.
+Le [note della versione 0.7.1](RELEASE_0.7.1.md) descrivono funzionalità
+e ambito delle verifiche. L'installazione aggiorna
+lo stesso pacchetto `nipat-desktop`, senza creare una seconda applicazione.
 
 ## Requisiti
 
@@ -54,7 +58,7 @@ Scaricare il pacchetto `.deb` della versione scelta dagli asset della pagina
 Dalla cartella che contiene il pacchetto:
 
 ```bash
-sudo apt install ./nipat-desktop_0.6.0_amd64.deb
+sudo apt install ./nipat-desktop_0.7.1_amd64.deb
 ```
 
 APT mostra anche le dipendenze da scaricare e installare. Esaminare il

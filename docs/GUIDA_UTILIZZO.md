@@ -1,11 +1,22 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.6.0**,
+Questa guida descrive **NIPAT Desktop 0.7.1**,
 con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
 artefatti GitHub Actions sono destinati alla revisione tecnica.
+
+La versione offre
+**W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
+CPI oppure entrambe le analisi, con SNPcall facoltativo sugli stessi BAM.
+La stessa voce offre SNPcall su più BAM o pileup. Un'unica configurazione
+e conferma avvia i passaggi selezionati; le quattro analisi singole rimangono
+disponibili.
+**Guida e informazioni → Catalogo scientifico** e `nipat parameters`
+descrivono in italiano e inglese opzioni configurabili, regole interne e
+preparazione degli input. Il [riferimento del catalogo](CATALOGO_SCIENTIFICO.md)
+e il [contratto dei piani](WORKFLOW_CONTRACT.md) documentano queste interfacce.
 
 NIPAT esegue DNPcall, SNPcall, Contamination e CPI sul computer dell'utente.
 Il motore scientifico contiene gli script R e gli strumenti necessari.
@@ -78,9 +89,16 @@ conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`.
 
 ## Menu guidato
 
-Il banner riporta la versione e il menu mostra le analisi disponibili.
-Nei terminali interattivi supportati si usano frecce e Invio oppure i numeri;
-negli altri terminali è disponibile la scelta numerica in testo semplice.
+Il banner riporta la versione. Il menu separa le analisi singole, i workflow
+automatici e gli strumenti di configurazione e consultazione.
+Nei terminali interattivi supportati si usano frecce e Invio oppure il tasto
+indicato accanto alla voce. Negli altri terminali si digita la scelta in testo
+semplice: un numero oppure `W` per i workflow automatici.
+
+Quando si ridimensiona la finestra, NIPAT adatta il menu allo spazio disponibile.
+Se lo spazio non basta o la lettura dei tasti non è disponibile, il messaggio
+indica il motivo e consente la selezione testuale. Allargare la finestra può
+rendere di nuovo utilizzabili le frecce nel menu successivo.
 
 | Scelta | Funzione |
 | --- | --- |
@@ -93,6 +111,7 @@ negli altri terminali è disponibile la scelta numerica in testo semplice.
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
 | 9 | Verifica aggiornamenti: ricerca, download verificato e avvio dell'installatore dopo conferma. |
+| W | Workflow automatici: composizioni DNPcall con Contamination/CPI e SNPcall facoltativo; SNPcall su più campioni. |
 | 0 | Uscita dal programma. |
 
 Ogni campo presenta indicazioni sul formato richiesto e sul significato di
@@ -105,12 +124,21 @@ restano leggibili in testo semplice negli altri terminali.
 | Invio in una lista con almeno un file | Termina l'elenco. |
 | Invio in una lista vuota | Ripropone le istruzioni; serve almeno un file. |
 | `:indietro` | Torna al campo precedente conservando i valori inseriti. |
-| `:annulla` | Abbandona la compilazione e torna al menu. |
+| `:annulla` | Nei campi e nei menu a inserimento testuale, annulla l'operazione corrente e torna direttamente al menu principale. |
+| Ctrl+C | Annulla l'operazione corrente e torna al menu principale, anche nei menu a frecce e durante il calcolo. |
 | `:vuoto` | Cancella un valore facoltativo, come nome del run o prefisso CPI. |
 
 Nei campi di testo e nei percorsi, `0` è un valore: per annullare usare
-`:annulla`. Nei menu che lo prevedono, Esc torna indietro. Il completamento
-dei percorsi con Tab non è disponibile.
+`:annulla` oppure Ctrl+C. Nei menu che lo prevedono, Esc torna al passaggio
+precedente; Ctrl+C torna direttamente al menu principale. La voce `0` segue
+l'azione indicata nel menu: soltanto **0 — Esci** nel menu principale chiude
+NIPAT. Il completamento dei percorsi con Tab non è disponibile.
+
+Durante il calcolo usare Ctrl+C e attendere il completamento dell'arresto.
+NIPAT conserva la cartella del run, i log e gli output già prodotti. Nei
+workflow automatici i passaggi successivi non vengono avviati; i risultati
+parziali non attestano il completamento dell'analisi. Per ripetere il lavoro
+occorre avviare un nuovo run: non è prevista la ripresa automatica.
 
 Al termine della compilazione, controllare input, parametri e destinazione
 nel riepilogo. È possibile correggere i campi prima di scegliere
@@ -122,8 +150,9 @@ La schermata finale consente di aprire risultati, cartella del run e log,
 o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file
 e metadati; non interpreta il significato scientifico dei risultati.
 Il richiamo dell'ultima esecuzione vale per la sessione corrente. I run
-precedenti restano sul disco; non sono presenti una cronologia tra sessioni
-o il concatenamento automatico delle analisi.
+precedenti restano sul disco; non è presente una cronologia tra sessioni.
+Ogni workflow automatico conserva i risultati separati dei passaggi selezionati
+all'interno di un solo run.
 
 **7 — Guida e informazioni** è dedicata alla consultazione. **8 — Verifica
 ambiente** controlla il motore e gli strumenti senza elaborare campioni.
@@ -137,6 +166,10 @@ le indicazioni spiegano il valore richiesto. **9 — Salva modifiche** registra
 la categoria, mentre **0 — Annulla modifiche** la chiude senza salvare.
 Invio mantiene il valore mostrato durante la modifica di un campo; nel menu
 della categoria equivale ad annullare senza salvare.
+`:annulla` oppure Ctrl+C abbandonano la configurazione e tornano direttamente
+al menu principale, scartando le modifiche della schermata non ancora salvate.
+Le categorie già salvate rimangono attive; annullare non ripristina i valori
+precedenti a un salvataggio.
 
 | Categoria | Impostazioni |
 | --- | --- |
@@ -216,6 +249,12 @@ il download richiedono Internet, mentre i calcoli continuano a usare il motore
 locale. In modalità `--dry-run` la voce aggiornamenti non esegue connessioni,
 download o installazioni.
 
+Ctrl+C interrompe la verifica o il download e torna al menu principale.
+Prima dell'avvio dell'installatore, `:annulla` nei menu testuali consente lo
+stesso ritorno. Dopo la conferma e l'avvio del programma di installazione,
+seguire i suoi comandi: l'annullamento nel menu NIPAT non controlla un
+installatore esterno già avviato.
+
 L'installatore dello stesso prodotto conserva percorsi configurati, preferenze,
 dati e risultati. Un aggiornamento non modifica i record delle analisi già
 eseguite: i nuovi run registrano la versione dell'applicazione e il motore
@@ -234,9 +273,12 @@ condivisioni UNC, unità di rete e unità rimovibili non sono supportate dal
 backend WSL. Su Linux i file devono essere accessibili al motore Docker locale.
 
 Si possono incollare percorsi completi, anche tra virgolette, oppure percorsi
-relativi alla cartella corrente mostrata dal programma. In Windows, **Copia
-come percorso** di Esplora file produce un valore utilizzabile. Le voci relative
-in un file BAM list partono invece dalla cartella della lista.
+relativi alla cartella corrente mostrata prima del campo. Ad esempio,
+`DNP_list.txt` indica un file nella cartella corrente: NIPAT non lo cerca
+nelle sottocartelle di **Dati**. Usare il percorso completo se il file si trova
+altrove. In Windows, **Copia come percorso** di Esplora file produce un valore
+utilizzabile. Le voci relative in un file BAM list partono invece dalla
+cartella della lista.
 
 Il setup Windows permette di scegliere separatamente queste destinazioni:
 
@@ -319,6 +361,12 @@ Selezionare uno o più BAM oppure un file lista con un percorso BAM per riga,
 senza intestazione. In CLI, ripetere `--bam` o usare `--bamlist`; le modalità
 sono alternative. Sono richiesti un FASTA e il pannello DNP.
 
+Nel campo **File FASTA di riferimento** scegliere il file delle sequenze,
+ad esempio `genome.fa` oppure un FASTA compresso in BGZF. Non selezionare
+`genome.fa.fai` o un file `.gzi`: sono indici, non il riferimento. Se viene
+selezionato un indice, il messaggio indica quale FASTA controllare; la scelta
+va corretta esplicitamente.
+
 Il FASTA deve avere il proprio indice `.fai`; se compresso in BGZF richiede
 anche `.gzi`. Gli indici BAM sono facoltativi per il percorso mpileup usato
 da NIPAT. Riferimento, BAM e pannello devono essere coerenti per assemblaggio
@@ -328,7 +376,9 @@ Il pannello contiene cinque colonne senza intestazione, separate da tabulazioni
 o spazi: `chr`, `pos1`, `pos2`, `REF`, `ALT`. Le coordinate sono positive e
 adiacenti (`pos2 = pos1 + 1`); gli alleli sono dinucleotidi composti da A, C,
 G e T. Non sono ammesse coordinate duplicate. NIPAT prepara una copia con
-alleli maiuscoli senza modificare l'originale.
+alleli maiuscoli senza modificare l'originale. Il pannello stabilisce quali
+posizioni e quali alleli analizzare. `DNP_list.txt` è un nome di esempio:
+è possibile scegliere un file con un altro nome, purché rispetti il formato.
 
 Il valore iniziale dell'esecuzione è seriale; il menu e `--parallel`
 consentono quella parallela. Il menu propone il valore salvato in **Configura**,
@@ -483,26 +533,246 @@ Le quattro analisi non sono quattro passaggi obbligatori della stessa catena:
 | Composizione | Uso degli input |
 | --- | --- |
 | DNPcall → Contamination | Le tabelle in `output/individual_outputs` forniscono i conteggi necessari; scegliere un pannello coerente. |
-| DNPcall → CPI | Le tabelle individuali dei campioni appropriati forniscono i conteggi; occorre assegnare esplicitamente il ruolo materno/paterno, preparare nomi compatibili con i prefissi e fornire coppie e frequenze di popolazione. |
+| DNPcall → CPI | Le tabelle individuali dei campioni appropriati forniscono i conteggi; occorre assegnare esplicitamente i ruoli cfDNA materno/paterno e fornire coppie e frequenze di popolazione. Nei workflow automatici il motore prepara i nomi interni. |
 | Contamination e CPI dopo DNPcall | Possono utilizzare le stesse tabelle DNPcall per analisi distinte; nessuna delle due richiede il risultato dell'altra. |
-| SNPcall sullo stesso BAM | È un'analisi separata con pannello SNP. Il suo output non è direttamente compatibile con gli schemi DNP di Contamination e CPI. |
+| SNPcall sullo stesso BAM | È un'attività indipendente, aggiungibile al workflow con un pannello SNP esplicito. Il suo output non è compatibile con gli schemi DNP di Contamination e CPI. |
 
 Contamination produce stime e filtra i siti secondo il proprio metodo: non
-genera automaticamente tabelle «decontaminate» da inviare a CPI.
-Il menu esegue un'analisi alla volta e non avvia automaticamente i passaggi
-successivi. L'opzione parallela di DNPcall riguarda i campioni all'interno
-di quella singola analisi, non l'orchestrazione degli altri workflow.
+modifica i conteggi DNPcall e non genera tabelle «decontaminate» da inviare a CPI.
+L'opzione parallela di DNPcall riguarda i campioni all'interno di quel passaggio;
+Contamination e CPI vengono avviati successivamente, uno per volta.
 
-Per una sequenza **DNPcall → Contamination**:
+### Scelta del workflow automatico
 
-1. Completare DNPcall e verificare stato, campioni e risultati.
-2. Scegliere **3 — Contamination**.
-3. Selezionare le tabelle richieste in `output\individual_outputs` del run
-   DNPcall, oppure quella sottocartella come input. La radice del run contiene
-   anche file non compatibili con Contamination.
-4. Indicare il pannello appropriato e avviare un nuovo run.
+Aprire **W — Workflow automatici** e selezionare:
 
-Per una sequenza **DNPcall → CPI**, verificare prima la corrispondenza fra
+| Scelta | Workflow | Passaggi |
+| --- | --- | --- |
+| 1 | DNPcall → Contamination | Conteggi DNP e stima della contaminazione. |
+| 2 | DNPcall → CPI | Conteggi DNP, frazione fetale e indice di paternità per le coppie dichiarate. |
+| 3 | DNPcall → Contamination e CPI | Conteggi DNP una sola volta, poi Contamination e CPI sugli stessi conteggi. |
+| 4 | SNPcall su più campioni | Un passaggio SNPcall per ogni BAM o pileup, con risultati separati. |
+| 0 | Indietro | Ritorno al menu principale senza avviare analisi. |
+
+Le prime tre scelte permettono di aggiungere SNPcall sugli stessi BAM con
+un pannello SNP selezionato esplicitamente. Il FASTA è quello del passaggio
+DNPcall; ogni BAM distinto viene analizzato una volta da SNPcall, anche
+quando compare in più coppie CPI. La scelta iniziale è di non aggiungerlo.
+
+Nel workflow combinato Contamination viene eseguito prima di CPI, ma i suoi
+risultati non diventano input CPI. Se Contamination fallisce, il piano si
+arresta e CPI non parte. Il completamento tecnico di Contamination, qualunque
+sia la stima prodotta, non aggiunge un filtro sui campioni destinati a CPI.
+
+### DNPcall → Contamination
+
+1. Scegliere **DNPcall → Contamination** dal menu dei workflow automatici.
+2. Indicare uno o più BAM, oppure una lista di BAM, il FASTA indicizzato e
+   il pannello DNP. Scegliere l'esecuzione DNPcall seriale o parallela.
+3. Per Contamination, mantenere il pannello DNP oppure selezionare un diverso
+   pannello di coordinate coerente con i conteggi da analizzare.
+4. Scegliere se includere SNPcall sugli stessi BAM e, in caso affermativo,
+   indicare il pannello SNP. Controllare passaggi, file e destinazione nel riepilogo, quindi
+   scegliere **Avvia analisi**. È richiesta una sola conferma.
+5. Attendere il completamento. Il motore verifica le tabelle prodotte da DNPcall
+   e le prepara automaticamente come input di Contamination.
+
+Il menu ripropone le impostazioni DNPcall salvate in **Configura**. La scelta
+di un pannello diverso per Contamination vale per quella esecuzione e non
+modifica le preferenze salvate.
+
+Non occorre copiare file o indicare percorsi di risultati che ancora non esistono.
+I nomi interni identificano i campioni senza dipendere dai nomi originali dei BAM;
+`run.json` conserva l'associazione con gli input selezionati.
+
+La stessa esecuzione può essere avviata dalla CLI:
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow dnp-contamination `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --run-name "dnp-contamination-01"
+```
+
+In alternativa a `--bam`, utilizzare `--bamlist "..\campioni\bamlist.txt"`.
+`--contamination-panel` seleziona un pannello diverso per il secondo passaggio;
+se omesso, viene utilizzato quello di `--panel`. `--parallel` abilita il
+parallelismo interno a DNPcall. Su Ubuntu usare `nipat` e percorsi Linux.
+`nipat workflow dnp-contamination --help` elenca tutte le opzioni.
+
+### DNPcall → CPI e DNPcall → Contamination e CPI
+
+1. Scegliere il workflow desiderato dal menu **W**.
+2. Inserire per ogni coppia un ID univoco, il BAM **cfDNA materno** e il BAM
+   **paterno**. Il ruolo materno richiede il campione cfDNA previsto dal metodo,
+   non viene dedotto dal nome del file o dai genotipi.
+3. Indicare il FASTA indicizzato, il pannello DNPcall e la modalità seriale
+   o parallela. Nel workflow combinato, scegliere anche il pannello
+   Contamination oppure mantenere quello DNPcall.
+4. Selezionare le frequenze di popolazione, la costante d'errore CPI e i siti
+   da analizzare: tutti quelli disponibili, un pannello o pannelli etichettati.
+5. Scegliere se includere SNPcall sugli stessi BAM e indicare il suo pannello.
+   Controllare coppie, ruoli, passaggi e parametri nel riepilogo, poi confermare
+   **Avvia analisi**. Il motore elabora i campioni e prepara automaticamente
+   le tabelle per CPI, senza copie o rinomine manuali.
+
+Il menu propone le impostazioni DNPcall e CPI salvate in **Configura**,
+comprese frequenze, modalità di cutoff e costante d'errore. I prefissi CPI
+salvati per l'analisi singola non si applicano ai workflow automatici:
+la selezione dei campioni usa i ruoli espliciti. Coppie e nome del run vengono
+inseriti per ogni esecuzione e non sono salvati come preferenze.
+
+L'**ID coppia** è un'etichetta scelta dall'utente per riconoscere nei risultati
+l'associazione fra il BAM cfDNA materno e il BAM paterno, per esempio
+`Coppia01`. Non è un parametro scientifico, non deve coincidere con un barcode
+o con il nome dei file. Occorrono due campioni distinti con ruoli noti; un
+solo BAM non permette di completare questi workflow.
+
+Gli ID delle coppie iniziano con una lettera e contengono fino a 64 caratteri
+ASCII: lettere, cifre, trattino e underscore. Non sono ammessi duplicati o ID
+che differiscono soltanto per maiuscole. Una stessa coppia di campioni non può
+essere ripetuta con un altro ID. Un campione può appartenere a più coppie nello
+stesso ruolo; viene elaborato da DNPcall una sola volta. L'uso dello stesso BAM
+in entrambi i ruoli viene rifiutato. Questi controlli verificano la coerenza
+formale, non l'identità biologica dei campioni.
+
+Esempio dalla CLI, con un campione paterno condiviso:
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow dnp-cpi `
+  --pair coppia_a "..\campioni\cfdna-a.bam" "..\campioni\padre.bam" `
+  --pair coppia_b "..\campioni\cfdna-b.bam" "..\campioni\padre.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --popfreq "..\pannelli\pop_allFreq.txt" --run-name "dnp-cpi-01"
+```
+
+Per includere Contamination, sostituire `dnp-cpi` con
+`dnp-contamination-cpi`. Il workflow combinato applica Contamination a tutti
+i campioni distinti presenti nelle coppie; `--contamination-panel` può
+selezionare un pannello diverso da quello DNPcall.
+
+| Opzione dei workflow con CPI | Significato |
+| --- | --- |
+| `--pair ID MATERNAL_BAM PATERNAL_BAM` | Coppia e assegnazione esplicita dei due BAM; opzione ripetibile. |
+| `--panel PATH` | Pannello usato da DNPcall per produrre i conteggi. |
+| `--popfreq PATH` | Frequenze di popolazione richieste da CPI. |
+| Nessuna opzione di cutoff | CPI usa tutti i siti disponibili nelle tabelle DNPcall, modalità ALL. |
+| `--cpi-panel PATH` | Un pannello di coordinate per CPI, distinto dalla selezione DNPcall. |
+| `--cutoff LABEL PATH` | Pannello CPI etichettato; opzione ripetibile. |
+| `--cutoff-map "LABEL=PATH,LABEL2=PATH2"` | Mappa di pannelli CPI; alternativa alle due opzioni precedenti. |
+| `--err-const NUMERO` | Costante d'errore CPI; valore iniziale `0.0000892303778101497`. |
+| `--parallel` | Parallelismo interno DNPcall, senza esecuzione simultanea dei passaggi. |
+| `--snp-panel PATH` | Aggiunge SNPcall per ogni BAM distinto usando questo pannello SNP e il FASTA del workflow. |
+
+Le tre forme di cutoff sono alternative. Un pannello CPI seleziona i loci
+fra quelli presenti nelle tabelle: non aggiunge conteggi per loci esclusi
+dal pannello DNPcall. Il pannello DNPcall non viene applicato implicitamente
+come cutoff CPI. I prefissi materno/paterno dei file sono gestiti dal motore;
+i ruoli sono quelli dichiarati con `--pair`, non nomi da interpretare.
+
+### SNPcall nei workflow DNPcall
+
+Per aggiungere SNPcall a uno dei tre workflow DNPcall, rispondere alla relativa
+scelta nel menu e selezionare un pannello SNP. Dalla CLI aggiungere
+`--snp-panel PATH`, per esempio:
+
+```powershell
+.\nipat.cmd workflow dnp-contamination `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --snp-panel "..\pannelli\SNPlist.txt"
+```
+
+Il pannello DNP non viene riutilizzato implicitamente come pannello SNP.
+SNPcall legge gli stessi BAM originali e lo stesso FASTA, preparando un proprio
+pileup per ciascun campione. Le sue tabelle rimangono risultati indipendenti;
+non sostituiscono gli input di Contamination o CPI. Nei preset i passaggi SNP
+seguono le analisi DNP, Contamination e CPI selezionate. Il piano è sequenziale:
+se un passaggio fallisce, quelli non ancora avviati vengono bloccati anche
+quando non ne dipendono scientificamente.
+
+### SNPcall su più campioni
+
+Scegliere **W → 4 — SNPcall su più campioni** e indicare la modalità:
+
+- **BAM:** selezionare più BAM, oppure un file elenco, un FASTA indicizzato
+  e un pannello SNP comune. Il motore prepara un pileup distinto per ogni BAM.
+- **Pileup:** selezionare più pileup con QNAME e un pannello SNP comune.
+  Non viene richiesto un FASTA e samtools non viene eseguito.
+
+Controllare file, modalità, pannello e destinazione nel riepilogo, quindi
+confermare una sola volta. Ogni file riceve un passaggio e una tabella di
+risultati propri, anche quando gli originali in cartelle diverse hanno lo
+stesso nome. Lo stesso file non può essere elencato più volte. Le modalità
+BAM e pileup non possono essere mescolate nello stesso run del menu o comando.
+Per il significato delle colonne e i requisiti degli input consultare
+[SNPcall](#snpcall).
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow snp-batch `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\SNPlist.txt" `
+  --run-name "snp-batch-01"
+
+.\nipat.cmd workflow snp-batch `
+  --pileup "..\campioni\campione-a.pileup" --pileup "..\campioni\campione-b.pileup" `
+  --panel "..\pannelli\SNPlist.txt" --run-name "snp-pileup-01"
+```
+
+`--bamlist PATH` è un'alternativa a `--bam` ripetuto; i percorsi relativi
+nell'elenco si risolvono rispetto alla cartella del file elenco. `--reference`
+è obbligatorio per BAM e non è ammesso per pileup.
+`nipat workflow snp-batch --help` elenca le opzioni; su Ubuntu usare `nipat`
+e percorsi Linux.
+
+### Risultati dei workflow automatici
+
+| Percorso nel run automatico | Contenuto |
+| --- | --- |
+| `work/engine-plan.json` | Piano inviato al motore, con campioni e collegamento fra i passaggi. |
+| `output/workflow/workflow-state.json` | Stato complessivo e stato di ciascun passaggio. |
+| `output/workflow/steps/dnp/output` | Tabelle, riepiloghi e grafici DNPcall. |
+| `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination, quando selezionato. |
+| `output/workflow/steps/cpi/output` | Riepilogo CSV e grafici PDF CPI, quando selezionato. |
+| `output/workflow/steps/snp_0001/output/SNPcall_output.txt` | Risultato del primo campione SNPcall; i successivi usano `snp_0002`, ecc. |
+| `output/workflow/steps/<id>/request.json` | Richiesta concreta del passaggio. |
+| `output/workflow/steps/<id>/command.log` | Messaggi R del passaggio; per DNPcall comprende anche i messaggi interni allo script. |
+| `output/workflow/steps/snp_0001/preparation.log` | Messaggi samtools del primo campione SNPcall da BAM; il comando è registrato nello stato. |
+| `output/workflow/steps/<id>/work` | Pannelli, liste e tabelle preparati per il passaggio. |
+
+Un errore o un'interruzione impediscono l'avvio dei passaggi successivi; risultati
+parziali e log rimangono disponibili. Controllare lo stato complessivo e quello
+dei singoli passaggi, senza dedurre il successo dalla sola presenza di file.
+Non è prevista la ripresa automatica: correggere la causa e avviare un nuovo run.
+La simulazione `--dry-run` prepara il piano e i mount, ma non esegue nessun
+passaggio e non produce risultati scientifici.
+
+Ogni passaggio SNPcall da BAM conserva `work/snp_regions.bed` e
+`work/pileup.txt`; in modalità pileup questi file non vengono rigenerati.
+La mappa dei campioni in `run.json` collega i nomi interni agli input originali;
+`artifacts.snp-tables` nello stato del passaggio collega la tabella al campione.
+Non attribuire le tabelle ai campioni usando soltanto il nome fisso
+`SNPcall_output.txt`: considerare il passaggio e la mappa registrata.
+
+Per usare **tabelle DNPcall già disponibili**, avviare invece **3 — Contamination**
+e selezionare i file richiesti in `output/individual_outputs` del run DNPcall,
+oppure quella sottocartella come input. Nel workflow automatico le tabelle
+si trovano in `output/workflow/steps/dnp/output/individual_outputs`.
+La radice del run contiene anche file non compatibili con Contamination.
+
+CPI produce `Summary_FetalFraction_CPI.csv` e, nella sottocartella `plots`,
+un PDF per coppia e `All_CPIplots.pdf`. Non produce tabelle di dettaglio per sito o per iterazione.
+La colonna `Pair` e i nomi dei PDF usano identificatori nativi assegnati dal
+motore, per esempio `Mothers0001-Fathers0002_DNPs`. Per risalire all'ID
+inserito dall'utente, consultare `cpi-pairs` nel record del passaggio CPI
+in `workflow-state.json`; `run.json` collega le coppie ai BAM originali.
+La mappa indica anche le righe del riepilogo associate a ciascuna coppia e cutoff.
+I CSV e i PDF originali non vengono riscritti.
+
+### Utilizzo di tabelle già disponibili
+
+Per avviare **CPI da un run DNPcall già completato**, scegliere l'analisi singola
+**4 — CPI**. Verificare prima la corrispondenza fra
 alias DNPcall e campioni originali in `run.json`. Preparare una cartella con
 copie delle tabelle selezionate, nominando per esempio `MotherA1.txt` la tabella
 cfDNA materna e `FatherA1.txt` quella del presunto padre; indicare poi `A1:A1`
@@ -526,7 +796,10 @@ Una cartella di output parziale non dimostra il completamento del workflow.
 | Analisi interrotta o fallita | Conservare l'intera cartella del run e consultare `execution.log`. |
 | Risultato inatteso | Confrontare input e parametri con il caso di riferimento e compilare la [scheda di validazione](VALIDAZIONE.md). |
 
-Ctrl+C tenta di interrompere anche il container corrente. Una chiusura forzata
+Nel menu guidato, Ctrl+C interrompe l'operazione e torna al menu principale
+dopo la procedura di arresto del container corrente. Se l'arresto non può
+essere confermato, NIPAT mostra un avviso: conservare il log e verificare lo
+stato del runtime prima di avviare un'altra analisi. Una chiusura forzata
 o uno spegnimento possono lasciare lo stato `preparing` o `running`: non sono
 esiti positivi. Una nuova prova deve usare una nuova cartella.
 

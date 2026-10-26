@@ -15,6 +15,15 @@ if TYPE_CHECKING:
 
 _MAX_METADATA_BYTES = 2 * 1024 * 1024
 _MAX_OUTPUT_FILES = 12
+_MAX_PAIRS = 12
+_MAX_STEPS = 24
+_WORKFLOW_STEPS = {
+    "dnp-contamination": {"dnp": "dnp-call", "contamination": "contamination"},
+    "dnp-cpi": {"dnp": "dnp-call", "cpi": "cpi"},
+    "dnp-contamination-cpi": {"dnp": "dnp-call", "contamination": "contamination", "cpi": "cpi"},
+    "snp-batch": {},
+}
+_STEP_LABELS = {"dnp": "DNPcall", "contamination": "Contamination", "cpi": "CPI"}
 _STATUS_LABELS = {
     "preparing": "Preparazione",
     "planned": "Pianificata (dry-run)",
@@ -22,6 +31,9 @@ _STATUS_LABELS = {
     "succeeded": "Completata",
     "failed": "Non riuscita",
     "interrupted": "Interrotta",
+    "cancelled": "Interrotta",
+    "pending": "In attesa",
+    "blocked": "Non avviata: workflow arrestato",
 }
 
 
@@ -74,16 +86,192 @@ def _output_inventory(directory: Path) -> tuple[list[str], bool]:
     return inventory, False
 
 
+def _local_descendant(run_dir: Path, relative: str) -> Path:
+    """Resolve only fixed, run-owned locations; do not follow linked entries."""
+    path = run_dir
+    for component in Path(relative).parts:
+        path = path / component
+        if path.is_symlink():
+            raise ValueError(f"Percorso collegato non consultabile: {relative}")
+    if not path.resolve().is_relative_to(run_dir):
+        raise ValueError(f"Percorso esterno alla cartella del run: {relative}")
+    return path
+
+
+def _read_metadata(run_dir: Path, relative: str) -> dict:
+    path = _local_descendant(run_dir, relative)
+    if not path.is_file():
+        raise ValueError(f"File non disponibile: {relative}")
+    # Bound the actual read as well as its reported size, including a file
+    # replaced or extended between the size check and open.
+    if path.stat().st_size > _MAX_METADATA_BYTES:
+        raise ValueError(f"{relative} supera il limite di lettura del riepilogo (2 MiB)")
+    with path.open("rb") as stream:
+        content = stream.read(_MAX_METADATA_BYTES + 1)
+    if len(content) > _MAX_METADATA_BYTES:
+        raise ValueError(f"{relative} supera il limite di lettura del riepilogo (2 MiB)")
+    try:
+        metadata = json.loads(content.decode("utf-8"))
+    except RecursionError as exc:
+        raise ValueError(f"Struttura JSON troppo complessa: {relative}") from exc
+    if (not isinstance(metadata, dict) or type(metadata.get("schema_version")) is not int
+            or metadata["schema_version"] != 1):
+        raise ValueError(f"Formato di {relative} non supportato")
+    return metadata
+
+
+def _workflow_steps(metadata: dict) -> list[dict]:
+    """Accept only preset-owned IDs and complete, ordered per-sample SNP mappings."""
+    workflow = metadata["workflow"]
+    expected = [{"id": step_id, "workflow": kind}
+                for step_id, kind in _WORKFLOW_STEPS[workflow].items()]
+    parameters = metadata.get("parameters")
+    parameters = parameters if isinstance(parameters, dict) else {}
+    supplied = parameters.get("expected_steps")
+    has_snp = workflow == "snp-batch" or parameters.get("snp_panel") is not None
+    if supplied is None and not has_snp:
+        # Runs produced before the per-sample extension had only fixed steps.
+        return expected
+    if has_snp:
+        if workflow != "snp-batch" and (
+            not isinstance(parameters.get("snp_panel"), str) or not parameters["snp_panel"]
+        ):
+            raise ValueError("Pannello SNP registrato non valido")
+        mode = parameters.get("mode") if workflow == "snp-batch" else "bam"
+        samples = parameters.get("sample_mapping")
+        if mode not in ("bam", "pileup") or not isinstance(samples, list) or not samples:
+            raise ValueError("Associazioni dei campioni SNP non valide")
+        snp_steps = []
+        for number, sample in enumerate(samples, 1):
+            identifier = f"sample_{number:04d}"
+            if (not isinstance(sample, dict) or sample.get("sample_id") != identifier
+                    or not isinstance(sample.get("original_path"), str) or not sample["original_path"]
+                    or not isinstance(sample.get("container_path"), str) or not sample["container_path"]):
+                raise ValueError("Associazioni dei campioni SNP non valide")
+            snp_steps.append({"id": f"snp_{number:04d}", "workflow": "snp-call",
+                              "sample": identifier, "mode": mode})
+        expected.extend(sorted(snp_steps, key=lambda step: step["id"]))
+    if supplied != expected:
+        raise ValueError("Elenco dei passaggi attesi non valido")
+    return expected
+
+
+def _workflow_state(run_dir: Path, workflow: str = "dnp-contamination",
+                    metadata: dict | None = None) -> dict:
+    metadata = _read_metadata(run_dir, "run.json") if metadata is None else metadata
+    if metadata.get("workflow") != workflow:
+        raise ValueError("Workflow e metadati non coerenti")
+    state = _read_metadata(run_dir, "output/workflow/workflow-state.json")
+    steps = state.get("steps")
+    allowed = {"pending", "running", "succeeded", "failed", "cancelled", "blocked"}
+    expected = {step["id"]: step for step in _workflow_steps(metadata)}
+    if (state.get("interface") != "workflow-plan-execution-v1"
+            or not isinstance(state.get("status"), str)
+            or state.get("status") not in {"running", "succeeded", "failed", "cancelled"}
+            or not isinstance(steps, list) or len(steps) != len(expected)
+            or any(not isinstance(step, dict) or not isinstance(step.get("id"), str)
+                   or step.get("id") not in expected
+                   or step.get("workflow") != expected[step["id"]]["workflow"]
+                   or not isinstance(step.get("status"), str) or step["status"] not in allowed
+                   for step in steps)
+            or {step["id"] for step in steps} != set(expected)):
+        raise ValueError("Stato del workflow automatico non valido")
+    if state["status"] == "succeeded" and any(step["status"] != "succeeded" for step in steps):
+        raise ValueError("Stato complessivo e stati dei passaggi non coerenti")
+    for step in steps:
+        declared = expected[step["id"]]
+        if declared["workflow"] != "snp-call":
+            continue
+        source = next(sample for sample in metadata["parameters"]["sample_mapping"]
+                      if sample["sample_id"] == declared["sample"])
+        mapping = step.get("sample_mapping")
+        if (mapping is not None or step["status"] == "succeeded") and mapping != {
+            "sample": declared["sample"], "mode": declared["mode"], "path": source["container_path"],
+        }:
+            raise ValueError("Passaggio SNP e campione atteso non coerenti")
+        if step["status"] != "succeeded":
+            continue
+        artifacts = step.get("artifacts")
+        tables = artifacts.get("snp-tables") if isinstance(artifacts, dict) else None
+        if (not isinstance(tables, list) or len(tables) != 1
+                or not isinstance(tables[0], dict) or tables[0].get("sample") != declared["sample"]):
+            raise ValueError("Risultato SNP e campione atteso non coerenti")
+    return state
+
+
+def _recorded_status(run_dir: Path) -> str | None:
+    try:
+        metadata = _read_metadata(run_dir, "run.json")
+        status = metadata.get("status")
+        if not isinstance(status, str):
+            return None
+        workflow = metadata.get("workflow")
+        if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS and status == "succeeded":
+            # A completed parent invocation is insufficient if the persisted
+            # scientific step report is unavailable or records another outcome.
+            return _workflow_state(run_dir, workflow, metadata)["status"]
+        return status
+    except (OSError, ValueError):
+        return None
+
+
+def _show_workflow_summary(ui: Terminal, run_dir: Path, workflow: str, metadata: dict) -> None:
+    ui.message("Passaggi del workflow automatico:")
+    try:
+        state = _workflow_state(run_dir, workflow, metadata)
+        steps = {step["id"]: step for step in state["steps"]}
+        declared = _workflow_steps(metadata)
+        parameters = metadata.get("parameters")
+        samples = parameters.get("sample_mapping", []) if isinstance(parameters, dict) else []
+        for specification in declared[:_MAX_STEPS]:
+            step_id = specification["id"]
+            label = (_STEP_LABELS[step_id] if specification["workflow"] != "snp-call" else
+                     f"SNPcall {specification['sample']} ({specification['mode']})")
+            step = steps[step_id]
+            ui.message(f"  {label}: {_STATUS_LABELS[step['status']]}")
+            if specification["workflow"] == "snp-call":
+                source = next(sample["original_path"] for sample in samples
+                              if sample["sample_id"] == specification["sample"])
+                ui.message(f"    Input: {_short_value(source)}")
+            output = _local_descendant(run_dir, f"output/workflow/steps/{step_id}/output")
+            if output.is_dir():
+                ui.message(f"    Cartella {label}: {output}")
+            elif step["status"] == "succeeded":
+                ui.message(f"    Cartella risultati {label} non disponibile.", kind="warning")
+        if len(declared) > _MAX_STEPS:
+            ui.message(f"Altri {len(declared) - _MAX_STEPS} passaggi disponibili in workflow-state.json.")
+        ui.message(f"Stato dei passaggi: {run_dir / 'output/workflow/workflow-state.json'}")
+    except (OSError, ValueError) as exc:
+        ui.message(f"Stato dei passaggi non consultabile: {exc}", kind="warning")
+
+
+def _show_pair_mapping(ui: Terminal, metadata: dict) -> None:
+    """Describe declared biological roles without opening metadata-supplied paths."""
+    parameters = metadata.get("parameters")
+    pairs = parameters.get("pair_mapping") if isinstance(parameters, dict) else None
+    fields = ("pair_id", "mother_sample_id", "father_sample_id", "mother_bam", "father_bam")
+    if (not isinstance(pairs, list) or not pairs
+            or any(not isinstance(pair, dict)
+                   or any(not isinstance(pair.get(field), str) for field in fields)
+                   for pair in pairs)):
+        ui.message("Associazioni delle coppie CPI non consultabili in run.json.", kind="warning")
+        return
+    ui.message(f"Coppie CPI registrate: {len(pairs)}")
+    for pair in pairs[:_MAX_PAIRS]:
+        ui.message(f"  Coppia {_short_value(pair['pair_id'])}")
+        ui.message(f"    cfDNA materno ({_short_value(pair['mother_sample_id'])}): "
+                   f"{_short_value(pair['mother_bam'])}")
+        ui.message(f"    Campione paterno ({_short_value(pair['father_sample_id'])}): "
+                   f"{_short_value(pair['father_bam'])}")
+    if len(pairs) > _MAX_PAIRS:
+        ui.message("Altre coppie disponibili in run.json.")
+
+
 def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
     ui.heading("Riepilogo dell'esecuzione")
     ui.message(f"Cartella: {run_dir}")
-    metadata_path = run_dir / "run.json"
     try:
-        if metadata_path.stat().st_size > _MAX_METADATA_BYTES:
-            raise ValueError("run.json supera il limite di lettura del riepilogo (2 MiB)")
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        if not isinstance(metadata, dict) or metadata.get("schema_version") != 1:
-            raise ValueError("formato di run.json non supportato")
+        metadata = _read_metadata(run_dir, "run.json")
         ui.message(f"Workflow: {_short_value(metadata.get('workflow'))}")
         status = metadata.get("status")
         label = (
@@ -99,6 +287,12 @@ def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
         source = metadata.get("source")
         if isinstance(source, dict) and source.get("nipat_version"):
             ui.message(f"Versione NIPAT: {_short_value(source['nipat_version'])}")
+        workflow = metadata.get("workflow")
+        if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS:
+            if not dry_run:
+                _show_workflow_summary(ui, run_dir, workflow, metadata)
+            if "cpi" in _WORKFLOW_STEPS[workflow]:
+                _show_pair_mapping(ui, metadata)
     except (OSError, ValueError) as exc:
         ui.message(f"Metadati non consultabili: {exc}", kind="warning")
 
@@ -128,11 +322,16 @@ def show_results(
     dry_run: bool = False,
     open_path: Callable[[Path], None] | None = None,
 ) -> None:
-    """Show the result of a successful workflow and offer explicit local file actions."""
+    """Show recorded run status and offer explicit local file actions."""
     run_dir = run_dir.expanduser().resolve()
     opener = open_local_path if open_path is None else open_path
-    ui.heading("Esecuzione pianificata" if dry_run else "Esecuzione completata")
-    ui.message(f"Esecuzione: {run_dir}", kind="info" if dry_run else "success")
+    status = "planned" if dry_run else _recorded_status(run_dir)
+    titles = {"planned": "Esecuzione pianificata", "succeeded": "Esecuzione completata",
+              "failed": "Esecuzione non riuscita", "interrupted": "Esecuzione interrotta",
+              "cancelled": "Esecuzione interrotta", "running": "Esecuzione in corso",
+              "preparing": "Preparazione dell'esecuzione"}
+    ui.heading(titles.get(status, "Risultati dell'esecuzione"))
+    ui.message(f"Esecuzione: {run_dir}", kind="success" if status == "succeeded" else "info")
     ui.message(f"Dettagli: {run_dir / 'run.json'}")
     ui.message(f"Log: {run_dir / 'execution.log'}")
     if dry_run:

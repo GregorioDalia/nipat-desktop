@@ -62,8 +62,8 @@ def verified_inputs(project: Path, manifest_path: Path, *, require_clean: bool =
         assets.validate_installation_profile(manifest.get("installation_profile"))
     except (TypeError, AttributeError, KeyError) as exc:
         raise ValueError("Struttura del manifest installer non valida.") from exc
-    if not re.fullmatch(r"0\.6\.\d+(?:(?:a|b|rc)\d+)?", manifest["version"]):
-        raise ValueError("Il pacchetto NIPAT Desktop richiede una versione 0.6.")
+    if not re.fullmatch(r"0\.[67]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", manifest["version"]):
+        raise ValueError("Il pacchetto NIPAT Desktop richiede una versione 0.6 o 0.7.")
     if assets.checked_version(project) != manifest["version"]:
         raise ValueError("Versione dei sorgenti diversa dal manifest runtime.")
     if assets.installation_profile(project) != manifest["installation_profile"]:

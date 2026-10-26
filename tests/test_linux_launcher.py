@@ -227,11 +227,23 @@ class LinuxLauncherTests(unittest.TestCase):
                 launcher.load_manifest(self.app)
 
     def test_manifest_rejects_other_release_families(self):
-        for version in ("0.4.1", "0.5.0a1", "0.7.0"):
+        for version in ("0.4.1", "0.5.0a1", "0.8.0", "1.0.0", "0.7.0dev1", "0.7.0a"):
             self.manifest.update(version=version, release_tag="v" + version)
             self.write_manifest()
             with self.subTest(version=version), self.assertRaises(launcher.SetupError):
                 launcher.load_manifest(self.app)
+
+    def test_manifest_accepts_supported_desktop_series_with_exact_tag(self):
+        for version in ("0.6.0", "0.6.1rc2", "0.7.0a1", "0.7.0b2", "0.7.0rc1", "0.7.0"):
+            self.manifest.update(version=version, release_tag="v" + version)
+            self.write_manifest()
+            with self.subTest(version=version):
+                actual, _ = launcher.load_manifest(self.app)
+                self.assertEqual(actual["version"], version)
+                self.manifest["release_tag"] = "v0.6.0" if version != "0.6.0" else "v0.7.0"
+                self.write_manifest()
+                with self.assertRaises(launcher.SetupError):
+                    launcher.load_manifest(self.app)
 
     def test_receipt_requires_one_untagged_loaded_id(self):
         self.assertEqual(launcher.loaded_image("progress\nLoaded image ID: " + LOADED_ID), LOADED_ID)

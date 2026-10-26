@@ -4,7 +4,8 @@ NIPAT Desktop è un'applicazione locale con interfaccia a riga di comando e menu
 guidato. Il client Python gestisce l'interazione, i percorsi, la configurazione
 e i registri delle esecuzioni. Un'immagine Linux autosufficiente contiene R,
 samtools, le dipendenze, gli script scientifici e il codice necessario alla
-preparazione dei quattro workflow. Non sono presenti un server web o un servizio
+preparazione delle quattro analisi e all'esecuzione dei piani composti.
+Non sono presenti un server web o un servizio
 di analisi remoto.
 
 ## Componenti
@@ -16,32 +17,43 @@ di analisi remoto.
 | `src/nipat/execution/runner.py` | Identificazione del motore, isolamento del container, esecuzione, interruzione e diagnostica. |
 | `src/nipat/execution/transport.py` | Accesso al Docker Engine nativo su Linux o al motore gestito nella distribuzione WSL2 su Windows. |
 | `engine/main.py` | Contratto del motore, verifica dei sorgenti scientifici e avvio dei workflow nell'immagine. |
-| `src/nipat_scientific/` | Validatori e preparazione dei file, condivisi dal client e dal motore. |
+| `src/nipat_scientific/` | Validatori, catalogo e preparazione dei file, condivisi dal client e dal motore. |
+| `src/nipat_scientific/plan.py` ed `executor.py` | Contratto dei piani e orchestrazione scientifica eseguita nell'immagine. |
 | `scientific/vendor/` | Sorgenti R e risorse dei progetti scientifici integrati. |
 
 Il client e il motore includono la stessa libreria di preparazione, ma non
 condividono file montati dall'applicazione. Gli algoritmi scientifici risiedono
 negli script R; gli adattatori Python preparano le loro interfacce di file.
-Ogni richiesta identifica una sola analisi. La versione 0.6 non contiene un
-orchestratore di dipendenze tra run: il riuso degli output compatibili è
-esplicito e ogni passaggio conserva input e metadati propri.
+Il comando `execute` avvia una singola analisi; `execute-plan` riceve un piano
+con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
+DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
+come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
+workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
+singoli. Questo documento descrive la versione 0.7.1.
 
-### Confini dell'estensione ai workflow automatici
+### Confini dei workflow automatici
 
-Per la versione 0.7, la pianificazione ed esecuzione delle dipendenze scientifiche
-sono previste nel motore incorporato nell'immagine. Il client raccoglierà e
-confermerà il piano, preparerà l'accesso ai file e presenterà gli stati restituiti.
-Il motore gestirà l'ordine dei passaggi, i loro parametri e l'associazione tra
-output e input successivi. Il contratto dovrà essere utilizzabile su Windows
-tramite WSL2, su Linux nativo e da un futuro servizio, senza dipendere dalla
-presenza della CLI o di una GUI dentro il container.
+Il client raccoglie e conferma il piano, prepara l'accesso ai file e avvia
+un solo container. Il motore incorporato nell'immagine determina l'ordine dei
+passaggi, prepara i loro parametri e associa output e input successivi.
+Non dipende dalla presenza della CLI o di una GUI dentro il container.
+Il contratto usa percorsi Linux assegnati dai mount e può essere utilizzato
+su Windows tramite WSL2, su Linux nativo e da un futuro servizio.
+
+Il validatore e l'esecutore supportano le quattro analisi e controllano i
+collegamenti tipizzati. SNPcall può condividere un BAM con DNPcall, ma non
+produce output utilizzabili da Contamination o CPI. Ogni campione SNPcall
+ha un passaggio distinto; da BAM, samtools prepara il pileup prima di R.
+I passaggi sono sequenziali; il parallelismo interno DNPcall rimane
+un'opzione distinta. Un errore interrompe
+il piano e blocca tutti i passaggi non ancora avviati. Non è prevista la ripresa.
 
 Interazione, preferenze locali, traduzione dei testi, avvio del runtime,
 installazione e aggiornamenti restano responsabilità del client e dei pacchetti
-di piattaforma. Gli identificatori del contratto saranno indipendenti dalla
-lingua dell'interfaccia. L'estensione non è implementata nella 0.6;
-obiettivi, verifiche e localizzazione sono descritti nel
-[piano di sviluppo](ROADMAP.md).
+di piattaforma. Gli identificatori del contratto sono indipendenti dalla
+lingua dell'interfaccia. Il [contratto dei piani](WORKFLOW_CONTRACT.md)
+descrive schema, stati e limiti; il [piano di sviluppo](ROADMAP.md) riporta
+gli obiettivi di qualificazione, distribuzione e localizzazione.
 
 ## Ambienti di esecuzione
 
@@ -67,6 +79,9 @@ Ogni analisi produce una richiesta JSON con versione di schema 1 e una delle
 interfacce `dnp-call-v1`, `snp-call-v1`, `contamination-v1` o `cpi-v1`.
 La richiesta contiene percorsi interni al container, parametri e destinazioni.
 Il motore valida nuovamente i file e prepara gli input prima di avviare R.
+I piani usano uno schema distinto, identificato da `schema_version: 1`,
+e l'interfaccia di esecuzione `workflow-plan-execution-v1`. Il runner ne
+verifica la presenza e il sottoinsieme di analisi supportato prima dell'avvio.
 Il contratto completo è descritto nel [riferimento del motore](../engine/README.md).
 
 Prima dell'analisi, il runner risolve l'immagine in un ID immutabile e verifica
@@ -106,9 +121,16 @@ shell a partire dagli input dell'utente.
 
 DNPcall riceve alias numerati come `sample_0001.bam`, compatibili con le chiamate
 interne dello script. `run.json` conserva l'associazione con i BAM originali.
-Contamination e CPI mantengono i nomi dei campioni nelle copie preparate;
-collisioni di nome, incluse quelle che differiscono soltanto per maiuscole,
-vengono rifiutate prima della scrittura.
+Nelle analisi singole, Contamination e CPI mantengono i nomi dei campioni
+nelle copie preparate; collisioni di nome, incluse quelle che differiscono
+soltanto per maiuscole, vengono rifiutate prima della scrittura.
+Nel piano automatico, Contamination usa alias `table_0001`, ecc.; lo stato
+del motore conserva l'associazione con il campione e il passaggio produttore,
+indipendentemente dall'ordine dei file o dai loro nomi originali.
+CPI assegna alias stabili alle tabelle selezionate e riutilizza i genitori
+condivisi senza duplicarne l'elaborazione. L'identificatore di ogni coppia,
+i riferimenti materno/paterno e il nome nativo prodotto da R rimangono
+associati nello stato del piano; i CSV scientifici non vengono riscritti.
 
 ## Preferenze del menu guidato
 
@@ -132,10 +154,14 @@ Ogni run usa una cartella nuova. `run.json` registra parametri, input, mappatura
 dei percorsi, stato, comandi e identità dell'immagine. `runtime.engine` contiene
 il manifest R verificato e gli hash del codice di preparazione effettivamente
 usato nell'immagine; le informazioni sui sorgenti del client sono distinte.
-`execution.log` conserva l'output dei processi. La struttura dei risultati è
-illustrata in [Esecuzioni e risultati](ESECUZIONI.md).
+`execution.log` conserva i messaggi del client e del motore. Nel piano,
+`output/workflow/workflow-state.json` registra stato, comandi e riferimenti
+agli output di ogni passaggio; i messaggi scientifici sono nei rispettivi
+`steps/<id>/command.log`. La struttura dei risultati è illustrata in
+[Esecuzioni e risultati](ESECUZIONI.md).
 
-Il motore conserva richieste e file preparati in `work`. SNPcall da BAM conserva
+Il motore conserva le richieste e i file preparati nel run; ogni passaggio
+di un piano ha una propria sottocartella `work`. SNPcall da BAM conserva
 BED e pileup; DNPcall conserva pannello e lista BAM, mentre lo script R elimina
 i propri file temporanei BED e pileup al termine. CPI e Contamination conservano
 le tabelle preparate e i pannelli normalizzati. Gli originali non vengono modificati.

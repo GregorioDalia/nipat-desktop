@@ -40,6 +40,10 @@ class WizardTests(unittest.TestCase):
         self.popfreq = self.file('pop.tsv', 'chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t1\t2\t0.5\t0.5\n')
         self.run = self.layout.runs_dir / 'test'
         (self.run / 'output').mkdir(parents=True)
+        (self.run / 'run.json').write_text(
+            '{"schema_version": 1, "workflow": "fixture", "status": "succeeded"}',
+            encoding='utf-8',
+        )
         self.workflows = Mock()
         for name in ('dnp_call', 'snp_call', 'contamination', 'cpi'):
             getattr(self.workflows, name).return_value = self.run
@@ -175,10 +179,102 @@ class WizardTests(unittest.TestCase):
 
     def test_cancel_and_eof_do_not_execute(self):
         for answers, expected in ((['1', ':annulla', '0'], 0), ([EOFError()], 130),
-                                  ([KeyboardInterrupt()], 130)):
+                                  ([KeyboardInterrupt(), '0'], 0)):
             result, _ = self.invoke(answers)
             self.assertEqual(result, expected)
         self.workflows.dnp_call.assert_not_called()
+
+    def test_cancel_returns_directly_to_main_from_every_form_and_nested_screen(self):
+        paths = [
+            ['1', '1', self.bam], ['2', '1'], ['3', '1'], ['4', self.samples],
+            self.snp_answers(), self.snp_answers() + ['2'],
+            self.snp_answers() + ['2', '5'],
+            ['W'], ['W', '1', '1'], ['W', '2', 'Pair1'],
+            ['W', '3', 'Pair1', self.bam], ['W', '4', '1'],
+            ['7'], ['7', '6'], ['7', '6', '1'],
+            ['5'], ['5', '1', '2'], ['5', '8', '1'], ['5', '7'],
+        ]
+        for path in paths:
+            for cancel in (':AnNuLlA', KeyboardInterrupt()):
+                with self.subTest(path=path, cancel=cancel):
+                    result, messages = self.invoke(path + [cancel, '0'])
+                    self.assertEqual(result, 0)
+                    self.assertEqual(messages.count('Menu principale\n'), 2)
+                    self.assertIn('Ritorno al menu principale', messages)
+        for method in ('dnp_call', 'snp_call', 'contamination', 'cpi',
+                       'dnp_contamination', 'dnp_cpi', 'snp_batch'):
+            getattr(self.workflows, method).assert_not_called()
+
+    def test_main_cancel_and_escape_do_not_close_session(self):
+        result, messages = self.invoke([':annulla', KeyboardInterrupt(), ':indietro', '0'])
+        self.assertEqual(result, 0)
+        self.assertEqual(messages.count('Menu principale\n'), 4)
+
+    def test_cancel_after_saved_settings_keeps_saved_layout_and_discards_pending_edit(self):
+        target = self.root / 'saved results'
+        discarded = self.root / 'unsaved results'
+        store = PreferencesStore(self.root / 'preferences.json')
+        result, _ = self.invoke([
+            '5', '1', '2', target, '9', '1', '2', discarded, ':annulla', '0',
+        ], preferences_store=store)
+        self.assertEqual(result, 0)
+        self.assertEqual(self.workflows.layout.runs_dir, target)
+        self.assertIs(self.workflows.layout, self.workflows.runner.layout)
+        self.assertFalse(discarded.exists())
+        self.assertEqual(store.load().runs_dir, target)
+
+    def test_environment_interrupt_returns_to_menu_and_can_retry(self):
+        self.workflows.runner.doctor.side_effect = [KeyboardInterrupt(), None]
+        result, messages = self.invoke(['8', '8', '0'])
+        self.assertEqual(result, 0)
+        self.assertEqual(self.workflows.runner.doctor.call_count, 2)
+        self.assertEqual(messages.count('Controllo completato:'), 1)
+        self.assertIn('Ritorno al menu principale', messages)
+
+    def test_interrupted_run_remains_accessible_and_another_analysis_can_start(self):
+        interrupted = self.layout.new_run_dir('snp-call', 'interrupted')
+        (interrupted / 'run.json').write_text(
+            '{"schema_version": 1, "workflow": "snp-call", "status": "interrupted"}',
+            encoding='utf-8',
+        )
+        (interrupted / 'execution.log').write_text('partial log\n', encoding='utf-8')
+        self.workflows.runner.last_run_dir = None
+        def cancel(**_kwargs):
+            self.workflows.runner.last_run_dir = interrupted
+            raise KeyboardInterrupt
+        self.workflows.snp_call.side_effect = cancel
+        self.workflows.contamination.return_value = self.run
+        result, messages = self.invoke(self.snp_answers('cancelled') + [
+            '1', '6', '0', '3', '1', self.table, '', self.panel, 'new-analysis', '1', '0', '0',
+        ])
+        self.assertEqual(result, 0)
+        self.assertIn('Esecuzione interrotta:', messages)
+        self.assertIn(str(interrupted), messages)
+        self.assertIn('Esecuzione completata', messages)
+        self.assertEqual((interrupted / 'execution.log').read_text(), 'partial log\n')
+        self.workflows.snp_call.assert_called_once()
+        self.workflows.contamination.assert_called_once()
+
+    def test_cancellation_before_run_creation_does_not_adopt_stale_runner_directory(self):
+        self.workflows.runner.last_run_dir = self.run
+        self.workflows.snp_call.side_effect = KeyboardInterrupt()
+        result, messages = self.invoke(self.snp_answers() + ['1', '6', '0'])
+        self.assertEqual(result, 0)
+        self.assertIn('Nessuna esecuzione', messages)
+        self.assertNotIn('Esecuzione interrotta:', messages)
+
+    def test_cancel_from_results_keeps_the_completed_run(self):
+        for cancel in (':annulla', KeyboardInterrupt()):
+            with self.subTest(cancel=cancel):
+                result, messages = self.invoke(self.snp_answers() + ['1', cancel, '6', '0', '0'])
+                self.assertEqual(result, 0)
+                self.assertEqual(messages.count('Esecuzione completata'), 2)
+
+    def test_update_interrupt_keeps_session_open(self):
+        with patch('nipat.wizard.run_updates', side_effect=KeyboardInterrupt()):
+            result, messages = self.invoke(['9', '7', '0', '0'])
+        self.assertEqual(result, 0)
+        self.assertIn('Guida e informazioni', messages)
 
     def test_workflow_failure_retains_form_for_corrected_retry(self):
         self.workflows.snp_call.side_effect = [ValidationError('Pannello non valido'), self.run]

@@ -10,12 +10,13 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione documentata: NIPAT Desktop 0.6.0.** Consultare la pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
-versioni effettivamente pubblicate, gli installatori e le rispettive note.
-Gli artefatti GitHub Actions sono pacchetti di verifica tecnica, distinti dalle
-release. NIPAT è software per la ricerca: gli autotest verificano casi noti,
-mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
+**Versione documentata: NIPAT Desktop 0.7.1**, destinata alla valutazione
+tecnica e scientifica da parte dei ricercatori. Scaricare gli installatori
+dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
+e consultare le [note della versione](docs/RELEASE_0.7.1.md).
+Gli artefatti GitHub Actions sono pacchetti di revisione tecnica, distinti
+dalle release. NIPAT è software per la ricerca: gli autotest verificano casi
+noti, mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
 
 ## Analisi disponibili
 
@@ -28,10 +29,25 @@ mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
 
 Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
 cartella distinta con risultati, intermedi conservati, metadati e log.
-I run esistenti non vengono sovrascritti. I quattro workflow sono disponibili
-sia nel menu sia nella CLI diretta. Ogni avvio esegue una singola analisi;
-le sequenze si compongono selezionando gli output compatibili del run precedente.
-L'interfaccia della 0.6 è testuale.
+I run esistenti non vengono sovrascritti. Le quattro analisi sono disponibili
+sia nel menu sia nella CLI diretta. I workflow automatici collegano
+**DNPcall → Contamination**, **DNPcall → CPI** oppure **DNPcall → Contamination
+e CPI**. DNPcall produce una sola volta le tabelle individuali per le analisi
+selezionate. CPI richiede l'assegnazione esplicita delle coppie cfDNA materne/paterne.
+Si può aggiungere SNPcall sugli stessi BAM, con un pannello SNP scelto
+esplicitamente, oppure eseguire SNPcall su più BAM o pileup in un unico run.
+Ogni passaggio conserva risultati e stato distinti.
+L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
+e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
+scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
+input senza modificare gli algoritmi o avviare analisi.
+
+Il [contratto dei piani](docs/WORKFLOW_CONTRACT.md) identifica campioni,
+dipendenze e risultati. Validatore ed esecutore supportano le quattro analisi
+in ordine sequenziale. SNPcall è un'attività indipendente: legge il BAM o il
+pileup selezionato e non fornisce tabelle compatibili con Contamination o CPI.
+Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
+modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
 
@@ -87,7 +103,13 @@ sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 5. Consultare risultati e log dalla schermata finale.
 
 Le indicazioni contestuali spiegano ogni campo. `:indietro` corregge il campo
-precedente, `:annulla` torna al menu e `:vuoto` svuota un campo facoltativo.
+precedente e `:vuoto` svuota un campo facoltativo. Nei campi di testo e nei
+menu a inserimento testuale, `:annulla` torna direttamente al menu principale.
+**Ctrl+C** annulla l'operazione corrente anche durante un'analisi: NIPAT
+esegue la procedura di arresto prima di tornare al menu, conservando log e
+risultati già prodotti e segnalando eventuali problemi di arresto. Le modifiche
+di configurazione non ancora salvate vengono scartate.
+Per chiudere il programma scegliere **0 — Esci** nel menu principale.
 **5 — Configura** salva cartelle dati e risultati, riferimenti, modalità e
 parametri predefiniti dei workflow per gli avvii successivi del menu.
 Ogni analisi permette di modificarli prima della conferma; campioni, coppie
@@ -98,12 +120,19 @@ e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
 approvate su GitHub; download e installazione richiedono conferme distinte.
 In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
 all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
-Per spostare applicazione, ambiente WSL o cache usare il setup.
+**W — Workflow automatici** offre le tre composizioni DNPcall e SNPcall su più
+campioni, con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
+usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
 cartella dell'applicazione; condivisioni UNC e unità di rete non sono supportate.
-I percorsi possono contenere spazi. Le analisi in sequenza si compongono
-selezionando gli output compatibili di un run come input del successivo.
+I percorsi possono contenere spazi. I percorsi relativi partono dalla cartella
+corrente indicata nel campo: la cartella configurata come **Dati** non è una
+base di ricerca automatica. Per il riferimento scegliere il file FASTA delle
+sequenze, ad esempio `genome.fa`; `.fai` e `.gzi` sono indici associati e non
+vanno selezionati al suo posto. Nel workflow automatico non occorre copiare
+o riselezionare le tabelle fra i passaggi. Le altre sequenze si
+compongono selezionando gli output compatibili di un run come input del successivo.
 
 ### CLI diretta
 
@@ -125,6 +154,54 @@ workflow del menu. Sostituire i percorsi relativi di esempio con i propri:
 .\nipat.cmd cpi --input-dir "..\campioni\cpi" --pairs "A1:A1" `
   --popfreq "..\pannelli\pop_allFreq.txt" --panel "..\pannelli\DNP_list.txt"
 ```
+
+Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow dnp-contamination `
+  --bam "..\campioni\campione.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt"
+```
+
+`--bam` è ripetibile; `--bamlist` accetta un elenco di BAM. Contamination usa
+il pannello DNP selezionato, oppure quello indicato con `--contamination-panel`.
+`--parallel` riguarda soltanto il calcolo DNPcall sui campioni: le analisi
+successive iniziano dopo il completamento e la verifica degli output DNPcall.
+
+Per calcolare CPI dopo DNPcall, assegnare esplicitamente il BAM cfDNA materno
+e quello paterno a ogni coppia:
+
+```powershell
+.\nipat.cmd workflow dnp-cpi `
+  --pair coppia_a "..\campioni\cfdna-a.bam" "..\campioni\padre-a.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --popfreq "..\pannelli\pop_allFreq.txt"
+```
+
+`--pair` è ripetibile. Per includere anche Contamination, usare
+`workflow dnp-contamination-cpi` con le stesse coppie. `--panel` seleziona
+sempre i loci DNPcall; CPI usa tutti i siti disponibili salvo scelta esplicita
+di `--cpi-panel`, `--cutoff` o `--cutoff-map`. Le tabelle non devono essere
+copiate o rinominate: il motore conserva la corrispondenza fra coppie e risultati.
+Contamination non modifica i conteggi utilizzati da CPI.
+
+L'opzione `--snp-panel PATH` aggiunge a ciascuno dei tre workflow un passaggio
+SNPcall per ogni BAM distinto, usando lo stesso FASTA. Il pannello SNP deve
+essere selezionato esplicitamente. Per eseguire soltanto SNPcall su più campioni:
+
+```powershell
+.\nipat.cmd workflow snp-batch `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\SNPlist.txt"
+
+.\nipat.cmd workflow snp-batch `
+  --pileup "..\campioni\campione-a.pileup" --pileup "..\campioni\campione-b.pileup" `
+  --panel "..\pannelli\SNPlist.txt"
+```
+
+`--bamlist` è un'alternativa ai BAM ripetuti; i percorsi nel file sono relativi
+alla cartella della lista. La modalità pileup non accetta un FASTA e richiede
+file con QNAME. Le due modalità non si mescolano nello stesso comando.
 
 Le opzioni globali, come `--runs-dir` e `--dry-run`, precedono il sottocomando.
 `--dry-run` valida gli input e registra un'esecuzione `planned`, senza eseguire
@@ -164,6 +241,12 @@ conservare il checkout completo e seguire i requisiti della
 ## Risultati e verifiche
 
 Ogni run contiene `output`, `work`, `run.json` ed `execution.log`.
+Nel workflow automatico, `output/workflow` conserva il piano, lo stato
+complessivo e le sottocartelle dei passaggi selezionati: `steps/dnp`,
+`steps/contamination`, `steps/cpi` e, quando richiesti, `steps/snp_0001` e
+successivi. Ogni passaggio conserva risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
+successivi; le evidenze già prodotte restano disponibili. Non è prevista
+la ripresa del run: una nuova prova usa una nuova cartella.
 Il record identifica input, parametri e immagine effettivamente usata;
 la [guida alle esecuzioni](docs/ESECUZIONI.md) ne descrive significato e limiti.
 Lo stato `succeeded` indica il completamento tecnico del workflow. La
@@ -172,7 +255,9 @@ concordanza scientifica richiede il confronto con risultati attesi appropriati.
 `doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
 `self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
 modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
-La CI esegue inoltre regressioni DNPcall sintetiche e controlli del motore;
+La CI esegue inoltre regressioni DNPcall sintetiche e confronti fra workflow
+automatici e analisi separate, compresi CPI e le sue modalità di selezione dei siti,
+SNPcall da BAM o pileup e l'uso dello stesso BAM per DNPcall e SNPcall;
 la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
 verifica degli installatori e pubblicazione. La
 [scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove
@@ -181,7 +266,7 @@ indipendenti e problemi riproducibili.
 ## Documentazione e licenza
 
 - [Sintesi del prodotto](SUNTO.md)
-- [Note della versione 0.6.0](docs/RELEASE_0.6.0.md)
+- [Note della versione 0.7.1](docs/RELEASE_0.7.1.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
