@@ -62,8 +62,8 @@ del contratto dei piani verificano struttura, riferimenti tipizzati,
 dipendenze e ordine deterministico. La suite dell'esecutore verifica inoltre
 stati dei passaggi, errori, interruzioni, output mancanti e rifiuto di una
 destinazione già utilizzata. Il confronto scientifico reale del workflow
-DNPcall → Contamination è distinto da questi test unitari: viene eseguito
-nell'immagine con R e samtools. Nessuno di questi controlli attesta da solo
+DNPcall → Contamination e dei piani con CPI è distinto da questi test
+unitari: viene eseguito nell'immagine con R e samtools. Nessuno di questi controlli attesta da solo
 la validità biologica degli input.
 
 ## Controlli sui sorgenti
@@ -92,8 +92,8 @@ Il job `scientific` costruisce il motore e avvia:
 - `scripts/verify_engine_package.py`: quattro workflow nell'immagine, senza
   sorgenti applicativi montati, con aspettative numeriche e casi non validi;
   controlla inoltre il catalogo incorporato, la validazione dei piani e
-  il workflow automatico DNPcall → Contamination tramite
-  `scripts/verify_workflow_execution.py`;
+  i workflow automatici DNPcall → Contamination, DNPcall → CPI e DNPcall →
+  Contamination e CPI tramite `scripts/verify_workflow_execution.py`;
 - `python -m nipat doctor --runtime`: compatibilità e identità del motore;
 - `python -m nipat self-test`: regressioni distribuite e modalità di input.
 
@@ -111,6 +111,30 @@ Verifica anche l'associazione fra identità dei campioni e risultati, stato e
 manifest, conservazione degli input, rifiuto del riutilizzo della destinazione
 e arresto della catena su input non valido. I casi negativi non equivalgono
 alla validazione scientifica su campioni reali.
+
+Le regressioni CPI dei piani comprendono due livelli distinti:
+
+- **Tabelle importate:** casi informativi e senza siti, più coppie con un
+  campione materno condiviso, modalità ALL, pannello singolo e pannelli
+  etichettati, oltre a una costante d'errore non predefinita. Valori attesi
+  indipendenti e confronto con l'analisi separata verificano il CSV; nomi,
+  intestazioni PDF e mappa delle coppie verificano l'identità degli output.
+- **BAM e workflow completi:** il percorso DNPcall → CPI verifica il caso
+  senza siti informativi. Il percorso DNPcall → Contamination e CPI usa BAM
+  sintetici con tre loci, 96 letture REF e 4 ALT per il campione materno e
+  50 REF/50 ALT per quello paterno. I valori attesi sono frazione fetale 8%
+  e log10 CPI `0.903` sul pannello completo; un pannello con un solo locus
+  produce log10 CPI `0.301`. Contamination deve restituire media `0.04` per
+  il campione materno e nessun sito informativo per quello paterno.
+
+La [fixture del workflow CPI](../tests/fixtures/workflow_cpi/README.md)
+documenta come sono costruiti i BAM e come sono derivati i valori attesi.
+Il caso completo verifica che CPI riceva i conteggi DNPcall originali anche
+quando Contamination scarta i loci paterni; il suo risultato non viene usato
+come filtro o trasformazione degli input CPI. La prova attraversa il client
+senza sorgenti R locali, richiede un solo comando container e controlla stati,
+parametri effettivi, checksum, campioni condivisi e conservazione degli input.
+Il confronto dei PDF ne verifica presenza e formato, non l'aspetto grafico.
 
 La selezione delle verifiche scientifiche è definita in
 [`ci_changes.py`](../.github/scripts/ci_changes.py). Modifiche al motore, ai
@@ -299,8 +323,8 @@ di confine e i nuovi comportamenti. Per la 0.7 le priorità comprendono
 propagazione dei parametri, impostazioni scientifiche fisse, equivalenza
 tra analisi separate e workflow concatenati e gestione dei fallimenti tra
 passaggi dipendenti. La 0.7.0a1 comprende i controlli del catalogo e la catena
-DNPcall → Contamination descritti sopra; le altre composizioni richiederanno
-casi dedicati. Queste verifiche non vengono attribuite retroattivamente alla 0.6.
+DNPcall → Contamination e le composizioni CPI descritte sopra; SNPcall
+nei piani richiederà casi dedicati. Queste verifiche non vengono attribuite retroattivamente alla 0.6.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
 regressione. Esiti, versioni e limiti sono registrati nella

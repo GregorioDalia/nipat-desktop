@@ -24,8 +24,8 @@ I percorsi si possono aprire dalla schermata finale del menu oppure dal
 file system. **6 — Ultima esecuzione** richiama il run più recente della
 sessione. I nomi dei file scientifici sono quelli prodotti dal workflow.
 
-Il workflow automatico DNPcall → Contamination conserva un unico record
-`run.json` e due passaggi distinti nella sottocartella `output/workflow`:
+Ogni workflow automatico conserva un unico record `run.json` e i passaggi
+selezionati nella sottocartella `output/workflow`:
 
 | Percorso nel run automatico | Contenuto |
 | --- | --- |
@@ -33,13 +33,16 @@ Il workflow automatico DNPcall → Contamination conserva un unico record
 | `output/workflow/plan.json` | Piano canonico eseguito dal motore. |
 | `output/workflow/workflow-state.json` | Stato complessivo e dei passaggi, con riferimenti agli output e checksum. |
 | `output/workflow/steps/dnp` | Preparazione, risultati e log DNPcall. |
-| `output/workflow/steps/contamination` | Preparazione, risultati e log Contamination. |
+| `output/workflow/steps/contamination` | Preparazione, risultati e log Contamination, quando selezionato. |
+| `output/workflow/steps/cpi` | Preparazione, risultati e log CPI, quando selezionato. |
 
 Ogni cartella di passaggio contiene `request.json`, `command.log`, `work`
 e `output`. L'output R e samtools viene conservato in `command.log`; il log
 principale segnala l'avvio dei passaggi e l'esito del piano. Le tabelle individuali DNPcall si trovano in
 `steps/dnp/output/individual_outputs`; il riepilogo Contamination si trova
 in `steps/contamination/output/contamination_summary.txt`.
+Il riepilogo CPI è `steps/cpi/output/Summary_FetalFraction_CPI.csv`, accompagnato
+dai PDF in `steps/cpi/output/plots`, incluso `All_CPIplots.pdf`.
 Questi percorsi sono relativi a `output/workflow`.
 
 ## Stati e significato dell'esito
@@ -110,6 +113,16 @@ Contamination copia e rinomina le tabelle nello staging interno senza alterare
 i conteggi DNPcall; i nomi `table_0001`, ecc. vanno interpretati attraverso
 questa corrispondenza, non confrontati direttamente con i nomi dei BAM.
 
+Per CPI, `artifacts.cpi-pairs` nel record del passaggio associa ogni ID di
+coppia ai riferimenti materno e paterno, al nome nativo R, al PDF e alle righe
+del riepilogo. `summary_rows` usa numeri a partire da 1, escludendo
+l'intestazione del CSV, e conserva il valore `Cutoff` quando presente.
+Gli alias come `Mothers0001-Fathers0002_DNPs` non sono nomi di campioni originali;
+per attribuire i risultati usare questa mappa e `run.json`. Il campo
+`pair_mapping` del passaggio conserva già la corrispondenza prima dell'avvio
+R ed è disponibile per interpretare eventuali output parziali dopo un errore.
+I CSV e PDF generati da R mantengono il proprio contenuto originale.
+
 La corrispondenza tra file originali e percorsi nel container è conservata
 nei metadati e in `work/input-mounts.json`. I BAM e i FASTA vengono montati
 in sola lettura, senza copiarli nella cartella del progetto. DNPcall usa
@@ -135,7 +148,7 @@ con sostituzione atomica del file; non è un database di cronologia globale.
 | DNPcall | `work/DNP_list.txt` e `work/bamlist.txt`, con pannello normalizzato e alias dei campioni. | Tabelle in `output/individual_outputs`, riepiloghi in `output/summary` e grafici in `output/plots`. |
 | SNPcall | Da BAM: `work/snp_regions.bed` e `work/pileup.txt`. Da pileup: riferimento al file selezionato. | `output/SNPcall_output.txt`. |
 | Contamination | `work/DNPpanel.txt` e tabelle preparate in `work/inputs`. | `output/contamination_summary.txt` e tabelle `contamination_full_output_*.txt`. |
-| CPI | Tabelle parentali richieste in `work/inputs`; eventuale `work/DNPpanel.txt` o pannelli `work/cutoff_001.tsv`, ecc. | `output/Summary_FetalFraction_CPI.csv`, risultati per coppia e grafici. |
+| CPI | Tabelle parentali richieste in `work/inputs`; eventuale `work/DNPpanel.txt` o pannelli `work/cutoff_001.tsv`, ecc. | `output/Summary_FetalFraction_CPI.csv`, un PDF per coppia in `output/plots` e `output/plots/All_CPIplots.pdf`. |
 
 Il pileup e il BED generati internamente da DNPcall nella radice del run
 vengono eliminati al termine dallo script R; non sono intermedi conservati
@@ -145,15 +158,18 @@ CPI copia senza modificare i byte le sole tabelle parentali richieste.
 Un campione presente in più coppie viene preparato una sola volta. La modalità
 ALL non genera pannelli e non aggiunge `Cutoff` al CSV. Un pannello singolo
 produce una colonna `Cutoff` con il percorso interno del pannello; i cutoff
-etichettati conservano le etichette selezionate. I risultati per coppia usano
-nomi `Mother<id>-Father<id>_DNPs`, anche quando i prefissi degli input sono diversi.
+etichettati conservano le etichette selezionate. I nomi dei PDF e la colonna
+`Pair` usano `Mother<id>-Father<id>_DNPs`, anche quando i prefissi degli input
+sono diversi. Nei piani gli ID nativi sono assegnati dal motore e documentati
+nella mappa delle coppie. Lo script produce il riepilogo CSV e i PDF, non
+tabelle di dettaglio per sito o per iterazione.
 
 ## Conservazione e uso successivo
 
 Conservare insieme `output`, `work`, `run.json` ed `execution.log`, oltre agli
 input originali necessari alla riproduzione. Nel workflow automatico,
 conservare l'intera sottocartella `output/workflow`: piano, stati, richieste,
-log e output dei due passaggi formano un insieme collegato. Non rinominare
+log e output dei passaggi selezionati formano un insieme collegato. Non rinominare
 singoli file al suo interno se si vogliono conservare i riferimenti registrati.
 Non è prevista la ripresa automatica di un piano interrotto; una nuova prova
 richiede un nuovo run.

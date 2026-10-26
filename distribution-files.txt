@@ -236,3 +236,5 @@ scripts/verify_workflow_execution.py
 tests/test_workflow_execution.py
 tests/test_workflow_client.py
 tests/test_workflow_wizard.py
+src/nipat/workflow_forms.py
+tests/fixtures/workflow_cpi/README.md

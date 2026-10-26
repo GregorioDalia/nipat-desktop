@@ -11,11 +11,11 @@ non avvia R o samtools, non crea risultati e non controlla esistenza,
 contenuto o compatibilità biologica dei file.
 
 Il comando distinto `execute-plan --plan FILE --run-dir DIR` esegue
-attualmente piani composti da DNPcall e Contamination. Un piano valido che
-contiene CPI o SNPcall non è ancora eseguibile e viene rifiutato prima
-dell'avvio dei passaggi. Le analisi singole restano disponibili tramite
-`execute`. Il menu e la CLI desktop offrono il workflow predefinito
-DNPcall → Contamination senza richiedere la scrittura manuale del JSON.
+piani composti da DNPcall, Contamination e CPI. Un piano valido che contiene
+SNPcall non è ancora eseguibile e viene rifiutato prima dell'avvio dei passaggi.
+Le analisi singole restano disponibili tramite `execute`. Il menu e la CLI
+desktop offrono tre workflow predefiniti, senza richiedere la scrittura del JSON:
+DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI.
 
 ## Struttura della richiesta
 
@@ -106,9 +106,9 @@ negativo e non introduce un limite superiore assente nell'adattatore.
 
 L'esempio seleziona due BAM, elabora i conteggi una sola volta e riferisce
 esplicitamente quei risultati nelle due analisi successive. La stima di
-contaminazione non modifica i dati usati dal CPI. L'esempio descrive il
-contratto completo e viene accettato da `validate-plan`; la presenza di CPI
-lo rende non eseguibile nell'attuale sottoinsieme di `execute-plan`.
+contaminazione non modifica i dati usati dal CPI. Il piano può essere
+convalidato senza dati con `validate-plan`; per eseguirlo occorrono gli input
+montati nei percorsi indicati, gli indici del FASTA e una destinazione nuova.
 
 ```json
 {
@@ -117,12 +117,12 @@ lo rende non eseguibile nell'attuale sottoinsieme di `execute-plan`.
     {
       "id": "cfDNA_a",
       "kind": "bam",
-      "path": "/workspace/inputs/cfdna_a.bam"
+      "path": "/workspace/inputs/bams/sample_0001.bam"
     },
     {
       "id": "paternal_a",
       "kind": "bam",
-      "path": "/workspace/inputs/paternal_a.bam"
+      "path": "/workspace/inputs/bams/sample_0002.bam"
     }
   ],
   "steps": [
@@ -194,9 +194,9 @@ Le cartelle `work` e `output` appartengono alla singola esecuzione e non
 sono impostate arbitrariamente nel piano. Gli ID del piano identificano i
 campioni; non devono essere interpretati come nomi generati dal codice R.
 Per CPI, il contratto rappresenta le selezioni di file mediante riferimenti
-espliciti alle coppie. L'esecutore CPI dovrà tradurre tali riferimenti nei
-prefissi `mother_prefix` e `father_prefix`, conservandone la corrispondenza.
-Questa preparazione CPI non è ancora implementata per i piani.
+espliciti alle coppie. L'esecutore traduce questi riferimenti nei nomi interni
+CPI e conserva la corrispondenza fra coppie dichiarate, input materni/paterni
+e risultati nativi. Non occorre rinominare gli originali.
 
 ## Esecuzione dei piani
 
@@ -212,7 +212,7 @@ e il percorso dello stato; `--json` scrive il resoconto completo su stdout,
 riservando stderr ai messaggi di avanzamento. Il codice di uscita non dipende
 dal formato di presentazione. Il descrittore del motore
 espone `plan_execution.interface: workflow-plan-execution-v1`, i workflow
-eseguibili `dnp-call` e `contamination`, la pianificazione `sequential` e
+eseguibili `dnp-call`, `contamination` e `cpi`, la pianificazione `sequential` e
 `resume: false`.
 
 La destinazione deve essere nuova, con directory padre già esistente:
@@ -241,6 +241,40 @@ Contamination usa `table_0001.txt`, `table_0002.txt` e successivi nell'ordine
 dichiarato dal consumatore. Questi nomi interni non sostituiscono l'identità
 dei campioni registrata nello stato.
 
+### Preparazione CPI e identità delle coppie
+
+CPI accetta tabelle già registrate come `dnp-table` oppure risultati DNPcall
+riferiti esplicitamente dal piano. I ruoli `mother` e `father` sono dichiarati
+nelle coppie; il motore non li ricava dai nomi originali dei file. Riferimenti
+materni e paterni allo stesso campione vengono respinti dal contratto.
+
+Le tabelle ricevono identificatori `s0001`, `s0002` e successivi, assegnati alla
+prima occorrenza nell'ordine delle coppie e dei ruoli materno/paterno. Un
+riferimento condiviso nello stesso ruolo viene preparato una sola volta.
+Il motore usa i prefissi interni `Mother` e `Father` e scrive le richieste
+all'adattatore CPI già disponibile. Questi prefissi servono alla selezione
+nativa dei file e non sostituiscono la dichiarazione dei ruoli biologici.
+
+I risultati R restano invariati: il motore non sostituisce gli ID delle coppie
+nel CSV e non riscrive i PDF. Lo stato del passaggio associa ogni coppia del
+piano al nome nativo, per esempio `Mothers0001-Fathers0002_DNPs`, alle righe
+del riepilogo e al PDF corrispondente. Le tre modalità di cutoff conservano
+il comportamento dello script:
+
+- `all`: una riga per coppia, senza colonna `Cutoff` nel CSV;
+- `panel`: una riga per coppia, con il percorso interno `work/DNPpanel.txt`
+  come valore `Cutoff`;
+- `named`: una riga per ogni combinazione coppia/etichetta, con le etichette
+  dichiarate nel piano.
+
+Lo script produce `Summary_FetalFraction_CPI.csv` e, nella sottocartella
+`plots`, un PDF per coppia e `All_CPIplots.pdf`; non salva tabelle di dettaglio per sito o per iterazione.
+L'esecutore controlla le colonne del riepilogo, l'insieme atteso di coppie e
+cutoff e la presenza e intestazione PDF degli output richiesti. Un CSV
+incompleto, righe duplicate o grafici mancanti impediscono di considerare
+il passaggio completato. Il controllo della struttura non interpreta la
+validità biologica o la plausibilità dei valori scientifici.
+
 ### Evidenze e stati
 
 | Percorso relativo alla destinazione `--run-dir` | Contenuto |
@@ -261,6 +295,27 @@ nome interno, percorso relativo alla destinazione e SHA-256. Per Contamination
 è conservato anche il riferimento alla tabella sorgente; il riepilogo ha un
 percorso e un checksum distinti. Questi riferimenti evitano la deduzione
 dell'identità dei campioni dai soli nomi dei file.
+
+Prima di preparare i file o avviare R, il passaggio CPI registra `pair_mapping`,
+con `pair`, riferimenti `mother` e `father` e `native_pair`. La mappa rimane
+consultabile anche in caso di fallimento o cancellazione, per attribuire gli
+output parziali. I riferimenti agli artefatti completati vengono aggiunti dopo
+le verifiche degli output.
+
+Il passaggio CPI completato registra in `artifacts`:
+
+| Campo | Contenuto |
+| --- | --- |
+| `summary` | Percorso e SHA-256 del CSV riepilogativo. |
+| `cpi-pairs` | Elenco delle coppie, ciascuna con `pair`, riferimenti `mother` e `father`, `native_pair`, `plot` e `summary_rows`. |
+| `combined-plot` | Percorso e SHA-256 di `All_CPIplots.pdf`. |
+
+`pair` mantiene l'ID del piano; `mother` e `father` mantengono i riferimenti
+agli input. `plot` contiene percorso e checksum del PDF della coppia.
+Ogni elemento di `summary_rows` contiene `row`, a partire da 1 senza contare
+l'intestazione del CSV, e `cutoff`: `null` in modalità ALL, il percorso interno
+del pannello singolo oppure l'etichetta dichiarata. Questa mappa collega i
+risultati nativi alla richiesta senza modificare i file scientifici.
 
 Un errore o un'interruzione arrestano il piano e marcano `blocked` tutti i
 passaggi non ancora iniziati, anche se indipendenti. I risultati già prodotti

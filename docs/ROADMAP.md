@@ -13,11 +13,12 @@ configurazione, accesso ai file locali, installazione e aggiornamenti.
 La GUI grafica è successiva alla versione 0.7.
 
 Lo sviluppo 0.7.0a1 comprende il [catalogo scientifico](CATALOGO_SCIENTIFICO.md)
-bilingue, il [contratto dei piani](WORKFLOW_CONTRACT.md) e l'esecuzione
-automatica DNPcall → Contamination dal menu e dalla CLI. L'orchestrazione
-risiede nell'immagine e conserva risultati e stato di ogni passaggio.
-L'esecutore supporta attualmente DNPcall e Contamination; la validazione del
-contratto descrive anche le future composizioni con CPI e SNPcall.
+bilingue, il [contratto dei piani](WORKFLOW_CONTRACT.md) e i workflow automatici
+DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI dal
+menu e dalla CLI. L'orchestrazione risiede nell'immagine e conserva risultati
+e stato di ogni passaggio, con ruoli CPI e coppie espliciti. L'esecutore
+supporta DNPcall, Contamination e CPI; il contratto descrive anche SNPcall
+come attività indipendente, la cui integrazione nell'esecutore resta da completare.
 Gli obiettivi seguenti comprendono le funzionalità necessarie per completare
 la 0.7, la cui release non è ancora disponibile.
 
@@ -55,8 +56,8 @@ un risultato identificabile per ciascun passaggio.
 | Composizione | Stato nella 0.7.0a1 di sviluppo | Requisiti |
 | --- | --- | --- |
 | DNPcall → Contamination | Eseguibile automaticamente. | Tabelle individuali compatibili e pannello di coordinate selezionato. |
-| DNPcall → CPI | Contratto validato; esecuzione da integrare. | Identificazione esplicita dei campioni cfDNA materni e paterni, coppie, frequenze di popolazione ed eventuali pannelli. |
-| DNPcall → Contamination e CPI | Contratto validato; esecuzione CPI da integrare. | Due elaborazioni dei conteggi prodotti, ciascuna con i propri input e parametri. La stima di contaminazione non modifica i dati usati dal CPI. |
+| DNPcall → CPI | Eseguibile automaticamente. | Identificazione esplicita dei campioni cfDNA materni e paterni, coppie, frequenze di popolazione ed eventuali pannelli. |
+| DNPcall → Contamination e CPI | Eseguibile automaticamente, in sequenza. | Due elaborazioni dei conteggi prodotti, ciascuna con i propri input e parametri. La stima di contaminazione non modifica i dati usati dal CPI. |
 | SNPcall nel piano | Contratto validato; esecuzione da integrare. | Attività indipendente con un proprio pannello; il suo output non è un input diretto di Contamination o CPI. |
 
 La prima implementazione usa un ordine di esecuzione deterministico.

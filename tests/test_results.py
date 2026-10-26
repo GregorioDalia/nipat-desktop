@@ -228,6 +228,83 @@ class ResultsTests(unittest.TestCase):
         self.assertIn("Esecuzione pianificata", ui.lines)
 
 
+    def prepare_cpi_workflow(self, *, full=False):
+        root, path, state = self.prepare_workflow()
+        self.metadata["workflow"] = "dnp-contamination-cpi" if full else "dnp-cpi"
+        self.metadata["parameters"] = {"pair_mapping": [{
+            "pair_id": "FamilyA", "mother_sample_id": "sample_0001", "father_sample_id": "sample_0002",
+            "mother_bam": "/external/maternal.bam", "father_bam": "/external/paternal.bam",
+        }]}
+        self.save_metadata()
+        if not full:
+            state["steps"] = state["steps"][:1]
+        state["steps"].append({"id": "cpi", "workflow": "cpi", "status": "succeeded"})
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return root, path, state
+
+    def test_cpi_workflow_summaries_show_only_their_expected_steps_and_roles(self):
+        for full in (False, True):
+            with self.subTest(full=full):
+                root, _, state = self.prepare_cpi_workflow(full=full)
+                for step in state["steps"]:
+                    (root / "steps" / step["id"] / "output").mkdir(parents=True, exist_ok=True)
+                ui, opener = FakeTerminal(["2", "0"]), Mock()
+                show_results(ui, self.run, open_path=opener)
+                self.assertIn("Esecuzione completata", ui.lines)
+                self.assertIn("  DNPcall: Completata", ui.lines)
+                self.assertIn("  CPI: Completata", ui.lines)
+                self.assertEqual("  Contamination: Completata" in ui.lines, full)
+                self.assertIn("Coppie CPI registrate: 1", ui.lines)
+                self.assertIn("  Coppia FamilyA", ui.lines)
+                self.assertIn("    cfDNA materno (sample_0001): /external/maternal.bam", ui.lines)
+                self.assertIn("    Campione paterno (sample_0002): /external/paternal.bam", ui.lines)
+                self.assertTrue(any(str(root / "steps/cpi/output") in line for line in ui.lines))
+                opener.assert_not_called()
+
+    def test_cpi_missing_or_failed_step_cannot_receive_success_title(self):
+        for missing in (True, False):
+            with self.subTest(missing=missing):
+                _, path, state = self.prepare_cpi_workflow(full=True)
+                if missing:
+                    state["steps"].pop()
+                else:
+                    state["status"] = "failed"
+                    state["steps"][-1]["status"] = "failed"
+                path.write_text(json.dumps(state), encoding="utf-8")
+                ui = FakeTerminal(["2", "0"])
+                show_results(ui, self.run)
+                self.assertNotIn("Esecuzione completata", ui.lines)
+                if missing:
+                    self.assertTrue(any("Stato dei passaggi non consultabile" in line for line in ui.lines))
+                else:
+                    self.assertIn("  CPI: Non riuscita", ui.lines)
+
+    def test_cpi_pair_mapping_is_bounded_and_never_opened_as_a_path(self):
+        self.prepare_cpi_workflow()
+        self.metadata["parameters"]["pair_mapping"] = [
+            {"pair_id": f"Family{number}", "mother_sample_id": f"sample_{number}",
+             "father_sample_id": "father", "mother_bam": "/outside/analysis.cmd",
+             "father_bam": "/outside/father.bam"} for number in range(20)
+        ]
+        self.save_metadata()
+        ui, opener = FakeTerminal(["2", "4", "0"]), Mock()
+        show_results(ui, self.run, open_path=opener)
+        self.assertEqual(sum(line.startswith("  Coppia ") for line in ui.lines), 12)
+        self.assertIn("Coppie CPI registrate: 20", ui.lines)
+        self.assertIn("Altre coppie disponibili in run.json.", ui.lines)
+        opener.assert_called_once_with(self.run)
+
+    def test_malformed_cpi_pair_mapping_does_not_hide_step_status(self):
+        self.prepare_cpi_workflow()
+        self.metadata["parameters"]["pair_mapping"] = [{"pair_id": "FamilyA", "mother_bam": []}]
+        self.save_metadata()
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertIn("  CPI: Completata", ui.lines)
+        self.assertIn("Associazioni delle coppie CPI non consultabili in run.json.", ui.lines)
+
+
+
 class DesktopOpenerTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

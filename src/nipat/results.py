@@ -15,6 +15,13 @@ if TYPE_CHECKING:
 
 _MAX_METADATA_BYTES = 2 * 1024 * 1024
 _MAX_OUTPUT_FILES = 12
+_MAX_PAIRS = 12
+_WORKFLOW_STEPS = {
+    "dnp-contamination": {"dnp": "dnp-call", "contamination": "contamination"},
+    "dnp-cpi": {"dnp": "dnp-call", "cpi": "cpi"},
+    "dnp-contamination-cpi": {"dnp": "dnp-call", "contamination": "contamination", "cpi": "cpi"},
+}
+_STEP_LABELS = {"dnp": "DNPcall", "contamination": "Contamination", "cpi": "CPI"}
 _STATUS_LABELS = {
     "preparing": "Preparazione",
     "planned": "Pianificata (dry-run)",
@@ -111,22 +118,22 @@ def _read_metadata(run_dir: Path, relative: str) -> dict:
     return metadata
 
 
-def _workflow_state(run_dir: Path) -> dict:
+def _workflow_state(run_dir: Path, workflow: str = "dnp-contamination") -> dict:
     state = _read_metadata(run_dir, "output/workflow/workflow-state.json")
     steps = state.get("steps")
     allowed = {"pending", "running", "succeeded", "failed", "cancelled", "blocked"}
-    expected = {"dnp": "dnp-call", "contamination": "contamination"}
+    expected = _WORKFLOW_STEPS[workflow]
     if (state.get("interface") != "workflow-plan-execution-v1"
             or not isinstance(state.get("status"), str)
             or state.get("status") not in {"running", "succeeded", "failed", "cancelled"}
-            or not isinstance(steps, list) or len(steps) != 2
+            or not isinstance(steps, list) or len(steps) != len(expected)
             or any(not isinstance(step, dict) or not isinstance(step.get("id"), str)
                    or step.get("id") not in expected
                    or step.get("workflow") != expected[step["id"]]
                    or not isinstance(step.get("status"), str) or step["status"] not in allowed
                    for step in steps)
             or {step["id"] for step in steps} != set(expected)):
-        raise ValueError("Stato del workflow DNPcall → Contamination non valido")
+        raise ValueError("Stato del workflow automatico non valido")
     if state["status"] == "succeeded" and any(step["status"] != "succeeded" for step in steps):
         raise ValueError("Stato complessivo e stati dei passaggi non coerenti")
     return state
@@ -138,21 +145,23 @@ def _recorded_status(run_dir: Path) -> str | None:
         status = metadata.get("status")
         if not isinstance(status, str):
             return None
-        if metadata.get("workflow") == "dnp-contamination" and status == "succeeded":
+        workflow = metadata.get("workflow")
+        if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS and status == "succeeded":
             # A completed parent invocation is insufficient if the persisted
             # scientific step report is unavailable or records another outcome.
-            return _workflow_state(run_dir)["status"]
+            return _workflow_state(run_dir, workflow)["status"]
         return status
     except (OSError, ValueError):
         return None
 
 
-def _show_workflow_summary(ui: Terminal, run_dir: Path) -> None:
+def _show_workflow_summary(ui: Terminal, run_dir: Path, workflow: str) -> None:
     ui.message("Passaggi del workflow automatico:")
     try:
-        state = _workflow_state(run_dir)
+        state = _workflow_state(run_dir, workflow)
         steps = {step["id"]: step for step in state["steps"]}
-        for step_id, label in (("dnp", "DNPcall"), ("contamination", "Contamination")):
+        for step_id in _WORKFLOW_STEPS[workflow]:
+            label = _STEP_LABELS[step_id]
             step = steps[step_id]
             ui.message(f"  {label}: {_STATUS_LABELS[step['status']]}")
             output = _local_descendant(run_dir, f"output/workflow/steps/{step_id}/output")
@@ -163,6 +172,28 @@ def _show_workflow_summary(ui: Terminal, run_dir: Path) -> None:
         ui.message(f"Stato dei passaggi: {run_dir / 'output/workflow/workflow-state.json'}")
     except (OSError, ValueError) as exc:
         ui.message(f"Stato dei passaggi non consultabile: {exc}", kind="warning")
+
+
+def _show_pair_mapping(ui: Terminal, metadata: dict) -> None:
+    """Describe declared biological roles without opening metadata-supplied paths."""
+    parameters = metadata.get("parameters")
+    pairs = parameters.get("pair_mapping") if isinstance(parameters, dict) else None
+    fields = ("pair_id", "mother_sample_id", "father_sample_id", "mother_bam", "father_bam")
+    if (not isinstance(pairs, list) or not pairs
+            or any(not isinstance(pair, dict)
+                   or any(not isinstance(pair.get(field), str) for field in fields)
+                   for pair in pairs)):
+        ui.message("Associazioni delle coppie CPI non consultabili in run.json.", kind="warning")
+        return
+    ui.message(f"Coppie CPI registrate: {len(pairs)}")
+    for pair in pairs[:_MAX_PAIRS]:
+        ui.message(f"  Coppia {_short_value(pair['pair_id'])}")
+        ui.message(f"    cfDNA materno ({_short_value(pair['mother_sample_id'])}): "
+                   f"{_short_value(pair['mother_bam'])}")
+        ui.message(f"    Campione paterno ({_short_value(pair['father_sample_id'])}): "
+                   f"{_short_value(pair['father_bam'])}")
+    if len(pairs) > _MAX_PAIRS:
+        ui.message("Altre coppie disponibili in run.json.")
 
 
 def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
@@ -185,8 +216,12 @@ def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
         source = metadata.get("source")
         if isinstance(source, dict) and source.get("nipat_version"):
             ui.message(f"Versione NIPAT: {_short_value(source['nipat_version'])}")
-        if metadata.get("workflow") == "dnp-contamination" and not dry_run:
-            _show_workflow_summary(ui, run_dir)
+        workflow = metadata.get("workflow")
+        if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS:
+            if not dry_run:
+                _show_workflow_summary(ui, run_dir, workflow)
+            if "cpi" in _WORKFLOW_STEPS[workflow]:
+                _show_pair_mapping(ui, metadata)
     except (OSError, ValueError) as exc:
         ui.message(f"Metadati non consultabili: {exc}", kind="warning")
 

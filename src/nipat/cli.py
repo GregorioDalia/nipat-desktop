@@ -86,6 +86,33 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dnp_contamination.add_argument("--run-name")
 
+    for preset in ("dnp-cpi", "dnp-contamination-cpi"):
+        composed_cpi = workflow_presets.add_parser(
+            preset, help=("DNPcall e CPI con coppie esplicite" if preset == "dnp-cpi" else
+                          "DNPcall, Contamination e CPI con coppie esplicite"),
+        )
+        composed_cpi.add_argument(
+            "--pair", nargs=3, action="append", required=True,
+            metavar=("ID", "MATERNAL_BAM", "PATERNAL_BAM"),
+            help="ID della coppia, BAM cfDNA materno e BAM paterno; ripetibile",
+        )
+        composed_cpi.add_argument("--reference", type=_path, required=True)
+        composed_cpi.add_argument("--panel", type=_path, required=True, help="pannello DNPcall")
+        composed_cpi.add_argument("--popfreq", type=_path, required=True)
+        composed_cpi.add_argument("--err-const", type=float, default=DEFAULT_ERR_CONST)
+        cutoff = composed_cpi.add_mutually_exclusive_group()
+        cutoff.add_argument("--cpi-panel", type=_path, help="singolo pannello cutoff CPI")
+        cutoff.add_argument("--cutoff", nargs=2, action="append", metavar=("LABEL", "PATH"),
+                            help="pannello cutoff CPI etichettato; ripetibile")
+        cutoff.add_argument("--cutoff-map", "--cutoff_map", dest="cutoff_map",
+                            help="mappa nativa cutoff CPI; se omessa usa ALL")
+        if preset == "dnp-contamination-cpi":
+            composed_cpi.add_argument("--contamination-panel", type=_path,
+                                      help="pannello Contamination; se omesso usa il pannello DNPcall")
+        composed_cpi.add_argument("--parallel", action="store_true",
+                                  help="parallelismo fra campioni in DNPcall; i passaggi restano sequenziali")
+        composed_cpi.add_argument("--run-name")
+
     dnp = subparsers.add_parser("dnp-call", help="esegue DNPcall da BAM")
     dnp_input = dnp.add_mutually_exclusive_group(required=True)
     dnp_input.add_argument("--bam", type=_path, action="append", help="ripetibile per piu' BAM")
@@ -182,11 +209,23 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "self-test":
             run_self_tests(layout)
         elif args.command == "workflow":
-            run_dir = workflows.dnp_contamination(
-                bams=args.bam, bamlist=args.bamlist, reference=args.reference,
-                panel=args.panel, contamination_panel=args.contamination_panel,
-                parallel=args.parallel, run_name=args.run_name,
-            )
+            if args.preset == "dnp-contamination":
+                run_dir = workflows.dnp_contamination(
+                    bams=args.bam, bamlist=args.bamlist, reference=args.reference,
+                    panel=args.panel, contamination_panel=args.contamination_panel,
+                    parallel=args.parallel, run_name=args.run_name,
+                )
+            else:
+                run_dir = workflows.dnp_cpi(
+                    pairs=[(pair_id, _path(mother), _path(father))
+                           for pair_id, mother, father in args.pair],
+                    reference=args.reference, panel=args.panel, popfreq=args.popfreq,
+                    err_const=args.err_const, cpi_panel=args.cpi_panel,
+                    cutoffs=[(label, _path(path)) for label, path in args.cutoff] if args.cutoff else None,
+                    cutoff_map=args.cutoff_map, include_contamination=args.preset == "dnp-contamination-cpi",
+                    contamination_panel=getattr(args, "contamination_panel", None),
+                    parallel=args.parallel, run_name=args.run_name,
+                )
             print(f"{completion_label}: {run_dir}")
         elif args.command == "dnp-call":
             run_dir = workflows.dnp_call(

@@ -1,4 +1,4 @@
-"""Execute typed DNPcall/Contamination plans inside the scientific image.
+"""Execute typed DNPcall, Contamination and CPI plans in the scientific image.
 
 The plan validator describes all scientific workflows. This executor deliberately
 supports a smaller, explicit subset. It never imports the desktop application,
@@ -22,6 +22,7 @@ import tempfile
 import time
 
 from nipat_scientific.contamination import prepare_contamination
+from nipat_scientific.cpi import POPFREQ_COLUMNS, prepare_cpi
 from nipat_scientific.dnp import prepare_dnp
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.files import (
@@ -32,9 +33,14 @@ from nipat_scientific.panels import read_dnp_list, read_position_panel
 from nipat_scientific.plan import validate_plan
 
 
-SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "contamination"})
+SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "contamination", "cpi"})
 INTERFACE = "workflow-plan-execution-v1"
 _NATIVE_PATH = re.compile(r"[A-Za-z0-9_./:-]+\Z")
+_CPI_COLUMNS = {
+    "Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
+    "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI",
+    "Median_logCPI", "Mean_logCPI", "CPI_medianFF",
+}
 
 
 class PlanExecutionError(ValidationError):
@@ -117,6 +123,23 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
 
     for step in plan["steps"]:
         inputs = step["inputs"]
+        if step["workflow"] == "cpi":
+            popfreq = require_file(Path(inputs["popfreq"]), "Population frequencies")
+            require_columns(popfreq, POPFREQ_COLUMNS, "Invalid population frequencies")
+            sources.append(popfreq)
+            if inputs["cutoffs"] and any(char in str(root) for char in ",="):
+                raise PlanExecutionError("execution.alias", "CPI cutoff staging requires a run path without comma or equals characters.")
+            for cutoff in inputs["cutoffs"]:
+                panel = require_file(Path(cutoff["path"]), "CPI cutoff panel")
+                read_position_panel(panel)
+                sources.append(panel)
+            for pair in inputs["pairs"]:
+                for role in ("mother", "father"):
+                    reference = pair[role]
+                    if "step" not in reference:
+                        require_columns(samples[reference["sample"]], DNP_OUTPUT_COLUMNS,
+                                        "Invalid imported CPI table", whitespace=True)
+            continue
         panel = require_file(Path(inputs["panel"]), "Plan panel")
         sources.append(panel)
         if step["workflow"] == "dnp-call":
@@ -220,7 +243,86 @@ def _output_columns(path: Path, columns: set[str]) -> None:
         raise PlanExecutionError("execution.output", str(exc)) from exc
 
 
+def _cpi_bindings(step: dict) -> tuple[list[dict], list[dict]]:
+    """Assign controlled aliases by typed identity, never by biological guesswork."""
+    aliases = {}
+    inputs, pairs = [], []
+    for pair in step["inputs"]["pairs"]:
+        names = {}
+        for role, prefix in (("mother", "Mother"), ("father", "Father")):
+            reference = pair[role]
+            key = (reference.get("step"), reference["sample"])
+            if key not in aliases:
+                native = f"s{len(aliases) + 1:04d}"
+                aliases[key] = native
+                inputs.append({"source": reference.copy(), "name": f"{prefix}{native}.txt"})
+            names[role] = aliases[key]
+        pairs.append({
+            "pair": pair["id"], "mother": pair["mother"].copy(), "father": pair["father"].copy(),
+            "native_pair": f"Mother{names['mother']}-Father{names['father']}_DNPs",
+            "native_selection": f"{names['mother']}:{names['father']}",
+        })
+    return inputs, pairs
+
+
+def _resolve_table(reference: dict, samples: dict, outputs: dict) -> Path:
+    return (outputs[(reference["step"], reference["sample"])] if "step" in reference
+            else Path(samples[reference["sample"]]["path"]))
+
+
+def _pdf_artifact(path: Path, root: Path, output_dir: Path) -> dict:
+    artifact = _artifact(path, root, output_dir)
+    with path.open("rb") as handle:
+        if handle.read(5) != b"%PDF-" or path.stat().st_size <= 5:
+            raise PlanExecutionError("execution.output", f"Invalid CPI PDF: {path.name}")
+    return artifact
+
+
+def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
+    summary = output_dir / "Summary_FetalFraction_CPI.csv"
+    artifact = _artifact(summary, root, output_dir)
+    mode = request["cutoff_mode"]
+    with summary.open(encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        columns = reader.fieldnames or []
+        required = _CPI_COLUMNS | ({"Cutoff"} if mode != "all" else set())
+        if (not required.issubset(columns) or len(columns) != len(set(columns))
+                or (mode == "all" and "Cutoff" in columns)):
+            raise PlanExecutionError("execution.output", "CPI summary columns do not match the requested cutoff mode.")
+        rows = list(reader)
+    _, bindings = _cpi_bindings(step)
+    cutoffs = ([None] if mode == "all" else [str(Path(request["work_dir"]) / "DNPpanel.txt")]
+               if mode == "panel" else [panel["label"] for panel in request["cutoffs"]])
+    expected = {(pair["native_pair"], cutoff) for pair in bindings for cutoff in cutoffs}
+    found = {}
+    for number, row in enumerate(rows, 1):
+        if None in row or any(value is None for value in row.values()):
+            raise PlanExecutionError("execution.output", "Malformed CPI summary row.")
+        key = (row["Pair"], row.get("Cutoff"))
+        if key in found:
+            raise PlanExecutionError("execution.output", "CPI summary contains duplicate pair/cutoff rows.")
+        found[key] = number
+    if set(found) != expected:
+        raise PlanExecutionError("execution.output", "CPI summary does not match the declared pairs and cutoffs.")
+    plots = output_dir / "plots"
+    expected_plots = {"All_CPIplots.pdf", *(f"{pair['native_pair']}_CPIplot.pdf" for pair in bindings)}
+    if {path.name for path in plots.glob("*.pdf")} != expected_plots:
+        raise PlanExecutionError("execution.output", "CPI plots do not match the declared pair identities.")
+    pairs = []
+    for pair in bindings:
+        pairs.append({
+            "pair": pair["pair"], "mother": pair["mother"], "father": pair["father"],
+            "native_pair": pair["native_pair"],
+            "summary_rows": [{"row": found[(pair["native_pair"], cutoff)], "cutoff": cutoff} for cutoff in cutoffs],
+            "plot": _pdf_artifact(plots / f"{pair['native_pair']}_CPIplot.pdf", root, output_dir),
+        })
+    return {"summary": artifact, "cpi-pairs": pairs,
+            "combined-plot": _pdf_artifact(plots / "All_CPIplots.pdf", root, output_dir)}
+
+
 def _collect_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
+    if step["workflow"] == "cpi":
+        return _collect_cpi_outputs(step, request, root, output_dir)
     if step["workflow"] == "dnp-call":
         directory = output_dir / "individual_outputs"
         expected = {f"full_output_sample_{number:04d}.txt" for number in range(1, len(request["samples"]) + 1)}
@@ -304,23 +406,43 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             directory.mkdir(parents=True)
             work, output = directory / "work", directory / "output"
             request = {"schema_version": 1, "workflow": step["workflow"],
-                       "panel": step["inputs"]["panel"], "work_dir": str(work), "out_dir": str(output)}
+                       "work_dir": str(work), "out_dir": str(output)}
             if step["workflow"] == "dnp-call":
-                request.update({"samples": [{"path": samples[identifier]["path"], "sample_id": f"sample_{number:04d}"}
+                request.update({"panel": step["inputs"]["panel"],
+                                "samples": [{"path": samples[identifier]["path"], "sample_id": f"sample_{number:04d}"}
                                             for number, identifier in enumerate(step["inputs"]["samples"], 1)],
                                 "reference": step["inputs"]["reference"], "parallel": step["parameters"]["parallel"]})
                 _atomic_json(directory / "request.json", request)
                 prepared = prepare_dnp(request)
                 native, cwd = prepared.native_arguments, prepared.working_dir
-            else:
+            elif step["workflow"] == "contamination":
                 selected = []
                 for number, reference in enumerate(step["inputs"]["samples"], 1):
-                    path = (outputs[(reference["step"], reference["sample"])] if "step" in reference
-                            else Path(samples[reference["sample"]]["path"]))
+                    path = _resolve_table(reference, samples, outputs)
                     selected.append({"path": str(path), "name": f"table_{number:04d}.txt"})
+                request["panel"] = step["inputs"]["panel"]
                 request["samples"] = selected
                 _atomic_json(directory / "request.json", request)
                 native, cwd = prepare_contamination(request), work
+            else:
+                selections, pairs = _cpi_bindings(step)
+                # Retain the explicit identities even when R leaves only
+                # partial plots or preparation fails before any output exists.
+                record["pair_mapping"] = [
+                    {key: pair[key] for key in ("pair", "mother", "father", "native_pair")}
+                    for pair in pairs
+                ]
+                request.update({
+                    "samples": [{"path": str(_resolve_table(item["source"], samples, outputs)), "name": item["name"]}
+                                for item in selections],
+                    "pairs": ",".join(pair["native_selection"] for pair in pairs),
+                    "mother_prefix": "Mother", "father_prefix": "Father",
+                    "popfreq": step["inputs"]["popfreq"], "cutoffs": step["inputs"]["cutoffs"],
+                    "cutoff_mode": step["parameters"]["cutoff_mode"], "err_const": step["parameters"]["err_const"],
+                })
+                _atomic_json(directory / "request.json", request)
+                _atomic_json(root / "workflow-state.json", state)
+                native, cwd = prepare_cpi(request), work
             if cancellation.signum is not None:
                 raise KeyboardInterrupt
             command = ["Rscript", str(scripts[step["workflow"]]), *native]

@@ -30,20 +30,21 @@ mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
 Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
 cartella distinta con risultati, intermedi conservati, metadati e log.
 I run esistenti non vengono sovrascritti. Le quattro analisi sono disponibili
-sia nel menu sia nella CLI diretta. **DNPcall → Contamination** può essere
-eseguito automaticamente come un unico workflow: il motore passa le tabelle
-individuali al secondo passaggio e conserva lo stato di entrambi.
-Le altre composizioni richiedono ancora la selezione manuale degli output
-compatibili. L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
+sia nel menu sia nella CLI diretta. I workflow automatici collegano
+**DNPcall → Contamination**, **DNPcall → CPI** oppure **DNPcall → Contamination
+e CPI**. Il motore elabora i BAM una sola volta, passa le tabelle individuali
+alle analisi selezionate e conserva lo stato di ogni passaggio. CPI richiede
+l'assegnazione esplicita delle coppie cfDNA materne/paterne.
+L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
 e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
 scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
 input senza modificare gli algoritmi o avviare analisi.
 
 Il [contratto dei piani](docs/WORKFLOW_CONTRACT.md) identifica campioni,
 dipendenze e risultati. La validazione ammette le quattro analisi; l'esecutore
-supporta attualmente i passaggi DNPcall e Contamination, in ordine sequenziale.
-CPI nei piani e SNPcall come attività indipendente del piano non sono ancora
-eseguibili. Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
+supporta DNPcall, Contamination e CPI, in ordine sequenziale. SNPcall resta
+un'analisi singola; la sua esecuzione come attività indipendente di un piano
+non è ancora disponibile. Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
 modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
@@ -111,8 +112,8 @@ e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
 approvate su GitHub; download e installazione richiedono conferme distinte.
 In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
 all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
-**W — Workflow automatici** prepara DNPcall → Contamination con un unico
-riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
+**W — Workflow automatici** permette di scegliere una delle tre composizioni,
+con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
 usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
@@ -152,8 +153,25 @@ Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
 
 `--bam` è ripetibile; `--bamlist` accetta un elenco di BAM. Contamination usa
 il pannello DNP selezionato, oppure quello indicato con `--contamination-panel`.
-`--parallel` riguarda soltanto il calcolo DNPcall sui campioni: Contamination
-inizia dopo il completamento e la verifica degli output DNPcall.
+`--parallel` riguarda soltanto il calcolo DNPcall sui campioni: le analisi
+successive iniziano dopo il completamento e la verifica degli output DNPcall.
+
+Per calcolare CPI dopo DNPcall, assegnare esplicitamente il BAM cfDNA materno
+e quello paterno a ogni coppia:
+
+```powershell
+.\nipat.cmd workflow dnp-cpi `
+  --pair coppia_a "..\campioni\cfdna-a.bam" "..\campioni\padre-a.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --popfreq "..\pannelli\pop_allFreq.txt"
+```
+
+`--pair` è ripetibile. Per includere anche Contamination, usare
+`workflow dnp-contamination-cpi` con le stesse coppie. `--panel` seleziona
+sempre i loci DNPcall; CPI usa tutti i siti disponibili salvo scelta esplicita
+di `--cpi-panel`, `--cutoff` o `--cutoff-map`. Le tabelle non devono essere
+copiate o rinominate: il motore conserva la corrispondenza fra coppie e risultati.
+Contamination non modifica i conteggi utilizzati da CPI.
 
 Le opzioni globali, come `--runs-dir` e `--dry-run`, precedono il sottocomando.
 `--dry-run` valida gli input e registra un'esecuzione `planned`, senza eseguire
@@ -194,8 +212,8 @@ conservare il checkout completo e seguire i requisiti della
 
 Ogni run contiene `output`, `work`, `run.json` ed `execution.log`.
 Nel workflow automatico, `output/workflow` conserva il piano, lo stato
-complessivo e le sottocartelle `steps/dnp` e `steps/contamination`, ciascuna
-con risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
+complessivo e le sottocartelle dei passaggi selezionati: `steps/dnp`,
+`steps/contamination` e `steps/cpi`, ciascuna con risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
 successivi; le evidenze già prodotte restano disponibili. Non è prevista
 la ripresa del run: una nuova prova usa una nuova cartella.
 Il record identifica input, parametri e immagine effettivamente usata;
@@ -206,8 +224,8 @@ concordanza scientifica richiede il confronto con risultati attesi appropriati.
 `doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
 `self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
 modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
-La CI esegue inoltre regressioni DNPcall sintetiche e il confronto fra
-DNPcall → Contamination automatico e le due analisi separate nel motore;
+La CI esegue inoltre regressioni DNPcall sintetiche e confronti fra workflow
+automatici e analisi separate, compresi CPI e le sue modalità di selezione dei siti;
 la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
 verifica degli installatori e pubblicazione. La
 [scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove

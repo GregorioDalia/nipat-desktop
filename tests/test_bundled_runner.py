@@ -135,6 +135,55 @@ class BundledRunnerTests(unittest.TestCase):
         self.assertEqual(record["runtime"]["engine"]["plan_execution"], description["plan_execution"])
         self.assertEqual(record["status"], "succeeded")
 
+    def test_cpi_plan_requires_composition_support_beyond_native_cpi(self):
+        # The preceding image can run CPI alone, but cannot execute it as a
+        # plan step. Reject it before starting even the upstream DNP analysis.
+        legacy = self.plan_metadata()
+        self.assertEqual(legacy["workflow_interfaces"]["cpi"], "cpi-v1")
+        variants = [legacy]
+        for key in ("workflow_interfaces", "preparation"):
+            description = self.plan_metadata()
+            description["plan_execution"]["workflows"].append("cpi")
+            if key == "workflow_interfaces":
+                description[key]["cpi"] = "cpi-v2"
+            else:
+                del description[key]["file_sha256"]["lib/nipat_scientific/cpi.py"]
+            variants.append(description)
+        for index, description in enumerate(variants):
+            with self.subTest(index=index):
+                run, context = self.begin(f"cpi-plan-invalid-{index}", "workflow-plan-cpi")
+                with redirect_stdout(self.stdout), patch.object(
+                    self.runner, "_capture", side_effect=self.captured(description),
+                ), patch("nipat.execution.runner.subprocess.Popen") as popen:
+                    with self.assertRaisesRegex(RuntimeExecutionError, "workflow-plan-execution-v1"):
+                        with context:
+                            self.fail("An image without the complete CPI plan contract must not execute.")
+                popen.assert_not_called()
+                self.assertEqual(json.loads((run / "run.json").read_text(encoding="utf-8"))["status"], "failed")
+
+    def test_cpi_plan_records_verified_contract_and_uses_one_container(self):
+        description = self.plan_metadata()
+        description["plan_execution"]["workflows"].append("cpi")
+        run, context = self.begin("cpi-plan", "workflow-plan-cpi")
+        with redirect_stdout(self.stdout), patch.object(
+            self.runner, "_capture", side_effect=self.captured(description),
+        ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process()) as popen:
+            with context:
+                self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute-plan"])
+        self.assertEqual(popen.call_count, 1)
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["status"], "succeeded")
+        self.assertEqual(record["bundled_workflow"], "workflow-plan-cpi")
+        self.assertEqual(record["runtime"]["engine"]["plan_execution"], description["plan_execution"])
+
+    def test_cpi_plan_uses_graceful_cancellation_before_forced_cleanup(self):
+        self.runner._bundled_workflow = "workflow-plan-cpi"
+        result = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with patch("nipat.execution.runner.subprocess.run", return_value=result) as execute:
+            self.runner._stop_container("nipat-run-cpi")
+        self.assertEqual(execute.call_args_list[0].args[0],
+                         ["docker", "stop", "--time", "10", "nipat-run-cpi"])
+
     def test_plan_rejects_legacy_or_partial_runtime_before_analysis(self):
         variants = [engine_metadata()]
         for key, value in (

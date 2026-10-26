@@ -20,6 +20,7 @@ from nipat_scientific.executor import (
     PlanExecutionError, _Cancellation, _run_process, execute_plan,
 )
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.plan import PlanValidationError
 
 
 class UnsupportedExecutionTests(unittest.TestCase):
@@ -48,7 +49,7 @@ class WorkflowExecutionTests(unittest.TestCase):
             (self.inputs / name).write_text(name, encoding="utf-8")
         (self.inputs / "panel.tsv").write_text("chr1\t10\t11\tAA\tGG\n", encoding="utf-8")
         self.scripts = {}
-        for workflow in ("dnp-call", "contamination"):
+        for workflow in ("dnp-call", "contamination", "cpi"):
             script = self.root / f"{workflow}.R"
             script.write_text("# unchanged scientific code\n", encoding="utf-8")
             self.scripts[workflow] = script
@@ -84,7 +85,7 @@ class WorkflowExecutionTests(unittest.TestCase):
                     f"chr1\t10\t11\tAA\tGG\t{number * 100}\t0\t0\t{number * 100}\n",
                     encoding="utf-8",
                 )
-        else:
+        elif Path(command[1]).name == "contamination.R":
             selected, output = Path(command[-2]), Path(command[-1])
             rows = []
             for source in sorted(selected.iterdir()):
@@ -99,6 +100,35 @@ class WorkflowExecutionTests(unittest.TestCase):
                 "individuo\tinformative_DNPs\tmean_contamination\tsd_contamination\n" + "".join(rows),
                 encoding="utf-8",
             )
+        else:
+            output = Path(command[command.index("--out_dir") + 1])
+            pairs = next(argument.split("=", 1)[1] for argument in command if argument.startswith("--pairs="))
+            cutoff_argument = next((argument.split("=", 1)[1] for argument in command
+                                    if argument.startswith("--cutoff_map=")), None)
+            cutoffs = [None] if cutoff_argument is None else [
+                item.split("=", 1)[0] for item in cutoff_argument.split(",")
+            ]
+            columns = ["Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
+                       "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI",
+                       "Median_logCPI", "Mean_logCPI", "CPI_medianFF"]
+            if cutoff_argument is not None:
+                columns.insert(1, "Cutoff")
+            plots = output / "plots"
+            plots.mkdir()
+            with (output / "Summary_FetalFraction_CPI.csv").open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=columns)
+                writer.writeheader()
+                for pair in pairs.split(","):
+                    mother, father = pair.split(":")
+                    native_pair = f"Mother{mother}-Father{father}_DNPs"
+                    for cutoff in cutoffs:
+                        row = {name: "NA" for name in columns}
+                        row.update(Pair=native_pair, N_sites_mother="0", N_sites_father="0")
+                        if cutoff is not None:
+                            row["Cutoff"] = cutoff
+                        writer.writerow(row)
+                    (plots / f"{native_pair}_CPIplot.pdf").write_bytes(b"%PDF-1.7\nfixture\n")
+            (plots / "All_CPIplots.pdf").write_bytes(b"%PDF-1.7\nfixture\n")
         return 0
 
     def saved(self):
@@ -279,6 +309,240 @@ class WorkflowExecutionTests(unittest.TestCase):
         artifact = result["steps"][0]["artifacts"]["contamination-tables"][0]
         self.assertEqual(artifact["sample"], "imported")
         self.assertEqual(artifact["source"], {"sample": "imported"})
+
+    def add_cpi(self, *, mode="all", imported=False, shared_father=False):
+        popfreq = self.inputs / "popfreq.tsv"
+        popfreq.write_text("chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t10\t11\t0.7\t0.3\n", encoding="utf-8")
+        if imported:
+            # Original filenames deliberately contradict the declared roles.
+            registry = []
+            for number, (identifier, filename) in enumerate((
+                    ("maternal_A", "Father_original.txt"), ("paternal_A", "Mother_original.txt"),
+                    ("maternal_B", "unclassified sample.txt")), 1):
+                path = self.inputs / filename
+                path.write_text(
+                    "chr\tpos1\tpos2\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\n"
+                    f"chr1\t10\t11\tAA\tGG\t{number * 100}\t0\t0\t{number * 100}\n", encoding="utf-8",
+                )
+                registry.append({"id": identifier, "kind": "dnp-table", "path": str(path)})
+            self.plan["samples"] = registry
+            self.plan["steps"] = []
+            pairs = [{"id": "family_A", "mother": {"sample": "maternal_A"}, "father": {"sample": "paternal_A"}}]
+            if shared_father:
+                pairs.append({"id": "family_B", "mother": {"sample": "maternal_B"}, "father": {"sample": "paternal_A"}})
+        else:
+            pairs = [{"id": "family_A", "mother": {"step": "dnp", "output": "dnp-tables", "sample": "donor_a"},
+                      "father": {"step": "dnp", "output": "dnp-tables", "sample": "donor_b"}}]
+        cutoffs = [] if mode == "all" else ([{"label": "", "path": str(self.inputs / "panel.tsv")}]
+                                            if mode == "panel" else [
+                                                {"label": "Full", "path": str(self.inputs / "panel.tsv")},
+                                                {"label": "Subset", "path": str(self.inputs / "panel.tsv")},
+                                            ])
+        step = {"id": "cpi", "workflow": "cpi", "inputs": {
+            "pairs": pairs, "popfreq": str(popfreq), "cutoffs": cutoffs,
+        }, "parameters": {"err_const": 0.0025, "cutoff_mode": mode}}
+        self.plan["steps"].append(step)
+        return step
+
+    def cpi_request(self):
+        return json.loads((self.run / "steps/cpi/request.json").read_text(encoding="utf-8"))
+
+    def test_complete_chain_runs_cpi_from_dnp_not_contamination_output(self):
+        cpi = self.add_cpi()
+        result = self.execute()
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(result["execution_order"], ["dnp", "contamination", "cpi"])
+        request = self.cpi_request()
+        self.assertEqual(request["err_const"], 0.0025)
+        self.assertEqual(self.calls[-1][self.calls[-1].index("--err_const") + 1], "0.0025")
+        self.assertTrue(all("steps/dnp/output/individual_outputs" in item["path"] for item in request["samples"]))
+        pair = result["steps"][2]["artifacts"]["cpi-pairs"][0]
+        self.assertEqual(pair["pair"], "family_A")
+        self.assertEqual(pair["mother"], cpi["inputs"]["pairs"][0]["mother"])
+        self.assertEqual(pair["father"], cpi["inputs"]["pairs"][0]["father"])
+        self.assertEqual(pair["native_pair"], "Mothers0001-Fathers0002_DNPs")
+        self.assertEqual(pair["summary_rows"], [{"row": 1, "cutoff": None}])
+        self.assertEqual(result, self.saved())
+
+    def test_dnp_to_cpi_does_not_require_contamination(self):
+        self.add_cpi(mode="panel")
+        self.plan["steps"] = [step for step in self.plan["steps"] if step["workflow"] != "contamination"]
+        result = self.execute()
+        self.assertEqual(result["execution_order"], ["dnp", "cpi"])
+        self.assertEqual(result["status"], "succeeded")
+        artifact = result["steps"][1]["artifacts"]["cpi-pairs"][0]
+        self.assertEqual(artifact["summary_rows"], [{"row": 1, "cutoff": str(self.run / "steps/cpi/work/DNPpanel.txt")}])
+
+    def test_imported_cpi_shared_father_is_staged_once_and_roles_are_explicit(self):
+        self.add_cpi(imported=True, shared_father=True, mode="named")
+        before = {p.name: p.read_bytes() for p in self.inputs.iterdir()}
+        result = self.execute()
+        self.assertEqual(result["status"], "succeeded")
+        request = self.cpi_request()
+        self.assertEqual(request["pairs"], "s0001:s0002,s0003:s0002")
+        self.assertEqual([item["name"] for item in request["samples"]],
+                         ["Mothers0001.txt", "Fathers0002.txt", "Mothers0003.txt"])
+        self.assertEqual(len(list((self.run / "steps/cpi/work/inputs").iterdir())), 3)
+        pairs = result["steps"][0]["artifacts"]["cpi-pairs"]
+        self.assertEqual([pair["pair"] for pair in pairs], ["family_A", "family_B"])
+        self.assertEqual([pair["native_pair"] for pair in pairs],
+                         ["Mothers0001-Fathers0002_DNPs", "Mothers0003-Fathers0002_DNPs"])
+        self.assertEqual([entry["cutoff"] for entry in pairs[0]["summary_rows"]], ["Full", "Subset"])
+        for original, staged in (("Father_original.txt", "Mothers0001.txt"),
+                                 ("Mother_original.txt", "Fathers0002.txt"),
+                                 ("unclassified sample.txt", "Mothers0003.txt")):
+            self.assertEqual((self.inputs / original).read_bytes(), (self.run / "steps/cpi/work/inputs" / staged).read_bytes())
+        self.assertEqual(before, {p.name: p.read_bytes() for p in self.inputs.iterdir()})
+
+    def test_cpi_missing_or_invalid_external_input_fails_before_any_analysis(self):
+        original = copy.deepcopy(self.plan)
+        for mutation in ("population_missing", "population_schema", "cutoff_missing", "imported_schema"):
+            with self.subTest(mutation=mutation):
+                self.plan = copy.deepcopy(original)
+                self.run = self.root / f"run_{mutation}"
+                step = self.add_cpi(mode="named", imported=mutation == "imported_schema")
+                if mutation == "population_missing":
+                    step["inputs"]["popfreq"] = str(self.inputs / "missing.tsv")
+                elif mutation == "population_schema":
+                    Path(step["inputs"]["popfreq"]).write_text("chr\tpos1\tpos2\n", encoding="utf-8")
+                elif mutation == "cutoff_missing":
+                    step["inputs"]["cutoffs"][0]["path"] = str(self.inputs / "missing.tsv")
+                else:
+                    (self.inputs / "Father_original.txt").write_text("chr\tpos1\tpos2\n", encoding="utf-8")
+                with self.assertRaises(ValidationError):
+                    self.execute()
+                self.assertFalse(self.run.exists())
+                self.assertFalse(self.calls)
+
+    def test_cpi_original_case_colliding_basenames_do_not_collide_in_staging(self):
+        self.add_cpi(imported=True)
+        self.plan["samples"] = self.plan["samples"][:2]
+        for sample, directory, name in zip(self.plan["samples"], ("first", "second"),
+                                           ("SAMPLE.txt", "sample.txt"), strict=True):
+            destination = self.inputs / directory / name
+            destination.parent.mkdir()
+            Path(sample["path"]).rename(destination)
+            sample["path"] = str(destination)
+        result = self.execute()
+        self.assertEqual(result["status"], "succeeded")
+        request = self.cpi_request()
+        self.assertEqual([item["name"] for item in request["samples"]], ["Mothers0001.txt", "Fathers0002.txt"])
+        for item in request["samples"]:
+            self.assertEqual(Path(item["path"]).read_bytes(),
+                             (self.run / "steps/cpi/work/inputs" / item["name"]).read_bytes())
+
+    def test_cpi_case_ambiguous_pair_ids_and_role_conflicts_are_preflight_errors(self):
+        step = self.add_cpi(imported=True, shared_father=True)
+        step["inputs"]["pairs"][1]["id"] = "FAMILY_a"
+        with self.assertRaises(PlanValidationError) as caught:
+            self.execute()
+        self.assertEqual(caught.exception.code, "plan.duplicate")
+        self.assertFalse(self.run.exists())
+        step["inputs"]["pairs"][1]["id"] = "family_B"
+        step["inputs"]["pairs"][1]["mother"] = {"sample": "paternal_A"}
+        with self.assertRaises(PlanValidationError) as caught:
+            self.execute()
+        self.assertEqual(caught.exception.code, "plan.roles")
+        self.assertFalse(self.run.exists())
+
+    def test_cpi_cutoff_map_path_delimiters_are_rejected_before_mkdir(self):
+        self.add_cpi(imported=True, mode="panel")
+        self.run = self.root / "run,unsafe"
+        with self.assertRaises(PlanExecutionError) as caught:
+            self.execute()
+        self.assertEqual(caught.exception.code, "execution.alias")
+        self.assertFalse(self.run.exists())
+
+    def test_cpi_missing_outputs_or_wrong_pair_cutoff_are_not_success(self):
+        for mutation in ("summary_missing", "pair_missing", "combined_missing", "wrong_pair", "wrong_cutoff",
+                         "duplicate_row", "missing_column", "invalid_pdf", "unexpected_pdf", "outside_pdf"):
+            with self.subTest(mutation=mutation):
+                self.run = self.root / f"cpi_{mutation}"
+                self.add_cpi(imported=True, mode="named")
+                def malformed(command, cwd, log_path):
+                    self.fake_r(command, cwd, log_path)
+                    output = Path(command[command.index("--out_dir") + 1])
+                    summary = output / "Summary_FetalFraction_CPI.csv"
+                    plots = output / "plots"
+                    plot = plots / "Mothers0001-Fathers0002_DNPs_CPIplot.pdf"
+                    if mutation == "summary_missing":
+                        summary.unlink()
+                    elif mutation == "pair_missing":
+                        plot.unlink()
+                    elif mutation == "combined_missing":
+                        (plots / "All_CPIplots.pdf").unlink()
+                    elif mutation == "wrong_pair":
+                        summary.write_text(summary.read_text().replace("Mothers0001", "MotherWrong"))
+                    elif mutation == "wrong_cutoff":
+                        summary.write_text(summary.read_text().replace("Full", "Wrong"))
+                    elif mutation == "duplicate_row":
+                        with summary.open("a") as handle:
+                            handle.write(summary.read_text().splitlines()[1] + "\n")
+                    elif mutation == "missing_column":
+                        summary.write_text(summary.read_text().replace("CPI_medianFF", "Unknown"))
+                    elif mutation == "invalid_pdf":
+                        plot.write_bytes(b"not a pdf")
+                    elif mutation == "unexpected_pdf":
+                        (plots / "unregistered.pdf").write_bytes(b"%PDF-1.7\n")
+                    else:
+                        external = self.root / "outside.pdf"
+                        external.write_bytes(plot.read_bytes())
+                        plot.unlink()
+                        plot.symlink_to(external)
+                    return 0
+                result = self.execute(malformed)
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["error"]["code"], "execution.output")
+                self.assertEqual(result["steps"][0]["artifacts"], {})
+
+    def test_cpi_all_mode_rejects_cutoff_column(self):
+        self.add_cpi(imported=True)
+        def malformed(command, cwd, log_path):
+            self.fake_r(command, cwd, log_path)
+            summary = Path(command[command.index("--out_dir") + 1]) / "Summary_FetalFraction_CPI.csv"
+            lines = summary.read_text().splitlines()
+            summary.write_text(lines[0] + ",Cutoff\n" + "\n".join(line + ",ALL" for line in lines[1:]) + "\n")
+            return 0
+        result = self.execute(malformed)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["error"]["code"], "execution.output")
+
+    def test_cpi_failure_and_cancellation_preserve_completed_analyses(self):
+        for cancelled in (False, True):
+            with self.subTest(cancelled=cancelled):
+                self.run = self.root / ("cpi_cancelled" if cancelled else "cpi_failed")
+                if not any(step["workflow"] == "cpi" for step in self.plan["steps"]):
+                    self.add_cpi()
+                    later = copy.deepcopy(self.plan["steps"][0])
+                    later["id"] = "zzz_contamination"
+                    self.plan["steps"].append(later)
+                def stop_cpi(command, cwd, log_path):
+                    if Path(command[1]).name != "cpi.R":
+                        return self.fake_r(command, cwd, log_path)
+                    if cancelled:
+                        raise KeyboardInterrupt
+                    log_path.write_text("R failure", encoding="utf-8")
+                    return 41
+                result = self.execute(stop_cpi)
+                self.assertEqual([step["status"] for step in result["steps"]],
+                                 ["succeeded", "succeeded", "cancelled" if cancelled else "failed", "blocked"])
+                self.assertEqual(result["exit_code"], 130 if cancelled else 41)
+                self.assertEqual(result["steps"][2]["pair_mapping"], [{
+                    "pair": "family_A", "native_pair": "Mothers0001-Fathers0002_DNPs",
+                    "mother": {"step": "dnp", "output": "dnp-tables", "sample": "donor_a"},
+                    "father": {"step": "dnp", "output": "dnp-tables", "sample": "donor_b"},
+                }])
+                self.assertTrue((self.run / "steps/dnp/output/individual_outputs/full_output_sample_0001.txt").is_file())
+                self.assertFalse((self.run / "steps/zzz_contamination").exists())
+                self.assertEqual(result, self.saved())
+
+    def test_completed_cpi_run_cannot_be_reused(self):
+        self.add_cpi(imported=True, shared_father=True)
+        self.execute()
+        snapshot = {str(p.relative_to(self.run)): p.read_bytes() for p in self.run.rglob("*") if p.is_file()}
+        with self.assertRaises(PlanExecutionError):
+            self.execute()
+        self.assertEqual(snapshot, {str(p.relative_to(self.run)): p.read_bytes() for p in self.run.rglob("*") if p.is_file()})
 
     def test_subprocess_log_and_exact_argv_preserve_special_characters(self):
         log = self.root / "process.log"

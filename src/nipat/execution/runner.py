@@ -29,8 +29,13 @@ BUNDLED_WORKFLOW_INTERFACES = {
 BUNDLED_WORKFLOW_LABELS = {
     "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall", "cpi": "CPI",
     "workflow-plan": "Workflow automatico",
+    "workflow-plan-cpi": "Workflow automatico con CPI",
 }
 PLAN_EXECUTION_INTERFACE = "workflow-plan-execution-v1"
+PLAN_WORKFLOWS = {
+    "workflow-plan": ("dnp-call", "contamination"),
+    "workflow-plan-cpi": ("dnp-call", "contamination", "cpi"),
+}
 
 
 class DockerComposeRunner:
@@ -114,14 +119,14 @@ class DockerComposeRunner:
             return (isinstance(value, str) and value.startswith(prefix) and "\\" not in value
                     and all(part not in ("", ".", "..") for part in value.split("/")))
 
-        is_plan = workflow == "workflow-plan"
+        is_plan = workflow in PLAN_WORKFLOWS
         if is_plan:
             required_preparation.update({
                 "lib/nipat_scientific/plan.py", "lib/nipat_scientific/executor.py",
             })
         expected_interfaces = (
             BUNDLED_WORKFLOW_INTERFACES if workflow is None else
-            {name: BUNDLED_WORKFLOW_INTERFACES[name] for name in ("dnp-call", "contamination")}
+            {name: BUNDLED_WORKFLOW_INTERFACES[name] for name in PLAN_WORKFLOWS[workflow]}
             if is_plan else
             {workflow: BUNDLED_WORKFLOW_INTERFACES.get(workflow)}
         )
@@ -164,7 +169,7 @@ class DockerComposeRunner:
                     and type(execution.get("schema_version")) is int
                     and execution["schema_version"] == 1
                     and isinstance(execution.get("workflows"), list)
-                    and {"dnp-call", "contamination"}.issubset(
+                    and set(PLAN_WORKFLOWS[workflow]).issubset(
                         value for value in execution["workflows"] if isinstance(value, str)
                     )
                     and execution.get("scheduling") == "sequential"
@@ -351,7 +356,7 @@ class DockerComposeRunner:
         if self._record is not None:
             raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
         if (bundled_workflow is not None and bundled_workflow not in BUNDLED_WORKFLOW_INTERFACES
-                and bundled_workflow != "workflow-plan"):
+                and bundled_workflow not in PLAN_WORKFLOWS):
             raise ValidationError(f"Workflow incorporato non supportato: {bundled_workflow}")
         record = RunRecord(run_dir, workflow, parameters)
         self._record = record
@@ -499,7 +504,7 @@ class DockerComposeRunner:
     def _stop_container(self, container_name: str) -> dict[str, Any]:
         command = None
         graceful = None
-        if self._bundled_workflow == "workflow-plan":
+        if self._bundled_workflow in PLAN_WORKFLOWS:
             # The plan coordinator must receive SIGTERM before removal so it
             # can stop its child process group and persist cancelled/blocked
             # step states. Forced removal remains a bounded fallback.

@@ -70,7 +70,7 @@ class EnginePackageTests(unittest.TestCase):
         })
         self.assertEqual(metadata["plan_execution"], {
             "interface": "workflow-plan-execution-v1", "schema_version": 1,
-            "workflows": ["dnp-call", "contamination"], "scheduling": "sequential", "resume": False,
+            "workflows": ["dnp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         hashes = metadata["preparation"]["file_sha256"]
@@ -365,7 +365,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(json.loads(output), report)
         execute.assert_called_once_with(document, run_dir=run_dir, script_paths={
             name: self.root / "scientific" / engine.SCRIPT_PATHS[name]
-            for name in ("dnp-call", "contamination")
+            for name in ("dnp-call", "contamination", "cpi")
         })
         self.assertFalse(run_dir.exists())
 

@@ -8,8 +8,8 @@ versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
 artefatti GitHub Actions sono destinati alla revisione tecnica.
 
 La release ufficiale disponibile è la 0.6.0. La versione documentata offre
-**W — Workflow automatici** per eseguire DNPcall → Contamination con un'unica
-configurazione e conferma. Le quattro analisi singole rimangono disponibili.
+**W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
+CPI oppure entrambe le analisi con un'unica configurazione e conferma. Le quattro analisi singole rimangono disponibili.
 **Guida e informazioni → Catalogo scientifico** e `nipat parameters`
 descrivono in italiano e inglese opzioni configurabili, regole interne e
 preparazione degli input. Il [riferimento del catalogo](CATALOGO_SCIENTIFICO.md)
@@ -102,7 +102,7 @@ semplice: un numero oppure `W` per i workflow automatici.
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
 | 9 | Verifica aggiornamenti: ricerca, download verificato e avvio dell'installatore dopo conferma. |
-| W | Workflow automatici: DNPcall seguito da Contamination nella stessa esecuzione. |
+| W | Workflow automatici: DNPcall seguito da Contamination, CPI oppure entrambe. |
 | 0 | Uscita dal programma. |
 
 Ogni campo presenta indicazioni sul formato richiesto e sul significato di
@@ -133,8 +133,8 @@ o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file
 e metadati; non interpreta il significato scientifico dei risultati.
 Il richiamo dell'ultima esecuzione vale per la sessione corrente. I run
 precedenti restano sul disco; non è presente una cronologia tra sessioni.
-Il workflow DNPcall → Contamination conserva i risultati separati dei due
-passaggi all'interno di un solo run.
+Ogni workflow automatico conserva i risultati separati dei passaggi selezionati
+all'interno di un solo run.
 
 **7 — Guida e informazioni** è dedicata alla consultazione. **8 — Verifica
 ambiente** controlla il motore e gli strumenti senza elaborare campioni.
@@ -494,18 +494,34 @@ Le quattro analisi non sono quattro passaggi obbligatori della stessa catena:
 | Composizione | Uso degli input |
 | --- | --- |
 | DNPcall → Contamination | Le tabelle in `output/individual_outputs` forniscono i conteggi necessari; scegliere un pannello coerente. |
-| DNPcall → CPI | Le tabelle individuali dei campioni appropriati forniscono i conteggi; occorre assegnare esplicitamente il ruolo materno/paterno, preparare nomi compatibili con i prefissi e fornire coppie e frequenze di popolazione. |
+| DNPcall → CPI | Le tabelle individuali dei campioni appropriati forniscono i conteggi; occorre assegnare esplicitamente i ruoli cfDNA materno/paterno e fornire coppie e frequenze di popolazione. Nei workflow automatici il motore prepara i nomi interni. |
 | Contamination e CPI dopo DNPcall | Possono utilizzare le stesse tabelle DNPcall per analisi distinte; nessuna delle due richiede il risultato dell'altra. |
 | SNPcall sullo stesso BAM | È un'analisi separata con pannello SNP. Il suo output non è direttamente compatibile con gli schemi DNP di Contamination e CPI. |
 
 Contamination produce stime e filtra i siti secondo il proprio metodo: non
 modifica i conteggi DNPcall e non genera tabelle «decontaminate» da inviare a CPI.
 L'opzione parallela di DNPcall riguarda i campioni all'interno di quel passaggio;
-Contamination viene avviato successivamente.
+Contamination e CPI vengono avviati successivamente, uno per volta.
 
-### Workflow automatico DNPcall → Contamination
+### Scelta del workflow automatico
 
-1. Scegliere **W — Workflow automatici**.
+Aprire **W — Workflow automatici** e selezionare:
+
+| Scelta | Workflow | Passaggi |
+| --- | --- | --- |
+| 1 | DNPcall → Contamination | Conteggi DNP e stima della contaminazione. |
+| 2 | DNPcall → CPI | Conteggi DNP, frazione fetale e indice di paternità per le coppie dichiarate. |
+| 3 | DNPcall → Contamination e CPI | Conteggi DNP una sola volta, poi Contamination e CPI sugli stessi conteggi. |
+| 0 | Indietro | Ritorno al menu principale senza avviare analisi. |
+
+Nel workflow combinato Contamination viene eseguito prima di CPI, ma i suoi
+risultati non diventano input CPI. Se Contamination fallisce, il piano si
+arresta e CPI non parte. Il completamento tecnico di Contamination, qualunque
+sia la stima prodotta, non aggiunge un filtro sui campioni destinati a CPI.
+
+### DNPcall → Contamination
+
+1. Scegliere **DNPcall → Contamination** dal menu dei workflow automatici.
 2. Indicare uno o più BAM, oppure una lista di BAM, il FASTA indicizzato e
    il pannello DNP. Scegliere l'esecuzione DNPcall seriale o parallela.
 3. Per Contamination, mantenere il pannello DNP oppure selezionare un diverso
@@ -538,12 +554,77 @@ se omesso, viene utilizzato quello di `--panel`. `--parallel` abilita il
 parallelismo interno a DNPcall. Su Ubuntu usare `nipat` e percorsi Linux.
 `nipat workflow dnp-contamination --help` elenca tutte le opzioni.
 
+### DNPcall → CPI e DNPcall → Contamination e CPI
+
+1. Scegliere il workflow desiderato dal menu **W**.
+2. Inserire per ogni coppia un ID univoco, il BAM **cfDNA materno** e il BAM
+   **paterno**. Il ruolo materno richiede il campione cfDNA previsto dal metodo,
+   non viene dedotto dal nome del file o dai genotipi.
+3. Indicare il FASTA indicizzato, il pannello DNPcall e la modalità seriale
+   o parallela. Nel workflow combinato, scegliere anche il pannello
+   Contamination oppure mantenere quello DNPcall.
+4. Selezionare le frequenze di popolazione, la costante d'errore CPI e i siti
+   da analizzare: tutti quelli disponibili, un pannello o pannelli etichettati.
+5. Controllare coppie, ruoli, passaggi e parametri nel riepilogo, poi confermare
+   **Avvia analisi**. Il motore elabora i campioni e prepara automaticamente
+   le tabelle per CPI, senza copie o rinomine manuali.
+
+Il menu propone le impostazioni DNPcall e CPI salvate in **Configura**,
+comprese frequenze, modalità di cutoff e costante d'errore. I prefissi CPI
+salvati per l'analisi singola non si applicano ai workflow automatici:
+la selezione dei campioni usa i ruoli espliciti. Coppie e nome del run vengono
+inseriti per ogni esecuzione e non sono salvati come preferenze.
+
+Gli ID delle coppie iniziano con una lettera e contengono fino a 64 caratteri
+ASCII: lettere, cifre, trattino e underscore. Non sono ammessi duplicati o ID
+che differiscono soltanto per maiuscole. Una stessa coppia di campioni non può
+essere ripetuta con un altro ID. Un campione può appartenere a più coppie nello
+stesso ruolo; viene elaborato da DNPcall una sola volta. L'uso dello stesso BAM
+in entrambi i ruoli viene rifiutato. Questi controlli verificano la coerenza
+formale, non l'identità biologica dei campioni.
+
+Esempio dalla CLI, con un campione paterno condiviso:
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow dnp-cpi `
+  --pair coppia_a "..\campioni\cfdna-a.bam" "..\campioni\padre.bam" `
+  --pair coppia_b "..\campioni\cfdna-b.bam" "..\campioni\padre.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --popfreq "..\pannelli\pop_allFreq.txt" --run-name "dnp-cpi-01"
+```
+
+Per includere Contamination, sostituire `dnp-cpi` con
+`dnp-contamination-cpi`. Il workflow combinato applica Contamination a tutti
+i campioni distinti presenti nelle coppie; `--contamination-panel` può
+selezionare un pannello diverso da quello DNPcall.
+
+| Opzione dei workflow con CPI | Significato |
+| --- | --- |
+| `--pair ID MATERNAL_BAM PATERNAL_BAM` | Coppia e assegnazione esplicita dei due BAM; opzione ripetibile. |
+| `--panel PATH` | Pannello usato da DNPcall per produrre i conteggi. |
+| `--popfreq PATH` | Frequenze di popolazione richieste da CPI. |
+| Nessuna opzione di cutoff | CPI usa tutti i siti disponibili nelle tabelle DNPcall, modalità ALL. |
+| `--cpi-panel PATH` | Un pannello di coordinate per CPI, distinto dalla selezione DNPcall. |
+| `--cutoff LABEL PATH` | Pannello CPI etichettato; opzione ripetibile. |
+| `--cutoff-map "LABEL=PATH,LABEL2=PATH2"` | Mappa di pannelli CPI; alternativa alle due opzioni precedenti. |
+| `--err-const NUMERO` | Costante d'errore CPI; valore iniziale `0.0000892303778101497`. |
+| `--parallel` | Parallelismo interno DNPcall, senza esecuzione simultanea dei passaggi. |
+
+Le tre forme di cutoff sono alternative. Un pannello CPI seleziona i loci
+fra quelli presenti nelle tabelle: non aggiunge conteggi per loci esclusi
+dal pannello DNPcall. Il pannello DNPcall non viene applicato implicitamente
+come cutoff CPI. I prefissi materno/paterno dei file sono gestiti dal motore;
+i ruoli sono quelli dichiarati con `--pair`, non nomi da interpretare.
+
+### Risultati dei workflow automatici
+
 | Percorso nel run automatico | Contenuto |
 | --- | --- |
 | `work/engine-plan.json` | Piano inviato al motore, con campioni e collegamento fra i passaggi. |
 | `output/workflow/workflow-state.json` | Stato complessivo e stato di ciascun passaggio. |
 | `output/workflow/steps/dnp/output` | Tabelle, riepiloghi e grafici DNPcall. |
-| `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination. |
+| `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination, quando selezionato. |
+| `output/workflow/steps/cpi/output` | Riepilogo CSV e grafici PDF CPI, quando selezionato. |
 | `output/workflow/steps/<id>/request.json` | Richiesta concreta del passaggio. |
 | `output/workflow/steps/<id>/command.log` | Messaggi scientifici del passaggio. |
 | `output/workflow/steps/<id>/work` | Pannelli, liste e tabelle preparati per il passaggio. |
@@ -561,9 +642,19 @@ oppure quella sottocartella come input. Nel workflow automatico le tabelle
 si trovano in `output/workflow/steps/dnp/output/individual_outputs`.
 La radice del run contiene anche file non compatibili con Contamination.
 
-### Altre composizioni
+CPI produce `Summary_FetalFraction_CPI.csv` e, nella sottocartella `plots`,
+un PDF per coppia e `All_CPIplots.pdf`. Non produce tabelle di dettaglio per sito o per iterazione.
+La colonna `Pair` e i nomi dei PDF usano identificatori nativi assegnati dal
+motore, per esempio `Mothers0001-Fathers0002_DNPs`. Per risalire all'ID
+inserito dall'utente, consultare `cpi-pairs` nel record del passaggio CPI
+in `workflow-state.json`; `run.json` collega le coppie ai BAM originali.
+La mappa indica anche le righe del riepilogo associate a ciascuna coppia e cutoff.
+I CSV e i PDF originali non vengono riscritti.
 
-Per una sequenza **DNPcall → CPI**, verificare prima la corrispondenza fra
+### Utilizzo di tabelle già disponibili
+
+Per avviare **CPI da un run DNPcall già completato**, scegliere l'analisi singola
+**4 — CPI**. Verificare prima la corrispondenza fra
 alias DNPcall e campioni originali in `run.json`. Preparare una cartella con
 copie delle tabelle selezionate, nominando per esempio `MotherA1.txt` la tabella
 cfDNA materna e `FatherA1.txt` quella del presunto padre; indicare poi `A1:A1`

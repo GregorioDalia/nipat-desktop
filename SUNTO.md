@@ -2,15 +2,16 @@
 
 **NIPAT Desktop 0.7.0a1, in sviluppo**, è un'applicazione locale per eseguire quattro workflow
 scientifici da un menu testuale guidato o dalla riga di comando. Le analisi
-possono essere avviate singolarmente; il workflow **DNPcall → Contamination**
-esegue automaticamente i due passaggi dopo una sola conferma.
+possono essere avviate singolarmente oppure in tre workflow automatici:
+**DNPcall → Contamination**, **DNPcall → CPI** e **DNPcall → Contamination e CPI**.
+Una sola conferma avvia tutti i passaggi selezionati.
 Questa versione non include una GUI grafica.
 
 Il catalogo scientifico consultabile dal menu o con `nipat parameters`
 descrive in italiano e inglese le opzioni R, le regole interne e la
 preparazione degli input. Il motore convalida i piani concatenati e ne
-esegue attualmente i passaggi DNPcall e Contamination, in sequenza.
-L'integrazione di CPI e SNPcall nell'esecutore dei piani non è ancora disponibile.
+esegue i passaggi DNPcall, Contamination e CPI in sequenza. SNPcall resta
+un'analisi indipendente, non ancora eseguibile all'interno di un piano.
 La release ufficiale per l'installazione rimane la 0.6.0.
 
 | Workflow | Funzione |
@@ -49,8 +50,9 @@ spiegano formati, valori predefiniti e comandi di navigazione. **Configura**
 conserva cartelle e impostazioni del menu fra gli avvii; ogni analisi consente
 di correggere i valori proposti. Campioni, coppie e nome del run si scelgono
 sempre per la singola analisi. **Guida e informazioni** e **Verifica ambiente**
-sono funzioni separate. **W — Workflow automatici** permette di impostare
-DNPcall e Contamination insieme. Le preferenze non cambiano la CLI diretta. Gli input
+sono funzioni separate. **W — Workflow automatici** configura le analisi
+successive a DNPcall; per CPI si indicano esplicitamente le coppie e i ruoli
+cfDNA materno e paterno. Le preferenze non cambiano la CLI diretta. Gli input
 possono restare nelle cartelle originali e vengono letti senza modificarli.
 Su Windows sono supportati dischi locali fissi.
 
@@ -64,14 +66,17 @@ Ogni analisi crea un nuovo run con risultati in `output`, intermedi conservati
 in `work`, metadati in `run.json` e messaggi in `execution.log`. Le cartelle
 esistenti non vengono sovrascritte. Il workflow automatico conserva in
 `output/workflow` lo stato complessivo, gli output e i log di ogni passaggio.
-DNPcall produce le tabelle individuali utilizzate direttamente da Contamination;
-se un passaggio fallisce, il successivo non viene avviato. Contamination non
-modifica i conteggi DNPcall e non produce tabelle «decontaminate».
+DNPcall produce una volta sola le tabelle individuali utilizzate da
+Contamination e CPI. Un campione condiviso fra coppie viene elaborato una sola
+volta, mantenendo il ruolo dichiarato. Se un passaggio fallisce, quelli
+successivi non vengono avviati. Contamination non modifica i conteggi DNPcall
+e non produce tabelle «decontaminate».
 
-Le altre sequenze richiedono la selezione degli output del run precedente.
-CPI utilizza le tabelle DNP dei campioni cfDNA materni e paterni, coppie esplicite
-e frequenze di popolazione. SNPcall usa un proprio pannello e produce una
-tabella SNP, che non è un input diretto di Contamination o CPI.
+CPI richiede frequenze di popolazione appropriate e può usare tutti i siti
+disponibili o pannelli selezionati. I risultati comprendono un CSV riepilogativo,
+un PDF per coppia e un PDF complessivo; il record conserva l'associazione
+con gli identificatori delle coppie. SNPcall usa un proprio pannello e produce
+una tabella SNP, che non è un input diretto di Contamination o CPI.
 
 La verifica degli strumenti controlla l'ambiente di esecuzione; gli autotest
 confrontano casi noti. Il completamento di un run non sostituisce la
