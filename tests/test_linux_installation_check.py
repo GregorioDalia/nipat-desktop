@@ -101,7 +101,9 @@ class InstalledAutomaticPlanEvidenceTests(unittest.TestCase):
         self.fixture = Path(__file__).resolve().parent / "fixtures/dnp_engine"
         self.manifest = {"version": "0.7.0a1", "source_commit": "1" * 40}
         self.image = "sha256:" + "2" * 64
-        self.sources = [self.root / "maternal.bam", self.root / "paternal.bam"]
+        # Match the canonical paths recorded by the client, including Windows
+        # short-name temporary directories expanded by Path.resolve().
+        self.sources = [(self.root / name).resolve() for name in ("maternal.bam", "paternal.bam")]
         self.record = {
             "workflow": "dnp-contamination-cpi", "status": "succeeded", "bundled_workflow": "workflow-plan-with-snp",
             "source": {"role": "client", "nipat_version": "0.7.0a1", "release": {"source_git": {"commit": "1" * 40}}},
