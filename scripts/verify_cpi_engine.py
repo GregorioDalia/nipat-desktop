@@ -151,9 +151,22 @@ def check_cpi_workflow(identifier: str, root: Path, *, run_image, write_request)
               inputs=inputs, results=invalid, expected_returncode=2)
     if list((invalid / "output").iterdir()) or {p.name for p in (invalid / "work").iterdir()} != {"request.json"}:
         raise ValueError("Invalid CPI request reached scientific preparation or R.")
+    for label, frequencies in (("out of range", "1.1\t0.5"), ("nonfinite", "NaN\t0.5"),
+                               ("duplicate loci", "0.5\t0.5\nchr1\t100\t101\t0.5\t0.5")):
+        (inputs / "invalid-population.tsv").write_text(
+            "chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t100\t101\t" + frequencies + "\n",
+            encoding="utf-8")
+        rejected = root / f"rejected CPI {label}"
+        write_request(rejected, {**base, "cutoff_mode": "all", "cutoffs": [],
+                                 "popfreq": "/inputs/invalid-population.tsv"})
+        run_image(identifier, ["execute", "cpi", "--request", "/results/work/request.json"],
+                  inputs=inputs, results=rejected, expected_returncode=2)
+        if list((rejected / "output").iterdir()) or {p.name for p in (rejected / "work").iterdir()} != {"request.json"}:
+            raise ValueError(f"Invalid CPI {label} reached scientific preparation or R.")
+    (inputs / "invalid-population.tsv").unlink()
     assert_originals(originals)
     print("PASS: complete CPI ALL/single/named panels, native R parity, independent numeric values, "
-          "no-sites cases, PDFs and invalid-selection rejection.", flush=True)
+          "no-sites cases, PDFs and invalid-selection/frequency rejection.", flush=True)
     return inputs
 
 

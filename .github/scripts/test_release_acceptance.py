@@ -444,5 +444,74 @@ class ReviewedResearchAcceptanceTests(unittest.TestCase):
         self.assertEqual(result["reviewed_source_changes"], [])
 
 
+class ReliabilityResearchAcceptanceTests(ReviewedResearchAcceptanceTests):
+    # Override the fixture and exercise the expanded policy independently of
+    # the inherited schema-3 expectations.
+    def setUp(self):
+        super().setUp()
+        self.record.update(schema_version=4, version="0.7.2",
+                           qualification_evidence_sha256="5" * 64,
+                           linux_upgrade_check_sha256="6" * 64)
+        baseline = self.record["observed_baseline"]
+        del baseline["source_equivalence_scope"]
+        baseline.update(source_comparison_scope=acceptance.RELIABILITY_SOURCE_SCOPE,
+                        role="historical-platform-evidence")
+        self.pair.update(version="0.7.2",
+                         linux_upgrade_check={"file": "linux-upgrade-check.json", "sha256": "6" * 64})
+
+    def validate(self, record=None):
+        acceptance.validate(record or self.record, "0.7.2", COMMIT, 123, self.pair)
+
+    def test_exact_build_identity_and_research_scope_remain_required(self):
+        self.validate()
+        for field, value in (("qualification_evidence_sha256", "invalid"),
+                             ("linux_upgrade_check_sha256", "f" * 64),
+                             ("domain_validation", "passed"), ("decision", "pending")):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.validate(dict(self.record, **{field: value}))
+        old = copy.deepcopy(self.record)
+        old["version"] = "0.7.1"
+        with self.assertRaisesRegex(ValueError, "from 0.7.2"):
+            acceptance.validate(old, "0.7.1", COMMIT, 123)
+
+    def test_reviewed_delta_uses_actual_bytes_and_does_not_claim_new_installation(self):
+        paths = ("src/nipat_scientific/executor.py", "engine/main.py", "installer/runtime/nipat-engine")
+        self.record["reviewed_source_changes"] = sorted([self.change(p) for p in paths], key=lambda x: x["path"])
+        self.validate()
+        result = acceptance.verify_baseline(self.record, self.read_source)
+        self.assertEqual(result["scope"], acceptance.RELIABILITY_SOURCE_SCOPE)
+        self.assertFalse(result["operational_equivalence_claimed"])
+        self.assertFalse(result["candidate_windows_installation_claimed"])
+        self.assertTrue(result["r_sources_unchanged"])
+        self.assertEqual(result["reviewed_source_changes"], self.record["reviewed_source_changes"])
+
+    def test_scientific_and_runtime_changes_cannot_be_approved_as_client_changes(self):
+        original = copy.deepcopy(self.sources)
+        for path in ("scientific/vendor/example.R", "scientific/SHA256SUMS", "engine/changed.R"):
+            self.sources = copy.deepcopy(original)
+            delta = self.change(path)
+            self.record["reviewed_source_changes"] = [delta]
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "non-R operative"):
+                self.validate()
+            self.record["reviewed_source_changes"] = []
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "Protected scientific"):
+                acceptance.verify_baseline(self.record, self.read_source)
+
+    def test_baseline_is_not_relabelled_as_candidate_installation_or_equivalence(self):
+        for change in ({"role": "candidate-tested"}, {"source_comparison_scope": acceptance.REVIEWED_SOURCE_SCOPE},
+                       {"source_equivalence_scope": acceptance.REVIEWED_SOURCE_SCOPE}):
+            record = copy.deepcopy(self.record)
+            record["observed_baseline"].update(change)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                self.validate(record)
+
+    def test_new_research_contract_cannot_use_historical_less_complete_schema(self):
+        old = research_record()
+        old.update(schema_version=3, version="0.7.2", reviewed_source_changes=[],
+                   domain_validation="pending-domain-researchers")
+        with self.assertRaisesRegex(ValueError, "require reliability acceptance"):
+            acceptance.validate(old, "0.7.2", COMMIT, 123)
+
+
 if __name__ == "__main__":
     unittest.main()

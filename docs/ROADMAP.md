@@ -1,10 +1,10 @@
 # Piano di sviluppo
 
-**NIPAT Desktop 0.7.1** offre quattro analisi singole, workflow automatici e
+**NIPAT Desktop 0.7.2** offre quattro analisi singole, workflow automatici e
 un catalogo delle impostazioni scientifiche. La priorità è raccogliere la
 valutazione delle esperte di dominio su input rappresentativi e rendere
 riproducibili le segnalazioni. Le funzionalità disponibili e i requisiti sono
-nelle [note della versione](RELEASE_0.7.1.md) e nella
+nelle [note della versione](RELEASE_0.7.2.md) e nella
 [guida per l'utilizzo](GUIDA_UTILIZZO.md).
 
 Il core scientifico rimane in R. Preparazione ed esecuzione delle analisi
@@ -15,14 +15,17 @@ alla valutazione della CLI.
 
 ## Funzionalità disponibili
 
-| Area | Comportamento della 0.7.1 |
+| Area | Comportamento della 0.7.2 |
 | --- | --- |
 | Analisi singole | DNPcall, SNPcall, Contamination e CPI dal menu e dalla CLI diretta. |
 | Composizioni DNPcall | DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI. |
 | SNPcall | Passaggi indipendenti sui BAM delle composizioni oppure batch da BAM o pileup. |
 | Campioni e coppie | Ruoli cfDNA materno/paterno assegnati esplicitamente; campioni condivisi elaborati una sola volta e associazioni conservate nei risultati. |
 | Parametri | Opzioni pubbliche R esposte o adattate da NIPAT; catalogo italiano/inglese di parametri, regole interne e preparazione. |
-| Esecuzione | Un piano in un container, ordine sequenziale, arresto su errore o annullamento e risultati distinti per passaggio. |
+| Esecuzione | Un piano in un container, ordine sequenziale, arresto su errore o annullamento, limiti facoltativi di CPU/memoria/processi e risultati distinti per passaggio. |
+| Validazione dei dati | Controlli Python condivisi prima di R, copie dei pannelli normalizzate, risultati verificati e avvisi numerici consultabili. |
+| Provenienza e diagnosi | Checksum integrali facoltativi degli input, consultazione dei run incompleti e arresto dei soli container identificati. |
+| Manutenzione Windows | Inventario dello spazio, rimozione selettiva di componenti precedenti verificati e ripresa della preparazione della versione installata. |
 | Interazione | Campi modificabili, configurazione persistente, annullamento globale, indicazioni contestuali e navigazione testuale alternativa alle frecce. |
 | Distribuzione | Un installatore Windows e un pacchetto Ubuntu, con immagine scientifica incorporata e verifica degli aggiornamenti dal menu. |
 
@@ -64,7 +67,9 @@ desktop estesa. I criteri sono nel
 
 ## Italiano e inglese
 
-Il catalogo scientifico è già disponibile in italiano e inglese. La traduzione
+Il catalogo scientifico è già disponibile in italiano e inglese. Un catalogo
+condiviso di messaggi supporta anche le nuove risposte della diagnostica dei
+run, con `--lang it|en`; non cambia la lingua del menu generale. La traduzione
 completa deve estendersi a README, guide, note delle release, menu, aiuti
 contestuali e messaggi NIPAT, oltre alla futura GUI. La lingua deve essere
 selezionabile e conservata nelle preferenze.
@@ -94,3 +99,9 @@ complessivo delle risorse, considerando anche il parallelismo interno a
 DNPcall. La ripresa richiede verifiche affidabili di input, parametri, output
 e identità del motore prima di riutilizzare un passaggio completato: dimensione
 e data di modifica dei file da sole non dimostrano l'identità dei contenuti.
+
+La distribuzione transazionale con attivazione della versione candidata e
+ripristino automatico completo della precedente richiede una progettazione
+dedicata. I backup selettivi e la ripresa del setup conservano informazioni
+utili, ma non implementano tale comportamento. La manutenzione disponibile
+ripara la preparazione della versione installata; non è un rollback.

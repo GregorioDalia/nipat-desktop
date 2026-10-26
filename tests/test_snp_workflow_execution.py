@@ -102,17 +102,18 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
         self.assertFalse((self.run / "steps/snp/work/pileup.txt").exists())
         self.assertFalse((self.run / "steps/snp/preparation.log").exists())
 
-    def test_duplicate_panel_coordinates_and_zero_count_na_remain_supported(self):
+    def test_duplicate_panel_coordinates_fail_before_execution(self):
         self.imported_pileup()
         with self.panel.open("a", encoding="utf-8") as handle:
             handle.write("chr1:10\tA\tG\n")
-        def repeated_result(command, cwd, log):
-            self.fake_process(command, cwd, log)
-            output = Path(command[command.index("--out") + 1])
-            with output.open("a", encoding="utf-8") as handle:
-                handle.write("chr1\t10\tA\tG\t1\t1\t0\t2\t0.5\n")
-            return 0
-        result = self.execute(repeated_result)
+        with self.assertRaisesRegex(ValidationError, "duplicata"):
+            self.execute()
+        self.assertFalse(self.run.exists())
+        self.assertEqual(self.calls, [])
+
+    def test_zero_count_na_remains_supported(self):
+        self.imported_pileup()
+        result = self.execute()
         self.assertEqual(result["status"], "succeeded")
         output = self.run / result["steps"][0]["artifacts"]["snp-tables"][0]["path"]
         self.assertIn("chr1\t15\tA\tT\t0\t0\t0\t0\tNA", output.read_text())

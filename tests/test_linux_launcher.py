@@ -5,10 +5,13 @@ import importlib.util
 import io
 import json
 import os
+import select
+import signal
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 
@@ -365,6 +368,67 @@ class LinuxLauncherTests(unittest.TestCase):
                 patch.object(launcher.os, "geteuid", return_value=0):
             with self.assertRaisesRegex(launcher.SetupError, "senza sudo"):
                 launcher.require_host()
+
+
+@unittest.skipUnless(sys.platform == "linux", "Linux foreground process-group signals")
+class LinuxLauncherSignalTests(unittest.TestCase):
+    def test_actual_launcher_preserves_wizard_after_ctrl_c_at_menu_and_field(self):
+        import pty
+        with tempfile.TemporaryDirectory() as directory:
+            script = (
+                "import importlib.util, pathlib, os; "
+                f"p=pathlib.Path({str(PROJECT)!r}); "
+                "s=importlib.util.spec_from_file_location('launcher',p/'installer/linux/launch.py'); "
+                "m=importlib.util.module_from_spec(s); s.loader.exec_module(m); "
+                f"root=pathlib.Path({directory!r}); "
+                "e=m.clean_environment(p,root/'data',root/'state',dict(os.environ,TERM='dumb')); "
+                "code=m.run_cli(p,['--dry-run','wizard'],e); "
+                "print('CLIENT_RETURNED',code,flush=True); raise SystemExit(code)"
+            )
+            child, descriptor = pty.fork()
+            if child == 0:
+                os.execv(sys.executable, [sys.executable, "-c", script])
+            status = None
+            output = bytearray()
+
+            def until(marker):
+                recent = bytearray()
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    if select.select([descriptor], [], [], .1)[0]:
+                        try:
+                            chunk = os.read(descriptor, 65536)
+                        except OSError:
+                            break
+                        if not chunk:
+                            break
+                        recent.extend(chunk)
+                        output.extend(chunk)
+                        if marker in recent:
+                            return
+                self.fail(f"Launcher did not show {marker!r}: {output!r}")
+
+            try:
+                until(b"Scelta:")
+                os.write(descriptor, b"\x03")
+                until(b"Menu principale. Per uscire scegliere 0.")
+                os.write(descriptor, b"1\n1\n")
+                until(b"Percorso del primo BAM:")
+                os.write(descriptor, b"\x03")
+                until(b"Operazione annullata. Ritorno al menu principale.")
+                os.write(descriptor, b"0\n")
+                until(b"CLIENT_RETURNED 0")
+                _, status = os.waitpid(child, 0)
+                self.assertEqual(os.waitstatus_to_exitcode(status), 0)
+                self.assertFalse((Path(directory) / "data/runs").exists())
+            finally:
+                if status is None:
+                    try:
+                        os.killpg(child, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    os.waitpid(child, 0)
+                os.close(descriptor)
 
 
 if __name__ == "__main__":

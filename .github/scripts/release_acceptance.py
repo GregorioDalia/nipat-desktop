@@ -22,14 +22,20 @@ RESEARCH_FIELDS = (FIELDS - {"tests"}) | {
     "scope", "review", "observed_baseline", "deferred_desktop_scenarios", "domain_validation",
 }
 REVIEWED_RESEARCH_FIELDS = RESEARCH_FIELDS | {"reviewed_source_changes"}
+RELIABILITY_DIGESTS = {"qualification_evidence_sha256", "linux_upgrade_check_sha256"}
+RELIABILITY_RESEARCH_FIELDS = REVIEWED_RESEARCH_FIELDS | RELIABILITY_DIGESTS
 SOURCE_EQUIVALENCE_SCOPE = "distributed-operative-sources-v1"
 REVIEWED_SOURCE_SCOPE = "scientific-runtime-equivalence-with-reviewed-client-changes-v1"
+RELIABILITY_SOURCE_SCOPE = "reviewed-operative-changes-with-unchanged-r-v1"
 BASELINE_OBSERVATIONS = {
     "installation_ready", "runtime_diagnostics", "scientific_self_tests", "dnp_sample_analysis",
 }
 WORKFLOW_BASELINE_OBSERVATIONS = BASELINE_OBSERVATIONS | {"automatic_workflow_sample_analysis"}
 REVIEWABLE_CLIENT_PREFIXES = ("src/nipat/", "installer/windows/", "installer/linux/", "scripts/", "tests/")
 REVIEWABLE_CLIENT_FILES = {"pyproject.toml", "1_SETUP.cmd", "2_AVVIA.cmd", "nipat.cmd"}
+REVIEWABLE_OPERATIVE_PREFIXES = (
+    "src/", "engine/", "installer/", "scripts/", "tests/", "docker/", "config/",
+)
 REMOVABLE_SIGNING_HELPERS = {
     "installer/windows/verify-signatures.ps1", "installer/windows/test-signatures.ps1",
 }
@@ -45,6 +51,21 @@ REQUIRED_OPERATIVE_PATHS = {
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def reliability_contract(version):
+    match = re.fullmatch(r"0\.7\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
+    return match is not None and int(match[1]) >= 2
+
+
+def reviewable_path(path, *, reliability=False):
+    if reliability:
+        # The Python preparation, orchestration and packaging may evolve, but
+        # this research policy never authorizes a change to the R algorithms.
+        return (PurePosixPath(path).suffix.casefold() != ".r"
+                and (path in REVIEWABLE_CLIENT_FILES | {"compose.yaml"}
+                     or path.startswith(REVIEWABLE_OPERATIVE_PREFIXES)))
+    return path in REVIEWABLE_CLIENT_FILES or path.startswith(REVIEWABLE_CLIENT_PREFIXES)
 
 
 def acceptance_path(version):
@@ -83,7 +104,7 @@ def template(installer_set, run_id):
 def validate(record, version, commit, run_id, installer_set=None):
     """Require a committed review under the record's explicit acceptance policy."""
     acceptance_path(version)
-    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3):
+    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4):
         validate_research(record, version, commit, run_id, installer_set)
         return
     require(isinstance(record, dict) and set(record) == FIELDS, "Acceptance record fields are invalid")
@@ -150,19 +171,28 @@ def review_evidence(value, label):
 
 def validate_research(record, version, commit, run_id, installer_set=None):
     """A limited research decision records deferred qualification, never fictitious passes."""
-    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 3
+    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 4
+    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4)
+    schema = 4 if reliability else (3 if reviewed_delta else 2)
     minor = "7" if reviewed_delta else "6"
     require(isinstance(version, str) and re.fullmatch(rf"0\.{minor}\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
-            f"Research acceptance schema {3 if reviewed_delta else 2} is limited to the pre-1.0 0.{minor} contract")
-    require(isinstance(record, dict) and set(record) == (REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
-            and type(record["schema_version"]) is int and record["schema_version"] == (3 if reviewed_delta else 2),
+            f"Research acceptance schema {schema} is limited to the pre-1.0 0.{minor} contract")
+    if reliability:
+        require(reliability_contract(version), "Reliability acceptance is available from 0.7.2 only")
+    elif reviewed_delta:
+        require(not reliability_contract(version),
+                "Research releases from 0.7.2 require reliability acceptance schema 4")
+    expected_fields = (RELIABILITY_RESEARCH_FIELDS if reliability else
+                       REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
+    require(isinstance(record, dict) and set(record) == expected_fields
+            and type(record["schema_version"]) is int and record["schema_version"] == schema,
             "Research acceptance record fields are invalid")
     require(record["version"] == version and record["source_commit"] == commit
             and isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit)
             and type(record["build_run_id"]) is int and type(run_id) is int
             and run_id > 0 and record["build_run_id"] == run_id,
             "Acceptance belongs to a different version, source or build run")
-    for field in DIGESTS:
+    for field in DIGESTS | (RELIABILITY_DIGESTS if reliability else set()):
         require(isinstance(record[field], str) and re.fullmatch(r"[0-9a-f]{64}", record[field]),
                 f"Invalid acceptance digest: {field}")
     require(record["decision"] == "accepted-for-research" and record["scope"] == "pre-1.0-research",
@@ -174,9 +204,15 @@ def validate_research(record, version, commit, run_id, installer_set=None):
     review_timestamp(review["reviewed_at"], "Research review date")
     review_evidence(review["evidence"], "Research review evidence")
     baseline = record["observed_baseline"]
-    require(isinstance(baseline, dict) and set(baseline) == {
-        "source_commit", "observations", "evidence", "source_equivalence_scope",
-    }, "Invalid observed baseline fields")
+    scope_field = "source_comparison_scope" if reliability else "source_equivalence_scope"
+    baseline_fields = {"source_commit", "observations", "evidence", scope_field}
+    if reliability:
+        baseline_fields.add("role")
+    require(isinstance(baseline, dict) and set(baseline) == baseline_fields,
+            "Invalid observed baseline fields")
+    if reliability:
+        require(baseline["role"] == "historical-platform-evidence",
+                "The baseline cannot attest installation of the changed candidate")
     require(isinstance(baseline["source_commit"], str)
             and re.fullmatch(r"[0-9a-f]{40}", baseline["source_commit"]), "Invalid observed baseline commit")
     observations = baseline["observations"]
@@ -187,7 +223,9 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             and bool(set(observations) & ({"scientific_self_tests", "dnp_sample_analysis"}
                                          | ({"automatic_workflow_sample_analysis"} if reviewed_delta else set()))),
             "Baseline must identify observed installation and scientific execution")
-    require(baseline["source_equivalence_scope"] == (REVIEWED_SOURCE_SCOPE if reviewed_delta else SOURCE_EQUIVALENCE_SCOPE),
+    expected_scope = (RELIABILITY_SOURCE_SCOPE if reliability else
+                      REVIEWED_SOURCE_SCOPE if reviewed_delta else SOURCE_EQUIVALENCE_SCOPE)
+    require(baseline[scope_field] == expected_scope,
             "Unsupported baseline source equivalence scope")
     review_evidence(baseline["evidence"], "Observed baseline evidence")
     deferred = record["deferred_desktop_scenarios"]
@@ -208,8 +246,9 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                     and not PurePosixPath(path).is_absolute() and ".." not in PurePosixPath(path).parts
                     and "\\" not in path and not any(character.isspace() for character in path)
                     and PurePosixPath(path).suffix.casefold() != ".md"
-                    and (path in REVIEWABLE_CLIENT_FILES or path.startswith(REVIEWABLE_CLIENT_PREFIXES)),
-                    "Only explicit client, installer and test source changes can be reviewed")
+                    and reviewable_path(path, reliability=reliability),
+                    ("Only explicit non-R operative source changes can be reviewed" if reliability
+                     else "Only explicit client, installer and test source changes can be reviewed"))
             for field in ("before_sha256", "after_sha256"):
                 digest = item[field]
                 require(digest is None or isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest),
@@ -220,6 +259,10 @@ def validate_research(record, version, commit, run_id, installer_set=None):
     if installer_set is not None:
         require(all(record[field] == value for field, value in identity(installer_set).items()),
                 "Acceptance hashes do not identify these verified installers")
+        if reliability:
+            upgrade = installer_set.get("linux_upgrade_check", {})
+            require(upgrade.get("sha256") == record["linux_upgrade_check_sha256"],
+                    "Acceptance does not identify the verified cross-version upgrade report")
 
 
 def verify_baseline(record, read_source):
@@ -229,14 +272,19 @@ def verify_baseline(record, read_source):
     executable inputs of the installed application. The allowlist is compared as
     a normalized inventory. Schema 2 only exempts removal of two obsolete signing
     helpers. Schema 3 requires an exact hash review for permitted client changes
-    and keeps scientific, engine and runtime sources immutable.
+    and keeps scientific, engine and runtime sources immutable. Schema 4 reviews
+    non-R operative changes without claiming operational equivalence to the
+    historical manual observation; all R sources remain immutable.
     """
     require(isinstance(record, dict) and type(record.get("schema_version")) is int
-            and record["schema_version"] in (1, 2, 3), "Unsupported acceptance schema")
+            and record["schema_version"] in (1, 2, 3, 4), "Unsupported acceptance schema")
     if record["schema_version"] == 1:
         return None
-    reviewed_delta = record["schema_version"] == 3
-    require(set(record) == (REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS),
+    reliability = record["schema_version"] == 4
+    reviewed_delta = record["schema_version"] in (3, 4)
+    expected_fields = (RELIABILITY_RESEARCH_FIELDS if reliability else
+                       REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
+    require(set(record) == expected_fields,
             "Research acceptance record fields are invalid")
     validate_research(record, record["version"], record["source_commit"], record["build_run_id"])
     baseline = record["observed_baseline"]["source_commit"]
@@ -279,7 +327,7 @@ def verify_baseline(record, read_source):
             if old == new:
                 unchanged += 1
                 continue
-            require(path in REVIEWABLE_CLIENT_FILES or path.startswith(REVIEWABLE_CLIENT_PREFIXES),
+            require(reviewable_path(path, reliability=reliability),
                     f"Protected scientific or runtime source differs: {path}")
             changes.append({"path": path,
                             "before_sha256": hashlib.sha256(old).hexdigest() if old is not None else None,
@@ -287,8 +335,11 @@ def verify_baseline(record, read_source):
         require(record["reviewed_source_changes"] == changes,
                 "Reviewed source changes do not match the exact baseline-to-candidate delta")
         return {"baseline_source_commit": baseline, "source_commit": candidate,
-                "scope": REVIEWED_SOURCE_SCOPE, "unchanged_files_verified": unchanged,
-                "reviewed_source_changes": changes, "candidate_windows_installation_claimed": False}
+                "scope": RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
+                "unchanged_files_verified": unchanged,
+                "reviewed_source_changes": changes, "candidate_windows_installation_claimed": False,
+                **({"operational_equivalence_claimed": False, "r_sources_unchanged": True}
+                   if reliability else {})}
     before -= REMOVABLE_SIGNING_HELPERS & (before - after)
     require(before == after, "Baseline operative inventory differs from candidate")
     for path in sorted(after):

@@ -118,6 +118,37 @@ class ResultsTests(unittest.TestCase):
                 show_results(FakeTerminal([answer]), self.run, open_path=opener)
                 opener.assert_not_called()
 
+    def test_input_and_numerical_warnings_are_visible_before_opening_summary(self):
+        work = self.run / "work"
+        work.mkdir()
+        (work / "input-validation.json").write_text(json.dumps({
+            "schema_version": 1, "warnings": [{"code": "input.frequency_sum",
+                "path": "/workspace/inputs/frequencies.tsv", "row": 2,
+                "message": "Frequency interpretation requires domain review."}],
+        }), encoding="utf-8")
+        (work / "scientific-validation.json").write_text(json.dumps({
+            "schema_version": 1, "quality_warnings": [{"code": "output.nonfinite",
+                "file": "summary.csv", "row": 2, "column": "CPI", "value": "Inf",
+                "message": "Non-finite scientific result; R value unchanged."}],
+        }), encoding="utf-8")
+        ui = FakeTerminal(["0"])
+        show_results(ui, self.run)
+        text = "\n".join(ui.lines)
+        self.assertIn("Avvisi sui dati o sui risultati: 2", text)
+        self.assertIn("input.frequency_sum", text)
+        self.assertIn("output.nonfinite", text)
+        self.assertIn("value=Inf", text)
+        self.assertEqual(json.loads((self.run / "run.json").read_text())["status"], "succeeded")
+
+    def test_invalid_warning_report_does_not_hide_results_navigation(self):
+        work = self.run / "work"
+        work.mkdir()
+        (work / "input-validation.json").write_text('{"schema_version":1,"warnings":42}', encoding="utf-8")
+        ui = FakeTerminal(["0"])
+        show_results(ui, self.run)
+        self.assertTrue(any("Avvisi di validazione non consultabili" in line for line in ui.lines))
+        self.assertTrue(ui.menus)
+
 
     def prepare_workflow(self, *, status="succeeded", dnp="succeeded", contamination="succeeded"):
         self.metadata.update(workflow="dnp-contamination", status=status)

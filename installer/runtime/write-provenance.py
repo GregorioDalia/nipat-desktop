@@ -1,6 +1,7 @@
 """Record the exact filesystem inputs while building the dedicated WSL rootfs."""
 
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -8,6 +9,10 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+_SPEC = importlib.util.spec_from_file_location("nipat_runtime_component", Path(__file__).with_name("component.py"))
+component = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(component)
 
 
 def collect_engine_notices(engine_version: str, destination: Path) -> dict:
@@ -36,19 +41,17 @@ def collect_engine_notices(engine_version: str, destination: Path) -> dict:
 
 
 def main() -> None:
-    commit, base_image = sys.argv[1:]
-    if not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise SystemExit("SOURCE_COMMIT must identify the exact source checkout")
+    base_image, source_directory = sys.argv[1:]
     packages = dict(
         line.split("\t", 1)
         for line in Path("/usr/share/nipat/apt-versions.tsv").read_text().splitlines()
     )
     engine_version = subprocess.check_output(["dockerd", "--version"], text=True).strip()
     marker = {
-        "schema_version": 1,
+        "schema_version": 2,
         "vendor": "nipat-desktop",
         "purpose": "dedicated-wsl-runtime",
-        "source_commit": commit,
+        "source_sha256": component.source_inventory(Path(source_directory)),
         "base_image": base_image,
         "os": "debian-bookworm",
         "architecture": subprocess.check_output(["dpkg", "--print-architecture"], text=True).strip(),
@@ -64,6 +67,7 @@ def main() -> None:
         "package_metadata": "/usr/share/nipat/docker-package-metadata.txt",
         "upstream_engine_notices": collect_engine_notices(engine_version, Path("/usr/share/doc/docker-ce")),
     }
+    marker["component_sha256"] = component.component_identity(marker)
     Path("/etc/nipat-runtime.json").write_text(json.dumps(marker, indent=2) + "\n")
 
 

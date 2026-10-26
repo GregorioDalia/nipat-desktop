@@ -9,6 +9,7 @@ from typing import Any
 
 from nipat.adapters.panels import read_position_panel
 from nipat.errors import NipatError, ValidationError
+from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences, PreferencesStore
 from nipat.terminal import Terminal
@@ -95,9 +96,11 @@ class GuidedSettings:
     """Own saved defaults and the effective layout, leaving runtime bindings intact."""
 
     def __init__(self, layout: ProjectLayout, store: PreferencesStore | None = None,
-                 directory_overrides: dict[str, Path] | None = None):
+                 directory_overrides: dict[str, Path] | None = None,
+                 execution_overrides: dict[str, Any] | None = None):
         self.base_layout = self.layout = layout
         self.store = store
+        self.execution_overrides = dict(execution_overrides or {})
         self.directory_overrides = directory_overrides or {}
         self.preferences = Preferences()
         self.load_error: str | None = None
@@ -129,6 +132,11 @@ class GuidedSettings:
             names = ", ".join("dati" if key == "data_dir" else "risultati"
                               for key in self.directory_overrides)
             ui.message(f"Cartelle {names}: in questa sessione prevalgono le opzioni esplicite di avvio. Le preferenze salvate saranno utilizzate alla riapertura senza tali opzioni.", kind="muted")
+        if self.execution_overrides:
+            ui.message("Esecuzione e provenienza: in questa sessione prevalgono le opzioni esplicite di avvio. Le preferenze salvate valgono alla riapertura senza tali opzioni.", kind="muted")
+
+    def execution_options(self) -> ExecutionOptions:
+        return self.preferences.execution_options(self.execution_overrides)
 
     def _save(self, preferences: Preferences) -> None:
         if self.load_error:
@@ -226,6 +234,11 @@ class GuidedSettings:
         ui.message(f"Cartella risultati in uso: {self.layout.runs_dir}")
         ui.message("Canale aggiornamenti: " + ("Testing" if self.preferences.update_channel == "testing" else "Stabile"))
         ui.message("Verifica aggiornamenti all'avvio: " + ("attivata" if self.preferences.check_updates_on_startup else "disattivata"))
+        options = self.execution_options()
+        ui.message("Checksum input: " + ("completi" if options.input_hashes == "full" else "automatici fino a 16 MiB"))
+        for label, value in (("Quota CPU", options.cpus), ("Memoria MiB", options.memory_mb),
+                             ("Numero processi", options.pids_limit)):
+            ui.message(f"{label}: {value if value is not None else 'nessun limite NIPAT'}")
         if self.store:
             ui.message(f"File delle preferenze: {self.store.path}", kind="muted")
         for choice in ("1", "2", "3", "4"):
@@ -291,6 +304,57 @@ class GuidedSettings:
         ui.message("Impostazioni ripristinate. Dati e risultati non sono stati modificati.", kind="success")
         self.explain(ui)
 
+    def _execution(self, ui: Terminal) -> None:
+        from dataclasses import asdict
+
+        values = asdict(self.preferences.execution_options())
+        labels = {"cpus": "Quota CPU", "memory_mb": "Memoria massima (MiB)",
+                  "pids_limit": "Numero massimo di processi"}
+        while True:
+            ui.message("Le opzioni regolano le risorse del container e la provenienza dei file, senza modificare i parametri scientifici R.", kind="muted")
+            ui.message("SHA-256 completo legge tutti i BAM e FASTA: puo' richiedere tempo. Ctrl+C annulla. La quota CPU non limita direttamente i worker di DNPcall; mantenere seriale se le risorse sono limitate.", kind="muted")
+            ui.message("Un limite insufficiente di memoria o processi puo' interrompere un'analisi. :vuoto rimuove un limite; 9 salva, 0 scarta le modifiche.", kind="muted")
+            action = _menu(ui, "Configura / Esecuzione e provenienza", [
+                ("1", "Checksum degli input", "Completi" if values["input_hashes"] == "full" else "Automatici fino a 16 MiB"),
+                *[(str(index), labels[key], str(values[key]) if values[key] is not None else "Nessun limite NIPAT")
+                  for index, key in enumerate(("cpus", "memory_mb", "pids_limit"), 2)],
+                ("9", "Salva modifiche", "Per le prossime analisi guidate"),
+                ("0", "Annulla modifiche", "Torna a Configura"),
+            ], default="0")
+            if action in {"0", ":indietro"}:
+                return
+            if action == "9":
+                self._save(replace(self.preferences, execution=values))
+                self._saved_message(ui)
+                return
+            if action == "1":
+                selected = _menu(ui, "Checksum degli input", [
+                    ("1", "Automatici", "SHA-256 fino a 16 MiB; dimensione e data per gli altri file"),
+                    ("2", "Completi", "SHA-256 di tutti gli input selezionati"),
+                    ("0", "Indietro", "Mantiene la scelta"),
+                ], default="2" if values["input_hashes"] == "full" else "1")
+                if selected in {"1", "2"}:
+                    values["input_hashes"] = "auto" if selected == "1" else "full"
+                continue
+            key = {"2": "cpus", "3": "memory_mb", "4": "pids_limit"}.get(action)
+            if key is None:
+                continue
+            try:
+                answer = navigation(ui.prompt(labels[key], default=str(values[key]) if values[key] is not None else ""))
+                if answer == ":vuoto":
+                    value = None
+                elif not answer:
+                    continue
+                else:
+                    value = float(answer) if key == "cpus" else int(answer)
+                candidate = {**values, key: value}
+                ExecutionOptions(**candidate)
+                values = candidate
+            except Back:
+                continue
+            except (NipatError, ValueError) as exc:
+                ui.message(f"Valore non valido: {exc}", kind="error")
+
     def configure(self, ui: Terminal, *, err_const: float) -> ProjectLayout:
         while True:
             ui.message("Impostare cartelle e valori predefiniti della CLI guidata. Ogni analisi permette ancora di modificare gli input e i parametri prima dell'avvio.", kind="muted")
@@ -305,6 +369,7 @@ class GuidedSettings:
                 ("6", "Riepilogo impostazioni", "Valori in uso e file delle preferenze"),
                 ("7", "Ripristina impostazioni", "Conferma richiesta; dati conservati"),
                 ("8", "Aggiornamenti", "Canale e verifica all'avvio"),
+                ("9", "Esecuzione e provenienza", "Checksum degli input e limiti delle risorse"),
                 ("0", "Torna al menu", ""),
             ], default="0")
             if action in {"0", ":indietro"}:
@@ -318,11 +383,13 @@ class GuidedSettings:
                     ui.message("Impostazioni non leggibili: consultare il riepilogo o scegliere Ripristina impostazioni per correggerle.", kind="warning")
                 elif action == "8":
                     self._updates(ui)
+                elif action == "9":
+                    self._execution(ui)
                 elif action == "1":
                     self._directories(ui)
                 elif action in {"2", "3", "4", "5"}:
                     self._workflow(ui, str(int(action) - 1), err_const)
                 else:
-                    ui.message("Scegliere una delle opzioni indicate (0-8).", kind="muted")
+                    ui.message("Scegliere una delle opzioni indicate (0-9).", kind="muted")
             except (NipatError, OSError, ValueError) as exc:
                 ui.message(str(exc), kind="error")

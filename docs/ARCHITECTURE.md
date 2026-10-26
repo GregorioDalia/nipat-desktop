@@ -16,6 +16,7 @@ di analisi remoto.
 | `src/nipat/execution/workflows.py` | Selezione e convalida preliminare degli input, richiesta del workflow e creazione del run. |
 | `src/nipat/execution/runner.py` | Identificazione del motore, isolamento del container, esecuzione, interruzione e diagnostica. |
 | `src/nipat/execution/transport.py` | Accesso al Docker Engine nativo su Linux o al motore gestito nella distribuzione WSL2 su Windows. |
+| `src/nipat/storage.py` | Regole condivise per separare dati e risultati dalle cartelle applicative e dalle destinazioni riservate. |
 | `engine/main.py` | Contratto del motore, verifica dei sorgenti scientifici e avvio dei workflow nell'immagine. |
 | `src/nipat_scientific/` | Validatori, catalogo e preparazione dei file, condivisi dal client e dal motore. |
 | `src/nipat_scientific/plan.py` ed `executor.py` | Contratto dei piani e orchestrazione scientifica eseguita nell'immagine. |
@@ -24,12 +25,16 @@ di analisi remoto.
 Il client e il motore includono la stessa libreria di preparazione, ma non
 condividono file montati dall'applicazione. Gli algoritmi scientifici risiedono
 negli script R; gli adattatori Python preparano le loro interfacce di file.
+La validazione semantica dei dati è nel modulo condiviso: conteggi, frequenze,
+loci e alleli sono controllati prima di R. Le normalizzazioni scrivono copie
+di lavoro e i casi che richiedono interpretazione scientifica generano avvisi
+tracciabili. Analisi singole e piani riutilizzano anche i controlli degli output.
 Il comando `execute` avvia una singola analisi; `execute-plan` riceve un piano
 con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
 come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
 workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
-singoli. Questo documento descrive la versione 0.7.1.
+singoli. Questo documento descrive la versione 0.7.2.
 
 ### Confini dei workflow automatici
 
@@ -99,6 +104,9 @@ montano dati o cartelle applicative. Ogni analisi usa esclusivamente il proprio
 - filesystem dell'immagine in sola lettura e directory temporanea dedicata;
 - rete disabilitata.
 
+Le quote CPU, memoria e processi sono facoltative e registrate con l'esecuzione.
+Non modificano i parametri scientifici o il numero di worker deciso da R.
+
 Le altre analisi, la cartella dei dati predefiniti e il progetto non vengono
 montati. I bind mount dei singoli file evitano di copiare BAM e FASTA di grandi
 dimensioni e non espongono automaticamente le loro cartelle parenti.
@@ -118,6 +126,8 @@ di rete e dispositivi rimovibili non sono supportati dal trasporto WSL.
 I percorsi Windows vengono tradotti separatamente dagli argomenti scientifici.
 Le chiamate sono costruite come liste di argomenti, senza concatenare comandi
 shell a partire dagli input dell'utente.
+Il controllo delle destinazioni riservate è comune a menu e CLI diretta:
+una cartella risultati non può occupare runtime o cache gestiti dall'installatore.
 
 DNPcall riceve alias numerati come `sample_0001.bam`, compatibili con le chiamate
 interne dello script. `run.json` conserva l'associazione con i BAM originali.
@@ -140,6 +150,7 @@ delle analisi. Su Windows risiedono in
 `${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json`. Comprendono
 cartelle dati e risultati, modalità, riferimenti e parametri proposti per i
 workflow. Non comprendono campioni, coppie CPI o nomi dei run.
+Comprendono anche modalità dei checksum e limiti facoltativi del container.
 
 Il menu carica questi valori e li sottopone alla convalida degli input prima
 dell'esecuzione. Le modifiche effettuate per una singola analisi non aggiornano
@@ -162,7 +173,8 @@ agli output di ogni passaggio; i messaggi scientifici sono nei rispettivi
 
 Il motore conserva le richieste e i file preparati nel run; ogni passaggio
 di un piano ha una propria sottocartella `work`. SNPcall da BAM conserva
-BED e pileup; DNPcall conserva pannello e lista BAM, mentre lo script R elimina
+BED e pileup, e ogni modalità SNP conserva il pannello normalizzato;
+DNPcall conserva pannello e lista BAM, mentre lo script R elimina
 i propri file temporanei BED e pileup al termine. CPI e Contamination conservano
 le tabelle preparate e i pannelli normalizzati. Gli originali non vengono modificati.
 
@@ -170,6 +182,13 @@ L'interruzione termina il processo attivo e richiede la rimozione del container
 del run. I risultati parziali rimangono disponibili per la diagnosi. Una prova
 `--dry-run` registra input, richiesta e comando previsto senza eseguire R e senza
 attestare la disponibilità dell'immagine.
+
+La modalità di provenienza `full` calcola i checksum di tutti gli input prima
+e dopo il calcolo; `auto` limita gli hash ai file piccoli e dichiara gli input
+identificati soltanto dai metadati. La riconciliazione delle esecuzioni incomplete
+confronta il record con il container osservato, senza riscrivere la storia o
+riprendere il piano. Un arresto esplicito richiede la corrispondenza dell'identità
+del container e conserva un rapporto separato.
 
 ## Verifica degli aggiornamenti
 
@@ -214,6 +233,14 @@ conservando la ricevuta precedente nello storico. Cambiare filesystem o posizion
 prepara un ambiente affiancato senza copiare o cancellare quello precedente;
 cambiare cartelle dati e risultati non trasferisce i file esistenti.
 
+La provenienza del componente WSL è indipendente dal commit dell'interfaccia:
+comprende sorgenti del componente, base, versioni dei pacchetti risolti e motore.
+Il manifest della release associa applicazione, immagine scientifica e archivio
+WSL. Il builder può riutilizzare i byte pubblicati di un archivio WSL soltanto
+quando descrittore, contenuto e checksum corrispondono al componente richiesto.
+Un cambiamento del solo client non impone quindi un'identità diversa del
+componente; una differenza nelle dipendenze risolte impedisce il riutilizzo.
+
 Il launcher usa esclusivamente il proprio manifest e backend verificati.
 La configurazione è attivata dopo la riuscita di diagnostica e autotest;
 uno stato incompleto impedisce l'avvio dell'analisi. La disinstallazione
@@ -221,6 +248,14 @@ conserva sempre dati e risultati; l'eventuale rimozione aggiuntiva riguarda
 solo distribuzioni WSL possedute e archivi verificati della cache, nelle
 destinazioni attuali e precedenti registrate. Identità, verifiche e recupero
 sono descritti nel [riferimento dell'installatore](INSTALLATORE_WINDOWS.md).
+
+La manutenzione Windows usa un inventario verificato di ambienti, cache e
+registri di backup. Il client può soltanto selezionare elementi dichiarati
+rimovibili o richiedere la ripresa dell'installazione corrente. Il worker
+PowerShell attende l'uscita del client, acquisisce il blocco esclusivo e
+ripete le verifiche prima di modificare componenti. L'esito è un rapporto
+separato; i dati dell'utente restano fuori dalla pulizia. I backup selettivi
+non realizzano un rollback completo della versione applicativa.
 
 ## Installazione Ubuntu
 

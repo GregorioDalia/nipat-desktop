@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nipat-desktop"
-version = "0.7.1"
+version = "0.7.2"
 description = "Local desktop orchestration layer for the NIPAT scientific workflows"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -17,7 +17,8 @@ dependencies = []
 [project.optional-dependencies]
 dev = [
   "pytest>=8.3,<9",
-  "ruff>=0.9,<1",
+  "ruff==0.17.2",
+  "coverage==7.17.0",
 ]
 
 [project.scripts]
@@ -39,3 +40,23 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+# Baseline correctness checks; formatting and unused imports are not release gates.
+[tool.ruff.lint]
+select = ["E9", "F821", "F822", "F823"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/nipat", "src/nipat_scientific"]
+relative_files = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+precision = 1
+
+[tool.coverage.json]
+output = "build/quality/coverage.json"
+
+[tool.coverage.xml]
+output = "build/quality/coverage.xml"

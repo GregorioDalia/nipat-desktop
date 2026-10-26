@@ -10,10 +10,10 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione documentata: NIPAT Desktop 0.7.1**, destinata alla valutazione
+**Versione documentata: NIPAT Desktop 0.7.2**, destinata alla valutazione
 tecnica e scientifica da parte dei ricercatori. Scaricare gli installatori
 dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
-e consultare le [note della versione](docs/RELEASE_0.7.1.md).
+e consultare le [note della versione](docs/RELEASE_0.7.2.md).
 Gli artefatti GitHub Actions sono pacchetti di revisione tecnica, distinti
 dalle release. NIPAT è software per la ricerca: gli autotest verificano casi
 noti, mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
@@ -37,6 +37,11 @@ selezionate. CPI richiede l'assegnazione esplicita delle coppie cfDNA materne/pa
 Si può aggiungere SNPcall sugli stessi BAM, con un pannello SNP scelto
 esplicitamente, oppure eseguire SNPcall su più BAM o pileup in un unico run.
 Ogni passaggio conserva risultati e stato distinti.
+Il livello Python condiviso controlla gli input prima di avviare R e gli
+output prima di registrare il completamento. I pannelli SNP e DNP vengono
+normalizzati in copie di lavoro; gli originali rimangono invariati.
+Il [contratto degli input](docs/INPUT_VALIDATION.md) distingue controlli
+tecnici, segnalazioni di qualità e valutazione scientifica.
 L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
 e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
 scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
@@ -251,6 +256,12 @@ Il record identifica input, parametri e immagine effettivamente usata;
 la [guida alle esecuzioni](docs/ESECUZIONI.md) ne descrive significato e limiti.
 Lo stato `succeeded` indica il completamento tecnico del workflow. La
 concordanza scientifica richiede il confronto con risultati attesi appropriati.
+Gli avvisi di validazione restano visibili anche dopo un completamento riuscito.
+`--input-hashes full` abilita la verifica SHA-256 integrale degli input;
+`--cpus`, `--memory-mb` e `--pids-limit` impostano limiti facoltativi del
+container. **Guida e informazioni** permette di consultare le esecuzioni
+incomplete e, su Windows, l'inventario dell'installazione con manutenzione
+selettiva confermata dall'utente.
 
 `doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
 `self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
@@ -266,8 +277,9 @@ indipendenti e problemi riproducibili.
 ## Documentazione e licenza
 
 - [Sintesi del prodotto](SUNTO.md)
-- [Note della versione 0.7.1](docs/RELEASE_0.7.1.md)
+- [Note della versione 0.7.2](docs/RELEASE_0.7.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
+- [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
 - [Architettura](docs/ARCHITECTURE.md)

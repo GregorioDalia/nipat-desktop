@@ -78,6 +78,28 @@ class ScientificSelection(unittest.TestCase):
                 self.assertTrue(self.selected())
                 self.base = self.git("rev-parse", "HEAD")
 
+    def test_runtime_and_packaging_paths_select_their_real_integration(self):
+        for path in ("installer/runtime/Dockerfile", "installer/runtime/nipat-engine",
+                     "installer/runtime/component.py"):
+            with self.subTest(path=path):
+                self.assertTrue({"runtime", "packaging"} <= changes.layers_for_path(path))
+        for path in ("installer/linux/launch.py", "installer/windows/bootstrap.ps1",
+                     "scripts/build_linux_installer.py", "scripts/build_windows_installer_assets.py",
+                     "distribution-files.txt"):
+            with self.subTest(path=path):
+                self.assertIn("packaging", changes.layers_for_path(path))
+        self.assertEqual(changes.layers_for_path("docs/GUIDA_UTILIZZO.md"), set())
+
+    def test_unknown_comparison_and_deleted_runtime_cover_every_required_layer(self):
+        decision, _ = changes.layer_decision("", self.base, repository=self.root)
+        self.assertEqual(decision, dict.fromkeys(changes.LAYERS, True))
+        self.write("installer/runtime/nipat-engine", "old helper")
+        self.base = self.commit()
+        (self.root / "installer/runtime/nipat-engine").unlink()
+        decision, _ = changes.layer_decision(self.base, self.commit(), repository=self.root)
+        self.assertTrue(decision["runtime"])
+        self.assertTrue(decision["packaging"])
+
     def test_manual_request_runs_scientific_checks_without_changes(self):
         self.assertTrue(changes.scientific_decision(self.base, self.base, force=True, repository=self.root)[0])
 

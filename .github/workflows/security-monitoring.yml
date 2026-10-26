@@ -1,0 +1,61 @@
+name: Published runtime security report
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-monitoring
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout reporting tools
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Generate inventories and candidate vulnerability associations
+        id: scan
+        continue-on-error: true
+        run: python .github/scripts/security_inventory.py --output-dir build/security-report
+      - name: Retain report-only monitoring evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-published-runtime-security
+          path: |
+            build/security-report/*.json
+            build/security-report/inputs/release-inputs.json
+            build/security-report/inputs/installer-manifest.json
+          retention-days: 90
+          if-no-files-found: error
+      - name: Summarize findings without blocking research releases
+        if: always()
+        env:
+          SCAN_OUTCOME: ${{ steps.scan.outcome }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          path = Path('build/security-report/security-summary.json')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('## Published runtime monitoring\n\n')
+              output.write('Report only; findings require maintainer triage. No automatic dependency updates or release blocking.\n\n')
+              if path.is_file():
+                  value = json.loads(path.read_text())
+                  output.write(f"Status: **{value['status']}**.\n\n")
+                  for name, record in value.get('archives', {}).items():
+                      output.write(f"- {name}: {record['candidate_associations']} candidate component-vulnerability associations.\n")
+                  output.write('\nComponent inventories are not guarantees of completeness or exploitability.\n')
+              if os.environ['SCAN_OUTCOME'] != 'success':
+                  output.write('\n**Monitoring incomplete:** inspect the retained error report; no clean security result is claimed.\n')
+                  print('::warning::Runtime security monitoring was incomplete. Inspect the retained report.')
+          PY

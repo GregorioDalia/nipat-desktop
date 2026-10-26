@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from nipat.errors import ValidationError
+from nipat.storage import resolve_storage_path, validate_managed_directories
 
 
 _SAFE_RUN_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -33,12 +34,12 @@ class ProjectLayout:
         layout = cls(
             project_dir=project_dir,
             workspace_dir=workspace_dir,
-            data_dir=Path(
+            data_dir=resolve_storage_path(
                 data_dir if data_dir is not None else os.environ.get("NIPAT_DATA_DIR", workspace_dir / "data")
-            ).expanduser().resolve(),
-            runs_dir=Path(
+            ),
+            runs_dir=resolve_storage_path(
                 runs_dir if runs_dir is not None else os.environ.get("NIPAT_RUNS_DIR", workspace_dir / "runs")
-            ).expanduser().resolve(),
+            ),
             compose_file=project_dir / "compose.yaml",
         )
         layout.validate_storage_roots()
@@ -47,8 +48,8 @@ class ProjectLayout:
     def validate_storage_roots(self) -> None:
         roots = {
             "progetto": self.project_dir.resolve(),
-            "dati": self.data_dir.resolve(),
-            "risultati": self.runs_dir.resolve(),
+            "dati": resolve_storage_path(self.data_dir),
+            "risultati": resolve_storage_path(self.runs_dir),
         }
         for label, path in roots.items():
             if path == Path(path.anchor):
@@ -63,6 +64,7 @@ class ProjectLayout:
                         f"Le cartelle {label} e {other_label} devono essere separate, "
                         f"senza sovrapporsi: {path}; {other}"
                     )
+        validate_managed_directories(self)
 
     def ensure_storage_dirs(self) -> None:
         self.validate_storage_roots()

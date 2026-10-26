@@ -74,11 +74,7 @@ def verified_inputs(project: Path, manifest_path: Path, *, require_clean: bool =
                 or source.get("commit") != manifest["source_commit"]):
             raise ValueError("La compilazione richiede un checkout Git pulito al commit del manifest.")
     provenance = manifest.get("rootfs_provenance", {})
-    if (type(provenance) is not dict or type(provenance.get("schema_version")) is not int
-            or provenance.get("schema_version") != 1
-            or provenance.get("vendor") != "nipat-desktop"
-            or provenance.get("source_commit") != manifest["source_commit"]):
-        raise ValueError("La provenienza del runtime non corrisponde al commit del manifest.")
+    assets.validate_rootfs_provenance(project, provenance, manifest["source_commit"])
     files = bundle.source_files(project)
     hashes = {path.relative_to(project).as_posix(): bundle.sha256_file(path) for path in files}
     if hashes != manifest.get("source_sha256"):

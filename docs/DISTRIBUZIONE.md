@@ -1,11 +1,11 @@
 # Distribuzione e requisiti
 
-Questo documento descrive l'installazione di **NIPAT Desktop 0.7.1**. Consultare la pagina
+Questo documento descrive l'installazione di **NIPAT Desktop 0.7.2**. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate, i pacchetti disponibili e le relative evidenze.
 Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
 dalle release; la loro costruzione non autorizza da sola la pubblicazione.
-Le [note della versione 0.7.1](RELEASE_0.7.1.md) descrivono funzionalità e
+Le [note della versione 0.7.2](RELEASE_0.7.2.md) descrivono funzionalità e
 ambito delle verifiche. L'installazione su un PC con NIPAT Desktop aggiorna
 quell'applicazione, senza creare un'edizione affiancata.
 
@@ -108,6 +108,9 @@ modificati rimangono in posizione e vengono anche salvati nel backup. Il backup 
 Un aggiornamento dello stesso canale ripropone i percorsi configurati. Se
 cambia l'archivio Linux o la destinazione dell'ambiente WSL, il setup prepara
 una distribuzione dedicata e attiva la configurazione dopo i controlli.
+Il componente WSL ha un'identità distinta dall'applicazione: quando sorgenti,
+dipendenze e contenuto verificato restano gli stessi, la build può riutilizzare
+l'archivio pubblicato senza legarlo a una modifica del solo menu.
 L'ambiente precedente viene conservato, senza copiarlo o eliminarlo
 automaticamente. Cambiare le cartelle dati o risultati non trasferisce i file:
 i risultati precedenti restano consultabili nella destinazione originaria.
@@ -127,6 +130,15 @@ Desktop, sulle altre installazioni NIPAT o su altre distribuzioni WSL. Le prefer
 e i piccoli registri dei percorsi restano disponibili per una reinstallazione.
 I dettagli tecnici e le prove richieste sono in
 [INSTALLATORE_WINDOWS.md](INSTALLATORE_WINDOWS.md).
+
+La voce **Guida e informazioni → Installazione e spazio** consente di
+consultare le risorse Windows, eliminare singoli componenti precedenti
+verificati e riprendere la preparazione della versione installata. Mantiene
+protetti ambiente attivo e precedente più recente e conserva dati e risultati.
+Ogni modifica richiede conferma e viene eseguita da un processo separato dopo
+la chiusura del client. Questa funzione non ripristina una versione precedente;
+ambito e rapporti sono descritti nella
+[manutenzione Windows](INSTALLATORE_WINDOWS.md#manutenzione-dei-componenti-installati).
 
 ## Pacchetto Ubuntu
 
@@ -237,7 +249,7 @@ distingue l'accettazione per ricerca pre-1.0, basata su prove manuali
 circoscritte, verifiche automatiche e revisione delle modifiche, dalla
 qualificazione desktop completa. La decisione documenta le evidenze disponibili
 e i casi ancora da verificare; la scelta del canale `stable` non estende la
-copertura dichiarata. La versione 0.7.1 è destinata alla campagna di valutazione
+copertura dichiarata. La versione 0.7.2 è destinata alla campagna di valutazione
 con le esperte di dominio. La
 [scheda di validazione](VALIDAZIONE.md) consente di registrare separatamente
 i risultati scientifici.

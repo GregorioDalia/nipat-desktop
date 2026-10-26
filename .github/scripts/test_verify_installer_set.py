@@ -292,5 +292,56 @@ class VersionedInstallerSetTests(unittest.TestCase):
 
 
 
+class RealUpgradeEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        self.manifest_bytes = b"candidate manifest"
+        self.manifest = {"version": "0.7.2", "source_commit": "a" * 40,
+                         "assets": {"scientific_image": {"sha256": "b" * 64}}}
+        self.package = {"sha256": "c" * 64}
+        checker = VERIFY.load_module("upgrade_test_baseline", VERIFY.PROJECT / "scripts/verify_linux_upgrade.py")
+        self.evidence = {
+            "schema_version": 1, "platform": "ubuntu-24.04-amd64",
+            "scenario": "prepared-ci-runner-real-upgrade", "version": "0.7.2", "source_commit": "a" * 40,
+            "installer_manifest_sha256": hashlib.sha256(self.manifest_bytes).hexdigest(),
+            "package_sha256": "c" * 64, "runtime_archive_sha256": "b" * 64,
+            "previous": copy.deepcopy(checker.BASELINE), "nonroot_uid": 1001,
+            "resolved_runtime_image": "sha256:" + "d" * 64, "checks": dict.fromkeys(checker.CHECKS, True),
+        }
+
+    def verify(self, evidence):
+        VERIFY.verify_upgrade_check(evidence, self.manifest, self.manifest_bytes, self.package)
+
+    def test_new_contract_does_not_reinterpret_older_release_evidence(self):
+        self.assertFalse(VERIFY.requires_reliability_evidence("0.7.1"))
+        self.assertFalse(VERIFY.requires_reliability_evidence("0.6.0"))
+        self.assertTrue(VERIFY.requires_reliability_evidence("0.7.2"))
+        self.assertTrue(VERIFY.requires_reliability_evidence("0.7.2a1"))
+        self.verify(self.evidence)
+
+    def test_rejects_reinstall_as_upgrade_and_substituted_baseline(self):
+        for key, value in (("version", "0.7.2"), ("sha256", "f" * 64), ("source_commit", "f" * 40)):
+            changed = copy.deepcopy(self.evidence)
+            changed["previous"][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.verify(changed)
+
+    def test_rejects_missing_failed_and_nonboolean_checks_or_candidate_mismatch(self):
+        for check in self.evidence["checks"]:
+            for value in (False, 1, "true", None):
+                changed = copy.deepcopy(self.evidence)
+                if value is None:
+                    del changed["checks"][check]
+                else:
+                    changed["checks"][check] = value
+                with self.subTest(check=check, value=value), self.assertRaises(ValueError):
+                    self.verify(changed)
+        for key, value in (("nonroot_uid", 0), ("nonroot_uid", True), ("package_sha256", "e" * 64),
+                           ("source_commit", "e" * 40), ("resolved_runtime_image", "latest")):
+            changed = copy.deepcopy(self.evidence)
+            changed[key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                self.verify(changed)
+
+
 if __name__ == "__main__":
     unittest.main()

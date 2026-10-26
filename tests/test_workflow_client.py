@@ -460,7 +460,7 @@ class WorkflowClientTests(unittest.TestCase):
 
     def test_invalid_snp_panel_is_rejected_before_any_dnp_run(self):
         for invoke in (self.invoke, lambda **options: self.workflows.dnp_cpi(**self.cpi_arguments(**options))):
-            with self.assertRaisesRegex(ValidationError, "lista SNP"):
+            with self.assertRaisesRegex(ValidationError, "(?i)lista SNP"):
                 invoke(snp_panel=self.panel)
             self.assert_not_started()
 

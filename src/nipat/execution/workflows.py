@@ -14,8 +14,6 @@ from nipat.execution.mounts import INPUT_ROOT, InputMounts
 from nipat.execution.runner import DockerComposeRunner
 from nipat.paths import ProjectLayout
 from nipat.validation.files import (
-    DNP_OUTPUT_COLUMNS,
-    require_columns,
     require_contamination_input,
     require_directory,
     require_file,
@@ -23,6 +21,7 @@ from nipat.validation.files import (
     require_snp_pileup,
 )
 from nipat_scientific.cpi import normalize_pairs
+from nipat_scientific.files import require_dnp_input, require_population_frequencies
 from nipat_scientific.plan import validate_plan
 
 
@@ -72,7 +71,11 @@ def _select_bams(
     if bamlist is not None:
         source_list = require_file(bamlist, "Lista BAM")
         selected = []
-        for line in source_list.read_text(encoding="utf-8-sig").splitlines():
+        try:
+            lines = source_list.read_text(encoding="utf-8-sig").splitlines()
+        except UnicodeError as exc:
+            raise ValidationError(f"Lista BAM: usare un file di testo UTF-8: {source_list}") from exc
+        for line in lines:
             value = line.strip()
             if not value:
                 continue
@@ -366,8 +369,7 @@ class Workflows:
         panel = require_file(panel, "Pannello DNP")
         read_dnp_list(panel)
         popfreq = require_file(popfreq, "Tabella frequenze di popolazione")
-        require_columns(popfreq, {"chr", "pos1", "pos2", "Ref_f.pop", "Alt_f.pop"},
-                        "Frequenze di popolazione non compatibili")
+        require_population_frequencies(popfreq)
         cutoff_mode, normalized_cutoffs = _select_cpi_cutoffs(
             panel=cpi_panel, cutoffs=cutoffs, cutoff_map=cutoff_map, panel_option="--cpi-panel",
         )
@@ -659,8 +661,7 @@ class Workflows:
         _validate_error_constant(err_const)
         input_dir = require_directory(input_dir, "Directory input CPI")
         popfreq = require_file(popfreq, "Tabella frequenze di popolazione")
-        require_columns(popfreq, {"chr", "pos1", "pos2", "Ref_f.pop", "Alt_f.pop"},
-                        "Frequenze di popolazione non compatibili")
+        require_population_frequencies(popfreq)
         pairs, names = normalize_pairs(pairs, mother_prefix, father_prefix)
         mounts = InputMounts(self.layout)
         popfreq_path = mounts.bind_file(popfreq, target=INPUT_ROOT / "population.tsv")
@@ -668,7 +669,7 @@ class Workflows:
         samples = []
         for number, name in enumerate(names, 1):
             source = require_file(input_dir / name, "Tabella campione CPI")
-            require_columns(source, DNP_OUTPUT_COLUMNS, "Input CPI non compatibile", whitespace=True)
+            require_dnp_input(source)
             sample_path = mounts.bind_file(
                 source, target=INPUT_ROOT / "cpi" / f"sample_{number:04d}.txt",
             )

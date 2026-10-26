@@ -16,7 +16,11 @@ from typing import Any, Iterable, Iterator, TextIO
 from nipat import __version__
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.mounts import InputMounts
-from nipat.execution.tracking import RunRecord, file_evidence, project_evidence, utc_now
+from nipat.execution.options import ExecutionOptions
+from nipat.execution.recovery import incomplete_runs, ownership_labels, reconcile_run
+from nipat.execution.tracking import (
+    RunRecord, file_evidence, project_evidence, utc_now, verify_input_evidence,
+)
 from nipat.execution.transport import DockerTransport
 from nipat.paths import ProjectLayout
 from nipat.validation.integrity import verify_sha256_manifest
@@ -70,9 +74,11 @@ class DockerComposeRunner:
     def __init__(
         self, layout: ProjectLayout, dry_run: bool = False, *,
         transport: DockerTransport | None = None,
+        options: ExecutionOptions | None = None,
     ) -> None:
         self.layout = layout
         self.dry_run = dry_run
+        self.options = options if options is not None else ExecutionOptions()
         self._record: RunRecord | None = None
         self._log: TextIO | None = None
         self._image_id: str | None = None
@@ -84,6 +90,7 @@ class DockerComposeRunner:
         )
         self._backend_ready = False
         self.last_run_dir: Path | None = None
+        self._hash_progress_key: tuple[Path, int] | None = None
 
     def _base_command(self) -> list[str]:
         if self._engine_compose_file is not None:
@@ -117,6 +124,7 @@ class DockerComposeRunner:
             "environment": {"HOME": "/tmp", "TMPDIR": "/tmp", "LANG": "C.UTF-8",
                             "LC_ALL": "C.UTF-8", "TZ": "Europe/Rome"},
         }
+        service.update(self.options.compose_limits())
         destination = run_dir / "work" / "engine-compose.json"
         with destination.open("x", encoding="utf-8", newline="\n") as handle:
             json.dump({"name": "nipat", "services": {"scientific": service}}, handle,
@@ -125,6 +133,44 @@ class DockerComposeRunner:
         self._engine_compose_file = destination
         self._record.data["engine_compose"] = "work/engine-compose.json"
         self._record.save()
+
+    def _hash_progress(self, path: Path, completed: int, total: int) -> None:
+        if total <= 16 * 1024 * 1024:
+            return
+        percent = 100 if total == 0 else min(100, completed * 100 // total)
+        bucket = percent // 10
+        key = (path, bucket)
+        if self._hash_progress_key != key:
+            self._hash_progress_key = key
+            self._write(f"Checksum SHA-256 {path.name}: {percent}% (Ctrl+C per annullare)\n")
+
+    def _verify_inputs(self, phase: str) -> None:
+        if self._record is None:
+            return
+        self._hash_progress_key = None
+        for evidence in self._record.data["inputs"]:
+            verify_input_evidence(evidence, progress=self._hash_progress)
+        self._record.data.setdefault("input_verifications", []).append({
+            "phase": phase, "verified_at": utc_now(),
+            "hashed_inputs": sum(item.get("sha256") is not None
+                                 for item in self._record.data["inputs"]),
+            "metadata_only_inputs": sum(item.get("sha256") is None
+                                        for item in self._record.data["inputs"]),
+        })
+        self._record.save()
+
+    def reconcile_run(self, run_dir: Path, *, stop: bool = False) -> dict[str, Any]:
+        if self.dry_run:
+            raise ValidationError("La verifica delle esecuzioni richiede il runtime; rimuovere --dry-run.")
+        if stop:
+            with _finish_cleanup():
+                return reconcile_run(self, run_dir, stop=True)
+        return reconcile_run(self, run_dir, stop=stop)
+
+    def incomplete_runs(self) -> list[dict[str, Any]]:
+        if self.dry_run:
+            raise ValidationError("La verifica delle esecuzioni richiede il runtime; rimuovere --dry-run.")
+        return incomplete_runs(self)
 
     @staticmethod
     def _validate_engine_description(
@@ -139,6 +185,7 @@ class DockerComposeRunner:
             "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
             "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
             "lib/nipat_scientific/cpi.py",
+            "lib/nipat_scientific/outputs.py",
         }
 
         def has_digest(value: Any) -> bool:
@@ -165,6 +212,7 @@ class DockerComposeRunner:
             workflows = description.get("workflows")
             interfaces = description.get("workflow_interfaces")
             preparation = description.get("preparation")
+            validation = description.get("scientific_validation")
             valid = (
                 type(description.get("schema_version")) is int
                 and description.get("schema_version") == 1
@@ -183,6 +231,13 @@ class DockerComposeRunner:
                 and isinstance(preparation, dict)
                 and preparation.get("interface") == "workflow-preparation-v1"
                 and isinstance(preparation.get("file_sha256"), dict)
+                and isinstance(validation, dict)
+                and validation.get("interface") == "scientific-validation-v1"
+                and validation.get("snp_alleles") == "uppercase-working-copy"
+                and all(isinstance(validation.get(key), list)
+                        and all(isinstance(name, str) for name in validation[key])
+                        and required_workflows.issubset(validation[key])
+                        for key in ("input_workflows", "output_workflows"))
             )
             if valid:
                 files = preparation["file_sha256"]
@@ -214,6 +269,7 @@ class DockerComposeRunner:
                 f"L'immagine non offre il contratto {label} "
                 f"incorporato richiesto ({contracts}), con metadati scientifici completi. "
                 "Usare un runtime costruito per questa versione di NIPAT."
+                " Sono richiesti i controlli scientific-validation-v1 sugli input e sugli output."
             )
         return description
 
@@ -401,7 +457,20 @@ class DockerComposeRunner:
                 try:
                     self._write(f"NIPAT {workflow}: {run_dir}\n")
                     self.layout.ensure_storage_dirs()
-                    record.data["inputs"] = [file_evidence(path) for path in inputs]
+                    record.data["execution_options"] = self.options.as_dict()
+                    self._hash_progress_key = None
+                    record.data["inputs"] = [file_evidence(
+                        path, mode=self.options.input_hashes, progress=self._hash_progress,
+                    ) for path in inputs]
+                    record.data["input_hash_limit_bytes"] = (
+                        None if self.options.input_hashes == "full" else record.data["input_hash_limit_bytes"]
+                    )
+                    if parameters.get("parallel"):
+                        self._write(
+                            "DNPcall parallelo usa i core rilevati da R. I limiti del container "
+                            "non impostano il numero dei worker R; un limite insufficiente puo "
+                            "interrompere il calcolo.\n"
+                        )
                     record.data["source"] = project_evidence(self.layout.project_dir)
                     if bundled_workflow is not None:
                         record.data["source"]["role"] = "client"
@@ -435,6 +504,7 @@ class DockerComposeRunner:
                     record.data["status"] = "planned" if self.dry_run else "running"
                     record.save()
                     yield record
+                    self._verify_inputs("after_execution")
                 except BaseException as exc:
                     with _finish_cleanup():
                         record.data["status"] = (
@@ -466,10 +536,16 @@ class DockerComposeRunner:
             self._backend_ready = False
         if not self.dry_run:
             self._ensure_backend()
+        self._verify_inputs("before_execution")
         container_name = "nipat-run-" + uuid.uuid4().hex
         docker_command = self._base_command() + [
             "run", "--rm", "-T", "--pull", "never", "--name", container_name,
         ]
+        if self._record is not None:
+            for key, value in ownership_labels(
+                self._record.run_dir, self._record.data["run_id"],
+            ).items():
+                docker_command.extend(["--label", f"{key}={value}"])
         if working_dir is not None:
             docker_command.extend(["--workdir", str(working_dir)])
         docker_command.append("scientific")
@@ -516,7 +592,7 @@ class DockerComposeRunner:
             with _finish_cleanup():
                 if interrupted:
                     self._write("Annullamento richiesto. Attendere l'arresto del calcolo e il salvataggio dei log.\n")
-                if interrupted or (process is not None and process.poll() is None):
+                if interrupted or process is not None:
                     # Stopping the client alone can leave its container running in the engine.
                     stage["container_cleanup"] = self._stop_container(container_name)
                 if process is not None and process.poll() is None:
@@ -577,7 +653,10 @@ class DockerComposeRunner:
             )
             cleanup = {
                 "status": ("removed" if result.returncode == 0 else
-                           "stopped" if graceful and graceful["returncode"] == 0 else "not_confirmed"),
+                           "stopped" if graceful and graceful["returncode"] == 0 else
+                           "absent" if any(message in result.stderr.lower() for message in
+                                           ("no such container", "no such object")) else
+                           "not_confirmed"),
                 "returncode": result.returncode, "message": result.stderr.strip(),
             }
         except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:

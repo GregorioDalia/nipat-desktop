@@ -724,10 +724,10 @@
       "evidence": {
         "path": "src/nipat_scientific/cpi.py",
         "source_lines": [
-          89,
-          95
+          83,
+          195
         ],
-        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+        "sha256": "45fb70c6284d83ad3dc2a166caece3f7f174260aaba41e1909c72d9c8a4bf935"
       }
     },
     {
@@ -742,10 +742,10 @@
       "evidence": {
         "path": "src/nipat_scientific/cpi.py",
         "source_lines": [
-          171,
-          188
+          83,
+          195
         ],
-        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+        "sha256": "45fb70c6284d83ad3dc2a166caece3f7f174260aaba41e1909c72d9c8a4bf935"
       }
     },
     {
@@ -764,16 +764,16 @@
       "applies_to": "all CPI sample tables",
       "origin": "NIPAT",
       "description": {
-        "it": "NIPAT verifica la presenza di queste colonne nell’intestazione delle tabelle prima di invocare R. Il controllo delle colonne non costituisce una validazione numerica integrale di tutte le righe.",
-        "en": "NIPAT checks these sample-table header columns before invoking R. Header checking does not constitute complete numerical validation of every row."
+        "it": "Ogni tabella selezionata richiede queste colonne, coordinate ordinate e uniche, alleli dinucleotidici A/C/G/T e conteggi interi finiti non negativi. Una tabella con sola intestazione e ammessa. Un totale incoerente produce un avviso senza modificare i dati. Il valore total_count=NA e ammesso solo se N_REF, N_ALT e N_Other sono tutti zero, come nei loci senza copertura prodotti da DNPcall; resta invariato.",
+        "en": "Every selected table requires these columns, ordered unique coordinates, A/C/G/T dinucleotide alleles and finite nonnegative integer counts. Header-only tables are allowed. An inconsistent total produces a warning without changing data. total_count=NA is allowed only when N_REF, N_ALT and N_Other are all zero, as in uncovered DNPcall loci; it remains unchanged."
       },
       "evidence": {
         "path": "src/nipat_scientific/files.py",
         "source_lines": [
-          9,
-          19
+          101,
+          142
         ],
-        "sha256": "6c7eaa7425166e67552bb9be463380d0e333fe8c60ec3469e5895ce6077dded2"
+        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
       }
     },
     {
@@ -793,28 +793,28 @@
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          76,
-          84
+          85,
+          93
         ],
-        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
       }
     },
     {
       "id": "coordinate_panel_input_validation",
-      "value": "positive integer coordinates; nonempty chromosome; at least one site",
+      "value": "positive integer ordered coordinates; unique sites; at least one site",
       "applies_to": "CPI panel or named-cutoff modes",
       "origin": "NIPAT",
       "description": {
-        "it": "Il lettore di coordinate accetta tabelle con intestazione, coordinate senza intestazione e pannelli DNP a cinque colonne. Richiede posizioni intere positive ma non impone adiacenza pos2=pos1+1 né unicità dei siti in questa interfaccia.",
-        "en": "The coordinate reader accepts headered tables, headerless coordinates and five-column DNP panels. It requires positive integer positions but does not enforce pos2=pos1+1 adjacency or unique sites in this interface."
+        "it": "Accetta pannelli con intestazione, coordinate senza intestazione e pannelli DNP a cinque colonne. Richiede posizioni intere positive, pos2 maggiore di pos1 e siti unici, senza imporre adiacenza.",
+        "en": "Accepts headered panels, headerless coordinates and five-column DNP panels. Positive integer positions, pos2 greater than pos1 and unique sites are required; adjacency is not imposed."
       },
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          112,
-          151
+          137,
+          182
         ],
-        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
       }
     },
     {
@@ -837,10 +837,10 @@
       "evidence": {
         "path": "src/nipat_scientific/cpi.py",
         "source_lines": [
-          118,
-          169
+          83,
+          195
         ],
-        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+        "sha256": "45fb70c6284d83ad3dc2a166caece3f7f174260aaba41e1909c72d9c8a4bf935"
       }
     },
     {
@@ -855,10 +855,10 @@
       "evidence": {
         "path": "src/nipat_scientific/cpi.py",
         "source_lines": [
-          41,
-          78
+          43,
+          80
         ],
-        "sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2"
+        "sha256": "45fb70c6284d83ad3dc2a166caece3f7f174260aaba41e1909c72d9c8a4bf935"
       }
     },
     {
@@ -885,7 +885,75 @@
           24,
           30
         ],
-        "sha256": "740e027be5cf1be89808ff433cfacabeae3def42e0c91458f37c20a8071e6bf8"
+        "sha256": "cbc0219f50b05f6727c873c336b6a5a7f2380a0a00965d8fe2bc1e7bde4ffea1"
+      }
+    },
+    {
+      "id": "population_frequency_preflight",
+      "value": {
+        "finite_range": [
+          0,
+          1
+        ],
+        "unique_loci": true,
+        "decimal_comma": true,
+        "sum_mismatch": "warning",
+        "zero_frequency": "warning"
+      },
+      "applies_to": "cpi",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Le frequenze devono essere finite tra 0 e 1, con coordinate uniche e almeno una riga. La virgola decimale resta supportata. Frequenze nulle e somma diversa da 1 producono avvisi, senza normalizzazione ne esclusione automatica.",
+        "en": "Frequencies must be finite from 0 to 1, with unique coordinates and at least one row. Decimal commas remain supported. Zero frequencies and sums differing from 1 produce warnings without normalization or automatic exclusion."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/files.py",
+        "source_lines": [
+          150,
+          176
+        ],
+        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+      }
+    },
+    {
+      "id": "input_validation_provenance",
+      "value": "work/input-validation.json",
+      "applies_to": "cpi",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Il motore registra gli avvisi e le copie normalizzate con percorsi e SHA256 di origine e copia. Gli originali restano invariati. Errori UTF-8 e di formato delle tabelle diventano diagnostica di validazione.",
+        "en": "The engine records warnings and normalized copies with source/prepared paths and SHA256. Originals remain unchanged. UTF-8 and table-format errors become validation diagnostics."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/files.py",
+        "source_lines": [
+          179,
+          195
+        ],
+        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+      }
+    },
+    {
+      "id": "scientific_output_contract",
+      "value": {
+        "standalone_report": "work/scientific-validation.json",
+        "plan_report": "workflow-state.json step artifacts",
+        "nonfinite_estimate": "structured warning",
+        "missing_or_malformed_output": "execution failure"
+      },
+      "applies_to": "cpi",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Analisi singole e workflow applicano gli stessi contratti di output: identita dei campioni e dei siti, colonne, conteggi e file attesi. NA previsto in assenza di informazione resta valido; stime non finite o NA inattesi sono segnalati e non riscritti. Output mancanti o malformati impediscono lo stato di successo.",
+        "en": "Individual analyses and plans share output contracts for sample/site identity, columns, counts and expected files. Expected NA with no information remains valid; nonfinite estimates or unexpected NA are reported and never rewritten. Missing or malformed output prevents success."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/outputs.py",
+        "source_lines": [
+          152,
+          245
+        ],
+        "sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
       }
     }
   ],

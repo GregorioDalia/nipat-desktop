@@ -10,6 +10,9 @@ from typing import Callable
 from nipat import __version__
 from nipat.catalog_ui import show_catalog
 from nipat.errors import NipatError
+from nipat.i18n import translate
+from nipat.installation import show_installation
+from nipat.recovery_ui import show_incomplete_runs
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
 from nipat.preferences import PreferencesStore
@@ -65,7 +68,7 @@ def _select_workflow(ui: Terminal) -> str | None:
         ui.message("Scegliere un workflow da 1 a 4 oppure 0 per tornare al menu.", kind="muted")
 
 
-def _help(ui: Terminal, layout: ProjectLayout) -> None:
+def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = False) -> bool:
     pages = {
         "1": ("Come usare NIPAT", (
             "Selezionare un'analisi dal menu e seguire le indicazioni mostrate prima di ogni campo.",
@@ -94,7 +97,7 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "Configura salva le cartelle e i valori predefiniti per i prossimi avvii della CLI guidata.",
             "Le preferenze vengono proposte nei campi dell'analisi: prima dell'avvio e' sempre possibile correggerle nel riepilogo.",
             "Campioni, coppie CPI e nome dell'esecuzione vengono scelti per ogni analisi; non sono memorizzati come preferenze.",
-            "Le preferenze riguardano le opzioni esposte dagli script. Le costanti interne dei codici R non vengono modificate.",
+            "Configura include le opzioni esposte dagli script, i checksum degli input e i limiti delle risorse del container. Le costanti interne dei codici R non vengono modificate.",
             "Cambiare cartella dati o risultati non sposta i file gia' presenti. App, runtime e cache si configurano attraverso il programma di installazione.",
             "Ripristina impostazioni elimina solo le preferenze: conserva dati, risultati e installazione.",
             "I comandi diretti mantengono le proprie opzioni e i propri valori predefiniti. --data-dir e --runs-dir espliciti prevalgono sulle cartelle salvate nella sessione guidata.",
@@ -134,15 +137,24 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             ("4", "Risultati e analisi in sequenza", "File intermedi, log e workflow successivi"),
             ("5", "Informazioni su NIPAT", "Versione, ambiente e documentazione"),
             ("6", "Catalogo scientifico", "Opzioni R, regole interne e preparazione; IT / EN"),
+            ("7", "Esecuzioni incomplete", "Stati registrati, container e arresto controllato"),
+            ("8", "Installazione e spazio", "Ambienti conservati, cache e ripresa della preparazione"),
             ("0", "Torna al menu", ""),
         ], default="0").strip().casefold()
         if action in {"0", ":indietro", ":annulla"}:
-            return
+            return False
         if action == "6":
             show_catalog(ui)
             continue
+        if action == "7" and runner is not None:
+            show_incomplete_runs(ui, runner, dry_run=dry_run)
+            continue
+        if action == "8":
+            if show_installation(ui, layout.project_dir, dry_run=dry_run):
+                return True
+            continue
         if action not in pages:
-            ui.message("Scegliere un argomento da 1 a 6 oppure 0 per tornare al menu.", kind="muted")
+            ui.message("Scegliere un argomento da 1 a 8 oppure 0 per tornare al menu.", kind="muted")
             continue
         title, paragraphs = pages[action]
         ui.heading(title)
@@ -172,14 +184,16 @@ def run_wizard(
     dry_run: bool = False,
     preferences_store: PreferencesStore | None = None,
     directory_overrides: dict[str, Path] | None = None,
+    execution_overrides: dict | None = None,
     read: Callable[[str], str] = input,
     write: Callable[[str], None] = print,
 ) -> int:
     """Collect and review values, then call a workflow only after confirmation."""
     ui = Terminal(read=read, write=write, cancel_to_menu=True)
-    settings = GuidedSettings(layout, preferences_store, directory_overrides)
+    settings = GuidedSettings(layout, preferences_store, directory_overrides, execution_overrides)
     layout = settings.layout
     workflows.layout = workflows.runner.layout = layout
+    workflows.runner.options = settings.execution_options()
     had_failure = False
     last_run: Path | None = None
     try:
@@ -221,15 +235,17 @@ def run_wizard(
                         # pending edit was cancelled; keep that saved layout.
                         layout = settings.layout
                         workflows.layout = workflows.runner.layout = layout
+                        workflows.runner.options = settings.execution_options()
                     continue
                 if choice == "6":
                     if last_run is None:
-                        ui.message("Nessuna esecuzione completata o pianificata in questa sessione.")
+                        ui.message(translate("no_session_runs"))
                     else:
                         show_results(ui, last_run, dry_run=dry_run)
                     continue
                 if choice == "7":
-                    _help(ui, layout)
+                    if _help(ui, layout, workflows.runner, dry_run=dry_run):
+                        return HANDOFF_EXIT_CODE
                     continue
                 if choice == "8":
                     _check_environment(ui, workflows, dry_run)
@@ -289,6 +305,11 @@ def run_wizard(
                         raise
                     except (NipatError, OSError) as exc:
                         had_failure = True
+                        failed_run = workflows.runner.last_run_dir
+                        if isinstance(failed_run, Path) and failed_run != previous_run:
+                            last_run = failed_run
+                            ui.message(translate("run_failed", path=last_run), kind="warning")
+                            ui.message(translate("failed_results"), kind="muted")
                         ui.message(f"Operazione non riuscita: {exc}", kind="error")
                         ui.message("I valori inseriti sono conservati: modificarli dal riepilogo.")
                         if choice == "w":

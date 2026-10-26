@@ -67,8 +67,16 @@ jobs:
       - name: Record the exact checkout identity
         id: source
         run: python .github/scripts/ci_control.py source
-      - name: Python unit tests
-        run: python -m unittest discover -s tests -v
+      - name: Install pinned quality tools
+        run: python -m pip install -r .github/quality-requirements.txt
+      - name: Correctness-focused Python static checks
+        run: python -m ruff check src engine scripts installer/linux .github/scripts
+      - name: Python unit tests with branch coverage
+        run: |
+          mkdir -p build/quality
+          python -m coverage run -m unittest discover -s tests -v
+          python -m coverage json
+          python -m coverage report > build/quality/coverage.txt
       - name: CI selection, release and installer-set guard tests
         run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
       - name: Validate local documentation links and anchors
@@ -111,7 +119,6 @@ jobs:
           file: installer/runtime/Dockerfile
           platforms: linux/amd64
           tags: nipat-wsl-rootfs:installer-test
-          build-args: SOURCE_COMMIT=${{ steps.source.outputs.source_commit }}
           load: true
           pull: true
           provenance: false
@@ -120,23 +127,44 @@ jobs:
       - name: Check daemon startup in isolated Linux container
         # This exercises the helper on Linux; it is not a live Windows/WSL installation test.
         run: |
-          docker run --rm --privileged --cgroupns=host --entrypoint /bin/bash \
+          docker run --rm --privileged --cgroupns=host \
+            --mount type=volume,target=/var/lib/docker --mount type=volume,target=/var/lib/containerd \
+            --entrypoint /bin/bash \
             nipat-wsl-rootfs:installer-test -euc \
             '/usr/local/bin/nipat-engine ensure; /usr/local/bin/nipat-engine ensure; docker info --format "{{.OSType}}"; docker compose version'
+      - name: Fetch the exact previous published WSL component for verified reuse
+        run: python .github/scripts/release_inputs.py --kind rootfs --output-dir build/previous-runtime
       - name: Export pinned assets and trusted installer manifest
         run: |
           python scripts/build_windows_installer_assets.py export \
             --output-dir build/assets --source-commit "$(git rev-parse HEAD)" \
-            --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:installer-test
+            --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:installer-test \
+            --reuse-rootfs-directory build/previous-runtime
           python scripts/build_windows_installer_assets.py stage \
             --manifest build/assets/installer-manifest.json --stage-dir build/windows-installer
+      - name: Import the exact selected rootfs archive for qualification
+        run: |
+          python - <<'PYCODE'
+          import json
+          from pathlib import Path
+          import subprocess
+          root = Path('build/assets')
+          manifest = json.loads((root / 'installer-manifest.json').read_text())
+          subprocess.run(['docker', 'image', 'import', str(root / manifest['assets']['rootfs']['file']),
+                          'nipat-wsl-rootfs:exported-test'], check=True)
+          PYCODE
+      - name: Record resolved component inventories
+        run: |
+          python .github/scripts/component_inventory.py \
+            --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:exported-test \
+            --source-commit "$(git rev-parse HEAD)" --output build/assets/component-inventory.json
       - name: Load and execute exported image in the shipped engine
         shell: pwsh
         run: |
           ./installer/windows/test-runtime-image.ps1 `
             -ManifestPath build/assets/installer-manifest.json `
             -AssetDirectory build/assets `
-            -RootfsImage nipat-wsl-rootfs:installer-test
+            -RootfsImage nipat-wsl-rootfs:exported-test
       - name: Retain runtime assets for reviewed release or offline setup
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -163,6 +191,7 @@ jobs:
             ${{ runner.temp }}/nipat-validation/runs/**/run.json
             ${{ runner.temp }}/nipat-validation/runs/**/execution.log
             ${{ runner.temp }}/nipat-engine-check/
+            build/quality/
           retention-days: 14
           if-no-files-found: ignore
 
@@ -366,6 +395,19 @@ jobs:
             --work-dir "$RUNNER_TEMP/NIPAT Linux installation check" \
             --output build/linux-output/linux-installation-check.json \
             --system-package-test
+      - name: Fetch the exact published 0.7.1 upgrade baseline
+        run: python .github/scripts/release_inputs.py --tag v0.7.1 --kind deb --output-dir build/upgrade-baseline
+      - name: Upgrade the real previous package and preserve research data
+        run: |
+          package=(build/linux-output/*.deb)
+          test "${#package[@]}" -eq 1
+          set -o pipefail
+          python scripts/verify_linux_upgrade.py \
+            --previous-package build/upgrade-baseline/nipat-desktop_0.7.1_amd64.deb \
+            --package "${package[0]}" --manifest build/assets/installer-manifest.json \
+            --work-dir "$RUNNER_TEMP/NIPAT Linux upgrade check" \
+            --output build/linux-output/linux-upgrade-check.json --system-package-test \
+            2>&1 | tee build/linux-output/linux-upgrade.log
       - name: Retain the Ubuntu package and installation evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -382,6 +424,8 @@ jobs:
           path: |
             build/linux-output/linux-dependency-check.json
             build/linux-output/linux-installation-check.json
+            build/linux-output/linux-upgrade-check.json
+            build/linux-output/linux-upgrade.log
             ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/setup.log
             ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/state.json
             ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/run.json
@@ -438,12 +482,40 @@ jobs:
         with:
           name: nipat-runtime-assets
           path: build/assets
+      - name: Download synthetic scientific diagnostics
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-scientific-check-logs
+          path: build/evidence/scientific
+      - name: Download staged Windows client diagnostics
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-windows-client-logs
+          path: build/evidence/windows
+      - name: Download installed Linux diagnostics
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-linux-installation-logs
+          path: build/evidence/linux
       - name: Verify both installers identify the same source and scientific archive
         run: |
           python .github/scripts/verify_installer_set.py \
             --windows-dir build/windows-output --linux-dir build/linux-output \
             --assets-dir build/assets --output-dir build/verified-installers \
             --source-commit "$(git rev-parse HEAD)"
+      - name: Preserve bounded synthetic qualification evidence for accepted releases
+        run: |
+          python .github/scripts/qualification_evidence.py \
+            --installer-set build/verified-installers/installer-set-check.json \
+            --output-dir build/verified-installers \
+            --source scientific build/evidence/scientific \
+            --source windows-client build/evidence/windows \
+            --source installed-linux build/evidence/linux \
+            --source windows-package build/windows-output \
+            --source linux-package build/linux-output \
+            --source components build/assets \
+            --source synthetic-fixtures tests/fixtures \
+            --redact-root "$GITHUB_WORKSPACE" --redact-root "$RUNNER_TEMP"
       - name: Retain the installer-set verification without publishing
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

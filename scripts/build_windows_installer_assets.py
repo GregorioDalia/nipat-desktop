@@ -9,6 +9,7 @@ import json
 import re
 import shutil
 import subprocess
+import tarfile
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,6 +20,11 @@ _SPEC = importlib.util.spec_from_file_location(
 )
 bundle = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(bundle)
+_COMPONENT_SPEC = importlib.util.spec_from_file_location(
+    "nipat_runtime_component", Path(__file__).resolve().parents[1] / "installer/runtime/component.py"
+)
+component = importlib.util.module_from_spec(_COMPONENT_SPEC)
+_COMPONENT_SPEC.loader.exec_module(component)
 
 RELEASE_REPOSITORY = "GregorioDalia/nipat-desktop"
 MAX_ASSET_BYTES = 2 * 1024**3  # GitHub release files must be smaller than 2 GiB.
@@ -124,6 +130,19 @@ def gzip_export(command: list[str], destination: Path) -> None:
         raise
 
 
+def validate_rootfs_provenance(project: Path, rootfs_provenance: dict, source_commit: str) -> None:
+    if not isinstance(rootfs_provenance, dict):
+        raise ValueError("Provenienza del componente WSL non valida.")
+    if rootfs_provenance.get("schema_version") == 2:
+        if (rootfs_provenance.get("source_sha256") != component.source_inventory(project / "installer/runtime")
+                or rootfs_provenance.get("component_sha256") != component.component_identity(rootfs_provenance)):
+            raise ValueError("La provenienza del componente WSL non corrisponde ai suoi sorgenti.")
+    elif (rootfs_provenance.get("vendor") != "nipat-desktop"
+          or rootfs_provenance.get("schema_version") != 1
+          or rootfs_provenance.get("source_commit") != source_commit):
+        raise ValueError("La provenienza del rootfs non corrisponde ai sorgenti dell'installer.")
+
+
 def make_manifest(
     project: Path, *, source_commit: str, runtime_image: str,
     rootfs: Path, scientific_image: Path, rootfs_provenance: dict,
@@ -134,10 +153,7 @@ def make_manifest(
         raise ValueError("source_commit deve essere lo SHA Git completo dei sorgenti compilati.")
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime_image):
         raise ValueError("runtime_image deve essere l'ID immutabile dell'immagine scientifica.")
-    if (rootfs_provenance.get("vendor") != "nipat-desktop"
-            or rootfs_provenance.get("schema_version") != 1
-            or rootfs_provenance.get("source_commit") != source_commit):
-        raise ValueError("La provenienza del rootfs non corrisponde ai sorgenti dell'installer.")
+    validate_rootfs_provenance(project, rootfs_provenance, source_commit)
     version = checked_version(project)
     release_tag = f"v{version}"
     sources = bundle.source_files(project)
@@ -160,9 +176,49 @@ def make_manifest(
     }
 
 
+def reuse_rootfs(previous_directory: Path | None, expected: dict, destination: Path) -> dict | None:
+    """Reuse exact published bytes only for the same freshly resolved component.
+
+    Source pins alone are insufficient: the complete descriptor includes the
+    actual installed APT and engine versions. Old schema-1 releases are not reused.
+    """
+    if previous_directory is None:
+        return None
+    previous = json.loads((previous_directory / MANIFEST_NAME).read_text(encoding="utf-8"))
+    validate_manifest(previous)
+    provenance = previous.get("rootfs_provenance", {})
+    if provenance.get("schema_version") != 2:
+        return None
+    identifier = component.component_identity(provenance)
+    if provenance.get("component_sha256") != identifier:
+        raise ValueError("Identita del componente WSL precedente non valida.")
+    if identifier != component.component_identity(expected):
+        return None
+    metadata = previous["assets"]["rootfs"]
+    archive = previous_directory / metadata["file"]
+    if asset_metadata(archive, previous["release_tag"]) != metadata:
+        raise ValueError("Archivio WSL precedente diverso dal manifest pubblicato.")
+    with tarfile.open(archive, "r:gz") as contents:
+        markers = [entry for entry in contents if entry.name in {"etc/nipat-runtime.json", "./etc/nipat-runtime.json"}]
+        if len(markers) != 1 or not markers[0].isfile() or not 0 < markers[0].size < 1024 * 1024:
+            raise ValueError("Provenienza WSL mancante o ambigua nell'archivio precedente.")
+        with contents.extractfile(markers[0]) as stream:
+            actual = json.load(stream)
+    if (actual.get("component_sha256") != identifier
+            or component.component_identity(actual) != identifier):
+        raise ValueError("Il contenuto WSL precedente non corrisponde al componente dichiarato.")
+    with archive.open("rb") as source, destination.open("xb") as target:
+        shutil.copyfileobj(source, target)
+    if bundle.sha256_file(destination) != metadata["sha256"]:
+        destination.unlink()
+        raise ValueError("La copia dell'archivio WSL precedente non e integra.")
+    print("WSL: riutilizzato l'archivio verificato del componente " + identifier)
+    return provenance
+
+
 def export_assets(
     project: Path, output: Path, *, source_commit: str,
-    scientific_reference: str, rootfs_reference: str,
+    scientific_reference: str, rootfs_reference: str, reuse_rootfs_directory: Path | None = None,
 ) -> Path:
     source = bundle.git_source(project)
     if source.get("commit") != source_commit or source.get("dirty") is not False:
@@ -174,22 +230,26 @@ def export_assets(
     scientific = output / f"nipat-scientific-runtime-{version}-amd64.tar.gz"
     rootfs = output / f"nipat-wsl-rootfs-{version}-amd64.tar.gz"
     gzip_export(["docker", "image", "save", scientific_details["Id"]], scientific)
-    container = subprocess.run(
-        ["docker", "create", rootfs_details["Id"]], check=True,
-        capture_output=True, text=True, timeout=60,
-    ).stdout.strip()
-    if not re.fullmatch(r"[0-9a-f]{64}", container):
-        raise ValueError("Docker non ha restituito l'identificativo del container creato.")
-    try:
-        # Export a fresh, never-started container: no Docker daemon/image state is embedded.
-        gzip_export(["docker", "container", "export", container], rootfs)
-    finally:
-        subprocess.run(["docker", "container", "rm", "--force", container], check=True)
     provenance = json.loads(subprocess.run(
         ["docker", "run", "--rm", "--entrypoint", "cat", rootfs_details["Id"],
          "/etc/nipat-runtime.json"], check=True, capture_output=True, text=True, timeout=60,
     ).stdout)
     provenance["rootfs_image_id"] = rootfs_details["Id"]
+    reused = reuse_rootfs(reuse_rootfs_directory, provenance, rootfs)
+    if reused is not None:
+        provenance = reused
+    else:
+        container = subprocess.run(
+            ["docker", "create", rootfs_details["Id"]], check=True,
+            capture_output=True, text=True, timeout=60,
+        ).stdout.strip()
+        if not re.fullmatch(r"[0-9a-f]{64}", container):
+            raise ValueError("Docker non ha restituito l'identificativo del container creato.")
+        try:
+            # Never-started container: no Docker daemon/image state is embedded.
+            gzip_export(["docker", "container", "export", container], rootfs)
+        finally:
+            subprocess.run(["docker", "container", "rm", "--force", container], check=True)
     manifest = make_manifest(
         project, source_commit=source_commit, runtime_image=scientific_details["Id"],
         rootfs=rootfs, scientific_image=scientific, rootfs_provenance=provenance,
@@ -414,6 +474,8 @@ def main() -> int:
     export.add_argument("--source-commit", required=True)
     export.add_argument("--scientific-image", required=True)
     export.add_argument("--rootfs-image", required=True)
+    export.add_argument("--reuse-rootfs-directory", type=Path,
+                        help="manifest e rootfs di una release pubblicata, riusati solo a identita completa uguale")
     stage = subparsers.add_parser("stage", help="prepara sorgenti approvati e incorporamento runtime per Inno Setup")
     stage.add_argument("--manifest", type=Path, required=True)
     stage.add_argument("--stage-dir", type=Path, required=True)
@@ -432,6 +494,7 @@ def main() -> int:
             result = export_assets(
                 project, args.output_dir.resolve(), source_commit=args.source_commit,
                 scientific_reference=args.scientific_image, rootfs_reference=args.rootfs_image,
+                reuse_rootfs_directory=args.reuse_rootfs_directory,
             )
         elif args.command in ("inventory", "verify-inventory"):
             operation = write_application_payload if args.command == "inventory" else verify_application_payload

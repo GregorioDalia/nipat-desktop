@@ -27,7 +27,7 @@ SCRIPT_PATHS = {
 }
 PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
-    "catalog.py", "plan.py", "executor.py",
+    "catalog.py", "plan.py", "executor.py", "outputs.py",
 )
 CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
@@ -131,6 +131,12 @@ def verify_bundle(bundle_root: Path) -> dict:
         },
         "workflows": workflows,
         "workflow_interfaces": WORKFLOW_INTERFACES.copy(),
+        "scientific_validation": {
+            "interface": "scientific-validation-v1",
+            "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "snp_alleles": "uppercase-working-copy",
+        },
         "plan_execution": {
             "interface": "workflow-plan-execution-v1",
             "schema_version": 1,
@@ -207,6 +213,33 @@ def run_preparation(command: list[str]) -> int:
         if received_signal is not None:
             return 128 + received_signal
         return returncode if returncode >= 0 else 128 - returncode
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+def run_validated_request(request: dict, script: Path, native_arguments: list[str]) -> int:
+    """Supervise unchanged R and validate the same outputs as a plan step."""
+    from nipat_scientific.executor import _Cancellation, _run_process, _atomic_json
+    from nipat_scientific.outputs import validate_standalone_outputs
+
+    cancellation = _Cancellation()
+    previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
+    try:
+        for signum in previous:
+            signal.signal(signum, cancellation.receive)
+        code = _run_process(["Rscript", str(script), *native_arguments], Path.cwd(), None, cancellation)
+        if code or cancellation.signum is not None:
+            return cancellation.exit_code if cancellation.signum is not None else code
+        artifacts = validate_standalone_outputs(request)
+        report = Path(request["work_dir"]) / "scientific-validation.json"
+        _atomic_json(report, {"schema_version": 1, "workflow": request["workflow"],
+                              "status": "validated", "artifacts": artifacts,
+                              "quality_warnings": artifacts.get("quality_warnings", [])})
+        for warning in artifacts.get("quality_warnings", []):
+            print(f"NIPAT output warning [{warning['code']}]: {warning}", file=sys.stderr, flush=True)
+        print(f"Scientific output contract verified: {report}", flush=True)
+        return 0
     finally:
         for signum, handler in previous.items():
             signal.signal(signum, handler)
@@ -304,6 +337,11 @@ def main(argv: list[str] | None = None) -> int:
                             return returncode
                         require_snp_pileup(prepared.generated_pileup)
                     native_arguments = prepared.native_arguments
+            except (ValidationError, ValueError) as exc:
+                raise BundleError(str(exc)) from exc
+            script = BUNDLE_ROOT / description["workflows"][arguments.workflow]["script"]
+            try:
+                return run_validated_request(request, script, native_arguments)
             except (ValidationError, ValueError) as exc:
                 raise BundleError(str(exc)) from exc
         else:

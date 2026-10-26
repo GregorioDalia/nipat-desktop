@@ -50,6 +50,12 @@ non cambia il modello scientifico e non autorizza automaticamente a modificarlo.
 I pannelli CPI chiamati *cutoff* selezionano coordinate; i loro nomi non
 applicano soglie numeriche ai campioni.
 
+I [controlli degli input e dei risultati](INPUT_VALIDATION.md) sono applicati
+dagli adattatori Python. Il catalogo distingue questi controlli dalle
+assunzioni e dalle formule R: una normalizzazione del pannello o un errore
+preliminare non modifica lo script scientifico. Le segnalazioni sui valori
+mantengono disponibili i dati originali per la valutazione di dominio.
+
 ## Provenienza e verifiche
 
 Ogni scheda identifica il percorso e lo SHA-256 del sorgente R, i riferimenti

@@ -23,7 +23,10 @@ jobs:
       run_checks: ${{ steps.ownership.outputs.run_checks }}
       duplicate_pr: ${{ steps.ownership.outputs.duplicate_pr }}
       ownership_reason: ${{ steps.ownership.outputs.ownership_reason }}
+      client: ${{ steps.select.outputs.client }}
       scientific: ${{ steps.select.outputs.scientific }}
+      runtime: ${{ steps.select.outputs.runtime }}
+      packaging: ${{ steps.select.outputs.packaging }}
       reason: ${{ steps.select.outputs.reason }}
     steps:
       - name: Checkout comparison history
@@ -63,8 +66,28 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
-      - name: Python unit tests
-        run: python -m unittest discover -s tests -v
+      - name: Install pinned quality tools
+        run: python -m pip install -r .github/quality-requirements.txt
+      - name: Correctness-focused Python static checks
+        run: python -m ruff check src engine scripts installer/linux .github/scripts
+      - name: Python unit tests with branch coverage
+        run: |
+          mkdir -p build/quality
+          python -m coverage run -m unittest discover -s tests -v
+      - name: Record branch coverage without an arbitrary percentage gate
+        if: always()
+        run: |
+          python -m coverage json
+          python -m coverage xml
+          python -m coverage report > build/quality/coverage.txt
+      - name: Retain quality baseline and missing branches
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-python-quality
+          path: build/quality/
+          retention-days: 14
+          if-no-files-found: error
       - name: CI selection and release guard tests
         run: python -m unittest discover -s .github/scripts -p 'test_*.py' -v
       - name: Validate local documentation links and anchors
@@ -155,12 +178,67 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  runtime:
+    needs: [changes, linux-checks, windows-checks]
+    if: needs.changes.outputs.run_checks == 'true' && needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout runtime source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Build the changed dedicated runtime
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: installer/runtime/Dockerfile
+          platforms: linux/amd64
+          tags: nipat-wsl-rootfs:ci-test
+          load: true
+          pull: true
+          provenance: false
+          cache-from: type=gha,version=2,scope=nipat-wsl-rootfs-linux-amd64
+          cache-to: type=gha,version=2,scope=nipat-wsl-rootfs-linux-amd64,mode=max,ignore-error=true
+      - name: Exercise daemon startup and exact component provenance
+        # Isolated Linux runtime integration; this does not claim Windows/WSL acceptance.
+        run: |
+          docker run --rm --privileged --cgroupns=host \
+            --mount type=volume,target=/var/lib/docker --mount type=volume,target=/var/lib/containerd \
+            --entrypoint /bin/bash \
+            nipat-wsl-rootfs:ci-test -euc \
+            '/usr/local/bin/nipat-engine ensure; /usr/local/bin/nipat-engine ensure; docker info --format "{{.OSType}}"; docker compose version; test -s /etc/nipat-runtime.json'
+
+  packaging:
+    needs: [changes, linux-checks, windows-checks]
+    if: needs.changes.outputs.run_checks == 'true' && needs.changes.outputs.packaging == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout package contracts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Exercise package contents, manifest and actual DEB fixture construction
+        run: |
+          python -m unittest discover -s tests -p 'test_*installer*.py' -v
+          python -m unittest discover -s tests -p 'test_distribution.py' -v
+          python -m unittest discover -s .github/scripts -p 'test_verify_installer_set.py' -v
+
   required:
     # Branch protection requires this stable job name, including documentation-only PRs.
     # A delegated branch push cannot satisfy the protected PR/main context.
     name: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' && 'branch-required' || 'required' }}
     if: always()
-    needs: [changes, linux-checks, windows-checks, scientific]
+    needs: [changes, linux-checks, windows-checks, scientific, runtime, packaging]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

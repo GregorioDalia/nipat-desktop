@@ -1,7 +1,7 @@
 # Validazione tecnica e di dominio
 
 Questa scheda consente di registrare separatamente installazione, esecuzione
-e concordanza scientifica di **NIPAT Desktop 0.7.1**, distribuito per la
+e concordanza scientifica di **NIPAT Desktop 0.7.2**, distribuito per la
 valutazione da parte delle esperte di dominio. Registrare in ogni scheda la
 versione effettivamente utilizzata, senza trasferire automaticamente gli
 esiti a versioni successive.
@@ -34,6 +34,7 @@ e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
 | Apertura e interazione con il menu | |
 | Aggiornamenti: canale, verifica all'avvio e versione proposta, se presente | |
 | Preferenze salvate in Configura e valori effettivi nel riepilogo dell'analisi | |
+| Modalità checksum degli input e limiti CPU, memoria e processi | |
 
 Nel pacchetto Windows verificare l'avvio con doppio clic di `NIPAT-Setup.exe`,
 il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Desktop**.
@@ -141,7 +142,7 @@ Documentare almeno le condizioni rilevanti per l'uso previsto:
 | Contamination | Singoli file e cartella con gli stessi input; presenza e assenza di `ratio_REF_ALT`; nessun sito informativo. |
 | CPI | Coppie appropriate; prefissi configurati; ALL, pannello singolo e più cutoff; nessun sito informativo. |
 | Workflow automatici | Composizioni DNPcall/Contamination/CPI; campioni condivisi fra coppie; SNPcall indipendente e batch; corrispondenza fra piano, campioni, output e analisi separate; passaggi bloccati dopo errore o interruzione. |
-| Robustezza | Percorsi con spazi, input fuori dal progetto, risultati in una destinazione scelta; file mancanti, intestazioni errate e nomi in conflitto. |
+| Robustezza | Percorsi con spazi, input fuori dal progetto, risultati in una destinazione scelta; file mancanti, codifica errata, intestazioni duplicate, conteggi non validi e nomi in conflitto. |
 | Utilizzo | Salvataggio e ripristino delle preferenze; persistenza dopo la riapertura; correzione per la singola analisi; campioni, coppie e run sempre selezionati esplicitamente; annullamento, riepilogo, apertura dei risultati e recupero dopo errore. |
 
 Verificare che un cambiamento in **Configura** venga riproposto nel menu dopo
@@ -155,6 +156,19 @@ insieme di dati. Nei confronti numerici stabilire prima quali colonne,
 ordinamenti e tolleranze considerare; non usare il solo confronto dei nomi
 o delle dimensioni dei file. I casi CPI con più cutoff devono mantenere
 distinti i risultati delle etichette selezionate.
+
+Per i pannelli SNP confrontare anche rappresentazioni equivalenti in maiuscolo
+e minuscolo: la normalizzazione deve lasciare invariati i conteggi e il file
+originale. Provare tabelle con conteggi negativi, loci duplicati e frequenze
+non finite: devono essere rifiutate prima di R. Registrare separatamente gli
+avvisi che mantengono i valori forniti, come frequenze zero o rapporti
+incoerenti con i conteggi; il loro significato va valutato nel caso scientifico.
+
+Provare Ctrl+C attraverso il collegamento installato, oltre che dalla CLI.
+Dopo un fallimento, verificare che **Ultima esecuzione** mostri il run fallito
+e i suoi log. La consultazione delle esecuzioni incomplete deve distinguere
+runtime irraggiungibile, container assente e container ancora attivo senza
+alterare i record storici.
 
 Distinguere un errore del programma da un risultato scientifico inatteso.
 Un valore `NA` in assenza di siti informativi può essere corretto.
@@ -179,8 +193,10 @@ con cui sono stati prodotti. Le prove tecniche complete sono nel
 
 Conservare l'intero run, inclusi `run.json`, `execution.log` e `work`, insieme
 ai risultati e agli input necessari alla riproduzione. Per file maggiori di
-16 MiB, NIPAT registra dimensione e data di modifica senza calcolare l'hash:
-aggiungere un inventario dei checksum se richiesto dal protocollo di prova.
+16 MiB, la modalità predefinita `auto` registra dimensione e data di modifica
+senza calcolare l'hash. Usare `--input-hashes full` quando il protocollo richiede
+checksum completi, registrando il costo delle letture aggiuntive; conservare
+sempre gli input originali necessari alla riproduzione.
 
 Una segnalazione utile riporta versione, piattaforma, sequenza di operazioni,
 atteso, osservato e messaggio d'errore completo. Nomi e percorsi dei campioni

@@ -142,6 +142,26 @@ def verify_installation_profile(manifest, commit, read_source):
             "Installation profile differs from the built commit")
 
 
+def verify_rootfs_source(provenance, commit, read_source):
+    require(isinstance(provenance, dict), "Invalid rootfs provenance")
+    schema = provenance.get("schema_version")
+    require(schema is None or (type(schema) is int and schema in (1, 2)),
+            "Unsupported rootfs provenance schema")
+    if schema == 2:
+        component = load_module("nipat_release_runtime_component", PROJECT / "installer/runtime/component.py")
+        expected_sources = {
+            name: hashlib.sha256(read_source(commit, f"installer/runtime/{name}")).hexdigest()
+            for name in component.SOURCE_FILES
+        }
+        require(provenance.get("source_sha256") == expected_sources,
+                "Rootfs component source mismatch")
+        require(provenance.get("component_sha256") == component.component_identity(provenance),
+                "Rootfs component identity mismatch")
+    else:
+        require(isinstance(provenance, dict) and provenance.get("source_commit") == commit,
+                "Rootfs source mismatch")
+
+
 def load_module(name, path):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -158,7 +178,7 @@ def require_publication_supported(version, acceptance=None, commit=None, run_id=
 
 def verify_research_baseline(record, validator):
     """Fetch an observed PR checkout if necessary, then compare actual source bytes."""
-    if record.get("schema_version") not in (2, 3):
+    if record.get("schema_version") not in (2, 3, 4):
         return None
     baseline = record["observed_baseline"]["source_commit"]
     require(re.fullmatch(r"[0-9a-f]{40}", baseline), "Invalid baseline source commit")
@@ -173,7 +193,7 @@ def verify_research_baseline(record, validator):
 def release_notes(commit, publication_commit, version, acceptance):
     # Research acceptance can be reviewed after the immutable installers were built.
     # Pin its explanatory documentation to the same preparation commit in both phases.
-    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3) else commit
+    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3, 4) else commit
     notes = source_bytes(notes_commit, f"docs/RELEASE_{version}.md").decode("utf-8").strip()
     return re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
         f"https://github.com/{REPO}/blob/{notes_commit}/docs/", m[1]) + ")", notes)
@@ -205,7 +225,14 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
     validator.validate(acceptance, actual["version"], commit, run_id, installer_set=actual)
     require(json.loads(acceptance_bytes) == acceptance, "Acceptance bytes differ from the validated record")
     baseline_check = validator.verify_baseline(acceptance, source_bytes) \
-        if acceptance.get("schema_version") in (2, 3) else None
+        if acceptance.get("schema_version") in (2, 3, 4) else None
+    reliability = validator.reliability_contract(actual["version"])
+    if reliability:
+        qualification = load_module("nipat_qualification_evidence", PROJECT / ".github/scripts/qualification_evidence.py")
+        qualification.verify(evidence, actual)
+        if acceptance.get("schema_version") == 4:
+            require(sha256(evidence / "qualification-evidence.zip") == acceptance["qualification_evidence_sha256"],
+                    "Qualification evidence differs from the accepted build")
     manifest = prepare_assets(setup, runtime, output, commit)
     additions = {
         actual["linux"]["file"]: linux / actual["linux"]["file"],
@@ -218,6 +245,13 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
     if manifest["version"].startswith("0.7."):
         additions.update({"windows-client-check.json": setup / "windows-client-check.json",
                           "application-files.json": setup / "application-files.json"})
+    if reliability:
+        additions.update({
+            "linux-upgrade-check.json": linux / "linux-upgrade-check.json",
+            "component-inventory.json": runtime / "component-inventory.json",
+            "qualification-evidence.json": evidence / "qualification-evidence.json",
+            "qualification-evidence.zip": evidence / "qualification-evidence.zip",
+        })
     for name, path in additions.items():
         require(path.is_file() and not path.is_symlink() and 0 < path.stat().st_size < MAX_ASSET_BYTES,
                 f"Missing or invalid joint release asset: {name}")
@@ -424,7 +458,7 @@ def prepare_assets(setup, runtime, output, commit, read_source=source_bytes, des
     tag = f"v{version}"
     require(manifest["schema_version"] == 1 and manifest["release_tag"] == tag
             and manifest["source_commit"] == commit, "Manifest release/source mismatch")
-    require(manifest["rootfs_provenance"]["source_commit"] == commit, "Rootfs source mismatch")
+    verify_rootfs_source(manifest["rootfs_provenance"], commit, read_source)
     approved = [line.strip() for line in read_source(commit, "distribution-files.txt").decode().splitlines()
                 if line.strip() and not line.strip().startswith("#")]
     require(len(approved) == len(set(approved)) and set(approved) == set(manifest["source_sha256"]),

@@ -48,6 +48,36 @@ def installation_checks(version):
     return INSTALLATION_CHECKS | (WORKFLOW_INSTALLATION_CHECKS if version.startswith("0.7.") else set())
 
 
+def requires_reliability_evidence(version):
+    match = re.fullmatch(r"0\.7\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version)
+    return bool(match and int(match.group(1)) >= 2)
+
+
+def verify_upgrade_check(evidence, manifest, manifest_bytes, package_record):
+    """A real released baseline and a distinct installed candidate, not reinstall."""
+    checker = load_module("nipat_review_upgrade", PROJECT / "scripts/verify_linux_upgrade.py")
+    expected = {
+        "schema_version": 1, "platform": "ubuntu-24.04-amd64",
+        "scenario": "prepared-ci-runner-real-upgrade", "version": manifest["version"],
+        "source_commit": manifest["source_commit"],
+        "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "package_sha256": package_record["sha256"],
+        "runtime_archive_sha256": manifest["assets"]["scientific_image"]["sha256"],
+        "previous": checker.BASELINE,
+    }
+    require(isinstance(evidence, dict) and set(evidence) == set(expected) | {
+        "nonroot_uid", "resolved_runtime_image", "checks"}
+        and all(type(evidence.get(key)) is type(value) and evidence.get(key) == value
+                for key, value in expected.items()), "Linux upgrade evidence mismatch")
+    require(type(evidence["nonroot_uid"]) is int and evidence["nonroot_uid"] > 0,
+            "Linux upgrade must be exercised as non-root")
+    require(isinstance(evidence["resolved_runtime_image"], str) and re.fullmatch(
+        r"sha256:[0-9a-f]{64}", evidence["resolved_runtime_image"]), "Upgrade runtime identity missing")
+    require(isinstance(evidence["checks"], dict) and set(evidence["checks"]) == set(checker.CHECKS)
+            and all(value is True for value in evidence["checks"].values()),
+            "A required real-upgrade check is missing or failed")
+
+
 def read_json(path):
     require(path.is_file() and not path.is_symlink(), f"Missing or invalid evidence: {path}")
     return json.loads(path.read_text(encoding="utf-8-sig"))
@@ -206,6 +236,15 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
         "publication_authorized": False,
         "scope": "Build and prepared-runner checks; fresh desktop acceptance is separate.",
     }
+    if requires_reliability_evidence(manifest["version"]):
+        inventory = load_module("nipat_review_inventory", PROJECT / ".github/scripts/component_inventory.py")
+        result["component_inventory"] = inventory.verify(assets / "component-inventory.json", manifest)
+        upgrade_path = linux / "linux-upgrade-check.json"
+        upgrade = read_json(upgrade_path)
+        verify_upgrade_check(upgrade, manifest, manifest_bytes, record)
+        result["linux_upgrade_check"] = {
+            "file": upgrade_path.name, "sha256": hashlib.sha256(upgrade_path.read_bytes()).hexdigest(),
+        }
     output.mkdir(parents=True)
     (output / "installer-set-check.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     return result

@@ -98,7 +98,9 @@ class RunTrackingTests(unittest.TestCase):
         with redirect_stdout(self.output), patch(
             "nipat.execution.runner.subprocess.Popen",
             side_effect=self.popen_factory(["import sys; print('pileup ready'); print('R failed'); sys.exit(7)"]),
-        ), patch.object(self.runner, "_describe_bundled_engine"):
+        ), patch.object(self.runner, "_describe_bundled_engine"), patch.object(
+            self.runner, "_stop_container", return_value={"status": "absent"},
+        ) as stop:
             with self.assertRaisesRegex(RuntimeExecutionError, "codice 7"):
                 Workflows(self.layout, self.runner).snp_call(
                     bam=bam, reference=reference, panel=panel, run_name="failed-snp"
@@ -109,6 +111,8 @@ class RunTrackingTests(unittest.TestCase):
         self.assertEqual([c["returncode"] for c in record["commands"]], [7])
         self.assertIn("snp-call", record["commands"][0]["argv"])
         self.assertIn("R failed", (self.layout.runs_dir / "failed-snp" / "execution.log").read_text())
+        stop.assert_called_once_with(record["commands"][0]["container_name"])
+        self.assertEqual(record["commands"][0]["container_cleanup"]["status"], "absent")
 
     def test_dry_run_is_planned_and_launches_no_process(self):
         bam, reference, panel = self.bam_inputs()

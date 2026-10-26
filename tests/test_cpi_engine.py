@@ -64,7 +64,7 @@ class CpiEngineTests(unittest.TestCase):
         self.assertEqual({path.name for path in staged.iterdir()}, {"MotherA.txt", "FatherB.txt", "FatherC.txt"})
         self.assertTrue(all(path.read_bytes() == self.sample_bytes for path in staged.iterdir()))
         self.assertEqual({path: path.read_bytes() for path in self.inputs.iterdir()}, before)
-        self.assertEqual([path.name for path in (self.run / "work").iterdir()], ["inputs"])
+        self.assertEqual({path.name for path in (self.run / "work").iterdir()}, {"inputs", "input-validation.json"})
         self.assertEqual(list((self.run / "output").iterdir()), [])
 
     def test_single_panel_preserves_native_path_label_and_normalization(self):

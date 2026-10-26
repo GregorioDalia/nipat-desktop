@@ -151,7 +151,7 @@ attive, inclusi eventuali blocchi del browser, di Smart App Control o antivirus.
 Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
 le prove sui sistemi destinatari. Una scheda generata con
 `release_acceptance.py` parte da `pending` e non costituisce un’autorizzazione.
-Il record distingue tre modalità:
+Il record distingue quattro modalità:
 
 - **Schema 1, qualificazione completa:** richiede tutti i sei scenari desktop
   superati sugli installatori esatti della build.
@@ -170,6 +170,15 @@ Il record distingue tre modalità:
   del runtime e `compose.yaml` devono restare invariati. Il record mantiene
   `domain_validation: pending-domain-researchers` e rinvia esplicitamente
   i sei scenari desktop estesi.
+- **Schema 4, ricerca pre-1.0 dalla 0.7.2:** consente modifiche revisionate
+  alla preparazione Python, all'orchestrazione e ai componenti di installazione,
+  conservando invariati i sorgenti R distribuiti. Il confronto registra ogni
+  differenza operativa con gli hash esatti; non dichiara equivalenza operativa.
+  La prova Windows precedente è soltanto evidenza storica della piattaforma:
+  non viene presentata come installazione della candidata. Sono richiesti
+  anche il rapporto di aggiornamento reale Ubuntu dalla 0.7.1 e l'archivio
+  permanente delle verifiche sintetiche, entrambi collegati ai checksum
+  dell'accettazione. La validazione di dominio resta in attesa delle ricercatrici.
 
 Il numero di versione o il canale `stable` non trasformano l'accettazione
 per ricerca in una validazione scientifica. Lo schema 3 richiede comunque
@@ -235,7 +244,7 @@ il suo `source_commit` completo e il canale scelto. Lasciare
 3. confronta pacchetti, manifest e archivio scientifico con il record di
    accettazione e prepara un elenco combinato dei checksum;
 4. usa le note `docs/RELEASE_<versione>.md` del commit compilato per lo
-   schema 1; negli schemi 2 e 3 usa quelle del commit di preparazione, che
+   schema 1; negli schemi 2, 3 e 4 usa quelle del commit di preparazione, che
    descrivono la decisione di ricerca e i limiti correnti;
 5. crea una bozza sul commit verificato e carica gli asset;
 6. verifica dimensioni e digest restituiti da GitHub;
@@ -255,7 +264,7 @@ diversi.
 
 La procedura ripete le verifiche del set, richiede che il record di accettazione
 sia invariato rispetto alla preparazione e controlla che la bozza contenga
-esattamente gli asset approvati. Per gli schemi 2 e 3 mantiene le note del commit
+esattamente gli asset approvati. Per gli schemi 2, 3 e 4 mantiene le note del commit
 di preparazione, anche se `main` avanza. Non crea una bozza mancante, non carica asset
 e non corregge contenuti alterati. Un avanzamento di `main` è ammesso soltanto
 se le condizioni verificate rimangono soddisfatte.
@@ -272,10 +281,15 @@ applicazione o immagine. La release conserva i due installatori, il manifest
 comune, gli archivi runtime, le evidenze di costruzione e prova,
 `desktop-acceptance.json`, `release-provenance.json`, `update-manifest.json`
 e `SHA256SUMS`. La serie 0.7 conserva inoltre `windows-client-check.json`
-e `application-files.json`. Gli schemi 2 e 3 includono anche
+e `application-files.json`. Gli schemi 2, 3 e 4 includono anche
 `baseline-source-check.json`, che registra l'esito e l'ambito del confronto
-con il riferimento manuale; nello schema 3 elenca le differenze revisionate
+con il riferimento manuale; negli schemi 3 e 4 elenca le differenze revisionate
 e dichiara che l'installazione manuale del candidato Windows non è attestata.
+Lo schema 4 conserva inoltre `linux-upgrade-check.json`,
+`qualification-evidence.json` e `qualification-evidence.zip`. L'archivio contiene
+soltanto le prove sintetiche della build e i loro rapporti; il publisher verifica
+identità, inventario e checksum prima di includerlo nella release. Queste
+verifiche non sono sostituibili con una reinstallazione dello stesso pacchetto.
 `release-provenance.json` identifica separatamente il commit del pacchetto,
 quello della procedura e quello delle note tramite `release_notes_commit`.
 I collegamenti delle note puntano alla revisione documentale corrispondente;
@@ -314,3 +328,11 @@ Per l’organizzazione dei workflow e i confini dei test consultare
 [CI/CD](../docs/CI_CD.md); per i pacchetti consultare
 [Installatore Windows](../docs/INSTALLATORE_WINDOWS.md) e
 [Installatore Linux](../docs/INSTALLATORE_LINUX.md).
+
+## Immutabilità degli artefatti pubblicati
+
+La repository abilita l'immutabilità delle nuove release. Tutti gli asset devono
+essere presenti e verificati nella bozza prima della pubblicazione: dopo questa
+operazione GitHub protegge i file e il tag associato. Una correzione richiede
+una nuova versione. L'impostazione non modifica retroattivamente le release
+precedenti e non sostituisce la verifica dei checksum svolta dal publisher.

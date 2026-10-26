@@ -19,10 +19,15 @@ Un run esistente non viene sovrascritto.
 | `work` | Richiesta al motore, configurazione dei mount e intermedi conservati. |
 | `run.json` | Stato, input, parametri, software e identità del motore. |
 | `execution.log` | Comandi, messaggi del client e output combinato del motore; nei piani, il dettaglio scientifico è nei log dei passaggi. |
+| `work/input-validation.json` | Controlli degli input, avvisi e provenienza delle copie normalizzate dell'analisi singola. |
+| `work/scientific-validation.json` | Controlli degli output e segnalazioni di qualità dell'analisi singola. |
 
 I percorsi si possono aprire dalla schermata finale del menu oppure dal
 file system. **6 — Ultima esecuzione** richiama il run più recente della
-sessione. I nomi dei file scientifici sono quelli prodotti dal workflow.
+sessione, anche fallito o interrotto se la sua cartella è stata creata.
+Un errore precedente alla creazione di una nuova cartella non sostituisce
+il riferimento all'ultimo run. I nomi dei file scientifici sono quelli
+prodotti dal workflow.
 
 Ogni workflow automatico conserva un unico record `run.json` e i passaggi
 selezionati nella sottocartella `output/workflow`:
@@ -60,7 +65,7 @@ Questi percorsi sono relativi a `output/workflow`.
 | `preparing` | Controlli e preparazione dell'esecuzione. |
 | `running` | Motore avviato, senza un esito finale registrato. |
 | `planned` | Simulazione con `--dry-run`; calcolo scientifico non eseguito. |
-| `succeeded` | Il processo del workflow è terminato senza errori segnalati. |
+| `succeeded` | Il processo del workflow è terminato correttamente e gli output hanno superato i controlli tecnici previsti. |
 | `failed` | Errore durante preparazione o esecuzione; consultare il log. |
 | `interrupted` | Interruzione intercettata, per esempio Ctrl+C. |
 
@@ -68,6 +73,15 @@ Il successo descrive il completamento tecnico, non la correttezza scientifica
 per un particolare campione. Una cartella con alcuni output può appartenere
 a un'esecuzione fallita. Gli autotest confrontano i valori dopo il completamento
 del workflow: anche il loro esito finale deve essere positivo.
+
+I controlli sono condivisi dalle analisi singole e dai piani automatici.
+Gli avvisi sui valori numerici restano distinti dagli errori strutturali:
+consultare le segnalazioni di qualità anche quando il run termina con successo.
+Gli script R e i risultati originali non vengono modificati da questi controlli.
+Nelle analisi singole il resoconto è `work/scientific-validation.json`;
+nei piani gli avvisi del passaggio sono in `artifacts.quality_warnings`
+di `workflow-state.json`. Il resoconto degli input è invece
+`work/input-validation.json` nell'analisi o nella cartella di ogni passaggio.
 
 Per SNPcall da BAM, samtools deve terminare correttamente prima dell'avvio
 R; il successo del solo pileup non conclude il workflow. DNPcall richiama
@@ -118,11 +132,23 @@ locale, registrato e riutilizzato per il run; un cambiamento del tag non
 cambia il runtime tra le fasi della stessa esecuzione. Sono raccolte anche
 le versioni di R, samtools e dei pacchetti R richiesti.
 
-Gli input fino a **16 MiB** ricevono un hash SHA-256. Per file più grandi,
-come BAM e FASTA, sono registrati percorso, dimensione e data di modifica,
-con una nota esplicita sull'assenza dell'hash. Dimensione e data non
-attestano l'identità dei contenuti: per riprodurre un'analisi conservare
-gli originali o un proprio inventario dei checksum.
+La modalità predefinita `--input-hashes auto` calcola SHA-256 per gli input
+fino a **16 MiB**. Per file più grandi, come BAM e FASTA, registra percorso,
+dimensione e data di modifica con una nota esplicita sull'assenza dell'hash.
+Dimensione e data non attestano l'identità dei contenuti.
+
+Con `--input-hashes full`, NIPAT legge tutti gli input per calcolarne SHA-256
+prima del calcolo e li verifica nuovamente dopo l'esecuzione. Questa modalità
+richiede letture aggiuntive dei BAM e dei FASTA e può prolungare la preparazione
+e la conclusione del run. Il calcolo dei checksum può essere annullato.
+Non vengono riutilizzati hash sulla sola base di dimensione e data del file.
+Conservare comunque gli originali necessari alla riproduzione.
+
+I mount in sola lettura impediscono al container di modificare gli input;
+non impediscono a un altro programma sull'host di cambiarli. Evitare modifiche
+ai file durante la preparazione e l'analisi. Un controllo dell'identità
+prima e dopo il calcolo rileva le differenze osservabili fra quei due momenti,
+ma non rende immutabile il file sull'host.
 
 Il workflow automatico registra inoltre il collegamento fra identità dei
 campioni, alias interni e tabelle prodotte. Il campo `parameters.expected_steps` in
@@ -169,12 +195,76 @@ vengono generati.
 Il log mostra anche i messaggi nel terminale. `run.json` viene aggiornato
 con sostituzione atomica del file; non è un database di cronologia globale.
 
+## Limiti delle risorse
+
+Le opzioni globali `--cpus`, `--memory-mb` e `--pids-limit` permettono di
+impostare rispettivamente una quota CPU, un limite di memoria in MiB e un
+limite di processi per il container scientifico. Se non indicate, NIPAT non
+aggiunge limiti a quelli già applicati da Docker e, su Windows, da WSL.
+Il menu può conservare queste scelte in **Configura → Esecuzione e provenienza**;
+la CLI diretta usa le proprie opzioni.
+Queste opzioni e `--input-hashes` riguardano analisi, workflow e wizard;
+diagnostica, autotest e comandi di manutenzione mantengono i propri protocolli
+e rifiutano opzioni di esecuzione non applicabili.
+
+Questi limiti riguardano il container. La quota CPU non modifica il numero
+di worker scelto da `detectCores()` nello script DNPcall quando si abilita
+`--parallel`. Un limite di memoria o processi insufficiente può interrompere
+il calcolo: scegliere valori adeguati al numero di campioni e alla dimensione
+del pannello, conservando il log in caso di errore.
+
+### Misure delle prestazioni
+
+Nel checkout, `scripts/benchmark_workflows.py` esegue una serie esplicita di
+prove DNPcall o DNPcall → Contamination e conserva `benchmark.json`, i log
+dei comandi e run distinti. Richiede BAM reali distinti; non duplica un singolo
+campione per simulare un numero maggiore di input. Esempio:
+
+```sh
+python scripts/benchmark_workflows.py \
+  --bamlist /dati/bamlist.txt --reference /dati/genome.fa \
+  --panel /dati/DNP_list.txt --output-dir /risultati/benchmark-nuovo \
+  --sample-counts 1 10 --repeats 1 --workflow dnp-contamination
+```
+
+Il resoconto misura durata complessiva e dimensione dei file prodotti;
+riporta il picco RAM dichiarato da R quando disponibile, che non rappresenta
+necessariamente il picco dell'intero container. Sono disponibili anche i
+limiti di risorse, la modalità checksum e `--parallel`. Le misure dipendono
+da hardware, dati e configurazione: questo strumento prepara prove
+riproducibili, non certifica prestazioni su altri computer. Le prove sono
+facoltative e distinte dai controlli rapidi della CI.
+
+## Esecuzioni incomplete
+
+**Guida e informazioni → Esecuzioni incomplete** consente di confrontare
+lo stato registrato con quello osservabile nel runtime. Dalla CLI:
+
+```sh
+nipat runs inspect
+nipat runs inspect --run /percorso/del/run --json
+nipat runs stop --run /percorso/del/run
+```
+
+`inspect` è una consultazione: non modifica i record storici e non arresta
+processi. La mancata disponibilità del runtime è riportata separatamente
+dall'assenza di un container. `stop` richiede una conferma esplicita;
+`--yes` consente la conferma nei comandi automatizzati.
+
+L'arresto è ammesso soltanto quando il container corrisponde all'identità
+registrata da NIPAT per quel run, inclusi motore e immagine. I run privi
+delle informazioni necessarie possono essere consultati ma non autorizzano
+la rimozione del container. Non sono eseguite pulizie generali di Docker o WSL.
+L'esito della richiesta di arresto è conservato in `recovery.json`, lasciando
+intatti `run.json` e gli output. La sola consultazione non crea questo file. La funzione non riprende il calcolo:
+per ripeterlo occorre un nuovo run.
+
 ## Intermedi e output per workflow
 
 | Workflow | Intermedi conservati | Output principali |
 | --- | --- | --- |
 | DNPcall | `work/DNP_list.txt` e `work/bamlist.txt`, con pannello normalizzato e alias dei campioni. | Tabelle in `output/individual_outputs`, riepiloghi in `output/summary` e grafici in `output/plots`. |
-| SNPcall | Da BAM: `work/snp_regions.bed` e `work/pileup.txt`. Da pileup: riferimento al file selezionato. | `output/SNPcall_output.txt`. |
+| SNPcall | `work/SNPpanel.tsv` normalizzato; da BAM anche `work/snp_regions.bed` e `work/pileup.txt`. Da pileup: riferimento al file selezionato. | `output/SNPcall_output.txt`. |
 | Contamination | `work/DNPpanel.txt` e tabelle preparate in `work/inputs`. | `output/contamination_summary.txt` e tabelle `contamination_full_output_*.txt`. |
 | CPI | Tabelle parentali richieste in `work/inputs`; eventuale `work/DNPpanel.txt` o pannelli `work/cutoff_001.tsv`, ecc. | `output/Summary_FetalFraction_CPI.csv`, un PDF per coppia in `output/plots` e `output/plots/All_CPIplots.pdf`. |
 

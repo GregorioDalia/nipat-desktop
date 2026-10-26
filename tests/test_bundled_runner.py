@@ -24,6 +24,12 @@ IMAGE_ID = "sha256:" + "a" * 64
 def engine_metadata():
     return {
         "schema_version": 1, "interface": "native-r-v1",
+        "scientific_validation": {
+            "interface": "scientific-validation-v1",
+            "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "snp_alleles": "uppercase-working-copy",
+        },
         "manifest": {"path": "scientific/SHA256SUMS", "sha256": "b" * 64},
         "workflows": {
             name: {"script": f"scientific/vendor/{name}/main.R", "sha256": "c" * 64}
@@ -38,13 +44,27 @@ def engine_metadata():
                 "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
                 "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
                 "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
-                "lib/nipat_scientific/cpi.py",
+                "lib/nipat_scientific/cpi.py", "lib/nipat_scientific/outputs.py",
             )},
         },
     }
 
 
 class BundledRunnerTests(unittest.TestCase):
+    def test_old_or_partial_validation_capability_is_rejected(self):
+        for changed in ("missing", "inputs", "outputs", "normalization"):
+            with self.subTest(changed=changed):
+                description = engine_metadata()
+                if changed == "missing":
+                    del description["scientific_validation"]
+                elif changed in {"inputs", "outputs"}:
+                    key = "input_workflows" if changed == "inputs" else "output_workflows"
+                    description["scientific_validation"][key].remove("cpi")
+                else:
+                    description["scientific_validation"]["snp_alleles"] = "unchanged"
+                with self.assertRaisesRegex(RuntimeExecutionError, "scientific-validation-v1"):
+                    DockerComposeRunner._validate_engine_description(description)
+
     def setUp(self):
         # platform.platform() may spawn a process on Linux; keep that host probe
         # separate from the Docker subprocesses controlled by these tests.
@@ -497,13 +517,16 @@ class BundledRunnerTests(unittest.TestCase):
         run, context = self.begin("failure")
         with redirect_stdout(self.stdout), patch.object(
             self.runner, "_capture", side_effect=self.captured(),
-        ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process(7)):
+        ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process(7)), patch.object(
+            self.runner, "_stop_container", return_value={"status": "absent"},
+        ) as stop:
             with self.assertRaisesRegex(RuntimeExecutionError, "codice 7"):
                 with context:
                     self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute"])
         record = json.loads((run / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(record["status"], "failed")
         self.assertEqual(record["commands"][0]["returncode"], 7)
+        stop.assert_called_once_with(record["commands"][0]["container_name"])
 
     def test_interrupt_keeps_existing_named_container_cleanup(self):
         process = MagicMock()

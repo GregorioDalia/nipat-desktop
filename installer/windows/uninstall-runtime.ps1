@@ -77,7 +77,7 @@ function Get-NipatRemovalRegistrationPath([string] $Path) {
     return (Get-NipatRemovalPath $Path)
 }
 
-function Assert-NipatRemovalTarget($Target, $Registrations) {
+function Assert-NipatRemovalTarget($Target, $Registrations, [switch] $SkipOwnerProbe) {
     Assert-NipatRemovalTree $Target.Directory
     Assert-NipatRemovalTree $Target.OwnershipPath
     $receipt = Read-NipatOwnership $Target.OwnershipPath $Target.Distro
@@ -95,7 +95,7 @@ function Assert-NipatRemovalTarget($Target, $Registrations) {
         }
         # This checks both the product marker and the installation's random owner
         # token. No owner file is initialized or rewritten during removal.
-        Assert-NipatRuntimeOwner $Target
+        if (-not $SkipOwnerProbe) { Assert-NipatRuntimeOwner $Target }
     } else {
         if ($matches.Count -ne 0) { throw 'La registrazione WSL e cambiata durante la verifica.' }
         if ((Test-Path -LiteralPath $Target.Directory) -and
@@ -105,7 +105,7 @@ function Assert-NipatRemovalTarget($Target, $Registrations) {
     }
 }
 
-function Get-NipatRuntimeRemovalPlan([string] $Project) {
+function Get-NipatRuntimeRemovalPlan([string] $Project, [switch] $InspectOnly) {
     $layouts = @(Get-NipatKnownInstallLayouts $Project)
     $profile = Get-NipatInstallationProfile
     $runtimeRoots = @{}
@@ -164,7 +164,7 @@ function Get-NipatRuntimeRemovalPlan([string] $Project) {
                     Legacy = $false
                     ReceiptSha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
                 }
-                Assert-NipatRemovalTarget $target $registrations
+                Assert-NipatRemovalTarget $target $registrations -SkipOwnerProbe:$InspectOnly
                 $knownTargets[$distro] = $target
                 $targets += $target
             }
@@ -197,7 +197,7 @@ function Get-NipatRuntimeRemovalPlan([string] $Project) {
         foreach ($file in @(Get-ChildItem -LiteralPath $cache -File -Force)) {
             if ($file.Name -cnotmatch '^([a-f0-9]{64})-(nipat-wsl-rootfs|nipat-scientific-runtime)-[A-Za-z0-9._-]+\.tar\.gz$') { continue }
             $expected = $Matches[1]
-            $actual = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $actual = if ($InspectOnly) { $expected } else { (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }
             if ($actual -cne $expected) {
                 throw "Archivio della cache modificato o incompleto: $($file.FullName). Nessuna rimozione viene eseguita."
             }
