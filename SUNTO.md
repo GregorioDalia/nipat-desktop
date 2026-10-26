@@ -14,6 +14,8 @@ preparazione degli input. Il motore convalida i piani concatenati e ne
 esegue le quattro analisi in sequenza, rispettandone le dipendenze. SNPcall
 rimane un'attività indipendente anche quando appartiene allo stesso piano.
 La release ufficiale per l'installazione rimane la 0.6.0.
+Le [note della candidata 0.7.0a1](docs/RELEASE_0.7.0a1.md) descrivono
+installazione di verifica e collaudo dei workflow automatici.
 
 | Workflow | Funzione |
 | --- | --- |

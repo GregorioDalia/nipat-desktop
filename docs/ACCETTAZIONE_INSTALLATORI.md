@@ -66,6 +66,13 @@ prima dell’integrazione: ciò consente di provare e accettare gli installatori
 senza modificare `main`. I controlli automatici delle pull request non
 producono un'autorizzazione alla distribuzione.
 
+La candidata 0.7.0a1 segue questo percorso di build e collaudo; le
+[note della candidata](RELEASE_0.7.0a1.md) descrivono la prima prova dei
+workflow automatici. Costruire e provare una candidata non richiede di
+dichiarare superati scenari non eseguiti o di pubblicare una release.
+L'eventuale decisione di distribuzione della 0.7 deve avere criteri e prove
+espliciti: l'accettazione della 0.6 non le viene attribuita automaticamente.
+
 La sequenza prevista è:
 
 1. Avviare manualmente la build sul commit revisionato del branch di sviluppo.

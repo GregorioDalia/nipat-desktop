@@ -112,7 +112,7 @@ class LinuxInstallerTests(unittest.TestCase):
                 self.inputs()
 
     def test_rejects_other_release_families_before_packaging(self):
-        for version in ("0.4.1", "0.5.0a1", "0.7.0"):
+        for version in ("0.4.1", "0.5.0a1", "0.8.0a1", "1.0.0"):
             manifest = copy.deepcopy(self.manifest)
             manifest.update(version=version, release_tag="v" + version)
             for asset in manifest["assets"].values():
@@ -120,6 +120,42 @@ class LinuxInstallerTests(unittest.TestCase):
             self.write_manifest(manifest)
             with self.subTest(version=version), self.assertRaisesRegex(ValueError, "versione 0.6|Preview 0.5"):
                 self.inputs()
+
+    def set_version(self, version):
+        (self.project / "pyproject.toml").write_text(
+            f'[project]\nversion = "{version}"\n', encoding="utf-8",
+        )
+        self.manifest = linux.assets.make_manifest(
+            self.project, source_commit=COMMIT, runtime_image="sha256:" + "b" * 64,
+            rootfs=self.rootfs, scientific_image=self.archive,
+            rootfs_provenance={"schema_version": 1, "vendor": "nipat-desktop", "source_commit": COMMIT},
+        )
+        self.write_manifest(self.manifest)
+
+    def test_accepts_07_versions_only_with_matching_source_and_profile(self):
+        for version in ("0.7.0a1", "0.7.0b2", "0.7.0rc1", "0.7.0", "0.7.5"):
+            with self.subTest(version=version):
+                self.set_version(version)
+                self.assertEqual(self.inputs()[0]["version"], version)
+                (self.project / "pyproject.toml").write_text(
+                    '[project]\nversion = "0.6.0"\n', encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, "Versione dei sorgenti diversa"):
+                    self.inputs()
+
+    @unittest.skipUnless(HAS_DPKG, "Requires the Linux dpkg-deb tool")
+    def test_07_candidate_build_keeps_prerelease_identity_and_shared_runtime(self):
+        self.set_version("0.7.0a1")
+        package = linux.build_installer(self.project, self.manifest_path, self.output)
+        self.assertEqual(package.name, "nipat-desktop_0.7.0~a1_amd64.deb")
+        record = linux.verify_package(package, self.manifest_path, self.project)
+        self.assertEqual(record["version"], "0.7.0a1")
+        self.assertEqual(record["source_commit"], COMMIT)
+        self.assertEqual(record["embedded_scientific_asset"]["sha256"],
+                         hashlib.sha256(self.archive.read_bytes()).hexdigest())
+        self.assertEqual(subprocess.check_output(
+            ["dpkg-deb", "-f", str(package), "Version"], text=True,
+        ).strip(), "0.7.0~a1")
 
     def test_rejects_malformed_manifest_and_unsafe_asset_names(self):
         for value in ([], None, {"schema_version": True}, dict(self.manifest, assets=[]),

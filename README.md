@@ -17,6 +17,8 @@ versioni effettivamente pubblicate, gli installatori e le rispettive note.
 Gli artefatti GitHub Actions sono pacchetti di verifica tecnica, distinti dalle
 release. NIPAT è software per la ricerca: gli autotest verificano casi noti,
 mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
+Le [note della candidata 0.7.0a1](docs/RELEASE_0.7.0a1.md) descrivono i
+pacchetti di revisione e la prima prova dei workflow installati.
 
 ## Analisi disponibili
 

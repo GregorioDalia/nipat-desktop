@@ -82,6 +82,31 @@ Le conferme di avvio eseguono calcoli reali. Per una prova della sola
 compilazione utilizzare esplicitamente `--dry-run`; tale prova deve essere
 registrata come simulazione e non come analisi riuscita.
 
+### Workflow automatici della 0.7
+
+La [prima prova della candidata](RELEASE_0.7.0a1.md#prima-prova-del-pacchetto)
+descrive l'avvio dal pacchetto installato. Per ogni composizione selezionata
+registrare sia il risultato complessivo sia quello dei singoli passaggi:
+
+- per DNPcall → Contamination e/o CPI, confrontare le tabelle DNP prodotte
+  con quelle usate dalle analisi successive; CPI deve mantenere i ruoli e gli
+  ID delle coppie dichiarate, anche quando condividono un campione;
+- quando si aggiunge SNPcall, verificare il pannello scelto, l'associazione
+  di ciascuna tabella al BAM originale e la separazione dai risultati DNP;
+- per SNPcall su più campioni, confrontare BAM e pileup dello stesso caso,
+  verificando anche campioni con lo stesso nome di file in cartelle diverse;
+- confrontare la composizione con le analisi singole a parità di input e
+  parametri, e con risultati indipendenti quando disponibili;
+- provare un input non valido e un'interruzione: i passaggi rimanenti non
+  devono partire, le evidenze già prodotte devono restare disponibili e la
+  ripetizione deve usare una nuova cartella.
+
+Il piano completo richiede BAM cfDNA materni e paterni appropriati, frequenze
+di popolazione e pannelli compatibili. I casi per cui mancano questi dati
+vanno registrati come non eseguiti. La stima Contamination non rappresenta
+un filtro automatico per CPI; SNPcall non produce tabelle di ingresso per
+Contamination o CPI.
+
 ## Scheda per ciascuna analisi
 
 | Campo | Valore da registrare |
@@ -91,6 +116,7 @@ registrata come simulazione e non come analisi riuscita.
 | Workflow e modalità di input | |
 | Provenienza degli input; pannello e riferimento genomico | |
 | Parametri configurati | |
+| Workflow automatico: ID dei passaggi, campioni e coppie dichiarate | |
 | Percorsi e destinazione dei risultati | |
 | Risultato atteso e fonte del riferimento | |
 | Risultato osservato: conteggi, stime e grafici pertinenti | |
@@ -115,6 +141,7 @@ Documentare almeno le condizioni rilevanti per l'uso previsto:
 | SNPcall | BAM e pileup compatibile dello stesso caso; conteggi REF, ALT e altre letture; formato QNAME richiesto. |
 | Contamination | Singoli file e cartella con gli stessi input; presenza e assenza di `ratio_REF_ALT`; nessun sito informativo. |
 | CPI | Coppie appropriate; prefissi configurati; ALL, pannello singolo e più cutoff; nessun sito informativo. |
+| Workflow automatici | Composizioni DNPcall/Contamination/CPI; campioni condivisi fra coppie; SNPcall indipendente e batch; corrispondenza fra piano, campioni, output e analisi separate; passaggi bloccati dopo errore o interruzione. |
 | Robustezza | Percorsi con spazi, input fuori dal progetto, risultati in una destinazione scelta; file mancanti, intestazioni errate e nomi in conflitto. |
 | Utilizzo | Salvataggio e ripristino delle preferenze; persistenza dopo la riapertura; correzione per la singola analisi; campioni, coppie e run sempre selezionati esplicitamente; annullamento, riepilogo, apertura dei risultati e recupero dopo errore. |
 

@@ -193,6 +193,14 @@ usa gli stessi archivi verificati, il profilo di installazione e il launcher.
 La verifica finale Windows confronta manifest, sorgenti, EXE ed evidenze
 di costruzione.
 
+Il controllo `windows-client-check.json` usa il payload destinato al setup,
+trasferito in una cartella isolata con spazi e caratteri Unicode. Esegue
+Python incorporato, importazioni, catalogo, navigazione del menu e simulazioni
+dei workflow automatici, verificando i piani e la conservazione degli input.
+Le evidenze identificano EXE, manifest, launcher e inventario del medesimo
+pacchetto. Lo scenario `staged-embedded-python-client` non installa Inno Setup
+e non esegue WSL o il calcolo scientifico sul runner Windows.
+
 Il job `linux-installer` riceve il medesimo archivio esportato, senza
 ricostruirlo, e prepara il pacchetto `nipat-desktop` per Ubuntu 24.04 amd64.
 Il builder verifica versione, commit, sorgenti e checksum, quindi produce
@@ -205,6 +213,13 @@ verifica proprietà e accessibilità dei risultati, ripetizione dell’avvio,
 reinstallazione dello stesso pacchetto e rimozione con conservazione dei
 dati, dello stato e delle risorse Docker estranee. La reinstallazione
 non equivale a una prova di aggiornamento fra versioni differenti.
+
+La prova del pacchetto 0.7 comprende inoltre un piano DNPcall, Contamination,
+CPI e SNPcall sui due BAM sintetici. Controlla i cinque passaggi nel medesimo
+motore, risultati numerici, associazioni dei campioni, file intermedi e hash
+degli output. I campi `automatic_workflow_plan` e `preferences_preserved`
+registrano rispettivamente questo controllo e la conservazione delle
+preferenze durante esecuzione, reinstallazione e rimozione.
 
 Una prova separata usa un container Ubuntu 24.04 identificato da digest,
 inizialmente privo delle dipendenze. Installa il `.deb` tramite APT e
@@ -227,17 +242,19 @@ automatica non costituisce accettazione sui sistemi destinatari.
 | `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e checksum. |
 | `nipat-installer-inputs` | Applicazione preparata e manifest destinati al compilatore. |
 | `nipat-scientific-check-logs` | Registri e metadati delle regressioni conservati dalla build. |
-| `nipat-windows-setup` | `NIPAT-Setup.exe`, manifest, checksum ed evidenze dell'installatore e del launcher. |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`, manifest, checksum ed evidenze dell'installatore, del launcher e del client preparato (`windows-client-check.json`). |
 | `NIPAT-Setup.exe` | Download diretto del solo installatore Windows, senza ZIP, disponibile dopo la verifica congiunta Windows/Ubuntu. |
 | `nipat-linux-setup` | Pacchetto `.deb`, manifest comune, checksum, evidenze di costruzione, installazione e risoluzione delle dipendenze. |
+| `nipat-desktop_<versione>_amd64.deb` | Download diretto del solo pacchetto Ubuntu, senza ZIP, disponibile dopo la verifica congiunta Windows/Ubuntu. |
 | `nipat-installer-set-evidence` | `installer-set-check.json`, esito della verifica congiunta Windows/Ubuntu. |
 
-Per il collaudo Windows, accedere a GitHub e aprire il run riuscito indicato
-dal referente. Nella sezione **Artifacts**, scaricare **NIPAT-Setup.exe**:
-il file è direttamente eseguibile e non richiede estrazione o assemblaggio.
-Questo download contiene gli stessi byte dell'installatore in
-`nipat-windows-setup`; le evidenze e la procedura di accettazione restano
-associate alla coppia Windows/Ubuntu.
+Per il collaudo, accedere a GitHub e aprire il run riuscito indicato dal
+referente. Il riepilogo offre i download diretti di **NIPAT-Setup.exe** per
+Windows e del **.deb** per Ubuntu, disponibili anche nella sezione
+**Artifacts**. Non richiedono estrazione o assemblaggio. I download contengono
+gli stessi byte dei pacchetti conservati negli artefatti di evidenza
+`nipat-windows-setup` e `nipat-linux-setup`; le prove e la procedura di
+accettazione restano associate alla coppia Windows/Ubuntu.
 
 Gli artefatti sono conservati per **14 giorni** dalla creazione e non
 equivalgono a una release pubblica. Conservare il riferimento al run per

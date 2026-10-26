@@ -1,10 +1,15 @@
 # Distribuzione e requisiti
 
-Questo documento descrive **NIPAT Desktop 0.6.0**. Consultare la pagina
+Questo documento descrive l'installazione di **NIPAT Desktop**, comune alla
+release 0.6.0 e alla candidata 0.7.0a1. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate, i pacchetti disponibili e le relative evidenze.
 Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
 dalle release; la loro costruzione non autorizza da sola la pubblicazione.
+Le [note della candidata 0.7.0a1](RELEASE_0.7.0a1.md) descrivono i pacchetti
+di revisione e il collaudo dei workflow automatici. La candidata utilizza
+la stessa identità applicativa: installarla su un PC con NIPAT Desktop
+aggiorna quell'applicazione, senza creare un'edizione affiancata.
 
 ## Piattaforme
 

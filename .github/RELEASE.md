@@ -46,7 +46,7 @@ Gli artefatti da conservare per la verifica dei pacchetti sono:
 
 | Artefatto | Evidenze |
 | --- | --- |
-| `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json` e launcher verificato. |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json`, `windows-client-check.json` e launcher verificato. |
 | `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e relativi checksum. |
 | `nipat-linux-setup` | `.deb`, manifest comune, checksum, `linux-installer-build.json`, `linux-installation-check.json` e `linux-dependency-check.json`. |
 | `nipat-scientific-check-logs` | Metadati e registri delle regressioni conservati dalla build. |
@@ -86,6 +86,17 @@ artefatti Docker Desktop. Questi controlli legano l'EXE alla build e ai suoi
 input; non costituiscono una verifica ottenuta installando o estraendo
 indipendentemente l'eseguibile finale.
 
+Per la candidata 0.7, `windows-client-check.json` registra anche una prova
+del payload applicativo preparato per il setup, copiato in una destinazione
+isolata con spazi e caratteri non ASCII. Usa il Python portabile incluso
+per verificare import, catalogo, menu e pianificazione `--dry-run` dei
+workflow automatici, con mount in sola lettura e input invariati.
+Il report collega versione e commit agli hash di installatore, manifest,
+launcher e inventario, ma dichiara lo scenario
+`staged-embedded-python-client`: non esegue l'installazione Inno Setup,
+la preparazione WSL o i calcoli R. Questi ultimi restano coperti dalle
+prove scientifiche separate e dal collaudo del pacchetto sul dispositivo.
+
 Gli archivi runtime separati servono a recupero e verifica. La normale
 installazione Windows usa soltanto l'EXE; non richiede che l'utente disponga
 gli archivi accanto all'installatore.
@@ -105,6 +116,16 @@ un utente non root. I controlli comprendono i casi distribuiti di SNPcall, CPI
 e Contamination e un caso DNPcall sintetico, proprietà dei risultati e
 conservazione dei dati dopo reinstallazione dello stesso pacchetto e
 rimozione. Non attestano un aggiornamento fra versioni differenti.
+
+La verifica 0.7 aggiunge un piano automatico completo DNPcall →
+Contamination e CPI, con SNPcall indipendente sugli stessi BAM sintetici.
+Il piano viene avviato dal client installato come utente non root e verifica
+risultati numerici, associazioni dei campioni, identità dell'immagine,
+intermedi e hash degli output. I campi `automatic_workflow_plan` e
+`preferences_preserved` registrano rispettivamente l'esito del piano e la
+conservazione delle preferenze durante analisi, reinstallazione e rimozione.
+Si tratta di una prova sul runner Ubuntu configurato, non di un'installazione
+su Ubuntu Desktop pulito.
 
 Una prova distinta installa il `.deb` in un container Ubuntu 24.04
 inizialmente privo delle dipendenze. `linux-dependency-check.json` identifica

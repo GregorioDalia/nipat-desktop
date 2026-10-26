@@ -22,6 +22,8 @@ ruoli CPI e coppie espliciti. Validatore ed esecutore supportano le quattro
 analisi; SNPcall resta indipendente dai risultati delle altre tre.
 Gli obiettivi seguenti comprendono le funzionalità necessarie per completare
 la 0.7, la cui release non è ancora disponibile.
+Le [note della candidata 0.7.0a1](RELEASE_0.7.0a1.md) identificano le
+funzionalità da verificare attraverso i pacchetti Windows e Ubuntu.
 
 ## Versione 0.7: parametri e impostazioni del motore
 
@@ -132,9 +134,10 @@ confermare che entrambe le lingue producano richieste scientifiche equivalenti.
 
 ## Incrementi successivi
 
-Prima della distribuzione 0.7 occorre confezionare i pacchetti Windows e
-Ubuntu dal medesimo motore, verificarne integrità e funzionamento e registrare
-le prove sul pacchetto destinato alla consegna. Le evidenze delle regressioni
+La build della candidata 0.7.0a1 prepara i pacchetti Windows e Ubuntu dal
+medesimo motore.
+Prima della distribuzione occorre verificarne integrità e funzionamento e
+registrare le prove sul pacchetto destinato alla consegna. Le evidenze delle regressioni
 su sorgenti e container rimangono distinte da quelle degli installatori.
 La pubblicazione segue la [procedura di release](../.github/RELEASE.md);
 la 0.6 ufficiale rimane disponibile fino alla pubblicazione della successiva.

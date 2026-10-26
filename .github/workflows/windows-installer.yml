@@ -288,6 +288,18 @@ jobs:
           print("PASS: WSL installer identifies the verified source, installation profile, launcher and runtime archives.")
           '@ | python -
           if ($LASTEXITCODE -ne 0) { throw 'Final distribution verification failed.' }
+      - name: Exercise the packaged Windows client with its embedded Python
+        # This checks the exact staged payload, not a live Windows 11 / WSL installation.
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & installer/windows/test-packaged-client.ps1 `
+            -StageDirectory 'build/windows-installer' `
+            -InstallerPath 'build/output/NIPAT-Setup.exe' `
+            -OutputPath 'build/output/windows-client-check.json' `
+            -WorkDirectory (Join-Path $env:RUNNER_TEMP ('NIPAT packaged client ' + [char]0x00e8))
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Windows client verification failed.' }
+          Copy-Item 'build/windows-installer/app/.distribution/application-files.json' 'build/output/application-files.json'
       - name: Retain installer for review (no release publication)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -296,6 +308,17 @@ jobs:
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
+      - name: Retain packaged Windows client diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-windows-client-logs
+          path: |
+            build/output/windows-client-check.json
+            ${{ runner.temp }}/NIPAT packaged client è/logs/
+            ${{ runner.temp }}/NIPAT packaged client è/runs/
+          retention-days: 14
+          if-no-files-found: ignore
 
   linux-installer:
     needs: linux-runtime
@@ -363,6 +386,11 @@ jobs:
             ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/state.json
             ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/run.json
             ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/execution.log
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/workflow-state.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/engine-plan.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/request.json
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/command.log
+            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/preparation.log
           retention-days: 14
           if-no-files-found: ignore
 
@@ -432,10 +460,20 @@ jobs:
           archive: false
           retention-days: 14
           if-no-files-found: error
-      - name: Summarize the Windows preview download
+      - name: Provide the verified Ubuntu package as one downloadable file
+        id: linux-download
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: build/linux-output/*.deb
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Summarize the candidate installer downloads
         env:
           WINDOWS_SETUP_URL: ${{ steps.windows-download.outputs.artifact-url }}
           WINDOWS_SETUP_SHA256: ${{ steps.windows-download.outputs.artifact-digest }}
+          LINUX_SETUP_URL: ${{ steps.linux-download.outputs.artifact-url }}
+          LINUX_SETUP_SHA256: ${{ steps.linux-download.outputs.artifact-digest }}
         run: |
           python - <<'PY'
           import hashlib
@@ -447,11 +485,21 @@ jobs:
               expected = hashlib.file_digest(installer, "sha256").hexdigest()
           if setup_hash != expected:
               raise SystemExit("Direct Windows download differs from the verified installer")
+          packages = list(Path("build/linux-output").glob("*.deb"))
+          if len(packages) != 1:
+              raise SystemExit("Expected exactly one verified Ubuntu package")
+          linux_hash = os.environ["LINUX_SETUP_SHA256"]
+          with packages[0].open("rb") as installer:
+              expected = hashlib.file_digest(installer, "sha256").hexdigest()
+          if linux_hash != expected:
+              raise SystemExit("Direct Ubuntu download differs from the verified installer")
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-              summary.write("## Windows Preview download\n\n")
+              summary.write("## Candidate installer downloads\n\n")
               summary.write(f"[Download NIPAT-Setup.exe]({os.environ['WINDOWS_SETUP_URL']})\n\n")
-              summary.write("One self-contained installer; no ZIP extraction or separate runtime downloads. ")
+              summary.write(f"Windows SHA-256: `{setup_hash}`\n\n")
+              summary.write(f"[Download {packages[0].name}]({os.environ['LINUX_SETUP_URL']})\n\n")
+              summary.write(f"Ubuntu SHA-256: `{linux_hash}`\n\n")
+              summary.write("One self-contained installer per platform; no ZIP extraction or separate runtime downloads. ")
               summary.write("Sign in to GitHub to download. Available for 14 days.\n\n")
-              summary.write(f"SHA-256: `{setup_hash}`\n\n")
               summary.write("Internal unsigned candidate. This build is not a published or accepted release.\n")
           PY
