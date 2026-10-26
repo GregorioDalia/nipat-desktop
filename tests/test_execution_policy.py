@@ -62,7 +62,7 @@ class ExecutionPolicyTests(unittest.TestCase):
         progress = Mock()
         evidence = file_evidence(path, mode="full", progress=progress)
         self.assertEqual(evidence["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
-        self.assertEqual(progress.call_args.args, (path, path.stat().st_size, path.stat().st_size))
+        self.assertEqual(progress.call_args.args, (path.resolve(), path.stat().st_size, path.stat().st_size))
         self.assertGreater(progress.call_count, 2)
         self.assertIsNone(file_evidence(path)["sha256"])
 
