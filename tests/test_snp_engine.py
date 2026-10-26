@@ -40,16 +40,16 @@ class SnpEngineTests(unittest.TestCase):
         self.assertFalse(self.work.exists())
         self.assertFalse(self.output.exists())
 
-    def test_existing_pileup_is_used_directly_without_creating_intermediates(self):
+    def test_existing_pileup_preserved_and_panel_normalized_with_provenance(self):
         original = {path: path.read_bytes() for path in self.inputs.iterdir()}
         prepared = prepare_snp(self.request)
         self.assertIsNone(prepared.preparation_command)
         self.assertIsNone(prepared.generated_pileup)
         self.assertEqual(prepared.native_arguments, [
-            "--pileup", str(self.pileup), "--snplist", str(self.panel),
+            "--pileup", str(self.pileup), "--snplist", str(self.work / "SNPpanel.tsv"),
             "--out", str(self.output / "SNPcall_output.txt"),
         ])
-        self.assertEqual(list(self.work.iterdir()), [])
+        self.assertEqual({p.name for p in self.work.iterdir()}, {"SNPpanel.tsv", "input-validation.json"})
         self.assertEqual(list(self.output.iterdir()), [])
         self.assertEqual(original, {path: path.read_bytes() for path in self.inputs.iterdir()})
 

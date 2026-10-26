@@ -118,13 +118,20 @@ def check_metadata(identifier: str) -> dict:
         "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
     }:
         raise ValueError("Unexpected supported workflow plan execution interface.")
+    if description.get("scientific_validation") != {
+        "interface": "scientific-validation-v1",
+        "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+        "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+        "snp_alleles": "uppercase-working-copy",
+    }:
+        raise ValueError("The image lacks the current semantic input/output contract.")
     preparation = description.get("preparation", {})
     if preparation.get("interface") != "workflow-preparation-v1":
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
     for name in (
         "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
-        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "catalog_data/dnp-call.json",
+        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "catalog_data/dnp-call.json",
         "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
     ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
@@ -297,6 +304,37 @@ def check_snp_workflow(identifier: str, root: Path) -> tuple[Path, Path]:
         raise ValueError("The complete SNP pileup workflow changed an original input.")
     print("PASS: complete SNPcall from an existing pileup, all nine reference rows.", flush=True)
 
+    lowercase = root / "lowercase SNP originals"
+    shutil.copytree(example_inputs, lowercase)
+    panel = lowercase / "SNPlist.txt"
+    lines = panel.read_text(encoding="utf-8").splitlines()
+    panel.write_text(lines[0] + "\n" + "\n".join(
+        "\t".join([fields[0], fields[1].lower(), fields[2].lower()])
+        for fields in (line.split("\t") for line in lines[1:])) + "\n", encoding="utf-8")
+    original = panel.read_bytes()
+    lower_results = root / "lowercase SNP results"
+    write_request(lower_results, pileup_request)
+    run_image(identifier, ["execute", "snp-call", "--request", "/results/work/request.json"],
+              inputs=lowercase, results=lower_results)
+    compare_snp_with_diagnostics(pileup_results / "output/SNPcall_output.txt",
+                                 lower_results / "output/SNPcall_output.txt")
+    report = json.loads((lower_results / "work/input-validation.json").read_text())
+    if panel.read_bytes() != original or not report["normalizations"]:
+        raise ValueError("SNP normalization changed original input or lost its provenance.")
+    output_report = json.loads((lower_results / "work/scientific-validation.json").read_text())
+    if output_report["status"] != "validated" or output_report["quality_warnings"]:
+        raise ValueError("Valid lowercase SNP fixture failed its shared output contract.")
+    for label, allele_row in (("same alleles", "chr1:10\ta\ta\n"),
+                              ("duplicate locus", "chr1:10\ta\tg\nchr1:10\ta\tt\n")):
+        panel.write_text("pos\tref\talt\n" + allele_row, encoding="utf-8")
+        rejected = root / f"rejected SNP {label}"
+        write_request(rejected, pileup_request)
+        diagnostic = run_image(identifier, ["execute", "snp-call", "--request", "/results/work/request.json"],
+                               inputs=lowercase, results=rejected, expected_returncode=2)
+        if "snpscall started" in diagnostic or any((rejected / "output").iterdir()):
+            raise ValueError("Invalid SNP semantics reached R.")
+    print("PASS: real R lowercase/uppercase SNP equivalence, original preservation and semantic rejection.", flush=True)
+
     inputs = build_snp_bam_fixture(identifier, root)
     originals = {path: path.read_bytes() for path in inputs.iterdir() if path.is_file()}
     bam_request = {
@@ -423,13 +461,19 @@ def check_contamination_workflow(identifier: str, root: Path) -> None:
     # an R failure, and it must not produce staged data or scientific outputs.
     missing_counts = inputs / "samples/BadCounts.tsv"
     missing_counts.write_text("chr\tpos1\tpos2\tN_REF\nchr1\t100\t101\t95\n", encoding="utf-8")
-    invalid_cases = (
+    for label, value in (("Negative", "-1"), ("Fractional", "1.5"), ("Nonfinite", "Inf")):
+        (inputs / f"samples/{label}.tsv").write_text(
+            "chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\n" + f"chr1\t100\t101\t95\t{value}\t0\n",
+            encoding="utf-8")
+    invalid_cases = [
         ("duplicate names", [request["samples"][0],
                              {"path": request["samples"][1]["path"], "name": "noratio.txt"}],
          "Nome file duplicato nello staging"),
         ("missing counts", [{"path": "/inputs/samples/BadCounts.tsv", "name": "BadCounts.txt"}],
          "colonne mancanti"),
-    )
+    ]
+    invalid_cases.extend((label, [{"path": f"/inputs/samples/{label}.tsv", "name": f"{label}.txt"}], "N_ALT")
+                         for label in ("Negative", "Fractional", "Nonfinite"))
     for label, samples, expected_error in invalid_cases:
         rejected = root / f"rejected Contamination {label}"
         write_request(rejected, {**request, "samples": samples})
@@ -442,7 +486,7 @@ def check_contamination_workflow(identifier: str, root: Path) -> None:
         if any((rejected / "output").iterdir()) or (rejected / "work/inputs").exists() \
                 or (rejected / "work/DNPpanel.txt").exists():
             raise ValueError(f"Invalid {label} produced staging or scientific output.")
-    print("PASS: complete Contamination rejects duplicate names and missing counts before R.",
+    print("PASS: complete Contamination rejects duplicate names, missing counts and invalid numeric counts before R.",
           flush=True)
 
 

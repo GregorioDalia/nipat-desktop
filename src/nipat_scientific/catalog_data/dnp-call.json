@@ -826,10 +826,10 @@
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          20,
+          29,
           73
         ],
-        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
       }
     },
     {
@@ -854,10 +854,10 @@
       "evidence": {
         "path": "src/nipat_scientific/dnp.py",
         "source_lines": [
-          68,
-          74
+          54,
+          138
         ],
-        "sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7"
+        "sha256": "caf0c80148cc636b93f49d5cd6dcf9a9018dd8e8c8bf0ffabfb86c33a7d98560"
       }
     },
     {
@@ -876,10 +876,10 @@
       "evidence": {
         "path": "src/nipat_scientific/dnp.py",
         "source_lines": [
-          76,
-          98
+          54,
+          138
         ],
-        "sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7"
+        "sha256": "caf0c80148cc636b93f49d5cd6dcf9a9018dd8e8c8bf0ffabfb86c33a7d98560"
       }
     },
     {
@@ -900,10 +900,10 @@
       "evidence": {
         "path": "src/nipat_scientific/dnp.py",
         "source_lines": [
-          100,
-          136
+          54,
+          138
         ],
-        "sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7"
+        "sha256": "caf0c80148cc636b93f49d5cd6dcf9a9018dd8e8c8bf0ffabfb86c33a7d98560"
       }
     },
     {
@@ -925,10 +925,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          193,
-          209
+          182,
+          231
         ],
-        "sha256": "bd7a4a3a8801280cd078682771cb52cd92dc726c2ed9376461e49a4d83623b7e"
+        "sha256": "de0b5ce26d4b698fede57d7732b14150d6b171fa97bbe666985fec991d7c7d19"
       }
     },
     {
@@ -969,9 +969,50 @@
               5,
               6
             ],
-            "sha256": "634387bdd5f496131b58cc0752b3e09b4118a0469a943e631d0f3ff67b3386a4"
+            "sha256": "64e17a377067b09c0c3d8fa79d1b09208db3c2027f87ba709597697bc0754b9d"
           }
         ]
+      }
+    },
+    {
+      "id": "input_validation_provenance",
+      "value": "work/input-validation.json",
+      "applies_to": "dnp-call",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Il motore registra gli avvisi e le copie normalizzate con percorsi e SHA256 di origine e copia. Gli originali restano invariati. Errori UTF-8 e di formato delle tabelle diventano diagnostica di validazione.",
+        "en": "The engine records warnings and normalized copies with source/prepared paths and SHA256. Originals remain unchanged. UTF-8 and table-format errors become validation diagnostics."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/files.py",
+        "source_lines": [
+          179,
+          195
+        ],
+        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+      }
+    },
+    {
+      "id": "scientific_output_contract",
+      "value": {
+        "standalone_report": "work/scientific-validation.json",
+        "plan_report": "workflow-state.json step artifacts",
+        "nonfinite_estimate": "structured warning",
+        "missing_or_malformed_output": "execution failure"
+      },
+      "applies_to": "dnp-call",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Analisi singole e workflow applicano gli stessi contratti di output: identita dei campioni e dei siti, colonne, conteggi e file attesi. NA previsto in assenza di informazione resta valido; stime non finite o NA inattesi sono segnalati e non riscritti. Output mancanti o malformati impediscono lo stato di successo. Ogni tabella DNP deve contenere esattamente tutti i loci del pannello, inclusi quelli senza copertura.",
+        "en": "Individual analyses and plans share output contracts for sample/site identity, columns, counts and expected files. Expected NA with no information remains valid; nonfinite estimates or unexpected NA are reported and never rewritten. Missing or malformed output prevents success. Every DNP table must contain exactly all panel loci, including uncovered loci."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/outputs.py",
+        "source_lines": [
+          152,
+          245
+        ],
+        "sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
       }
     }
   ],

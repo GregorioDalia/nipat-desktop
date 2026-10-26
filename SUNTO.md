@@ -1,6 +1,6 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.7.1**, è un'applicazione locale per eseguire quattro workflow
+**NIPAT Desktop 0.7.2** è un'applicazione locale per eseguire quattro workflow
 scientifici da un menu testuale guidato o dalla riga di comando. Le analisi
 possono essere avviate singolarmente oppure nei workflow automatici
 **DNPcall → Contamination**, **DNPcall → CPI** e **DNPcall → Contamination e CPI**.
@@ -14,7 +14,7 @@ preparazione degli input. Il motore convalida i piani concatenati e ne
 esegue le quattro analisi in sequenza, rispettandone le dipendenze. SNPcall
 rimane un'attività indipendente anche quando appartiene allo stesso piano.
 La versione è destinata alla valutazione da parte dei ricercatori.
-Le [note della versione 0.7.1](docs/RELEASE_0.7.1.md) descrivono funzionalità,
+Le [note della versione 0.7.2](docs/RELEASE_0.7.2.md) descrivono funzionalità,
 pacchetti e ambito delle verifiche.
 
 | Workflow | Funzione |
@@ -29,6 +29,14 @@ delle esecuzioni. Un'immagine scientifica autonoma contiene la preparazione
 degli input, l'esecuzione dei piani, gli script R, samtools e le dipendenze. Su Windows l'immagine
 viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
 nativo. I calcoli e i dati rimangono sul computer.
+
+Prima di R, il motore Python controlla formato e contenuto degli input.
+I pannelli vengono normalizzati in copie di lavoro; conteggi e frequenze
+incompatibili con il formato sono rifiutati. Le incongruenze che richiedono
+una valutazione scientifica vengono segnalate senza correggere i dati.
+Il menu mostra gli avvisi anche dopo un completamento tecnico riuscito.
+Checksum integrali degli input e limiti di risorse sono configurabili;
+le esecuzioni incomplete possono essere consultate senza riscrivere i risultati.
 
 Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
 installazione con doppio clic e avvio dal collegamento **NIPAT Desktop**

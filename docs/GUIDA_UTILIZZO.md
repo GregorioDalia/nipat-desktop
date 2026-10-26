@@ -1,6 +1,6 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.7.1**,
+Questa guida descrive **NIPAT Desktop 0.7.2**,
 con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
@@ -149,14 +149,23 @@ inclusi gli script R e samtools quando il workflow lo richiede.
 La schermata finale consente di aprire risultati, cartella del run e log,
 o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file
 e metadati; non interpreta il significato scientifico dei risultati.
+Gli avvisi registrati sugli input o sui risultati sono mostrati anche nella
+schermata finale, con il riferimento al rapporto completo. Il completamento
+tecnico non risolve questi avvisi: esaminarli prima di utilizzare le stime.
 Il richiamo dell'ultima esecuzione vale per la sessione corrente. I run
 precedenti restano sul disco; non è presente una cronologia tra sessioni.
+La voce **6 — Ultima esecuzione** include anche il run più recente fallito
+o interrotto, quando la sua cartella è stata creata. In questo caso mostra
+lo stato e consente di consultare log e risultati parziali; non presenta
+come ultimo risultato un run riuscito precedente.
 Ogni workflow automatico conserva i risultati separati dei passaggi selezionati
 all'interno di un solo run.
 
-**7 — Guida e informazioni** è dedicata alla consultazione. **8 — Verifica
-ambiente** controlla il motore e gli strumenti senza elaborare campioni.
-Aprire la guida non avvia questo controllo né modifica la configurazione.
+**7 — Guida e informazioni** contiene istruzioni, catalogo scientifico,
+diagnostica delle esecuzioni incomplete e manutenzione dell'installazione.
+Aprire la guida non avvia analisi o manutenzioni. **8 — Verifica ambiente**
+nel menu principale controlla invece il motore e gli strumenti senza
+elaborare campioni.
 
 ## Configurazione del menu
 
@@ -181,6 +190,7 @@ precedenti a un salvataggio.
 | Riepilogo impostazioni | Consultazione dei valori salvati. |
 | Ripristina impostazioni | Ritorno ai valori iniziali del menu dopo conferma esplicita; non elimina campioni o risultati. |
 | Aggiornamenti | Canale `testing` o `stable` e verifica facoltativa all'avvio. |
+| Esecuzione e provenienza | Checksum degli input e limiti CPU, memoria e processi del container. |
 
 I valori salvati vengono riproposti anche dopo aver chiuso NIPAT. Si possono
 modificare durante la compilazione di una singola analisi senza cambiare le
@@ -210,6 +220,14 @@ campi dell'analisi; la presenza nelle preferenze non ne attesta la validità.
 Per cambiare la posizione dell'applicazione, dell'ambiente WSL o della cache,
 usare l'installatore. **Configura** non trasferisce questi componenti e non
 sposta i dati già presenti. La gestione delle cartelle è descritta di seguito.
+
+**Esecuzione e provenienza** propone `auto` per i checksum: i file fino a
+16 MiB vengono verificati con SHA-256, quelli maggiori sono identificati dai
+metadati. La scelta `full` calcola e verifica anche gli hash dei file grandi,
+con letture aggiuntive prima e dopo il calcolo. I limiti CPU, memoria e processi
+sono facoltativi; un campo non impostato conserva i limiti del runtime.
+La quota CPU non cambia il numero di worker scelto internamente da DNPcall.
+Le modalità sono descritte in [Esecuzioni e risultati](ESECUZIONI.md).
 
 ## Aggiornamenti
 
@@ -262,6 +280,30 @@ utilizzati. Il backup di riparazione non costituisce un rollback completo
 automatico. In caso di errore conservare messaggi e log, quindi seguire la
 [guida Windows](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione) o la
 [guida Ubuntu](INSTALLATORE_LINUX.md#aggiornamento-e-rimozione).
+
+## Installazione e spazio
+
+Da **7 — Guida e informazioni → 8 — Installazione e spazio** si consultano
+gli ambienti WSL e gli archivi di cache posseduti dall'installazione Windows,
+con dimensione e motivo dell'eventuale protezione. L'ambiente attivo e il
+precedente più recente sono conservati. Solo gli elementi indicati come
+rimovibili possono essere selezionati per la pulizia; dati, risultati,
+file estranei e distribuzioni WSL di altre applicazioni non vengono eliminati.
+
+**Ripara/riprendi preparazione** verifica i componenti dell'installazione
+corrente e ripete la preparazione del runtime e gli autotest. Non reinstalla
+una versione precedente e non ripristina automaticamente un backup completo.
+Se NIPAT non può essere avviato, usare il collegamento **NIPAT Desktop - completa
+preparazione** dopo aver risolto la causa segnalata dal setup.
+
+Pulizia e riparazione richiedono conferma. NIPAT si chiude solo dopo che il
+componente di manutenzione ha confermato la ricezione della richiesta; la
+finestra separata attende la chiusura delle sessioni e ripete i controlli
+prima di procedere. Il passaggio alla finestra non attesta il completamento:
+consultare l'esito finale indicato, conservato in
+`.runtime/maintenance/<id>/result.json` nella cartella applicativa.
+Su Ubuntu questa schermata è informativa: l'applicazione è gestita da APT
+e non viene proposta una pulizia generale delle immagini Docker.
 
 ## Percorsi e cartelle
 
@@ -355,6 +397,12 @@ eliminate. La procedura e i registri sono descritti nella
 
 ## Input dei quattro workflow
 
+NIPAT verifica i file nel livello Python condiviso prima dell'avvio R.
+Gli errori indicano l'input da correggere; le trasformazioni richieste dagli
+script vengono applicate a copie di lavoro, conservando intatti gli originali.
+I controlli e il significato delle segnalazioni sono descritti in
+[Controlli degli input e dei risultati](INPUT_VALIDATION.md).
+
 ### DNPcall
 
 Selezionare uno o più BAM oppure un file lista con un percorso BAM per riga,
@@ -400,6 +448,10 @@ Un pileup a sei colonne non contiene le informazioni richieste.
 La lista SNP è tabulata, con intestazioni `pos`, `ref`, `alt`. La posizione
 ha forma `chr1:1770788`. Nella modalità BAM la posizione deve essere almeno 2,
 per consentire la costruzione della finestra di tre basi.
+Gli alleli `ref` e `alt` sono basi singole A, C, G o T. NIPAT accetta
+maiuscole e minuscole e prepara una copia del pannello con gli alleli
+maiuscoli prima dell'avvio R, senza modificare il file selezionato.
+Le due basi devono essere distinte e le coordinate non possono essere duplicate.
 L'output `SNPcall_output.txt` include conteggi REF, ALT e altre letture.
 Il totale comprende le letture altre; il rapporto REF usa solo REF e ALT
 nel denominatore.
@@ -415,6 +467,9 @@ Sono richieste le colonne tabulate `chr`, `pos1`, `pos2`, `N_REF`, `N_ALT`,
 `N_Other`. Le tabelle individuali DNPcall sono compatibili. Se presente,
 `ratio_REF_ALT` viene utilizzato; altrimenti lo script lo calcola dai conteggi.
 I nomi che collidono dopo l'adattamento vengono rifiutati.
+I conteggi devono essere interi non negativi e i loci univoci. Un rapporto
+fornito incoerente con i conteggi viene segnalato, conservando il valore
+originale; i dettagli sono nel [contratto degli input](INPUT_VALIDATION.md).
 
 Il pannello può essere un DNP a cinque colonne o un pannello di coordinate:
 con intestazione deve contenere `chr`, `pos1`, `pos2`; senza intestazione
@@ -428,6 +483,10 @@ Selezionare la cartella delle tabelle cfDNA materne e del presunto padre,
 le coppie e il file delle frequenze di popolazione. Le tabelle devono contenere
 `chr`, `pos1`, `pos2`, `REF`, `ALT`, `N_REF`, `N_ALT`, `N_Other`, `total_count`.
 Le frequenze richiedono `chr`, `pos1`, `pos2`, `Ref_f.pop`, `Alt_f.pop`.
+I conteggi devono essere interi non negativi; le frequenze devono essere
+finite tra 0 e 1 e non contenere loci duplicati. Una frequenza zero o una
+somma REF/ALT diversa da uno viene segnalata senza modificare il dato.
+Il file delle frequenze accetta il punto o la virgola come separatore decimale.
 
 Con i prefissi predefiniti, la coppia `A1:A1` seleziona `MotherA1.txt` e
 `FatherA1.txt`. Più coppie si separano con virgole, per esempio
@@ -497,6 +556,43 @@ un nuovo nome di run. Per simulare il menu usare `nipat.cmd --dry-run wizard`;
 per effettuare analisi reali aprire normalmente NIPAT. Nel pacchetto Ubuntu,
 `--dry-run` non importa l’immagine e non avvia la preparazione o gli autotest;
 non attesta quindi che l’ambiente scientifico sia disponibile.
+
+Le opzioni `--input-hashes auto|full`, `--cpus`, `--memory-mb` e `--pids-limit`
+precedono il sottocomando dell'analisi, `workflow` o `wizard`. Per esempio:
+
+```powershell
+.\nipat.cmd --input-hashes full --cpus 4 --memory-mb 8192 wizard
+```
+
+`full` verifica SHA-256 degli input prima e dopo il calcolo. I limiti delle
+risorse sono facoltativi e riguardano il container, non il numero di worker R.
+La CLI diretta non legge le preferenze scientifiche del menu. Diagnostica e
+autotest rifiutano queste opzioni quando non applicabili.
+
+Per consultare le esecuzioni incomplete e, dopo conferma, arrestare un
+container di cui NIPAT riconosce l'identità:
+
+```powershell
+.\nipat.cmd runs inspect
+.\nipat.cmd --runs-dir "..\risultati" runs inspect --run "..\risultati\prova" --json
+.\nipat.cmd --runs-dir "..\risultati" runs stop --run "..\risultati\prova"
+```
+
+`runs inspect` non modifica i record. `runs stop` conserva risultati e log;
+non riprende il calcolo. Per questi comandi `--lang it|en` seleziona la lingua
+della diagnostica, lasciando invariata la lingua del menu generale.
+Su Windows i comandi dell'installazione sono:
+
+```powershell
+.\nipat.cmd installation inspect --json
+.\nipat.cmd installation recover --target current-installation
+```
+
+`installation cleanup --target ID` richiede un identificativo indicato come
+rimovibile dall'inventario. Le operazioni che modificano componenti richiedono
+conferma; `--yes` la fornisce esplicitamente nell'uso automatizzato. Il codice
+di uscita `85` indica il passaggio al componente separato, non la riuscita
+finale della manutenzione.
 
 Per verificare strumenti e casi di prova:
 

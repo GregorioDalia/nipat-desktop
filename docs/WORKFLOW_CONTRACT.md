@@ -18,6 +18,16 @@ desktop offrono DNPcall → Contamination, DNPcall → CPI e DNPcall → Contami
 e CPI, con SNPcall facoltativo sugli stessi BAM, oltre a SNPcall su più campioni.
 Queste opzioni non richiedono la scrittura del JSON.
 
+Prima dell'avvio di ciascun script R, il motore esegue anche i controlli
+sul contenuto degli input descritti in [INPUT_VALIDATION.md](INPUT_VALIDATION.md).
+Questi controlli appartengono all'esecuzione, non a `validate-plan`, e sono
+condivisi con le analisi singole. I pannelli normalizzati e il resoconto
+`work/input-validation.json` appartengono alla cartella del passaggio.
+Gli output sono verificati prima di essere dichiarati utilizzabili dal
+passaggio dipendente. Gli avvisi numerici sono conservati in
+`artifacts.quality_warnings`: non trasformano le tabelle R e non attestano
+la validità scientifica di un risultato tecnicamente completato.
+
 ## Struttura della richiesta
 
 La richiesta contiene esattamente `schema_version`, `samples` e `steps`.

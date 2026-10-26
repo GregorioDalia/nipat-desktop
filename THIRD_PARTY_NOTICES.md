@@ -66,9 +66,6 @@ licenses. The NIPAT license does not replace those licenses.
   provenance in `/etc/nipat-runtime.json`. Package notices are retained under
   `/usr/share/doc`; the exact engine's upstream LICENSE and NOTICE are also
   retained under `/usr/share/doc/docker-ce`.
-- **Docker Desktop:** this is a separately installed prerequisite for the
-  Docker Desktop distribution of NIPAT. It is not included in that package
-  and is governed by its own terms.
 
 This inventory describes the principal components; it is not a replacement
 for the license and notice files of every dependency in a runtime image.
@@ -76,7 +73,7 @@ for the license and notice files of every dependency in a runtime image.
 ## Redistribution and release records
 
 Distribute this notice, the root LICENSE and the original third-party license
-files with both Windows delivery formats. The release's source commit identifies
+files with the Windows installer and Ubuntu package. The release's source commit identifies
 the matching NIPAT source, including launcher and build scripts, at
 <https://github.com/GregorioDalia/nipat-desktop>.
 

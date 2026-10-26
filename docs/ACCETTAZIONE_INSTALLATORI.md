@@ -8,7 +8,7 @@ e scenari ancora da verificare.
 
 La serie **0.7** prevede una distribuzione per ricerca pre-1.0, basata su
 prove manuali documentate, una build completa riuscita e una decisione
-esplicita del manutentore. La **0.7.1** è destinata alla campagna di valutazione
+esplicita del manutentore. La **0.7.2** è destinata alla campagna di valutazione
 con le esperte di dominio. La qualificazione desktop completa rimane un
 percorso distinto: il suo catalogo di casi non blocca automaticamente ogni
 release pre-1.0.
@@ -33,14 +33,20 @@ L'accettazione per ricerca richiede:
 4. Revisione esplicita della distribuzione per ricerca, con responsabile,
    data, riferimenti alle evidenze e indicazione degli scenari rinviati.
 
-Una prova su una build precedente può costituire il riferimento manuale
-secondo uno dei due ambiti verificati automaticamente:
+Una prova su una build precedente può essere conservata con uno dei seguenti
+ambiti verificati automaticamente:
 
 - **Schema 2, serie 0.6:** equivalenza dei sorgenti operativi distribuiti,
   con le sole esclusioni esplicitamente definite dal validatore.
-- **Schema 3, serie 0.7:** equivalenza dei sorgenti scientifici e del runtime;
+- **Schema 3, fino alla 0.7.1:** equivalenza dei sorgenti scientifici e del runtime;
   revisione esplicita di ogni differenza nei sorgenti distribuiti del client,
   degli installatori e dei loro test, con hash precedenti e nuovi.
+- **Schema 4, dalla 0.7.2:** evidenza storica di installazione e funzionamento
+  sulla piattaforma osservata. Le differenze operative, inclusi adattatori e
+  runtime, sono revisionate con hash precedenti e nuovi; i sorgenti R e il
+  loro manifest devono restare invariati. Il confronto non dichiara equivalenza
+  operativa con la build precedente. Sono richiesti anche la prova reale di
+  aggiornamento Ubuntu e il rapporto permanente delle verifiche della candidata.
 
 Il confronto considera l'inventario versionato dei file distribuiti. Per lo
 schema 3, modifiche ai percorsi `scientific/`, `engine/`,
@@ -57,6 +63,12 @@ completo. Le evidenze non attribuiscono una prova manuale al nuovo EXE se non
 desktop rinviati in prove superate e non abilita automaticamente la
 qualificazione della versione 1.0.
 
+Nello schema 4 la prova precedente mantiene soltanto il ruolo
+`historical-platform-evidence`. La candidata viene valutata sulle proprie
+regressioni scientifiche, sul client Windows preparato, sul pacchetto Ubuntu
+installato e sul suo aggiornamento effettivo dalla 0.7.1. Nessuna di queste
+evidenze viene presentata come una nuova installazione manuale Windows.
+
 I test automatici vengono estesi quando un difetto, un nuovo comportamento
 o una condizione di confine possono essere riprodotti. Rimangono separati
 la copertura automatica, l'esperienza su dispositivi reali e il giudizio
@@ -72,7 +84,7 @@ prima dell’integrazione: ciò consente di provare e accettare gli installatori
 senza modificare `main`. I controlli automatici delle pull request non
 producono un'autorizzazione alla distribuzione.
 
-Le [note della versione 0.7.1](RELEASE_0.7.1.md) descrivono le funzionalità
+Le [note della versione 0.7.2](RELEASE_0.7.2.md) descrivono le funzionalità
 e il riferimento manuale utilizzato per la valutazione. Costruire e provare
 una candidata non richiede di dichiarare superati scenari non eseguiti o di
 pubblicare una release. Ogni distribuzione richiede una propria decisione
@@ -101,6 +113,8 @@ Conservare questi elementi della medesima build:
 - il `.deb` da `nipat-linux-setup`;
 - `installer-manifest.json` e i checksum;
 - `installer-set-check.json` da `nipat-installer-set-evidence`;
+- `linux-upgrade-check.json` e il rapporto permanente di qualificazione
+  richiesti dallo schema 4;
 - ID e URL della build, commit completo e registri delle prove.
 
 Verificare gli SHA-256 prima di installare. Non sostituire gli archivi
@@ -108,8 +122,8 @@ incorporati, ricompilare gli eseguibili o combinare artefatti di build diverse.
 Se i pacchetti cambiano, l’accettazione precedente non si applica.
 Gli artefatti Actions hanno scadenza: completare la revisione entro la loro
 conservazione, oppure ripetere build e accettazione sui nuovi artefatti.
-L’eventuale riutilizzo di una prova manuale segue i criteri di equivalenza
-dei sorgenti sopra descritti.
+L’eventuale uso di una prova manuale precedente segue l'ambito dichiarato
+dallo schema scelto, senza estenderne le osservazioni alla nuova candidata.
 
 ## Registrazione di ciascuna prova
 
@@ -310,7 +324,7 @@ completa e distinta da quella del riferimento manuale. Il confronto dei
 sorgenti viene ripetuto prima della preparazione e della pubblicazione;
 una differenza fuori dall'ambito ammesso interrompe la procedura.
 
-### Schema 3: distribuzione per ricerca della serie 0.7
+### Schema 3: distribuzione per ricerca fino alla 0.7.1
 
 Lo schema 3 conserva l'identità della build e i digest dei pacchetti e distingue
 la prova manuale di riferimento dalle verifiche della nuova distribuzione:
@@ -338,10 +352,37 @@ Il confronto numerico osservato comprende 11 siti DNP e 10 siti mantenuti da
 Contamination, concordanti con le esecuzioni separate. Non equivale a un
 collaudo manuale del nuovo EXE, dei casi CPI o di tutti i desktop destinatari.
 
+### Schema 4: distribuzione per ricerca dalla 0.7.2
+
+Lo schema 4 conserva identità della build, checksum dei pacchetti, decisione
+`accepted-for-research`, revisione e scenari rinviati. Richiede inoltre:
+
+| Campo | Contenuto |
+| --- | --- |
+| `schema_version` | `4`. |
+| `qualification_evidence_sha256` | SHA-256 del rapporto permanente di qualificazione della candidata. |
+| `linux_upgrade_check_sha256` | SHA-256 della prova di aggiornamento del pacchetto Ubuntu. |
+| `observed_baseline.role` | `historical-platform-evidence`: descrive soltanto l'esperienza effettivamente osservata sulla piattaforma. |
+| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-unchanged-r-v1`. |
+| `reviewed_source_changes` | Differenze operative complete, con percorso e hash prima/dopo; include gli adattatori Python e il runtime quando cambiano. |
+| `domain_validation` | `pending-domain-researchers`. |
+
+La procedura confronta i byte effettivi dei sorgenti e rifiuta modifiche R,
+differenze non dichiarate o hash non corrispondenti. Il resoconto del confronto
+dichiara che non attesta equivalenza operativa né installazione manuale del
+candidato Windows. Le verifiche richieste sono associate alla build esatta:
+regressioni scientifiche, client Windows preparato, pacchetto Ubuntu installato,
+aggiornamento reale dalla 0.7.1 e rapporto permanente delle evidenze.
+
+Il rapporto dell'aggiornamento distingue il pacchetto precedente dalla candidata
+e verifica la conservazione di dati e preferenze. Una reinstallazione dello
+stesso pacchetto non soddisfa questo requisito. Gli hash dei rapporti sono
+controllati insieme a quelli degli installatori prima della pubblicazione.
+
 ### Revisione e pubblicazione
 
 Sottoporre il record a revisione in
-`.github/release-acceptance/v0.7.1.json`, separatamente dal commit della
+`.github/release-acceptance/v0.7.2.json`, separatamente dal commit della
 build da distribuire. Il record può essere preparato sul branch di sviluppo;
 prima della pubblicazione, integrare in `main` sia il commit compilato sia
 il record approvato. Quest’ultimo non è incorporato negli installatori.

@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import argparse
 from contextlib import ExitStack
+import json
 import sys
 from pathlib import Path
 
 from nipat import __version__
 from nipat.activity import activity_session
 from nipat.errors import NipatError
+from nipat.execution.options import ExecutionOptions
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
 from nipat.preferences import PreferencesStore
+from nipat.i18n import translate
+from nipat.recovery_ui import recovery_lines
 from nipat.validation.self_test import run_self_tests
 from nipat.wizard import run_wizard
 
@@ -42,6 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--runs-dir", type=_path,
         help="cartella dei risultati (in alternativa: NIPAT_RUNS_DIR)",
     )
+    parser.add_argument("--input-hashes", choices=("auto", "full"),
+                        help="provenienza: auto calcola SHA-256 fino a 16 MiB; full su tutti gli input")
+    parser.add_argument("--cpus", type=float,
+                        help="quota CPU del container; non imposta il numero di worker R")
+    parser.add_argument("--memory-mb", type=int, help="limite memoria del container in MiB")
+    parser.add_argument("--pids-limit", type=int, help="limite dei processi nel container")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     doctor = subparsers.add_parser("doctor", help="controlla ambiente e runtime")
@@ -54,6 +64,28 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-runtime", help="costruisce l'immagine R/samtools")
     subparsers.add_parser("wizard", help="avvia la CLI guidata per i quattro workflow")
     subparsers.add_parser("self-test", help="esegue le verifiche numeriche distribuite")
+
+    runs = subparsers.add_parser("runs", help="controlla le esecuzioni incomplete senza riprenderle")
+    run_commands = runs.add_subparsers(dest="run_operation", required=True)
+    inspect = run_commands.add_parser("inspect", help="confronta i record con lo stato dei container")
+    inspect.add_argument("--run", type=_path, help="singola cartella di esecuzione")
+    stop = run_commands.add_parser("stop", help="arresta solo i container identificati e verificati")
+    stop.add_argument("--run", type=_path, required=True)
+    stop.add_argument("--yes", action="store_true", help="conferma esplicitamente l'arresto")
+    for command in (inspect, stop):
+        command.add_argument("--json", action="store_true", help="report strutturato con chiavi stabili")
+        command.add_argument("--lang", choices=("it", "en"), default="it",
+                             help="lingua dei messaggi di questa operazione")
+
+    installation = subparsers.add_parser("installation", help="consulta e gestisce i componenti installati")
+    installation_commands = installation.add_subparsers(dest="installation_operation", required=True)
+    inventory = installation_commands.add_parser("inspect", help="mostra ambienti, cache e preparazione")
+    inventory.add_argument("--json", action="store_true", help="inventario strutturato")
+    for operation, help_text in (("cleanup", "rimuove un componente precedente verificato"),
+                                 ("recover", "riprende la preparazione della versione installata")):
+        command = installation_commands.add_parser(operation, help=help_text)
+        command.add_argument("--target", required=True, help="ID ottenuto da installation inspect")
+        command.add_argument("--yes", action="store_true", help="conferma e chiude NIPAT per la manutenzione")
 
     parameters = subparsers.add_parser(
         "parameters", help="consulta opzioni R, regole interne e preparazione degli input",
@@ -182,12 +214,24 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.dry_run and args.command == "self-test":
         parser.error("self-test richiede l'esecuzione reale; rimuovere --dry-run")
+    if args.dry_run and args.command == "runs":
+        parser.error("runs interroga il runtime: rimuovere --dry-run; inspect non arresta container")
+    if args.dry_run and args.command == "installation":
+        parser.error("installation richiede un controllo reale: rimuovere --dry-run; inspect non modifica componenti")
+    execution_overrides = {
+        name: getattr(args, name) for name in ("input_hashes", "cpus", "memory_mb", "pids_limit")
+        if getattr(args, name) is not None
+    }
+    if execution_overrides and args.command not in {
+        "wizard", "workflow", "dnp-call", "snp-call", "contamination", "cpi",
+    }:
+        parser.error("Le opzioni di provenienza e risorse si applicano alle analisi e al wizard; "
+                     "rimuoverle per diagnostica, autotest e manutenzione.")
     completion_label = "Esecuzione pianificata" if args.dry_run else "Esecuzione completata"
 
     activity = ExitStack()
     try:
         if args.command == "parameters":
-            import json
             from nipat.catalog_ui import catalog_lines
             from nipat.terminal import Terminal
             from nipat_scientific.catalog import load_catalog
@@ -204,7 +248,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         layout = ProjectLayout.discover(data_dir=args.data_dir, runs_dir=args.runs_dir)
         activity.enter_context(activity_session(project_dir=layout.project_dir))
-        runner = DockerComposeRunner(layout, dry_run=args.dry_run)
+        runner = DockerComposeRunner(layout, dry_run=args.dry_run,
+                                     options=ExecutionOptions(**execution_overrides))
         workflows = Workflows(layout, runner)
         if args.command == "doctor":
             runner.doctor(args.runtime)
@@ -220,7 +265,66 @@ def main(argv: list[str] | None = None) -> int:
                     key: getattr(args, key) for key in ("data_dir", "runs_dir")
                     if getattr(args, key) is not None
                 },
+                execution_overrides=execution_overrides,
             )
+        elif args.command == "runs":
+            stop_requested = args.run_operation == "stop"
+            if stop_requested and not args.yes:
+                from nipat.terminal import Terminal
+                with Terminal() as ui:
+                    ui.message(translate("recovery_help", args.lang))
+                    ui.message(str(args.run))
+                    answer = ui.prompt(translate("stop_confirm", args.lang)).strip().casefold()
+                if answer not in {"s", "si", "sì", "y", "yes"}:
+                    print(translate("stop_cancelled", args.lang))
+                    return 0
+            reports = ([runner.reconcile_run(args.run, stop=stop_requested)] if args.run is not None
+                       else runner.incomplete_runs())
+            if args.json:
+                print(json.dumps(reports, ensure_ascii=True, indent=2))
+            elif not reports:
+                print(translate("no_incomplete_runs", args.lang))
+            else:
+                from nipat.terminal import Terminal
+                with Terminal() as ui:
+                    for report in reports:
+                        for line in recovery_lines(report, language=args.lang):
+                            ui.message(line)
+                    if stop_requested:
+                        ui.message(translate("stop_requested", args.lang))
+            if stop_requested and any(
+                item.get("cleanup", {}).get("status") == "not_confirmed"
+                for report in reports for item in report.get("containers", [])
+            ):
+                return 2
+        elif args.command == "installation":
+            from nipat.installation import (
+                installation_inventory, inventory_lines, maintenance_selection, start_maintenance,
+            )
+            from nipat.terminal import Terminal
+            from nipat.update_handoff import HANDOFF_EXIT_CODE
+
+            inventory = installation_inventory(layout.project_dir)
+            if args.installation_operation == "inspect":
+                if args.json:
+                    print(json.dumps(inventory, ensure_ascii=True, indent=2))
+                else:
+                    with Terminal() as ui:
+                        for line in inventory_lines(inventory):
+                            ui.message(line)
+            else:
+                selected = maintenance_selection(inventory, args.installation_operation, args.target)
+                with Terminal() as ui:
+                    ui.message(selected.get("path", selected["id"]))
+                    ui.message(selected.get("reason", ""))
+                    if not args.yes:
+                        answer = ui.prompt("Confermare la manutenzione e chiudere NIPAT? [s/N]").strip().casefold()
+                        if answer not in {"s", "si", "sì", "y", "yes"}:
+                            ui.message("Manutenzione annullata. Nessuna modifica richiesta.")
+                            return 0
+                    report = start_maintenance(layout.project_dir, args.installation_operation, args.target)
+                    ui.message(f"Passaggio alla manutenzione confermato. Esito finale: {report}")
+                return HANDOFF_EXIT_CODE
         elif args.command == "self-test":
             run_self_tests(layout)
         elif args.command == "workflow":

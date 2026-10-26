@@ -97,9 +97,11 @@ class CheckOwnership(unittest.TestCase):
 class RequiredGate(unittest.TestCase):
     def results(self, scientific="true"):
         return {
-            "changes": {"result": "success", "outputs": {"run_checks": "true", "scientific": scientific}},
+            "changes": {"result": "success", "outputs": {"run_checks": "true", "scientific": scientific, "runtime": scientific, "packaging": scientific}},
             "linux-checks": {"result": "success"}, "windows-checks": {"result": "success"},
             "scientific": {"result": "success" if scientific == "true" else "skipped"},
+            "runtime": {"result": "success" if scientific == "true" else "skipped"},
+            "packaging": {"result": "success" if scientific == "true" else "skipped"},
         }
 
     def errors(self, results, event="pull_request", ref="refs/pull/42/merge"):
@@ -110,7 +112,7 @@ class RequiredGate(unittest.TestCase):
         self.assertEqual(self.errors(self.results("false")), [])
 
     def test_failed_cancelled_skipped_or_missing_required_jobs_fail_closed(self):
-        for name in ("changes", "linux-checks", "windows-checks", "scientific"):
+        for name in ("changes", "linux-checks", "windows-checks", "scientific", "runtime", "packaging"):
             for result in ("failure", "cancelled", "skipped", None):
                 with self.subTest(job=name, result=result):
                     results = self.results()
@@ -121,7 +123,7 @@ class RequiredGate(unittest.TestCase):
             self.assertTrue(self.errors(results))
 
     def test_unknown_selection_fails_closed(self):
-        for field in ("run_checks", "scientific"):
+        for field in ("run_checks", "scientific", "runtime", "packaging"):
             for value in (None, "", "unexpected"):
                 results = self.results()
                 results["changes"]["outputs"][field] = value
@@ -135,7 +137,7 @@ class RequiredGate(unittest.TestCase):
     def test_only_branch_context_may_report_delegation(self):
         results = self.results()
         results["changes"]["outputs"].update(run_checks="false", duplicate_pr="42")
-        for name in ("linux-checks", "windows-checks", "scientific"):
+        for name in ("linux-checks", "windows-checks", "scientific", "runtime", "packaging"):
             results[name]["result"] = "skipped"
         self.assertEqual(self.errors(results, "push", "refs/heads/feature/new"), [])
         self.assertTrue(self.errors(results))

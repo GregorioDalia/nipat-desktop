@@ -1,7 +1,7 @@
 # Installazione di NIPAT su Ubuntu
 
 Il pacchetto Linux di **NIPAT Desktop** è un unico file `.deb`, con versione
-nel nome: `nipat-desktop_0.7.1_amd64.deb` per la versione 0.7.1.
+nel nome: `nipat-desktop_0.7.2_amd64.deb` per la versione 0.7.2.
 Contiene applicazione, documentazione
 e immagine scientifica con R, samtools, dipendenze e preparazione dei workflow.
 Il motore è lo stesso archivio verificato incluso nel pacchetto Windows.
@@ -13,7 +13,7 @@ relativi pacchetti sono elencati nella pagina
 I pacchetti degli artefatti GitHub Actions servono alla revisione tecnica.
 Le istruzioni si riferiscono a una build identificata; un archivio
 **Source code** di GitHub non è un installatore.
-Le [note della versione 0.7.1](RELEASE_0.7.1.md) descrivono funzionalità
+Le [note della versione 0.7.2](RELEASE_0.7.2.md) descrivono funzionalità
 e ambito delle verifiche. L'installazione aggiorna
 lo stesso pacchetto `nipat-desktop`, senza creare una seconda applicazione.
 
@@ -58,7 +58,7 @@ Scaricare il pacchetto `.deb` della versione scelta dagli asset della pagina
 Dalla cartella che contiene il pacchetto:
 
 ```bash
-sudo apt install ./nipat-desktop_0.7.1_amd64.deb
+sudo apt install ./nipat-desktop_0.7.2_amd64.deb
 ```
 
 APT mostra anche le dipendenze da scaricare e installare. Esaminare il
@@ -215,7 +215,15 @@ Docker Engine e Compose v2 e controlla i comandi informativi del pacchetto.
 Questa prova non avvia un daemon Docker nel container e non verifica
 l’autorizzazione di un account desktop.
 
-Le due prove automatiche non attestano l’esperienza completa su un Ubuntu
+Una prova dedicata installa il pacchetto ufficiale 0.7.1 e lo aggiorna alla
+candidata con APT. Verifica run, dati e preferenze conservati e ripete gli
+autotest scientifici sul pacchetto aggiornato. Le identità dei due pacchetti
+e gli esiti sono registrati in `linux-upgrade-check.json`.
+I test del launcher verificano inoltre Ctrl+C attraverso il processo che
+avvia il wizard: l'annullamento lascia disponibile il menu quando il client
+ha completato l'arresto.
+
+Le prove automatiche non attestano l’esperienza completa su un Ubuntu
 Desktop pulito, la risoluzione di ogni configurazione APT o l’interazione
 con ogni gestore grafico dei pacchetti. Prima della distribuzione,
 completare il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md)

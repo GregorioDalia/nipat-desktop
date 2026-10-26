@@ -197,6 +197,19 @@ def check_snp_plans(identifier: str, root: Path, inputs: Path, expected: Path,
         reused = workflows.snp_batch(pileups=list(reversed(pileups)), panel=inputs / "SNPlist.tsv",
                                      run_name="snp-batch-pileups")
         _snp_steps(reused, layout, list(zip(reversed(pileups), (expected, second_expected))), mode="pileup")
+        lower_panel = root / "lowercase SNP batch panel.tsv"
+        with (inputs / "SNPlist.tsv").open(encoding="utf-8", newline="") as handle:
+            lower_rows = list(csv.DictReader(handle, delimiter="\t"))
+        with lower_panel.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["pos", "ref", "alt"], delimiter="\t", lineterminator="\n")
+            writer.writeheader()
+            writer.writerows({"pos": row["pos"], "ref": row["ref"].lower(), "alt": row["alt"].lower()}
+                             for row in lower_rows)
+        lower_original = lower_panel.read_bytes()
+        normalized = workflows.snp_batch(pileups=pileups, panel=lower_panel, run_name="snp-batch-lowercase")
+        _snp_steps(normalized, layout, list(zip(pileups, (second_expected, expected))), mode="pileup")
+        if lower_panel.read_bytes() != lower_original:
+            raise ValueError("SNP plan normalization modified the original panel.")
         if any(path.read_bytes() != content for path, content in old_run.items()):
             raise ValueError("Reusing SNP intermediates changed a completed run.")
 

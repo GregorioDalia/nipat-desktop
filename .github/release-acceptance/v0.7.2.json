@@ -1,0 +1,451 @@
+{
+  "schema_version": 4,
+  "version": "0.7.2",
+  "source_commit": "5bc05e00c7e231f7f3d501ace91131dae3bd1458",
+  "installer_manifest_sha256": "e29f99c85f20d3fdc700836283662ac656ce1c3638c272b4b3eaf6ce31678019",
+  "scientific_archive_sha256": "4b3480bc6f35e1859d5e9838e683a3ccbb74a8fccdec59c6219d6d37bfcd90a8",
+  "windows_installer_sha256": "180282492e0fdaf7459e5b86ab1a75037e44ad5f65001f7c16ac237b0d9010d7",
+  "linux_installer_sha256": "e623897ffa46698250b1ee32216b1ab392607b6f7e3082a1932a164ef4992675",
+  "qualification_evidence_sha256": "dddab17dd1a5149d438f1489a59bd61d8dbde6cb9dee4a6c79fbdff2542ad03a",
+  "linux_upgrade_check_sha256": "8c91eb6b2270020445cbab9272a826ac0b4f3019c033493cd7728c6d7f57d4aa",
+  "build_run_id": 40360043319,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "Codex, revisione tecnica su incarico di Gregorio Dalia",
+    "reviewed_at": "2026-10-26T17:03:38Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/23f284469f005d81d516e0a44d795530a706e858/.github/release-acceptance/v0.7.2-evidence.md",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/40360043319",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/40359756734"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "1b601081a4aff9efe1806c921fd7ac963feea7b7",
+    "observations": [
+      "installation_ready",
+      "automatic_workflow_sample_analysis"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/1603d998e036ba73d37f015338c1200c1ea12c65/.github/release-acceptance/v0.7.1-evidence.md"
+    ],
+    "source_comparison_scope": "reviewed-operative-changes-with-unchanged-r-v1",
+    "role": "historical-platform-evidence"
+  },
+  "reviewed_source_changes": [
+    {
+      "path": ".gitignore",
+      "before_sha256": "7e0709fc432587fb8691aa0238f38d5e15d136646d2bb47516634ca282f462f7",
+      "after_sha256": "1be4eaf8a4a50a09486f6c6f7c30385172237ff042efe341dfd2b146adbc5ec1"
+    },
+    {
+      "path": "docker/scientific-runtime/Dockerfile",
+      "before_sha256": "634387bdd5f496131b58cc0752b3e09b4118a0469a943e631d0f3ff67b3386a4",
+      "after_sha256": "64e17a377067b09c0c3d8fa79d1b09208db3c2027f87ba709597697bc0754b9d"
+    },
+    {
+      "path": "engine/main.py",
+      "before_sha256": "7003881841bcf11c31faa54cd7fa75cc5761930dac7ccb6e0576497a35ed09e5",
+      "after_sha256": "98eb0eee8328e60a486ef588a94a5f30e078fad06a8858921dc795acabef8181"
+    },
+    {
+      "path": "installer/linux/launch.py",
+      "before_sha256": "319d462a313b57facfbf08d610aceb1813d507299c0c56063ca7cab6dda02a0a",
+      "after_sha256": "11a23e2085d5a77627a3e813dc86cdf34610e9c9140f0d38526001e43b60d77a"
+    },
+    {
+      "path": "installer/runtime/Dockerfile",
+      "before_sha256": "7b67d18de6302f417c20d033df8de1ec8ae6f356a554c2c5f2e0c6534c84f75c",
+      "after_sha256": "dedbf8460acf92a1648555fe6b0dfdc3e0a649ddb0799c61f0352e69bc6783fb"
+    },
+    {
+      "path": "installer/runtime/component.py",
+      "before_sha256": null,
+      "after_sha256": "7b1971920a0b38fba02d43c9ff605009cf2fa11c8577f0fa3ea60f31cca512ad"
+    },
+    {
+      "path": "installer/runtime/nipat-engine",
+      "before_sha256": "4e0f701fdc35cfd57d15cb9fa4a77446fe4b1e9896c5af2b13ee4c31191e7f95",
+      "after_sha256": "180417dbfb790388ebfd37f177374e767ab0f5db7d4adca168cc45e626c77af0"
+    },
+    {
+      "path": "installer/runtime/write-provenance.py",
+      "before_sha256": "e0134a5ca3077e248c3e4639f7673d4070520da3bd5a364266bf392492f10350",
+      "after_sha256": "65d65acc38e198c2cff352df396120b5fb49d326755005b36d3b044339d2f1a0"
+    },
+    {
+      "path": "installer/windows/bootstrap-common.ps1",
+      "before_sha256": "836c8f0071e8f229dda6011792a8bbbd362fd78f9a3b4bbb700262b2440055b7",
+      "after_sha256": "8ec21e9215c544e2e084ea8ca68f45e7f375bb6d4d05eaf72dbb6adddf8919e5"
+    },
+    {
+      "path": "installer/windows/maintenance.ps1",
+      "before_sha256": null,
+      "after_sha256": "6f45df0eab722feaef13a415efa5f768964633a60398a94e2984c6021971eed4"
+    },
+    {
+      "path": "installer/windows/test-bootstrap.ps1",
+      "before_sha256": "f5a77570672c9ee586a5f66756ed0d94aca3b17e8d09b4a00765aa868d216112",
+      "after_sha256": "7aaf595db4495ede5bb567d45da106de40eb0dfc320530ba92991fa1b007ffe2"
+    },
+    {
+      "path": "installer/windows/test-maintenance.ps1",
+      "before_sha256": null,
+      "after_sha256": "3d37528c66284ec9b88bc3c5697a99ecfd1456764ae8133712500f71eb8d292c"
+    },
+    {
+      "path": "installer/windows/uninstall-runtime.ps1",
+      "before_sha256": "e1ec080696f30c40f034ee654402d82aaf54d279e8621c3965c273b2ec1171c9",
+      "after_sha256": "eaa1e571300509c3c2ba0dfc59e1a5645b03c094c723efc9bf4a17d15dd87248"
+    },
+    {
+      "path": "pyproject.toml",
+      "before_sha256": "8926a6c0809b40fe7c4edc760530f63dbfb3ae21075af307e8fdea745d8ad321",
+      "after_sha256": "97aea14efe55d5818395304690ad8f00bee4891d5c239f51ab9929cca4758b23"
+    },
+    {
+      "path": "scripts/benchmark_workflows.py",
+      "before_sha256": null,
+      "after_sha256": "b5c7a3517d5fbd5ab38e08f956562b45f613f72eac342fccca12b27617a6e03c"
+    },
+    {
+      "path": "scripts/build_linux_installer.py",
+      "before_sha256": "eb88973a141f1311ad1d74c3e5be705631e67ff193e257ed518c0a3f2b4a3c4a",
+      "after_sha256": "c1470db0d4e3f64286b14d51b3377763198887f453b2935294b792aa2db54449"
+    },
+    {
+      "path": "scripts/build_windows_installer_assets.py",
+      "before_sha256": "92bd632ae32f2359d7578a11dbf706ca7e0e41cbd23fa8005218827a831f8524",
+      "after_sha256": "4ec6d3da35fcffd1286c9604630f766bd0b15535914325a10a138f397364713a"
+    },
+    {
+      "path": "scripts/verify_contamination_update.py",
+      "before_sha256": "825f6612708957281b58831d96623237ca2371a15577e1a401774cb122fc6fe8",
+      "after_sha256": "d9df8ad2d8a81b6e8608769e23bc9f89e7aa972194dedb61e7b2e71d5a6b76a0"
+    },
+    {
+      "path": "scripts/verify_cpi_engine.py",
+      "before_sha256": "d286f28c128e378b16a255f0f2b04260cf4e961f673c9fbaff69adec5b9486b9",
+      "after_sha256": "f0693810dd5a120a67a5e4fe0c17860e0199f972372eb857f4f398201756b278"
+    },
+    {
+      "path": "scripts/verify_dnp_engine.py",
+      "before_sha256": "1534df6938cd039d5832ed405f7423f4d2c20c3a61216ad213faef2df82abec5",
+      "after_sha256": "8d7cab4c9e0b6e315c2564b56f26646db42cba92f146c1b61a50892d16e0d744"
+    },
+    {
+      "path": "scripts/verify_engine_package.py",
+      "before_sha256": "559cceba6968b77add1f03107ebcadc88bebee63de05e857b235c4abb4a82090",
+      "after_sha256": "9499457de726c2dfc72166b7e71d8a6af5b0ba5db9cd7bdb10bbca8f1ab31aac"
+    },
+    {
+      "path": "scripts/verify_linux_upgrade.py",
+      "before_sha256": null,
+      "after_sha256": "f97bde185bdaa10bcc6042e1b7ebf66bb06f243c0b861d309f4db61563cacefb"
+    },
+    {
+      "path": "scripts/verify_snp_workflow.py",
+      "before_sha256": "24ff1df01ed3dc0f21f96b6f2af8d6197902c58f826da96ddc7367ba8130ca25",
+      "after_sha256": "67d03529dbbf3b6298e0a0f7e54f5de4f4f3e3ab4787cf6b69fd1af98c611f4a"
+    },
+    {
+      "path": "scripts/verify_windows_payload.py",
+      "before_sha256": "21c4894da194ff4e5e22ae502d15962ab9ae05fb0561eb347b625e139582efd1",
+      "after_sha256": "4462dc87c047aa64f70b26e704f784d8a42f17fc789ded853c5acbd2c5afefff"
+    },
+    {
+      "path": "src/nipat/__init__.py",
+      "before_sha256": "def754c170a99a8c515be3b86a12243269aac2c647904a1e745903665b2b3ada",
+      "after_sha256": "2d5f4fe4e9bfd3491c2f6f6154dd06b7bf4d0dafbd9879c2b86e42519824acfe"
+    },
+    {
+      "path": "src/nipat/cli.py",
+      "before_sha256": "e4e2c2858f0b4264980b2d0893a00565ebfa183fd35ffbd9d61e82892467a2d7",
+      "after_sha256": "63ed588e0cfe265c6ee472abf3585d74ea5f52c38e7ae04910d3ae3d56d4ce09"
+    },
+    {
+      "path": "src/nipat/errors.py",
+      "before_sha256": "847da0e36f07d75dad4fb0d78448a649bcb711a8ba159766aca158659d6addf4",
+      "after_sha256": "45849c4e14863bc3e74e9722a53e4b015998b58ce6d481795ad3688e6b51b364"
+    },
+    {
+      "path": "src/nipat/execution/options.py",
+      "before_sha256": null,
+      "after_sha256": "26d2fffa047c5a3aecd2033b0b44e5f68e7cc657094753b00bd78aadb041567b"
+    },
+    {
+      "path": "src/nipat/execution/recovery.py",
+      "before_sha256": null,
+      "after_sha256": "25f2eeac25ad173fe820368887208bb4d359a60768b5f931f1668d3184d2b389"
+    },
+    {
+      "path": "src/nipat/execution/runner.py",
+      "before_sha256": "0d70c74e22a6fa8e0f8a5113b57be0683b2a5dc7bd209ec8e40e17170a94c8cf",
+      "after_sha256": "4cb66820feeeca43849ce30db26ec53d503f6a0d4a65e64c9a25a58c04d875b6"
+    },
+    {
+      "path": "src/nipat/execution/tracking.py",
+      "before_sha256": "d11e734f584e0cd3d4dacb63d6d8740357c673fd8429e65b88c199807c5f7855",
+      "after_sha256": "3b3c0e979df17391cc300ea186fd11e7aee0b5d47346b54ff16461987a531001"
+    },
+    {
+      "path": "src/nipat/execution/workflows.py",
+      "before_sha256": "bd7a4a3a8801280cd078682771cb52cd92dc726c2ed9376461e49a4d83623b7e",
+      "after_sha256": "de0b5ce26d4b698fede57d7732b14150d6b171fa97bbe666985fec991d7c7d19"
+    },
+    {
+      "path": "src/nipat/i18n.py",
+      "before_sha256": null,
+      "after_sha256": "d3a2261f4dab304863364c53c2d3e61fb36437bbd49420ca3df367de2a6e06a0"
+    },
+    {
+      "path": "src/nipat/installation.py",
+      "before_sha256": null,
+      "after_sha256": "b6d342bbeeb11c1e368b49659786a00b33672d693090af916359c3c8c25dd1a4"
+    },
+    {
+      "path": "src/nipat/paths.py",
+      "before_sha256": "e70baf0836f693b7e8e246db39c62b018064a92c6bda374a12bb40c8a6d1a907",
+      "after_sha256": "b2ed4874a5294213ccfc5f6dc91200a5e57bd963066bd64227c84c2dbb8554a6"
+    },
+    {
+      "path": "src/nipat/preferences.py",
+      "before_sha256": "740e027be5cf1be89808ff433cfacabeae3def42e0c91458f37c20a8071e6bf8",
+      "after_sha256": "cbc0219f50b05f6727c873c336b6a5a7f2380a0a00965d8fe2bc1e7bde4ffea1"
+    },
+    {
+      "path": "src/nipat/recovery_ui.py",
+      "before_sha256": null,
+      "after_sha256": "4a3a8a3dea2e06071c6e61cec7e6f9dd1a3eb0296a2daa56faf18744504191ad"
+    },
+    {
+      "path": "src/nipat/results.py",
+      "before_sha256": "7ebb5cd0924f228334a341a34347a6ada2ca7695ff3decbb0a472fe7a2900f12",
+      "after_sha256": "4cbc83b8bcbec43bb2209a6976001cda38afa3e0f111f6b167694fb88a9fdbc8"
+    },
+    {
+      "path": "src/nipat/storage.py",
+      "before_sha256": null,
+      "after_sha256": "ce3adece1a23950a4b0c488e3c66f62f5399e56b9e3e841fe2324e81bb47bfac"
+    },
+    {
+      "path": "src/nipat/terminal.py",
+      "before_sha256": "f24848d81511692bff0bffabf7692f5bfa1a12dd4b60b069ff254311dc7d9adc",
+      "after_sha256": "180e56a433d01077ec95bbdc9d2c5c822d81ac5c04596c87a32b7920e3d5a983"
+    },
+    {
+      "path": "src/nipat/wizard.py",
+      "before_sha256": "3231646d0bcf0971f59b0ac78ef84f46fb7a41d7940c64ccd9c09c9ba4e62ebf",
+      "after_sha256": "b35273967167017452d82a364387b549646844a782f1cbe579fcdcce6e9d7c5a"
+    },
+    {
+      "path": "src/nipat/wizard_forms.py",
+      "before_sha256": "83108041fefc2f1d162f44f6718c3004016718f733e1f252159e77b60b5afd6d",
+      "after_sha256": "edcb83f477e55cadc5b15506d5cd7b15ec8f6b9c2f35f32d5a9ca18d229a0d9c"
+    },
+    {
+      "path": "src/nipat/wizard_settings.py",
+      "before_sha256": "92ca11c360ca91b42e1b16487d4e7a9be910799840c1b21dd2ee6306e59143d8",
+      "after_sha256": "2c174a73a77614d7d73c6dce4974f41ee247d245126413fc6b707743b59fa048"
+    },
+    {
+      "path": "src/nipat/workflow_forms.py",
+      "before_sha256": "27b8308b5515be8cc9727be1190423af016608c6af6c0a5d311ff8f6005b8f9c",
+      "after_sha256": "ac9f17ac785c65e0c158959c501ae339f0a01cca00116454aae963f7d68abf06"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/contamination.json",
+      "before_sha256": "5de7f0d7fb5111ec0ba4e910ab8e76deb3619e96a62c6ae3bec673cd680001c4",
+      "after_sha256": "2068253b8bcb0f27454187b0f1cc8f17f27444fa4730600367e8b56bb10d871d"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/cpi.json",
+      "before_sha256": "8f9bb1bc750695aea3e8f518bc6f789a4b206390c4dbd50186eb1f571e888303",
+      "after_sha256": "11f02f6d188d9ff905820fdbeecf75a2a53bab08b51609f8a4871a3d278118b2"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/dnp-call.json",
+      "before_sha256": "a70391821db9c8c93dfe5571a6a1410cbbafe7d1ac17502b586f907f6707ab8b",
+      "after_sha256": "d3edfb75668335c87a6fbb187f857473dc3387280e0ff118a53fceea288afc7e"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/snp-call.json",
+      "before_sha256": "7653a799e7ea6fa5ed62dd59fc839c6427840c169ef474c79cc5e86badad6880",
+      "after_sha256": "31c178091c6e28c3716cde8ee53a63852b9f98765a33acdd591553f1af966eb2"
+    },
+    {
+      "path": "src/nipat_scientific/contamination.py",
+      "before_sha256": "3d7490ace832c5da1bf42efffb13a1bab9baa2dcaa4e66664b1c69117f3282dd",
+      "after_sha256": "3da9cd0bc7208c4aae4aa47085cc85b1ca307a7aedc32ef2cc304b645f323c4a"
+    },
+    {
+      "path": "src/nipat_scientific/cpi.py",
+      "before_sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2",
+      "after_sha256": "45fb70c6284d83ad3dc2a166caece3f7f174260aaba41e1909c72d9c8a4bf935"
+    },
+    {
+      "path": "src/nipat_scientific/dnp.py",
+      "before_sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7",
+      "after_sha256": "caf0c80148cc636b93f49d5cd6dcf9a9018dd8e8c8bf0ffabfb86c33a7d98560"
+    },
+    {
+      "path": "src/nipat_scientific/errors.py",
+      "before_sha256": "18c8d4055ae4fc3adfaa69d6682efc6dc7464bf9c429b543e9da4d8a02eee816",
+      "after_sha256": "f004343c7d2cfa7994431cc8c0dcf59e592262063146a3cf5ad717747e68367f"
+    },
+    {
+      "path": "src/nipat_scientific/executor.py",
+      "before_sha256": "aefe63ee7daf1c0cf7cab480969a3a0d38e0c00f233949fdd5a6c6fa32c39903",
+      "after_sha256": "cc55d361476544a7709e5b52aeefecae14fa2497e24177e385ddc7a1a31fd190"
+    },
+    {
+      "path": "src/nipat_scientific/files.py",
+      "before_sha256": "6c7eaa7425166e67552bb9be463380d0e333fe8c60ec3469e5895ce6077dded2",
+      "after_sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+    },
+    {
+      "path": "src/nipat_scientific/outputs.py",
+      "before_sha256": null,
+      "after_sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
+    },
+    {
+      "path": "src/nipat_scientific/panels.py",
+      "before_sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3",
+      "after_sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
+    },
+    {
+      "path": "src/nipat_scientific/snp.py",
+      "before_sha256": "c35604707c9de2e8a9e65094570990b186fbf4ab8dbf058fb1b9fc74c2381f09",
+      "after_sha256": "d67712ababffc485819367112d43d1c6af35a15d30d83a01d33451e26d42a0d7"
+    },
+    {
+      "path": "tests/test_benchmark_workflows.py",
+      "before_sha256": null,
+      "after_sha256": "e6c22d4f19561edfae0ca4bc40105417f2fdda5cf15368e10f0d03e1bed2991d"
+    },
+    {
+      "path": "tests/test_bundled_runner.py",
+      "before_sha256": "eb4fe72cdef6f9499647673ddb98d416ccf5e0bc75c14578c51c82088771819c",
+      "after_sha256": "ad206996a2f35f3b7cdeab69a7c8f3267fa362b8fea015ea2a5f7f3efa5553d2"
+    },
+    {
+      "path": "tests/test_cli_validation.py",
+      "before_sha256": "8ce391928c207fb7c38d96b747a540e2202659de4d6f756513412fa412ac84cf",
+      "after_sha256": "5269eddbe0ef46274a182bb9fb5f9dbe60b4d754bc9f497b749256e2507c73a6"
+    },
+    {
+      "path": "tests/test_client_reliability.py",
+      "before_sha256": null,
+      "after_sha256": "ab0648bbb0d60f42b2dda1356b0ee861427d131270c98f217531d707165cf9d2"
+    },
+    {
+      "path": "tests/test_cpi_engine.py",
+      "before_sha256": "550e1537389050d01cd134ea5c157b55e583e879fb109ae4b352223773d7887d",
+      "after_sha256": "6b8c967700d97493aa308c8f785e1f78bbdcc94108e08555fef4b15edcf8d9e5"
+    },
+    {
+      "path": "tests/test_dnp_engine.py",
+      "before_sha256": "5b6a2bdb81a71bc949338aae56429da9b91d5060e8c1bd6f98cce6cc212ea6f5",
+      "after_sha256": "caa78f56c35206fe0ed7d793960a58133d31112d185b5a95ae27a5d0cd5066df"
+    },
+    {
+      "path": "tests/test_engine_package.py",
+      "before_sha256": "8d6b1cdccb5463b9201f691aff9e4e3488c6bc6df75ab07c2550e2d6531307e3",
+      "after_sha256": "afbdd508eb45e9faa9df66d73642b0e5477ba429d43788e284534ead223efe76"
+    },
+    {
+      "path": "tests/test_execution_policy.py",
+      "before_sha256": null,
+      "after_sha256": "c7fd2f3ba75d247cad6975cbc290bc9b2cd3eb60305e80d0f63a18b55d2c1a7b"
+    },
+    {
+      "path": "tests/test_installation_client.py",
+      "before_sha256": null,
+      "after_sha256": "772fe8b6868c3fd8983289b51b40438c8faa734051a948e2649bddc5e4f818d7"
+    },
+    {
+      "path": "tests/test_linux_launcher.py",
+      "before_sha256": "c87ac79c2b2c48aaf33c42449ff539de973bad23d33dcc603e92e4ba172e3d5e",
+      "after_sha256": "a243583520a5ebb7375059d8f18eb4d800dda7522836ab096e1824ba203b050b"
+    },
+    {
+      "path": "tests/test_linux_upgrade.py",
+      "before_sha256": null,
+      "after_sha256": "7f470dc6df1b884a23acbab09bdc323a1adb803978cdefdbf78d5d0f07153dcb"
+    },
+    {
+      "path": "tests/test_results.py",
+      "before_sha256": "d40ab3f846dcba8a6342d1610ad0f87e39528d9b80535cd65e10163224281f19",
+      "after_sha256": "bc10af5ffec2b50acfe2cc482c11be8f27e6dc98ef149ca66692fc4aae176db3"
+    },
+    {
+      "path": "tests/test_run_recovery.py",
+      "before_sha256": null,
+      "after_sha256": "ae15e43db782af95260e7f74787b8927118dbf13c795adb3678bb7d0632ecf2f"
+    },
+    {
+      "path": "tests/test_run_tracking.py",
+      "before_sha256": "3c1b72221dfe7ba05c08669b0241f32e5f325ebb7acf9d42899d9c6b9ab391e9",
+      "after_sha256": "f77d9e052da0af30fe3986999f4f74922770f9444f8dbf8fa75c7a9d9b338c11"
+    },
+    {
+      "path": "tests/test_runtime_component.py",
+      "before_sha256": null,
+      "after_sha256": "733ff9a049d8f3b8adde6984f7907f417f32fe72f5c53c7723e5338cee017533"
+    },
+    {
+      "path": "tests/test_scientific_outputs.py",
+      "before_sha256": null,
+      "after_sha256": "9b518618c590be24666ffe851030c1a3b2bfc052935c08f1d1129540d9fb9683"
+    },
+    {
+      "path": "tests/test_scientific_preflight.py",
+      "before_sha256": null,
+      "after_sha256": "8c018e619b39948550a1452f938b2444019496bf5e645ae89ee50d5f20e31214"
+    },
+    {
+      "path": "tests/test_snp_engine.py",
+      "before_sha256": "0a748e3e7b64ecc5482b7bb5bf8d3431cd26392a7f71fe8860cf894a82dd09b3",
+      "after_sha256": "b1a712a047fae0ad56360a1b74eff1a0ee115e9a03d92b117084894c18a27663"
+    },
+    {
+      "path": "tests/test_snp_workflow_execution.py",
+      "before_sha256": "31c837175ad9647677ea6add51861e9facf0db72104e8c9ee5e2724a097f0059",
+      "after_sha256": "589da7984d7fffd5809177e1ea950e750755fc7f61c57a1c029825cb1846df83"
+    },
+    {
+      "path": "tests/test_terminal.py",
+      "before_sha256": "0a7252383e24880f899d276bef1ad07bdcac3b829b09fd99374b34b0936595c8",
+      "after_sha256": "b9bcf3452cba965fc8531013f46d27add77be8c1a3a948bb4ea9a3a1d658c29b"
+    },
+    {
+      "path": "tests/test_wizard_guidance.py",
+      "before_sha256": "4c601c995588a7d335b03d6bace43c12e0a22c7e3a24d9c23dd8b20d52654967",
+      "after_sha256": "13d3c8a3fbf4930fed8dcfcaae85693de4832c3efe1047997a84257378376ec7"
+    },
+    {
+      "path": "tests/test_wizard_settings.py",
+      "before_sha256": "56ef04c159f41aa11333bffbd04c47f4f6924b7de22aabb2ee33354eec857d09",
+      "after_sha256": "d38b088d672e85e88d655cdc93bbdd5e620f1991d462617051cfbc4919e7ccb9"
+    },
+    {
+      "path": "tests/test_workflow_client.py",
+      "before_sha256": "9f06c4910f4d1504b0656b501a042d31da435d7f796953b20ea482c75c29fd81",
+      "after_sha256": "a49864a6f2591850360dc2e7cdb78fdfddc9d5e27585358b2db4b61e0185b4c6"
+    },
+    {
+      "path": "tests/test_workflow_wizard.py",
+      "before_sha256": "34ea60fc6168e53336da12c869c52344812a66ddce95778c330db481b814f626",
+      "after_sha256": "5cbfccd0d0114196324a3d5a9696496bc28b8e1859db485a96bc13c9e85f594e"
+    }
+  ],
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "pending-domain-researchers"
+}

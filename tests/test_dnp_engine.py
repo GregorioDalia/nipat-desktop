@@ -61,7 +61,7 @@ class DnpEngineTests(unittest.TestCase):
                          (self.bam.as_posix() + "\n").encode())
         self.assertEqual({path: path.read_bytes() for path in self.inputs.iterdir()}, before)
         self.assertEqual({path.name for path in (self.run / "work").iterdir()},
-                         {"DNP_list.txt", "bamlist.txt"})
+                         {"DNP_list.txt", "bamlist.txt", "input-validation.json"})
         self.assertEqual(list((self.run / "output").iterdir()), [])
         self.assertFalse(any(path.is_symlink() for path in self.run.rglob("*")))
 

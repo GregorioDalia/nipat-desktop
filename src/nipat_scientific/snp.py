@@ -7,8 +7,8 @@ from pathlib import Path
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
-from nipat_scientific.files import require_file, require_sidecar, require_snp_pileup
-from nipat_scientific.panels import read_snp_positions, write_snp_bed
+from nipat_scientific.files import require_file, require_sidecar, require_snp_pileup, write_input_report
+from nipat_scientific.panels import read_snp_list, write_snp_bed, write_snp_list
 
 
 REQUEST_FIELDS = {
@@ -58,7 +58,8 @@ def prepare_snp(request: object) -> SnpPreparation:
         raise ValidationError("La modalità pileup richiede soltanto il pileup, senza BAM o riferimento.")
 
     panel = require_file(_absolute_path(request["panel"], "Lista SNP"), "Lista SNP")
-    positions = read_snp_positions(panel, for_bed=mode == "bam")
+    panel_rows = read_snp_list(panel, for_bed=mode == "bam")
+    positions = [(row.chromosome, row.position) for row in panel_rows]
     sources = [panel]
     bam = reference = None
     if mode == "bam":
@@ -90,12 +91,15 @@ def prepare_snp(request: object) -> SnpPreparation:
         raise ValidationError("La cartella risultati deve essere vuota.")
     bed_file = work_dir / "snp_regions.bed"
     generated_pileup = work_dir / "pileup.txt"
-    for destination in (bed_file, generated_pileup):
+    normalized_panel = work_dir / "SNPpanel.tsv"
+    for destination in (bed_file, generated_pileup, normalized_panel, work_dir / "input-validation.json"):
         if destination.exists() or destination.is_symlink():
             raise ValidationError(f"Preparazione già presente: {destination}")
 
     work_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
+    write_snp_list(panel_rows, normalized_panel)
+    write_input_report(work_dir, "snp-call", [], normalized=[(panel, normalized_panel)])
     command = None
     if mode == "bam":
         write_snp_bed(positions, bed_file)
@@ -106,6 +110,6 @@ def prepare_snp(request: object) -> SnpPreparation:
             "-o", str(pileup), str(bam),
         ]
     return SnpPreparation(command, [
-        "--pileup", str(pileup), "--snplist", str(panel),
+        "--pileup", str(pileup), "--snplist", str(normalized_panel),
         "--out", str(out_dir / "SNPcall_output.txt"),
     ], generated_pileup if mode == "bam" else None)

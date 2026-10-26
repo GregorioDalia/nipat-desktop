@@ -180,7 +180,59 @@ def check_dnp_workflow(identifier: str, root: Path, *, run_container, run_image,
         raise ValueError("The complete/native DNP workflows modified an original input.")
     print("PASS: complete DNPcall, two unindexed BAMs, independent counts/genotypes, "
           "native R parity for all table fields and ten PDFs.", flush=True)
+    check_uncovered_dnp_locus(identifier, root, inputs, run_image=run_image, write_request=write_request)
     return inputs
+
+
+def check_uncovered_dnp_locus(identifier: str, root: Path, inputs: Path, *, run_image, write_request) -> None:
+    """Native zero coverage must remain a valid DNP -> Contamination/CPI input."""
+    partial = root / "DNP zero coverage inputs"
+    shutil.copytree(inputs, partial)
+    sequence = "".join(line for line in (partial / "reference.fa").read_text().splitlines()
+                       if not line.startswith(">"))
+    reference = sequence[279:281]
+    if len(reference) != 2:
+        raise ValueError("Synthetic reference lacks the deliberately uncovered locus.")
+    alternative = "AC" if reference != "AC" else "GT"
+    panel = partial / "DNP_list.txt"
+    panel.write_text(panel.read_text() + f"chrDnpSynthetic\t280\t281\t{reference}\t{alternative}\n", encoding="utf-8")
+    population = partial / "population.tsv"
+    population.write_text("chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\n" + "".join(
+        f"chrDnpSynthetic\t{position}\t{position + 1}\t0.5\t0.5\n"
+        for position in (50, 140, 230, 280)), encoding="utf-8")
+    plan = {"schema_version": 1, "samples": [
+        {"id": name, "kind": "bam", "path": f"/inputs/bams/sample_{number:04d}.bam"}
+        for number, name in enumerate(("maternal", "paternal"), 1)], "steps": [
+        {"id": "dnp", "workflow": "dnp-call", "inputs": {
+            "samples": ["maternal", "paternal"], "reference": "/inputs/reference.fa",
+            "panel": "/inputs/DNP_list.txt"}, "parameters": {"parallel": False}},
+        {"id": "contamination", "workflow": "contamination", "inputs": {
+            "samples": [{"step": "dnp", "output": "dnp-tables", "sample": name}
+                        for name in ("maternal", "paternal")], "panel": "/inputs/DNP_list.txt"}, "parameters": {}},
+        {"id": "cpi", "workflow": "cpi", "inputs": {"pairs": [{"id": "family",
+            "mother": {"step": "dnp", "output": "dnp-tables", "sample": "maternal"},
+            "father": {"step": "dnp", "output": "dnp-tables", "sample": "paternal"}}],
+            "popfreq": "/inputs/population.tsv", "cutoffs": []},
+            "parameters": {"cutoff_mode": "all", "err_const": 0.0000892303778101497}},
+    ]}
+    results = root / "DNP zero coverage results"
+    write_request(results, plan)
+    run_image(identifier, ["execute-plan", "--plan", "/results/work/request.json", "--run-dir", "/results/workflow"],
+              inputs=partial, results=results)
+    run = results / "workflow"
+    state = json.loads((run / "workflow-state.json").read_text())
+    if state["status"] != "succeeded" or any(step["status"] != "succeeded" for step in state["steps"]):
+        raise ValueError("The real DNP -> Contamination/CPI plan rejected legitimate zero coverage.")
+    for sample in ("sample_0001", "sample_0002"):
+        table_path = run / "steps/dnp/output/individual_outputs" / f"full_output_{sample}.txt"
+        rows = keyed_rows(table_path)
+        zero = rows[("chrDnpSynthetic", "280", "281")]
+        if any(zero[name] != "0" for name in ("N_REF", "N_ALT", "N_Other")) or zero["total_count"] != "NA":
+            raise ValueError(f"Unexpected native zero-coverage DNP representation: {zero}")
+        baseline = keyed_rows(root / "complete DNP results/output/individual_outputs" / f"full_output_{sample}.txt")
+        if {key: row for key, row in rows.items() if key in baseline} != baseline:
+            raise ValueError("Adding an uncovered locus changed the covered DNP results.")
+    print("PASS: native DNP zero-count/NA-total locus preserved through automatic Contamination and CPI.", flush=True)
 
 
 def check_dnp_client_without_host_scripts(identifier: str, root: Path, inputs: Path) -> None:

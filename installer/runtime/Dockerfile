@@ -48,12 +48,12 @@ RUN rm -f /etc/dpkg/dpkg.cfg.d/docker \
 COPY installer/runtime/nipat-engine /usr/local/bin/nipat-engine
 COPY installer/runtime/wsl.conf /etc/wsl.conf
 COPY installer/runtime/write-provenance.py /usr/local/lib/nipat/write-provenance.py
-# Keep commit-specific provenance outside the reusable dependency layers.
-ARG SOURCE_COMMIT
-RUN test -n "$SOURCE_COMMIT" \
-    && chmod 0755 /usr/local/bin/nipat-engine \
+COPY installer/runtime/component.py /usr/local/lib/nipat/component.py
+COPY installer/runtime/Dockerfile installer/runtime/component.py installer/runtime/nipat-engine installer/runtime/write-provenance.py installer/runtime/wsl.conf /usr/share/nipat/runtime-sources/
+# Bind this component to its own sources and resolved packages, not to a CLI commit.
+RUN chmod 0755 /usr/local/bin/nipat-engine \
     && printf 'nipat-runtime-v1\n' > /etc/nipat-runtime-id \
-    && python3 /usr/local/lib/nipat/write-provenance.py "$SOURCE_COMMIT" "$DEBIAN_BASE" \
+    && python3 /usr/local/lib/nipat/write-provenance.py "$DEBIAN_BASE" /usr/share/nipat/runtime-sources \
     && bash -n /usr/local/bin/nipat-engine \
     && test -s /usr/share/doc/docker-ce/README.md \
     && test -s /usr/share/doc/docker-ce/upstream-LICENSE \

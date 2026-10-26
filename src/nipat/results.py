@@ -17,6 +17,7 @@ _MAX_METADATA_BYTES = 2 * 1024 * 1024
 _MAX_OUTPUT_FILES = 12
 _MAX_PAIRS = 12
 _MAX_STEPS = 24
+_MAX_WARNINGS = 12
 _WORKFLOW_STEPS = {
     "dnp-contamination": {"dnp": "dnp-call", "contamination": "contamination"},
     "dnp-cpi": {"dnp": "dnp-call", "cpi": "cpi"},
@@ -267,6 +268,54 @@ def _show_pair_mapping(ui: Terminal, metadata: dict) -> None:
         ui.message("Altre coppie disponibili in run.json.")
 
 
+def _show_quality_warnings(ui: Terminal, run_dir: Path) -> None:
+    """Display recorded validator warnings without interpreting scientific values."""
+    warnings = []
+    reports = [("work/input-validation.json", "warnings"),
+               ("work/scientific-validation.json", "quality_warnings")]
+    try:
+        metadata = _read_metadata(run_dir, "run.json")
+        workflow = metadata.get("workflow")
+        if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS:
+            state_path = _local_descendant(run_dir, "output/workflow/workflow-state.json")
+            if state_path.is_file():
+                state = _workflow_state(run_dir, workflow, metadata)
+                for step in state["steps"]:
+                    artifacts = step.get("artifacts")
+                    recorded = artifacts.get("quality_warnings", []) if isinstance(artifacts, dict) else []
+                    if not isinstance(recorded, list) or any(not isinstance(item, dict) for item in recorded):
+                        raise ValueError("Avvisi del workflow non validi")
+                    warnings.extend((f"output/workflow/steps/{step['id']}", item) for item in recorded)
+                    reports.append((f"output/workflow/steps/{step['id']}/work/input-validation.json", "warnings"))
+        for relative, key in reports:
+            path = _local_descendant(run_dir, relative)
+            if not path.is_file():
+                continue  # Earlier versions did not produce these reports.
+            report = _read_metadata(run_dir, relative)
+            recorded = report.get(key, [])
+            if not isinstance(recorded, list) or any(not isinstance(item, dict) for item in recorded):
+                raise ValueError(f"Avvisi non validi: {relative}")
+            warnings.extend((relative, item) for item in recorded)
+        if not warnings:
+            return
+        ui.message(f"Avvisi sui dati o sui risultati: {len(warnings)}. Il completamento tecnico non risolve questi avvisi.", kind="warning")
+        for origin, item in warnings[:_MAX_WARNINGS]:
+            code = _short_value(item.get("code"))
+            message = _short_value(item.get("message"))
+            ui.message(f"  [{code}] {message}", kind="warning")
+            details = []
+            for key in ("file", "path", "row", "column", "value"):
+                if key in item:
+                    details.append(f"{key}={_short_value(item[key])}")
+            if details:
+                ui.message("    " + "; ".join(details), kind="muted")
+            ui.message(f"    Report: {origin}", kind="muted")
+        if len(warnings) > _MAX_WARNINGS:
+            ui.message("Altri avvisi sono conservati nei report di validazione del run.", kind="warning")
+    except (OSError, ValueError) as exc:
+        ui.message(f"Avvisi di validazione non consultabili: {exc}", kind="warning")
+
+
 def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
     ui.heading("Riepilogo dell'esecuzione")
     ui.message(f"Cartella: {run_dir}")
@@ -338,6 +387,7 @@ def show_results(
         ui.message("Dry-run: i comandi sono stati preparati; l'analisi non e' stata eseguita.")
     else:
         ui.message(f"Risultati: {run_dir / 'output'}")
+        _show_quality_warnings(ui, run_dir)
 
     while True:
         choices = []

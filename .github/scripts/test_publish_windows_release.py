@@ -208,10 +208,16 @@ class ReleaseGuards(unittest.TestCase):
             calls.append((args, kwargs))
             return actual
         original = publisher.prepare_assets
+        original_load = publisher.load_module
         def prepare(*args, **kwargs):
             return original(*args, **kwargs, read_source=lambda commit, name: self.sources[name])
-        with patch.object(publisher, "load_module", side_effect=lambda name, path:
-                          validator if path.name == "release_acceptance.py" else SimpleNamespace(verify_set=verify_set)), \
+        def load(name, path):
+            if path.name == "release_acceptance.py":
+                return validator
+            if path.name == "verify_installer_set.py":
+                return SimpleNamespace(verify_set=verify_set)
+            return original_load(name, path)
+        with patch.object(publisher, "load_module", side_effect=load), \
                 patch.object(publisher, "prepare_assets", side_effect=prepare):
             result = publisher.prepare_installer_set(
                 self.setup, self.runtime, linux, evidence, self.root / "release", COMMIT,
@@ -320,6 +326,62 @@ class ReleaseGuards(unittest.TestCase):
     def test_07_joint_release_requires_retained_windows_evidence(self):
         parts = self.joint_fixture("0.7.1")
         with self.assertRaisesRegex(ValueError, "joint release asset"):
+            self.prepare_joint(*parts)
+
+    def reliability_fixture(self):
+        parts = self.joint_fixture("0.7.2")
+        linux, evidence, actual, validator, record = parts
+        for name in ("windows-client-check.json", "application-files.json"):
+            (self.setup / name).write_text(json.dumps({"fixture": name}), encoding="utf-8")
+        upgrade = linux / "linux-upgrade-check.json"
+        upgrade.write_text('{"fixture":"verified separately by the set validator"}')
+        actual["linux_upgrade_check"] = {"file": upgrade.name, "sha256": publisher.sha256(upgrade)}
+        inventory = self.runtime / "component-inventory.json"
+        inventory.write_text('{"fixture":"verified separately by the set validator"}')
+        actual["component_inventory"] = {"file": inventory.name, "sha256": publisher.sha256(inventory)}
+        (evidence / "installer-set-check.json").write_text(json.dumps(actual))
+        synthetic = self.root / "synthetic"
+        synthetic.mkdir()
+        (synthetic / "regression.log").write_text("PASS: expected synthetic counts matched\n")
+        qualification = publisher.load_module("qualification_fixture", Path(__file__).with_name("qualification_evidence.py"))
+        qualification.build(evidence, actual, {"synthetic": synthetic})
+        record.pop("tests")
+        links = ["https://github.com/example/repository/blob/commit/evidence.md"]
+        record.update(schema_version=4, decision="accepted-for-research", scope="pre-1.0-research",
+                      qualification_evidence_sha256=publisher.sha256(evidence / "qualification-evidence.zip"),
+                      linux_upgrade_check_sha256=publisher.sha256(upgrade),
+                      review={"reviewer": "Test reviewer", "reviewed_at": "2026-01-01T12:00:00Z", "evidence": links},
+                      observed_baseline={"source_commit": "c" * 40,
+                          "observations": ["installation_ready", "automatic_workflow_sample_analysis"],
+                          "evidence": links, "source_comparison_scope": validator.RELIABILITY_SOURCE_SCOPE,
+                          "role": "historical-platform-evidence"},
+                      deferred_desktop_scenarios=sorted(validator.SCENARIOS),
+                      domain_validation="pending-domain-researchers", reviewed_source_changes=[])
+        return parts
+
+    def test_reliability_release_preserves_exact_upgrade_and_permanent_qualification_evidence(self):
+        parts = self.reliability_fixture()
+        with patch.object(parts[-2], "verify_baseline", return_value={"operational_equivalence_claimed": False}):
+            self.prepare_joint(*parts)
+        output = self.root / "release"
+        hashes = publisher.checksums(output / "SHA256SUMS")
+        for name in ("linux-upgrade-check.json", "component-inventory.json", "qualification-evidence.json", "qualification-evidence.zip"):
+            self.assertEqual(hashes[name], publisher.sha256(output / name))
+        self.assertEqual(hashes["qualification-evidence.zip"], parts[-1]["qualification_evidence_sha256"])
+        provenance = json.loads((output / "release-provenance.json").read_text())
+        self.assertEqual(provenance["release_notes_commit"], "b" * 40)
+
+    def test_reliability_rejects_changed_qualification_bytes_or_acceptance_digest(self):
+        parts = self.reliability_fixture()
+        archive = parts[1] / "qualification-evidence.zip"
+        original = archive.read_bytes()
+        archive.write_bytes(original + b"altered")
+        with patch.object(parts[-2], "verify_baseline", return_value={}), self.assertRaisesRegex(ValueError, "archive bytes"):
+            self.prepare_joint(*parts)
+        self.assertFalse((self.root / "release").exists())
+        archive.write_bytes(original)
+        parts[-1]["qualification_evidence_sha256"] = "f" * 64
+        with patch.object(parts[-2], "verify_baseline", return_value={}), self.assertRaisesRegex(ValueError, "differs from the accepted"):
             self.prepare_joint(*parts)
 
     def test_update_manifest_requires_both_matching_source_and_installer_name(self):
@@ -482,6 +544,34 @@ class ReleaseGuards(unittest.TestCase):
         self.write_manifests()
         with self.assertRaisesRegex(ValueError, "Rootfs source mismatch"):
             self.prepare()
+
+    def test_rootfs_component_is_bound_to_runtime_sources_without_app_commit(self):
+        component = publisher.load_module("test_release_component", publisher.PROJECT / "installer/runtime/component.py")
+        source = {name: (publisher.PROJECT / "installer/runtime" / name).read_bytes()
+                  for name in component.SOURCE_FILES}
+        provenance = {
+            "schema_version": 2, "vendor": "nipat-desktop", "purpose": "dedicated-wsl-runtime",
+            "source_sha256": {name: hashlib.sha256(value).hexdigest() for name, value in source.items()},
+            "apt_packages": {"docker-ce": "29.9.1"}, "base_image": "debian@sha256:" + "d" * 64,
+            "docker_engine_version": "Docker version 29.9.1", "compose_version": "2.40.3",
+        }
+        provenance["component_sha256"] = component.component_identity(provenance)
+        read = lambda commit, path: source[Path(path).name]
+        publisher.verify_rootfs_source(provenance, COMMIT, read)
+        publisher.verify_rootfs_source(provenance, "c" * 40, read)
+        changed = copy.deepcopy(provenance)
+        changed["apt_packages"]["docker-ce"] = "changed"
+        with self.assertRaisesRegex(ValueError, "identity mismatch"):
+            publisher.verify_rootfs_source(changed, COMMIT, read)
+        source["nipat-engine"] += b"\n# unexpected\n"
+        with self.assertRaisesRegex(ValueError, "source mismatch"):
+            publisher.verify_rootfs_source(provenance, COMMIT, read)
+
+    def test_rootfs_unknown_schema_cannot_fall_back_to_commit_only(self):
+        for schema in (True, 3, "2"):
+            with self.subTest(schema=schema), self.assertRaisesRegex(ValueError, "schema"):
+                publisher.verify_rootfs_source({"schema_version": schema, "source_commit": COMMIT},
+                                               COMMIT, lambda *_: b"")
 
     def test_new_release_requires_and_publishes_verified_docker_zip(self):
         self.make_dual_package()

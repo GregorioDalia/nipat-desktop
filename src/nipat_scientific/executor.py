@@ -7,7 +7,7 @@ changes R sources, copies BAMs, executes shell fragments, or resumes an old run.
 
 from __future__ import annotations
 
-import csv
+from contextlib import nullcontext
 from datetime import datetime, timezone
 import errno
 import hashlib
@@ -22,14 +22,15 @@ import tempfile
 import time
 
 from nipat_scientific.contamination import prepare_contamination
-from nipat_scientific.cpi import POPFREQ_COLUMNS, prepare_cpi
+from nipat_scientific.cpi import prepare_cpi
 from nipat_scientific.dnp import prepare_dnp
-from nipat_scientific.errors import ValidationError
+from nipat_scientific.errors import PlanExecutionError, ValidationError
 from nipat_scientific.files import (
-    DNP_OUTPUT_COLUMNS, require_columns, require_contamination_input,
-    require_file, require_sidecar, require_snp_pileup,
+    require_contamination_input,
+    require_dnp_input, require_file, require_population_frequencies, require_sidecar, require_snp_pileup,
 )
 from nipat_scientific.panels import read_dnp_list, read_position_panel, read_snp_positions
+from nipat_scientific.outputs import _artifact, _collect_outputs, _cpi_bindings
 from nipat_scientific.plan import validate_plan
 from nipat_scientific.snp import prepare_snp
 
@@ -37,23 +38,6 @@ from nipat_scientific.snp import prepare_snp
 SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi"})
 INTERFACE = "workflow-plan-execution-v1"
 _NATIVE_PATH = re.compile(r"[A-Za-z0-9_./:-]+\Z")
-_CPI_COLUMNS = {
-    "Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
-    "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI",
-    "Median_logCPI", "Mean_logCPI", "CPI_medianFF",
-}
-_SNP_COLUMNS = {
-    "chr", "pos", "Reference", "Alternative", "N_Reference", "N_Alternative",
-    "N_Altro", "total_count", "ratio",
-}
-
-
-class PlanExecutionError(ValidationError):
-    """An execution/preflight failure with a stable language-independent code."""
-
-    def __init__(self, code: str, message: str):
-        self.code = code
-        super().__init__(f"{code}: {message}")
 
 
 def _utc() -> str:
@@ -130,7 +114,7 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
         inputs = step["inputs"]
         if step["workflow"] == "cpi":
             popfreq = require_file(Path(inputs["popfreq"]), "Population frequencies")
-            require_columns(popfreq, POPFREQ_COLUMNS, "Invalid population frequencies")
+            require_population_frequencies(popfreq)
             sources.append(popfreq)
             if inputs["cutoffs"] and any(char in str(root) for char in ",="):
                 raise PlanExecutionError("execution.alias", "CPI cutoff staging requires a run path without comma or equals characters.")
@@ -142,8 +126,7 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
                 for role in ("mother", "father"):
                     reference = pair[role]
                     if "step" not in reference:
-                        require_columns(samples[reference["sample"]], DNP_OUTPUT_COLUMNS,
-                                        "Invalid imported CPI table", whitespace=True)
+                        require_dnp_input(samples[reference["sample"]])
             continue
         panel = require_file(Path(inputs["panel"]), "Plan panel")
         sources.append(panel)
@@ -215,9 +198,9 @@ def _signal_group(process: subprocess.Popen, signum: int) -> None:
         pass
 
 
-def _run_process(command: list[str], cwd: Path, log_path: Path, cancellation: _Cancellation) -> int:
+def _run_process(command: list[str], cwd: Path, log_path: Path | None, cancellation: _Cancellation) -> int:
     """Keep R/samtools in one cancellable process group and retain their output."""
-    with log_path.open("xb") as output:
+    with (log_path.open("xb") if log_path is not None else nullcontext(None)) as output:
         process = subprocess.Popen(
             command, cwd=cwd, stdout=output, stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL, start_new_session=os.name == "posix",
@@ -248,160 +231,9 @@ def _run_process(command: list[str], cwd: Path, log_path: Path, cancellation: _C
             raise
 
 
-def _artifact(path: Path, root: Path, output_dir: Path) -> dict:
-    resolved_output = output_dir.resolve()
-    if (path.is_symlink() or not path.is_file() or not resolved_output.is_relative_to(root.resolve())
-            or not path.resolve().is_relative_to(resolved_output)):
-        raise PlanExecutionError("execution.output", f"Expected output is missing or outside its directory: {path.name}")
-    return {"path": path.relative_to(root).as_posix(), "sha256": _sha256(path)}
-
-
-def _output_columns(path: Path, columns: set[str]) -> None:
-    try:
-        require_columns(path, columns, "Invalid scientific result")
-    except ValidationError as exc:
-        raise PlanExecutionError("execution.output", str(exc)) from exc
-
-
-def _cpi_bindings(step: dict) -> tuple[list[dict], list[dict]]:
-    """Assign controlled aliases by typed identity, never by biological guesswork."""
-    aliases = {}
-    inputs, pairs = [], []
-    for pair in step["inputs"]["pairs"]:
-        names = {}
-        for role, prefix in (("mother", "Mother"), ("father", "Father")):
-            reference = pair[role]
-            key = (reference.get("step"), reference["sample"])
-            if key not in aliases:
-                native = f"s{len(aliases) + 1:04d}"
-                aliases[key] = native
-                inputs.append({"source": reference.copy(), "name": f"{prefix}{native}.txt"})
-            names[role] = aliases[key]
-        pairs.append({
-            "pair": pair["id"], "mother": pair["mother"].copy(), "father": pair["father"].copy(),
-            "native_pair": f"Mother{names['mother']}-Father{names['father']}_DNPs",
-            "native_selection": f"{names['mother']}:{names['father']}",
-        })
-    return inputs, pairs
-
-
 def _resolve_table(reference: dict, samples: dict, outputs: dict) -> Path:
     return (outputs[(reference["step"], reference["sample"])] if "step" in reference
             else Path(samples[reference["sample"]]["path"]))
-
-
-def _pdf_artifact(path: Path, root: Path, output_dir: Path) -> dict:
-    artifact = _artifact(path, root, output_dir)
-    with path.open("rb") as handle:
-        if handle.read(5) != b"%PDF-" or path.stat().st_size <= 5:
-            raise PlanExecutionError("execution.output", f"Invalid CPI PDF: {path.name}")
-    return artifact
-
-
-def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
-    summary = output_dir / "Summary_FetalFraction_CPI.csv"
-    artifact = _artifact(summary, root, output_dir)
-    mode = request["cutoff_mode"]
-    with summary.open(encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        columns = reader.fieldnames or []
-        required = _CPI_COLUMNS | ({"Cutoff"} if mode != "all" else set())
-        if (not required.issubset(columns) or len(columns) != len(set(columns))
-                or (mode == "all" and "Cutoff" in columns)):
-            raise PlanExecutionError("execution.output", "CPI summary columns do not match the requested cutoff mode.")
-        rows = list(reader)
-    _, bindings = _cpi_bindings(step)
-    cutoffs = ([None] if mode == "all" else [str(Path(request["work_dir"]) / "DNPpanel.txt")]
-               if mode == "panel" else [panel["label"] for panel in request["cutoffs"]])
-    expected = {(pair["native_pair"], cutoff) for pair in bindings for cutoff in cutoffs}
-    found = {}
-    for number, row in enumerate(rows, 1):
-        if None in row or any(value is None for value in row.values()):
-            raise PlanExecutionError("execution.output", "Malformed CPI summary row.")
-        key = (row["Pair"], row.get("Cutoff"))
-        if key in found:
-            raise PlanExecutionError("execution.output", "CPI summary contains duplicate pair/cutoff rows.")
-        found[key] = number
-    if set(found) != expected:
-        raise PlanExecutionError("execution.output", "CPI summary does not match the declared pairs and cutoffs.")
-    plots = output_dir / "plots"
-    expected_plots = {"All_CPIplots.pdf", *(f"{pair['native_pair']}_CPIplot.pdf" for pair in bindings)}
-    if {path.name for path in plots.glob("*.pdf")} != expected_plots:
-        raise PlanExecutionError("execution.output", "CPI plots do not match the declared pair identities.")
-    pairs = []
-    for pair in bindings:
-        pairs.append({
-            "pair": pair["pair"], "mother": pair["mother"], "father": pair["father"],
-            "native_pair": pair["native_pair"],
-            "summary_rows": [{"row": found[(pair["native_pair"], cutoff)], "cutoff": cutoff} for cutoff in cutoffs],
-            "plot": _pdf_artifact(plots / f"{pair['native_pair']}_CPIplot.pdf", root, output_dir),
-        })
-    return {"summary": artifact, "cpi-pairs": pairs,
-            "combined-plot": _pdf_artifact(plots / "All_CPIplots.pdf", root, output_dir)}
-
-
-def _collect_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
-    if step["workflow"] == "cpi":
-        return _collect_cpi_outputs(step, request, root, output_dir)
-    if step["workflow"] == "snp-call":
-        path = output_dir / "SNPcall_output.txt"
-        artifact = _artifact(path, root, output_dir)
-        with path.open(encoding="utf-8-sig", newline="") as handle:
-            reader = csv.DictReader(handle, delimiter="\t")
-            columns = reader.fieldnames or []
-            if not _SNP_COLUMNS.issubset(columns) or len(columns) != len(set(columns)):
-                raise PlanExecutionError("execution.output", "SNPcall result columns are missing or duplicated.")
-            found = set()
-            for row in reader:
-                if None in row or any(value is None for value in row.values()):
-                    raise PlanExecutionError("execution.output", "Malformed SNPcall result row.")
-                try:
-                    found.add((row["chr"], int(row["pos"])))
-                except ValueError as exc:
-                    raise PlanExecutionError("execution.output", "Invalid SNPcall result coordinate.") from exc
-        expected = set(read_snp_positions(Path(request["panel"]), for_bed=request["mode"] == "bam"))
-        # R outer-joins the selected panel, retaining zero-coverage loci. A
-        # header-only file is therefore incomplete for every valid panel.
-        if found != expected:
-            raise PlanExecutionError("execution.output", "SNPcall result loci do not match the selected panel.")
-        preparation = []
-        if request["mode"] == "bam":
-            work = Path(request["work_dir"])
-            preparation = [{"kind": kind, **_artifact(work / name, root, work)}
-                           for kind, name in (("regions-bed", "snp_regions.bed"), ("pileup", "pileup.txt"))]
-        return {"snp-tables": [{"sample": step["inputs"]["sample"], **artifact}],
-                "preparation": preparation}
-    if step["workflow"] == "dnp-call":
-        directory = output_dir / "individual_outputs"
-        expected = {f"full_output_sample_{number:04d}.txt" for number in range(1, len(request["samples"]) + 1)}
-        actual = {path.name for path in directory.glob("full_output_*.txt")}
-        if expected != actual:
-            raise PlanExecutionError("execution.output", f"{step['id']}: DNP tables do not match the declared sample identities.")
-        tables = []
-        for number, identifier in enumerate(step["inputs"]["samples"], 1):
-            name = f"sample_{number:04d}"
-            path = directory / f"full_output_{name}.txt"
-            artifact = _artifact(path, root, output_dir)
-            _output_columns(path, DNP_OUTPUT_COLUMNS)
-            tables.append({"sample": identifier, "native_name": name, **artifact})
-        return {"dnp-tables": tables}
-
-    summary = output_dir / "contamination_summary.txt"
-    artifact = _artifact(summary, root, output_dir)
-    _output_columns(summary, {"individuo", "informative_DNPs", "mean_contamination", "sd_contamination"})
-    with summary.open(encoding="utf-8-sig", newline="") as handle:
-        rows = list(csv.DictReader(handle, delimiter="\t"))
-    expected_names = [Path(sample["name"]).stem for sample in request["samples"]]
-    if sorted(row["individuo"] for row in rows) != sorted(expected_names):
-        raise PlanExecutionError("execution.output", "Contamination summary does not match the selected sample identities.")
-    tables = []
-    for reference, name in zip(step["inputs"]["samples"], expected_names, strict=True):
-        path = output_dir / f"contamination_{name}.txt"
-        table_artifact = _artifact(path, root, output_dir)
-        _output_columns(path, {"chr", "pos1", "pos2", "contamination"})
-        tables.append({"sample": reference["sample"], "source": reference.copy(),
-                       "native_name": name, **table_artifact})
-    return {"summary": artifact, "contamination-tables": tables}
 
 
 def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Path], run_process=None) -> dict:
@@ -534,6 +366,9 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                 native, cwd = prepare_cpi(request), work
             if cancellation.signum is not None:
                 raise KeyboardInterrupt
+            validation_report = work / "input-validation.json"
+            record["input_validation"] = _artifact(validation_report, root, work)
+            record["input_warnings"] = json.loads(validation_report.read_text(encoding="utf-8"))["warnings"]
             command = ["Rscript", str(scripts[step["workflow"]]), *native]
             record["command"] = command
             _atomic_json(root / "workflow-state.json", state)
@@ -548,6 +383,8 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             if code:
                 raise PlanExecutionError("execution.process", f"{step['id']} exited with code {code}; see {record['log']}.")
             artifacts = _collect_outputs(step, request, root, output)
+            for warning in artifacts.get("quality_warnings", []):
+                print(f"NIPAT output warning [{warning['code']}]: {warning}", file=sys.stderr, flush=True)
             if cancellation.signum is not None:
                 raise KeyboardInterrupt
             record.update(status="succeeded", artifacts=artifacts, finished_utc=_utc())

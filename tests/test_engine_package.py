@@ -73,8 +73,14 @@ class EnginePackageTests(unittest.TestCase):
             "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
+        self.assertEqual(metadata["scientific_validation"], {
+            "interface": "scientific-validation-v1",
+            "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "snp_alleles": "uppercase-working-copy",
+        })
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 16)
+        self.assertEqual(len(hashes), 17)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)
@@ -92,6 +98,39 @@ class EnginePackageTests(unittest.TestCase):
             self.assertEqual(actual["script"], f"scientific/{relative}")
             self.assertEqual(actual["sha256"],
                              hashlib.sha256((self.root / actual["script"]).read_bytes()).hexdigest())
+
+    def test_numeric_regression_provenance_accepts_complete_engine_source_inventory(self):
+        from nipat.errors import ValidationError
+        from nipat.paths import ProjectLayout
+
+        spec = importlib.util.spec_from_file_location(
+            "nipat_regression_provenance", PROJECT_ROOT / "scripts/verify_contamination_update.py")
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        code, output, errors = self.call_main(["describe", "--json"])
+        self.assertEqual(code, 0, errors)
+        metadata = json.loads(output)
+        layout = ProjectLayout(self.root, self.root, self.root / "data", self.root / "runs",
+                               self.root / "compose.yaml")
+        run = self.root / "runs/provenance"
+        (run / "work").mkdir(parents=True)
+        compose = run / "work/engine-compose.json"
+        compose.write_text(json.dumps({"services": {"scientific": {
+            "read_only": True, "network_mode": "none", "volumes": [{
+                "type": "bind", "source": str(run), "target": str(layout.container_path(run)),
+                "bind": {"create_host_path": False},
+            }],
+        }}}), encoding="utf-8")
+        record = {"status": "succeeded", "workflow": "contamination", "source": {"role": "client"},
+                  "input_mounts": [], "runtime": {"engine": metadata, "image_id": "sha256:" + "a" * 64},
+                  "commands": [{"argv": ["docker", "compose", "-f", str(compose), "run", "scientific",
+                                           "python3", "/opt/nipat/engine/main.py", "execute", "contamination"]}]}
+        (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
+        helper.check_bundled_run(run, layout)
+        del metadata["preparation"]["file_sha256"]["lib/nipat_scientific/outputs.py"]
+        (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
+        with self.assertRaisesRegex(ValidationError, "preparazione"):
+            helper.check_bundled_run(run, layout)
 
     def test_modified_or_missing_script_prevents_execution(self):
         source = self.root / "scientific" / engine.SCRIPT_PATHS["cpi"]
@@ -652,7 +691,7 @@ class EnginePackageTests(unittest.TestCase):
         request_file.write_text(json.dumps(request), encoding="utf-8")
         return request_file, request
 
-    def snp_tools(self, samtools_body):
+    def snp_tools(self, samtools_body, r_body="sys.exit(37)\n"):
         fake_bin = self.root / "bin"
         fake_bin.mkdir()
         header = (
@@ -661,7 +700,7 @@ class EnginePackageTests(unittest.TestCase):
             "with Path(os.environ['SNP_TEST_EVENTS']).open('a') as log:\n"
             "    log.write(json.dumps(sys.argv) + '\\n')\n"
         )
-        for name, body in (("samtools", samtools_body), ("Rscript", "sys.exit(37)\n")):
+        for name, body in (("samtools", samtools_body), ("Rscript", r_body)):
             executable = fake_bin / name
             executable.write_text(header + body, encoding="utf-8")
             executable.chmod(0o755)
@@ -733,7 +772,7 @@ class EnginePackageTests(unittest.TestCase):
         ])
         self.assertEqual(commands[1][1:], [
             str(self.root / "scientific" / engine.SCRIPT_PATHS["snp-call"]),
-            "--pileup", request["work_dir"] + "/pileup.txt", "--snplist", request["panel"],
+            "--pileup", request["work_dir"] + "/pileup.txt", "--snplist", request["work_dir"] + "/SNPpanel.tsv",
             "--out", request["out_dir"] + "/SNPcall_output.txt",
         ])
         self.assertEqual(Path(request["work_dir"], "snp_regions.bed").read_text(), "chr1\t98\t101\n")
@@ -746,7 +785,32 @@ class EnginePackageTests(unittest.TestCase):
         commands = self.snp_events()
         self.assertEqual([Path(command[0]).name for command in commands], ["Rscript"])
         self.assertEqual(commands[0][commands[0].index("--pileup") + 1], request["pileup"])
-        self.assertEqual(list(Path(request["work_dir"]).iterdir()), [])
+        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json"})
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_standalone_zero_exit_without_output_is_a_failure(self):
+        request_file, request = self.snp_request(mode="pileup")
+        result = self.run_snp_request(request_file, self.snp_tools("sys.exit(99)\n", "sys.exit(0)\n"))
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn("execution.output", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertFalse(Path(request["work_dir"], "scientific-validation.json").exists())
+
+    @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
+    def test_standalone_validated_output_has_hash_and_retained_nonfinite_warning(self):
+        request_file, request = self.snp_request(mode="pileup")
+        result = self.run_snp_request(request_file, self.snp_tools("sys.exit(99)\n",
+            "Path(sys.argv[sys.argv.index('--out') + 1]).write_text("
+            "'chr\\tpos\\tReference\\tAlternative\\tN_Reference\\tN_Alternative\\tN_Altro\\ttotal_count\\tratio\\n'"
+            "'chr1\\t100\\tA\\tG\\t1\\t0\\t0\\t1\\tInf\\n')\n"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(Path(request["work_dir"], "scientific-validation.json").read_text())
+        self.assertEqual(report["status"], "validated")
+        self.assertEqual(report["quality_warnings"][0]["code"], "output.nonfinite")
+        self.assertEqual(report["quality_warnings"][0]["value"], "Inf")
+        actual = Path(request["out_dir"], "SNPcall_output.txt")
+        self.assertEqual(report["artifacts"]["snp-tables"][0]["sha256"], hashlib.sha256(actual.read_bytes()).hexdigest())
+        self.assertIn("output.nonfinite", result.stderr)
 
     @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
     def test_snp_samtools_failure_preserves_exit_code_without_starting_r(self):

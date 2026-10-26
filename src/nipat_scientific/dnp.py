@@ -13,7 +13,7 @@ import re
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
-from nipat_scientific.files import require_file, require_sidecar
+from nipat_scientific.files import require_file, require_sidecar, write_input_report
 from nipat_scientific.panels import read_dnp_list, write_dnp_list
 
 
@@ -114,6 +114,7 @@ def prepare_dnp(request: object) -> DnpPreparation:
     bamlist = work_dir / "bamlist.txt"
     for destination in (
         native_panel, bamlist, run_dir / "mpileup.txt", run_dir / "bedfile_for_mpileup.bed",
+        work_dir / "input-validation.json",
     ):
         if destination.exists() or destination.is_symlink():
             raise ValidationError(f"Preparazione già presente: {destination}")
@@ -122,6 +123,7 @@ def prepare_dnp(request: object) -> DnpPreparation:
     work_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_dnp_list(records, native_panel)
+    write_input_report(work_dir, "dnp-call", [], normalized=[(panel, native_panel)])
     with bamlist.open("x", encoding="utf-8", newline="\n") as handle:
         handle.write("".join(path + "\n" for path in bams))
     arguments = [

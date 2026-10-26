@@ -8,7 +8,10 @@ import shutil
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
-from nipat_scientific.files import DNP_OUTPUT_COLUMNS, require_columns, require_file
+from nipat_scientific.files import (
+    POPFREQ_COLUMNS, require_dnp_input, require_file, require_population_frequencies,
+    write_input_report,
+)
 from nipat_scientific.panels import read_position_panel, write_position_panel
 
 
@@ -16,7 +19,6 @@ REQUEST_FIELDS = {
     "schema_version", "workflow", "samples", "pairs", "mother_prefix", "father_prefix",
     "popfreq", "cutoff_mode", "cutoffs", "err_const", "work_dir", "out_dir",
 }
-POPFREQ_COLUMNS = {"chr", "pos1", "pos2", "Ref_f.pop", "Alt_f.pop"}
 
 
 def _absolute_path(value: object, label: str) -> Path:
@@ -100,6 +102,7 @@ def prepare_cpi(request: object) -> list[str]:
     if not isinstance(selected, list) or not selected:
         raise ValidationError("Nessuna tabella di input per CPI.")
     samples: dict[str, Path] = {}
+    warnings = []
     for item in selected:
         if not isinstance(item, dict) or set(item) != {"path", "name"}:
             raise ValidationError("Descrizione campione CPI non valida.")
@@ -107,13 +110,13 @@ def prepare_cpi(request: object) -> list[str]:
         if name not in required_names or name in samples:
             raise ValidationError(f"Campione CPI inatteso o duplicato: {name}")
         source = require_file(_absolute_path(item["path"], "Output DNPcall"), "Output DNPcall")
-        require_columns(source, DNP_OUTPUT_COLUMNS, "Input CPI non compatibile", whitespace=True)
+        warnings.extend(require_dnp_input(source))
         samples[name] = source
     if set(samples) != set(required_names):
         raise ValidationError("Mancano campioni richiesti dalle coppie CPI.")
     popfreq = require_file(_absolute_path(request["popfreq"], "Frequenze di popolazione"),
                            "Frequenze di popolazione")
-    require_columns(popfreq, POPFREQ_COLUMNS, "Frequenze di popolazione non compatibili")
+    warnings.extend(require_population_frequencies(popfreq))
 
     mode = request["cutoff_mode"]
     cutoffs = request["cutoffs"]
@@ -164,7 +167,7 @@ def prepare_cpi(request: object) -> list[str]:
     staged_dir = work_dir / "inputs"
     native_panels = [work_dir / ("DNPpanel.txt" if mode == "panel" else f"cutoff_{number:03d}.tsv")
                      for number in range(1, len(panels) + 1)]
-    for destination in [staged_dir, *native_panels]:
+    for destination in [staged_dir, *native_panels, work_dir / "input-validation.json"]:
         if destination.exists() or destination.is_symlink():
             raise ValidationError(f"Preparazione già presente: {destination}")
 
@@ -178,6 +181,9 @@ def prepare_cpi(request: object) -> list[str]:
     for (label, _, records), destination in zip(panels, native_panels):
         write_position_panel(records, destination)
         maps.append(f"{label}={destination}" if label else str(destination))
+    write_input_report(work_dir, "cpi", warnings,
+                       normalized=[(source, destination) for (_, source, _), destination
+                                   in zip(panels, native_panels)])
     arguments = [
         "--pileup_dir", str(staged_dir), "--out_dir", str(out_dir),
         f"--pairs={pairs}", f"--mother_prefix={request['mother_prefix']}",

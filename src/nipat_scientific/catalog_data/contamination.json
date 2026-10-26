@@ -497,10 +497,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          594,
-          609
+          590,
+          651
         ],
-        "sha256": "bd7a4a3a8801280cd078682771cb52cd92dc726c2ed9376461e49a4d83623b7e"
+        "sha256": "de0b5ce26d4b698fede57d7732b14150d6b171fa97bbe666985fec991d7c7d19"
       }
     },
     {
@@ -518,10 +518,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          610,
-          630
+          590,
+          651
         ],
-        "sha256": "bd7a4a3a8801280cd078682771cb52cd92dc726c2ed9376461e49a4d83623b7e"
+        "sha256": "de0b5ce26d4b698fede57d7732b14150d6b171fa97bbe666985fec991d7c7d19"
       }
     },
     {
@@ -532,23 +532,24 @@
           "pos1",
           "pos2"
         ],
-        "coordinate_type": "positive integer",
+        "coordinate_type": "positive ordered integer",
         "supports_headerless": true,
-        "requires_adjacent_positions": false
+        "requires_adjacent_positions": false,
+        "unique_coordinates": true
       },
       "applies_to": "all",
       "origin": "nipat_engine",
       "description": {
-        "it": "Il lettore accetta pannelli con o senza intestazione e valida le coordinate senza imporre gli alleli o l'adiacenza richiesta da DNPcall.",
-        "en": "The reader accepts headered or headerless panels and validates coordinates without imposing alleles or the adjacency required by DNPcall."
+        "it": "Accetta pannelli con o senza intestazione: cromosoma e coordinate intere positive, pos2 maggiore di pos1, siti unici. Non richiede alleli ne posizioni adiacenti.",
+        "en": "Accepts headered or headerless panels: chromosome and positive integer coordinates, pos2 greater than pos1, unique sites. Alleles and adjacency are not required."
       },
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          112,
-          151
+          137,
+          182
         ],
-        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
       }
     },
     {
@@ -571,10 +572,10 @@
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          76,
-          84
+          85,
+          93
         ],
-        "sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3"
+        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
       }
     },
     {
@@ -593,10 +594,10 @@
       "evidence": {
         "path": "src/nipat_scientific/contamination.py",
         "source_lines": [
-          91,
-          98
+          41,
+          100
         ],
-        "sha256": "3d7490ace832c5da1bf42efffb13a1bab9baa2dcaa4e66664b1c69117f3282dd"
+        "sha256": "3da9cd0bc7208c4aae4aa47085cc85b1ca307a7aedc32ef2cc304b645f323c4a"
       }
     },
     {
@@ -614,10 +615,10 @@
       "evidence": {
         "path": "src/nipat_scientific/contamination.py",
         "source_lines": [
-          73,
-          89
+          41,
+          100
         ],
-        "sha256": "3d7490ace832c5da1bf42efffb13a1bab9baa2dcaa4e66664b1c69117f3282dd"
+        "sha256": "3da9cd0bc7208c4aae4aa47085cc85b1ca307a7aedc32ef2cc304b645f323c4a"
       }
     },
     {
@@ -638,7 +639,72 @@
           24,
           29
         ],
-        "sha256": "740e027be5cf1be89808ff433cfacabeae3def42e0c91458f37c20a8071e6bf8"
+        "sha256": "cbc0219f50b05f6727c873c336b6a5a7f2380a0a00965d8fe2bc1e7bde4ffea1"
+      }
+    },
+    {
+      "id": "count_table_preflight",
+      "value": {
+        "counts": "finite nonnegative integers",
+        "unique_loci": true,
+        "header_only": "allowed",
+        "ratio_optional": true,
+        "mismatch_policy": "warn without rewriting"
+      },
+      "applies_to": "contamination",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Preflight verifica colonne, larghezza delle righe, coordinate uniche e ordinate e conteggi interi finiti non negativi. Se fornito, ratio_REF_ALT deve essere finito tra 0 e 1 oppure mancante. Rapporto/totale incoerente e rapporto mancante con conteggi positivi producono avvisi; R conserva la propria politica di calcolo. Il valore total_count=NA e ammesso solo se N_REF, N_ALT e N_Other sono tutti zero, come nei loci senza copertura prodotti da DNPcall; resta invariato.",
+        "en": "Preflight checks columns, row width, unique ordered coordinates and finite nonnegative integer counts. When supplied, ratio_REF_ALT must be finite from 0 to 1 or missing. Ratio/total mismatches and missing ratios with positive counts produce warnings; R retains its calculation policy. total_count=NA is allowed only when N_REF, N_ALT and N_Other are all zero, as in uncovered DNPcall loci; it remains unchanged."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/files.py",
+        "source_lines": [
+          101,
+          142
+        ],
+        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+      }
+    },
+    {
+      "id": "input_validation_provenance",
+      "value": "work/input-validation.json",
+      "applies_to": "contamination",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Il motore registra gli avvisi e le copie normalizzate con percorsi e SHA256 di origine e copia. Gli originali restano invariati. Errori UTF-8 e di formato delle tabelle diventano diagnostica di validazione.",
+        "en": "The engine records warnings and normalized copies with source/prepared paths and SHA256. Originals remain unchanged. UTF-8 and table-format errors become validation diagnostics."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/files.py",
+        "source_lines": [
+          179,
+          195
+        ],
+        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+      }
+    },
+    {
+      "id": "scientific_output_contract",
+      "value": {
+        "standalone_report": "work/scientific-validation.json",
+        "plan_report": "workflow-state.json step artifacts",
+        "nonfinite_estimate": "structured warning",
+        "missing_or_malformed_output": "execution failure"
+      },
+      "applies_to": "contamination",
+      "origin": "NIPAT Python scientific engine",
+      "description": {
+        "it": "Analisi singole e workflow applicano gli stessi contratti di output: identita dei campioni e dei siti, colonne, conteggi e file attesi. NA previsto in assenza di informazione resta valido; stime non finite o NA inattesi sono segnalati e non riscritti. Output mancanti o malformati impediscono lo stato di successo.",
+        "en": "Individual analyses and plans share output contracts for sample/site identity, columns, counts and expected files. Expected NA with no information remains valid; nonfinite estimates or unexpected NA are reported and never rewritten. Missing or malformed output prevents success."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/outputs.py",
+        "source_lines": [
+          152,
+          245
+        ],
+        "sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
       }
     }
   ],

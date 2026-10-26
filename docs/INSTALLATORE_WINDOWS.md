@@ -5,8 +5,8 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive il pacchetto Windows di **NIPAT Desktop 0.7.1**.
-Le [note della versione](RELEASE_0.7.1.md) descrivono funzionalità e ambito
+Questo documento descrive il pacchetto Windows di **NIPAT Desktop 0.7.2**.
+Le [note della versione](RELEASE_0.7.2.md) descrivono funzionalità e ambito
 delle verifiche.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
@@ -201,6 +201,13 @@ automatico completo in caso di errore.
 
 ### Preparazione del runtime e ripresa
 
+Il manifest distingue applicazione, immagine scientifica e componente WSL.
+La provenienza WSL identifica i suoi sorgenti, la base Linux e le dipendenze
+effettivamente risolte, indipendentemente dal commit del client. Il builder
+può riutilizzare un archivio pubblicato soltanto se il descrittore del
+componente e il contenuto verificato corrispondono. Il setup continua a
+verificare i byte dell'archivio tramite SHA-256 prima dell'importazione.
+
 Una distribuzione può essere riutilizzata soltanto se digest completo,
 registrazione WSL, proprietà del canale e posizione effettiva sono coerenti.
 I nuovi nomi combinano il prefisso del canale, 32 cifre del digest del
@@ -242,6 +249,34 @@ completa dell'installazione. Inno Setup copia i file applicativi prima della
 preparazione del runtime:
 un errore lascia l'applicazione bloccata fino al completamento del setup,
 anche se la distribuzione precedente è ancora presente.
+
+## Manutenzione dei componenti installati
+
+**Guida e informazioni → Installazione e spazio** legge l'inventario delle
+risorse possedute e le dimensioni di ambienti WSL e cache. Gli elementi
+attivi e il precedente ambiente più recente sono protetti. La pulizia è
+selettiva: richiede un elemento esplicitamente rimovibile, una conferma e
+una nuova verifica di proprietà, percorso e integrità prima della rimozione.
+File estranei, dati e risultati vengono conservati; non viene eseguito un
+`prune` generale di Docker o WSL.
+
+La riparazione riguarda la versione installata: verifica il payload e
+avvia `bootstrap.ps1 -Resume`, con diagnostica e autotest. I registri dei
+backup selettivi sono consultabili ma non autorizzano il ripristino di una
+versione precedente. Un ripristino automatico completo richiederebbe anche
+una copia coerente di tutti i componenti applicativi e della configurazione
+dell'installatore, che il backup selettivo non rappresenta.
+
+I comandi equivalenti sono `installation inspect [--json]`,
+`installation cleanup --target ID` e
+`installation recover --target current-installation`. Le ultime due
+operazioni richiedono conferma, oppure `--yes` per una richiesta automatizzata.
+Un processo separato conferma la ricezione, attende la chiusura del client
+e acquisisce l'accesso esclusivo all'installazione prima di intervenire.
+Il passaggio del client con codice `85` non indica una pulizia o riparazione
+riuscita. Il risultato finale è in
+`.runtime/maintenance/<id>/result.json`; i dettagli della preparazione restano
+nei log dell'installatore. In caso di errore conservare entrambi.
 
 ## Disinstallazione
 

@@ -6,17 +6,19 @@ Direct CLI commands deliberately do not consume these defaults.
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 import json
 import math
 import os
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 import sys
 import tempfile
 from typing import Any, Mapping
 
 from nipat.errors import ValidationError
+from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout
+from nipat.storage import validate_windows_storage_path as _validate_windows_storage_path
 
 
 SCHEMA_VERSION = 1
@@ -71,25 +73,6 @@ def _path(value: Any, label: str, *, stored: bool = False) -> Path:
         # Also check a local path that resolves through a link onto another drive.
         _validate_windows_storage_path(resolved)
     return resolved
-
-
-def _validate_windows_storage_path(path: Path) -> None:
-    """Reject unsupported destinations without invoking WSL or touching their files."""
-    if sys.platform != "win32":
-        return
-    from nipat.execution.transport import _drive_type, _windows_path
-
-    raw = str(path)
-    parsed = PureWindowsPath(raw)
-    if not parsed.is_absolute() and not raw.startswith(("\\\\", "//")):
-        # absolute() is lexical: unlike resolve(), it does not follow links.
-        raw = str(path.absolute())
-    parsed = _windows_path(raw)
-    if _drive_type(parsed.anchor) != 3:
-        raise ValidationError(
-            f"La cartella deve trovarsi su un disco locale fisso: {parsed.anchor}. "
-            "Le unita' di rete e rimovibili non sono supportate per dati e risultati."
-        )
 
 
 def _label(value: Any) -> str:
@@ -171,12 +154,20 @@ class Preferences:
     workflows: dict[str, dict[str, Any]] = field(default_factory=dict)
     update_channel: str = "testing"
     check_updates_on_startup: bool = False
+    execution: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.update_channel, str) or self.update_channel not in {"stable", "testing"}:
             raise ValidationError("Canale aggiornamenti non valido: scegliere stable o testing.")
         if type(self.check_updates_on_startup) is not bool:
             raise ValidationError("Il controllo aggiornamenti all'avvio deve essere attivo o disattivo.")
+        if (not isinstance(self.execution, dict)
+                or self.execution.keys() - {"input_hashes", "cpus", "memory_mb", "pids_limit"}):
+            raise ValidationError("Opzioni di esecuzione non riconosciute.")
+        normalized_execution = asdict(ExecutionOptions(**self.execution))
+        object.__setattr__(self, "execution", {
+            key: normalized_execution[key] for key in self.execution
+        })
         for name in ("data_dir", "runs_dir"):
             value = getattr(self, name)
             if value is not None:
@@ -191,6 +182,14 @@ class Preferences:
         if choice not in WORKFLOW_KEYS:
             raise ValidationError("Workflow non riconosciuto.")
         return deepcopy(self.workflows.get(choice, {}))
+
+    def execution_options(self, overrides: Mapping[str, Any] | None = None) -> ExecutionOptions:
+        """Saved guided defaults, with explicit command-line overrides applied last."""
+        values = dict(self.execution)
+        values.update(overrides or {})
+        if values.keys() - {"input_hashes", "cpus", "memory_mb", "pids_limit"}:
+            raise ValidationError("Opzioni di esecuzione non riconosciute.")
+        return ExecutionOptions(**values)
 
     def with_workflow(self, choice: str, values: dict[str, Any]) -> "Preferences":
         workflows = deepcopy(self.workflows)
@@ -219,7 +218,6 @@ class Preferences:
         }
         layout = replace(base, **updates)
         layout.validate_storage_roots()
-        _validate_managed_directories(layout)
         return layout
 
     def to_dict(self) -> dict[str, Any]:
@@ -236,12 +234,13 @@ class Preferences:
                 "data_dir": str(self.data_dir) if self.data_dir is not None else None,
                 "runs_dir": str(self.runs_dir) if self.runs_dir is not None else None,
                 "workflows": workflows, "update_channel": self.update_channel,
-                "check_updates_on_startup": self.check_updates_on_startup}
+                "check_updates_on_startup": self.check_updates_on_startup,
+                "execution": deepcopy(self.execution)}
 
     @classmethod
     def from_dict(cls, document: Any) -> "Preferences":
         allowed = {"schema_version", "data_dir", "runs_dir", "workflows",
-                   "update_channel", "check_updates_on_startup"}
+                   "update_channel", "check_updates_on_startup", "execution"}
         if (not isinstance(document, dict) or document.keys() - allowed
                 or type(document.get("schema_version")) is not int
                 or document["schema_version"] != SCHEMA_VERSION):
@@ -255,7 +254,8 @@ class Preferences:
                        for key in ("data_dir", "runs_dir") if (value := document.get(key)) is not None}
         return cls(**directories, workflows=normalized,
                    update_channel=document.get("update_channel", "testing"),
-                   check_updates_on_startup=document.get("check_updates_on_startup", False))
+                   check_updates_on_startup=document.get("check_updates_on_startup", False),
+                   execution=document.get("execution", {}))
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -265,55 +265,6 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise ValidationError(f"Chiave duplicata nelle impostazioni: {key}")
         result[key] = value
     return result
-
-
-def _validate_managed_directories(layout: ProjectLayout) -> None:
-    """Keep research files outside installer-managed runtime/cache locations.
-
-    A source checkout and the Linux package do not have this Windows layout file.
-    When present, an unreadable or unexpected record cannot waive the check.
-    The installer remains the owner and sole writer of this record.
-    """
-    record = layout.project_dir / ".runtime" / "install-layout.json"
-    if not record.exists() and not record.is_symlink():
-        return
-    try:
-        if record.is_symlink():
-            raise ValueError("collegamento non consentito")
-        with record.open("rb") as stream:
-            content = stream.read(MAX_SETTINGS_BYTES + 1)
-        if len(content) > MAX_SETTINGS_BYTES:
-            raise ValueError("dimensione del record")
-        data = json.loads(content.decode("utf-8-sig"), object_pairs_hook=_unique_object)
-        fields = {"app_dir", "runtime_dir", "cache_dir", "data_dir", "runs_dir"}
-        if (not isinstance(data, dict) or data.keys() != fields | {"schema_version", "installation_channel"}
-                or type(data["schema_version"]) is not int or data["schema_version"] != 1
-                or data["installation_channel"] != "desktop"):
-            raise ValueError("formato o identita del record")
-        directories = {key: _path(data[key], key, stored=True) for key in fields}
-        if directories["app_dir"] != layout.project_dir.resolve():
-            raise ValueError("cartella applicazione diversa dal record")
-        paths = list(directories.values())
-        for index, path in enumerate(paths):
-            if path == Path(path.anchor):
-                raise ValueError("radice del disco riservata")
-            if any(path.is_relative_to(other) or other.is_relative_to(path)
-                   for other in paths[index + 1:]):
-                raise ValueError("cartelle di installazione sovrapposte")
-    except (OSError, ValueError, UnicodeError, RecursionError, ValidationError) as exc:
-        raise ValidationError(
-            f"Configurazione delle cartelle installate non valida: {record}. "
-            "Riaprire il setup NIPAT per ripararla prima di modificare le destinazioni."
-        ) from exc
-    for name in ("data_dir", "runs_dir"):
-        selected = getattr(layout, name).resolve()
-        for role in ("runtime_dir", "cache_dir"):
-            protected = directories[role]
-            if selected.is_relative_to(protected) or protected.is_relative_to(selected):
-                raise ValidationError(
-                    f"La cartella {name} si sovrappone alla destinazione riservata {role}: "
-                    f"{protected}. Scegliere una cartella separata."
-                )
 
 
 class PreferencesStore:

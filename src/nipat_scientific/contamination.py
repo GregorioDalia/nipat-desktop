@@ -12,7 +12,7 @@ import shutil
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
-from nipat_scientific.files import require_contamination_input, require_file
+from nipat_scientific.files import require_contamination_input, require_file, write_input_report
 from nipat_scientific.panels import read_position_panel, write_position_panel
 
 
@@ -59,6 +59,7 @@ def prepare_contamination(request: object) -> list[str]:
     records = read_position_panel(panel)
     samples: list[tuple[Path, str]] = []
     names: set[str] = set()
+    warnings = []
     for item in selected:
         if not isinstance(item, dict) or set(item) != {"path", "name"}:
             raise ValidationError("Descrizione campione Contamination non valida.")
@@ -67,7 +68,7 @@ def prepare_contamination(request: object) -> list[str]:
             raise ValidationError(f"Nome file duplicato nello staging: {name}")
         names.add(name.casefold())
         source = require_file(_absolute_path(item["path"], "Output DNPcall"), "Output DNPcall")
-        require_contamination_input(source)
+        warnings.extend(require_contamination_input(source))
         samples.append((source, name))
 
     work_dir = _absolute_path(request["work_dir"], "Cartella di lavoro")
@@ -84,7 +85,7 @@ def prepare_contamination(request: object) -> list[str]:
         raise ValidationError("La cartella risultati deve essere vuota.")
     staged_dir = work_dir / "inputs"
     native_panel = work_dir / "DNPpanel.txt"
-    for destination in (staged_dir, native_panel):
+    for destination in (staged_dir, native_panel, work_dir / "input-validation.json"):
         if destination.exists() or destination.is_symlink():
             raise ValidationError(f"Preparazione già presente: {destination}")
 
@@ -95,4 +96,5 @@ def prepare_contamination(request: object) -> list[str]:
     for source, name in samples:
         shutil.copy2(source, staged_dir / name)
     write_position_panel(records, native_panel)
+    write_input_report(work_dir, "contamination", warnings, normalized=[(panel, native_panel)])
     return [str(native_panel), str(staged_dir), str(out_dir)]

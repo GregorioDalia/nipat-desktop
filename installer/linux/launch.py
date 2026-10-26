@@ -13,6 +13,7 @@ import os
 from pathlib import Path, PurePosixPath
 import platform
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -225,17 +226,28 @@ def cli_command(app: Path, arguments: list[str]) -> list[str]:
 
 
 def run_cli(app: Path, arguments: list[str], environment: dict[str, str], log=None) -> int:
-    if log is None:
-        return subprocess.run(cli_command(app, arguments), env=environment).returncode
-    with subprocess.Popen(cli_command(app, arguments), env=environment, stdout=subprocess.PIPE,
-                          stderr=subprocess.STDOUT, text=True, encoding="utf-8",
-                          errors="replace", bufsize=1) as process:
-        assert process.stdout is not None
-        for line in process.stdout:
-            print(line, end="", flush=True)
-            log.write(line)
-            log.flush()
-        return process.wait()
+    # The foreground terminal sends SIGINT to both supervisor and client. The
+    # client owns cancellation and may deliberately remain in its menu. Keep the
+    # supervisor waiting (and its activity lease alive) instead of letting
+    # subprocess.run kill a child that just recovered from Ctrl+C. A *caught*
+    # handler, not SIG_IGN, resets to the default across exec: the child still
+    # receives SIGINT and can stop its scientific process normally.
+    previous = signal.signal(signal.SIGINT, lambda _number, _frame: None)
+    try:
+        if log is None:
+            with subprocess.Popen(cli_command(app, arguments), env=environment) as process:
+                return process.wait()
+        with subprocess.Popen(cli_command(app, arguments), env=environment, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                              errors="replace", bufsize=1) as process:
+            assert process.stdout is not None
+            for line in process.stdout:
+                print(line, end="", flush=True)
+                log.write(line)
+                log.flush()
+            return process.wait()
+    finally:
+        signal.signal(signal.SIGINT, previous)
 
 
 def binding(manifest: dict, manifest_hash: str) -> dict:
