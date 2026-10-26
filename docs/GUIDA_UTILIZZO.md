@@ -1,13 +1,13 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.7.0a1, in sviluppo**,
+Questa guida descrive **NIPAT Desktop 0.7.1**,
 con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
 artefatti GitHub Actions sono destinati alla revisione tecnica.
 
-La release ufficiale disponibile è la 0.6.0. La versione documentata offre
+La versione offre
 **W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
 CPI oppure entrambe le analisi, con SNPcall facoltativo sugli stessi BAM.
 La stessa voce offre SNPcall su più BAM o pileup. Un'unica configurazione
@@ -89,10 +89,16 @@ conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`.
 
 ## Menu guidato
 
-Il banner riporta la versione e il menu mostra le analisi disponibili.
+Il banner riporta la versione. Il menu separa le analisi singole, i workflow
+automatici e gli strumenti di configurazione e consultazione.
 Nei terminali interattivi supportati si usano frecce e Invio oppure il tasto
 indicato accanto alla voce. Negli altri terminali si digita la scelta in testo
 semplice: un numero oppure `W` per i workflow automatici.
+
+Quando si ridimensiona la finestra, NIPAT adatta il menu allo spazio disponibile.
+Se lo spazio non basta o la lettura dei tasti non è disponibile, il messaggio
+indica il motivo e consente la selezione testuale. Allargare la finestra può
+rendere di nuovo utilizzabili le frecce nel menu successivo.
 
 | Scelta | Funzione |
 | --- | --- |
@@ -267,9 +273,12 @@ condivisioni UNC, unità di rete e unità rimovibili non sono supportate dal
 backend WSL. Su Linux i file devono essere accessibili al motore Docker locale.
 
 Si possono incollare percorsi completi, anche tra virgolette, oppure percorsi
-relativi alla cartella corrente mostrata dal programma. In Windows, **Copia
-come percorso** di Esplora file produce un valore utilizzabile. Le voci relative
-in un file BAM list partono invece dalla cartella della lista.
+relativi alla cartella corrente mostrata prima del campo. Ad esempio,
+`DNP_list.txt` indica un file nella cartella corrente: NIPAT non lo cerca
+nelle sottocartelle di **Dati**. Usare il percorso completo se il file si trova
+altrove. In Windows, **Copia come percorso** di Esplora file produce un valore
+utilizzabile. Le voci relative in un file BAM list partono invece dalla
+cartella della lista.
 
 Il setup Windows permette di scegliere separatamente queste destinazioni:
 
@@ -352,6 +361,12 @@ Selezionare uno o più BAM oppure un file lista con un percorso BAM per riga,
 senza intestazione. In CLI, ripetere `--bam` o usare `--bamlist`; le modalità
 sono alternative. Sono richiesti un FASTA e il pannello DNP.
 
+Nel campo **File FASTA di riferimento** scegliere il file delle sequenze,
+ad esempio `genome.fa` oppure un FASTA compresso in BGZF. Non selezionare
+`genome.fa.fai` o un file `.gzi`: sono indici, non il riferimento. Se viene
+selezionato un indice, il messaggio indica quale FASTA controllare; la scelta
+va corretta esplicitamente.
+
 Il FASTA deve avere il proprio indice `.fai`; se compresso in BGZF richiede
 anche `.gzi`. Gli indici BAM sono facoltativi per il percorso mpileup usato
 da NIPAT. Riferimento, BAM e pannello devono essere coerenti per assemblaggio
@@ -361,7 +376,9 @@ Il pannello contiene cinque colonne senza intestazione, separate da tabulazioni
 o spazi: `chr`, `pos1`, `pos2`, `REF`, `ALT`. Le coordinate sono positive e
 adiacenti (`pos2 = pos1 + 1`); gli alleli sono dinucleotidi composti da A, C,
 G e T. Non sono ammesse coordinate duplicate. NIPAT prepara una copia con
-alleli maiuscoli senza modificare l'originale.
+alleli maiuscoli senza modificare l'originale. Il pannello stabilisce quali
+posizioni e quali alleli analizzare. `DNP_list.txt` è un nome di esempio:
+è possibile scegliere un file con un altro nome, purché rispetti il formato.
 
 Il valore iniziale dell'esecuzione è seriale; il menu e `--parallel`
 consentono quella parallela. Il menu propone il valore salvato in **Configura**,
@@ -604,6 +621,12 @@ comprese frequenze, modalità di cutoff e costante d'errore. I prefissi CPI
 salvati per l'analisi singola non si applicano ai workflow automatici:
 la selezione dei campioni usa i ruoli espliciti. Coppie e nome del run vengono
 inseriti per ogni esecuzione e non sono salvati come preferenze.
+
+L'**ID coppia** è un'etichetta scelta dall'utente per riconoscere nei risultati
+l'associazione fra il BAM cfDNA materno e il BAM paterno, per esempio
+`Coppia01`. Non è un parametro scientifico, non deve coincidere con un barcode
+o con il nome dei file. Occorrono due campioni distinti con ruoli noti; un
+solo BAM non permette di completare questi workflow.
 
 Gli ID delle coppie iniziano con una lettera e contengono fino a 64 caratteri
 ASCII: lettere, cifre, trattino e underscore. Non sono ammessi duplicati o ID

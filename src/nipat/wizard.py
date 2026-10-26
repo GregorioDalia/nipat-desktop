@@ -34,6 +34,11 @@ MAIN_MENU = [
     ("9", "Verifica aggiornamenti", "Release disponibili, download e installazione"),
     ("0", "Esci", ""),
 ]
+MAIN_MENU_GROUPS = {
+    "1": "Analisi singole",
+    "W": "Workflow automatici",
+    "5": "Configurazione e strumenti",
+}
 
 
 def _select_workflow(ui: Terminal) -> str | None:
@@ -196,7 +201,7 @@ def run_wizard(
                 ui.message("Verifica iniziale annullata. Ritorno al menu principale.")
         while True:
             try:
-                choice = ui.menu("Menu principale", MAIN_MENU).strip().casefold()
+                choice = ui.menu("Menu principale", MAIN_MENU, groups=MAIN_MENU_GROUPS).strip().casefold()
             except (Cancelled, KeyboardInterrupt):
                 ui.message("Menu principale. Per uscire scegliere 0.", kind="muted")
                 continue

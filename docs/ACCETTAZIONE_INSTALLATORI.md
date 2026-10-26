@@ -6,13 +6,12 @@ x86_64. Ogni decisione identifica gli installatori tramite commit, build
 GitHub Actions e checksum e distingue prove osservate, controlli automatici
 e scenari ancora da verificare.
 
-Per la serie **0.6** è prevista una distribuzione per ricerca pre-1.0,
-basata su una prova manuale documentata di installazione e funzionamento,
-una build completa riuscita e una decisione esplicita del manutentore.
-La qualificazione desktop completa rimane un percorso distinto: il suo
-catalogo di casi non blocca automaticamente ogni release pre-1.0.
-La **0.7** è la versione prevista per la consegna alle esperte di dominio
-e per la relativa campagna di accettazione.
+La serie **0.7** prevede una distribuzione per ricerca pre-1.0, basata su
+prove manuali documentate, una build completa riuscita e una decisione
+esplicita del manutentore. La **0.7.1** è destinata alla campagna di valutazione
+con le esperte di dominio. La qualificazione desktop completa rimane un
+percorso distinto: il suo catalogo di casi non blocca automaticamente ogni
+release pre-1.0.
 
 L’accettazione tecnica riguarda installazione, avvio, conservazione dei dati
 e funzionamento dei workflow. La validazione scientifica sui dati e sugli
@@ -22,7 +21,7 @@ per gli aggiornamenti; non attesta una validazione scientifica generale.
 
 ## Criteri di distribuzione pre-1.0
 
-L'accettazione per ricerca della 0.6 richiede:
+L'accettazione per ricerca richiede:
 
 1. CI applicabile e build completa degli installatori riuscite, incluse le
    regressioni dei quattro workflow e le prove automatiche dei pacchetti.
@@ -34,22 +33,29 @@ L'accettazione per ricerca della 0.6 richiede:
 4. Revisione esplicita della distribuzione per ricerca, con responsabile,
    data, riferimenti alle evidenze e indicazione degli scenari rinviati.
 
-Una prova svolta su una build precedente può costituire il riferimento
-manuale soltanto quando il controllo automatico conferma l'equivalenza dei
-sorgenti operativi distribuiti. Sono confrontati applicazione, motore,
-script R, configurazione, definizioni dei runtime, installatori, script di
-costruzione e fixture inclusi nell'elenco di distribuzione. Documentazione
-e strumenti `.github` di CI/pubblicazione sono esclusi da questo confronto;
-le eccezioni limitate ai due verificatori di firma rimossi sono dichiarate
-nel validatore. Altri cambiamenti, aggiunte o rimozioni di sorgenti operativi
-interrompono il riutilizzo della prova.
+Una prova su una build precedente può costituire il riferimento manuale
+secondo uno dei due ambiti verificati automaticamente:
 
-Questa equivalenza riguarda i sorgenti, non i byte degli installatori o
-l'ambiente completo. Le evidenze devono conservare tale distinzione e non
-attribuire una prova manuale al nuovo EXE se non è stato installato.
-L'accettazione per ricerca non trasforma i sei scenari desktop rinviati in
-prove superate. Il relativo schema è autorizzato per la serie 0.6; non
-abilita automaticamente altre versioni o la qualificazione della 1.0.
+- **Schema 2, serie 0.6:** equivalenza dei sorgenti operativi distribuiti,
+  con le sole esclusioni esplicitamente definite dal validatore.
+- **Schema 3, serie 0.7:** equivalenza dei sorgenti scientifici e del runtime;
+  revisione esplicita di ogni differenza nei sorgenti distribuiti del client,
+  degli installatori e dei loro test, con hash precedenti e nuovi.
+
+Il confronto considera l'inventario versionato dei file distribuiti. Per lo
+schema 3, modifiche ai percorsi `scientific/`, `engine/`,
+`src/nipat_scientific/`, `docker/`, `installer/runtime/` o al file `compose.yaml` impediscono il
+riutilizzo di questo riferimento: non possono essere autorizzate come semplici
+correzioni del client. Le differenze ammesse devono coincidere esattamente
+con quelle dichiarate e revisionate. Documentazione e strumenti `.github`
+di CI/pubblicazione non sono sorgenti operativi dell'applicazione; restano
+soggetti alla revisione e ai controlli della pipeline.
+
+L'equivalenza riguarda i sorgenti, non i byte degli installatori o l'ambiente
+completo. Le evidenze non attribuiscono una prova manuale al nuovo EXE se non
+è stato installato. L'accettazione per ricerca non trasforma i sei scenari
+desktop rinviati in prove superate e non abilita automaticamente la
+qualificazione della versione 1.0.
 
 I test automatici vengono estesi quando un difetto, un nuovo comportamento
 o una condizione di confine possono essere riprodotti. Rimangono separati
@@ -66,12 +72,11 @@ prima dell’integrazione: ciò consente di provare e accettare gli installatori
 senza modificare `main`. I controlli automatici delle pull request non
 producono un'autorizzazione alla distribuzione.
 
-La candidata 0.7.0a1 segue questo percorso di build e collaudo; le
-[note della candidata](RELEASE_0.7.0a1.md) descrivono la prima prova dei
-workflow automatici. Costruire e provare una candidata non richiede di
-dichiarare superati scenari non eseguiti o di pubblicare una release.
-L'eventuale decisione di distribuzione della 0.7 deve avere criteri e prove
-espliciti: l'accettazione della 0.6 non le viene attribuita automaticamente.
+Le [note della versione 0.7.1](RELEASE_0.7.1.md) descrivono le funzionalità
+e il riferimento manuale utilizzato per la valutazione. Costruire e provare
+una candidata non richiede di dichiarare superati scenari non eseguiti o di
+pubblicare una release. Ogni distribuzione richiede una propria decisione
+associata ai pacchetti esatti.
 
 La sequenza prevista è:
 
@@ -110,7 +115,7 @@ dei sorgenti sopra descritti.
 
 La tabella seguente costituisce il catalogo della qualificazione desktop
 completa. Nello schema 1 tutti i sei scenari devono essere superati;
-nello schema 2 della 0.6 sono dichiarati esplicitamente come rinviati.
+negli schemi 2 e 3 per ricerca sono dichiarati esplicitamente come rinviati.
 Le singole evidenze automatiche o manuali restano utilizzabili con il loro
 ambito effettivo, senza attribuire loro la copertura dell’intero scenario.
 
@@ -305,10 +310,38 @@ completa e distinta da quella del riferimento manuale. Il confronto dei
 sorgenti viene ripetuto prima della preparazione e della pubblicazione;
 una differenza fuori dall'ambito ammesso interrompe la procedura.
 
+### Schema 3: distribuzione per ricerca della serie 0.7
+
+Lo schema 3 conserva l'identità della build e i digest dei pacchetti e distingue
+la prova manuale di riferimento dalle verifiche della nuova distribuzione:
+
+| Campo | Contenuto |
+| --- | --- |
+| `schema_version` | `3`. |
+| `decision`, `scope` | `accepted-for-research` e `pre-1.0-research`. |
+| `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
+| `observed_baseline` | Commit effettivamente provato, riferimenti alle evidenze e osservazioni ricevute; descrive soltanto le prove realmente eseguite. |
+| `observed_baseline.source_equivalence_scope` | `scientific-runtime-equivalence-with-reviewed-client-changes-v1`. |
+| `reviewed_source_changes` | Elenco ordinato delle differenze operative ammesse: `path`, `before_sha256`, `after_sha256`; aggiunte e rimozioni hanno un lato `null`. |
+| `deferred_desktop_scenarios` | Tutte le sei chiavi del catalogo desktop, esplicitamente rinviate. |
+| `domain_validation` | `pending-domain-researchers`. |
+
+La procedura confronta i file con Git: non si limita ad accettare gli hash
+scritti nel record. Una differenza non dichiarata, un digest errato o una
+modifica scientifica o del runtime interrompono la pubblicazione. I nuovi
+pacchetti devono comunque superare la build completa e le prove automatiche
+applicabili: client Windows preparato e pacchetto Ubuntu installato.
+
+La prova Windows di riferimento della 0.7.1 riguarda il commit
+`1b601081a4aff9efe1806c921fd7ac963feea7b7` e il workflow DNPcall → Contamination.
+Il confronto numerico osservato comprende 11 siti DNP e 10 siti mantenuti da
+Contamination, concordanti con le esecuzioni separate. Non equivale a un
+collaudo manuale del nuovo EXE, dei casi CPI o di tutti i desktop destinatari.
+
 ### Revisione e pubblicazione
 
 Sottoporre il record a revisione in
-`.github/release-acceptance/v0.6.0.json`, separatamente dal commit della
+`.github/release-acceptance/v0.7.1.json`, separatamente dal commit della
 build da distribuire. Il record può essere preparato sul branch di sviluppo;
 prima della pubblicazione, integrare in `main` sia il commit compilato sia
 il record approvato. Quest’ultimo non è incorporato negli installatori.

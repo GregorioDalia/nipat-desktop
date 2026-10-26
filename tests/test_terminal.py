@@ -125,8 +125,128 @@ class TerminalTests(unittest.TestCase):
         terminal._size.side_effect = [os.terminal_size((80, 24)), os.terminal_size((30, 10))]
         terminal.read.return_value = "2"
         self.assertEqual(terminal.menu("Analisi", CHOICES), "2")
-        self.assertFalse(terminal._live)
+        self.assertTrue(terminal._live)
         self.assertNotIn("\x1b[4A", "\n".join(output))
+        self.assertIn("finestra troppo piccola dopo il ridimensionamento", "\n".join(output))
+        self.assertEqual("\n".join(output).count("DNPcall"), 1)
+
+    def test_resized_menu_preserves_selection_and_keeps_arrows_active(self):
+        terminal, output, _ = self.make_live(["down", "down", "enter"])
+        terminal._size.side_effect = [os.terminal_size((80, 24)),
+                                     os.terminal_size((100, 30)), os.terminal_size((100, 30))]
+        self.assertEqual(terminal.menu("Analisi", CHOICES), "0")
+        terminal.read.assert_not_called()
+        self.assertTrue(terminal._live)
+        self.assertIn("Finestra ridimensionata: menu aggiornato", "\n".join(output))
+        redraws = [text for text in output if "\x1b[4A" in text]
+        self.assertEqual(len(redraws), 1)  # Only the second arrow uses cursor offsets.
+
+    def test_small_resized_window_recovers_live_navigation_on_next_menu(self):
+        terminal, output, _ = self.make_live(["down", "w"])
+        terminal._size.side_effect = [os.terminal_size((80, 24)),
+                                     os.terminal_size((30, 10)), os.terminal_size((80, 24))]
+        terminal.read.return_value = "W"
+        choices = CHOICES + [("W", "Workflow", "")]
+        self.assertEqual(terminal.menu("First", choices), "W")
+        self.assertEqual(terminal.menu("Second", choices), "W")
+        terminal.read.assert_called_once_with("Scelta [2]: ")
+        self.assertTrue(terminal._live)
+
+    def test_read_error_reports_safe_diagnostic_without_duplicate_menu_and_accepts_w(self):
+        terminal, output, _ = self.make_live([OSError(5, "secret sample path")])
+        terminal.read.return_value = "W"
+        self.assertEqual(terminal.menu("Analisi", CHOICES + [("W", "Workflow", "")]), "W")
+        rendered = "\n".join(output)
+        self.assertIn("OSError, codice 5", rendered)
+        self.assertIn("numero o la lettera", rendered)
+        self.assertNotIn("secret sample path", rendered)
+        self.assertEqual(rendered.count("DNPcall"), 1)
+        self.assertFalse(terminal._live)
+
+    def test_unavailable_dimensions_fall_back_without_disabling_future_live_menus(self):
+        terminal, output, _ = self.make_live(["down"])
+        terminal._size.side_effect = [os.terminal_size((80, 24)), None]
+        terminal.read.return_value = ":annulla"
+        terminal.cancel_to_menu = True
+        with self.assertRaises(Cancelled):
+            terminal.menu("Analisi", CHOICES)
+        self.assertIn("dimensioni della console non disponibili", "\n".join(output))
+        self.assertTrue(terminal._live)
+
+    def test_group_headings_do_not_create_selectable_choices(self):
+        terminal, output, _ = self.make_live(["down", "enter"])
+        groups = {"1": "Analisi singole", "2": "Secondo gruppo"}
+        self.assertEqual(terminal.menu("Analisi", CHOICES, groups=groups), "2")
+        self.assertIn("\x1b[6A", "\n".join(output))
+        terminal = Terminal(read=Mock(return_value="2"), write=output.append)
+        self.assertEqual(terminal.menu("Analisi", CHOICES, groups=groups), "2")
+        self.assertIn("Analisi singole", output)
+        with self.assertRaisesRegex(ValueError, "group headings"):
+            terminal.menu("Analisi", CHOICES, groups={"x": "Missing choice"})
+
+    def test_group_headings_are_counted_before_selecting_live_layout(self):
+        terminal, output, read_key = self.make_live([], size=(80, 8))
+        terminal.read.return_value = "1"
+        self.assertEqual(terminal.menu("Analisi", CHOICES, groups={"1": "Analisi"}), "1")
+        read_key.assert_not_called()
+
+    @unittest.skipUnless(os.name == "posix", "POSIX interactive terminal")
+    def test_real_terminal_resize_retains_arrows_and_next_menu_accepts_w(self):
+        import fcntl
+        import pty
+        import select
+        import struct
+        import subprocess
+        import sys
+        import termios
+        import time
+
+        master, slave = pty.openpty()
+        process = None
+        output = b""
+
+        def resize(columns, rows):
+            fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
+
+        def expect(marker):
+            nonlocal output
+            deadline = time.monotonic() + 10
+            while marker not in output:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0 or not select.select([master], [], [], remaining)[0]:
+                    self.fail(f"Terminal did not show {marker!r}; output={output!r}")
+                output += os.read(master, 65536)
+
+        script = (
+            "from nipat.terminal import Terminal\n"
+            "choices=[('1','DNPcall',''),('2','SNPcall',''),('W','Workflow','')]\n"
+            "with Terminal(cancel_to_menu=True) as ui:\n"
+            " print('RESULT1='+ui.menu('First menu',choices), flush=True)\n"
+            " print('RESULT2='+ui.menu('Second menu',choices), flush=True)\n"
+        )
+        try:
+            resize(80, 24)
+            environment = {**os.environ, "TERM": "xterm"}
+            environment.pop("NO_COLOR", None)
+            process = subprocess.Popen([sys.executable, "-u", "-c", script],
+                                       stdin=slave, stdout=slave, stderr=slave, env=environment)
+            expect(b"Su/Giu e Invio")
+            resize(100, 30)
+            os.write(master, b"\x1b[B")
+            expect(b"Finestra ridimensionata: menu aggiornato")
+            os.write(master, b"\r")
+            expect(b"RESULT1=2")
+            expect(b"Second menu")
+            os.write(master, b"W")
+            expect(b"RESULT2=W")
+            self.assertEqual(process.wait(timeout=5), 0)
+            self.assertNotIn(b"Navigazione a frecce non disponibile", output)
+        finally:
+            if process is not None and process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+            os.close(master)
+            os.close(slave)
 
     def test_wide_labels_are_clipped_before_the_terminal_edge(self):
         self.assertEqual(_clip("abcdef", 20), "abcdef")

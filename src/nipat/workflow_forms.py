@@ -248,7 +248,12 @@ class DnpCpiForm(DnpContaminationForm):
             label = ("ID coppia", "BAM cfDNA materno", "BAM campione paterno")[index]
             if index == 0:
                 self.ui.message(
-                    "Assegnare un ID alla coppia: iniziare con una lettera; sono ammessi lettere ASCII, numeri, '_' e '-' (massimo 64 caratteri).",
+                    "ID coppia e' un'etichetta scelta dall'utente, per esempio Coppia01, per riconoscere nei risultati l'associazione fra cfDNA materno e campione paterno. "
+                    "Non e' un parametro scientifico o un barcode e non deve coincidere con i nomi dei file.",
+                    kind="muted",
+                )
+                self.ui.message(
+                    "Usare un ID distinto per ogni coppia: iniziare con una lettera; sono ammessi lettere ASCII, numeri, '_' e '-' (massimo 64 caratteri).",
                     kind="muted",
                 )
                 if others and existing is None:
@@ -261,6 +266,7 @@ class DnpCpiForm(DnpContaminationForm):
                     kind="muted",
                 )
                 self.ui.message("Incollare il percorso completo o relativo, anche tra virgolette. Lo stesso BAM puo' essere riutilizzato in piu' coppie nello stesso ruolo.", kind="muted")
+                self._path_guide()
             self.ui.message(":indietro torna al campo precedente della coppia; :annulla torna al menu.", kind="muted")
             default = str(values[index]) if values[index] is not None else ""
             try:
@@ -297,6 +303,10 @@ class DnpCpiForm(DnpContaminationForm):
         self.ui.message(
             "Per ogni coppia indicare esplicitamente ID, BAM cfDNA materno e BAM del campione paterno. "
             "I BAM condivisi vengono elaborati una sola volta; le associazioni rimangono distinte.", kind="muted",
+        )
+        self.ui.message(
+            "Sono necessari due campioni con ruolo noto: cfDNA materno (plasma) e campione paterno. "
+            "Un solo BAM non basta per questo workflow e non puo' essere assegnato a entrambi i ruoli.", kind="muted",
         )
         self.ui.message("Nomi e prefissi dei file CPI sono preparati automaticamente da NIPAT; non occorre rinominare i BAM.", kind="muted")
         manage = bool(current)
@@ -417,7 +427,7 @@ class SnpBatchForm(WorkflowForm):
         else:
             fields.append(Field("bamlist", "File bamlist", "file", check=check_bamlist)
                           if mode == "3" else Field("bams", "BAM", "files"))
-            fields.append(Field("reference", "FASTA indicizzato (.fai; .gzi se BGZF)",
+            fields.append(Field("reference", "File FASTA di riferimento",
                                 "file", check=check_reference))
         fields += [Field("panel", "Lista SNP (pos, ref, alt)", "file",
                          check=lambda path: read_snp_positions(path, for_bed=mode != "2")),

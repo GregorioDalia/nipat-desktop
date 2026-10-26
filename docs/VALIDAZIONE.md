@@ -1,16 +1,15 @@
 # Validazione tecnica e di dominio
 
 Questa scheda consente di registrare separatamente installazione, esecuzione
-e concordanza scientifica di **NIPAT Desktop**. La versione 0.6 dispone di
-prove tecniche e costituisce una distribuzione per ricerca pre-1.0; la
-consegna alle esperte di dominio e la relativa campagna di accettazione sono
-pianificate sulla **0.7**. Registrare in ogni scheda la versione effettivamente
-utilizzata, senza trasferire automaticamente gli esiti a versioni successive.
+e concordanza scientifica di **NIPAT Desktop 0.7.1**, distribuito per la
+valutazione da parte delle esperte di dominio. Registrare in ogni scheda la
+versione effettivamente utilizzata, senza trasferire automaticamente gli
+esiti a versioni successive.
 
 Un autotest superato verifica i casi inclusi; non attesta la validità per
 ogni campione o scenario d’impiego. Per la pubblicazione applicare il
 [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md), che distingue
-l'accettazione per ricerca della 0.6 dalla qualificazione desktop completa.
+l'accettazione per ricerca pre-1.0 dalla qualificazione desktop completa.
 Questa scheda non sostituisce il record di decisione associato ai pacchetti.
 
 ## Ambiente e preparazione
@@ -82,11 +81,11 @@ Le conferme di avvio eseguono calcoli reali. Per una prova della sola
 compilazione utilizzare esplicitamente `--dry-run`; tale prova deve essere
 registrata come simulazione e non come analisi riuscita.
 
-### Workflow automatici della 0.7
+### Workflow automatici
 
-La [prima prova della candidata](RELEASE_0.7.0a1.md#prima-prova-del-pacchetto)
-descrive l'avvio dal pacchetto installato. Per ogni composizione selezionata
-registrare sia il risultato complessivo sia quello dei singoli passaggi:
+La [guida per l'utilizzo](GUIDA_UTILIZZO.md#risultati-e-analisi-in-sequenza) descrive
+configurazione e avvio dal pacchetto installato. Per ogni composizione
+selezionata registrare sia il risultato complessivo sia quello dei singoli passaggi:
 
 - per DNPcall → Contamination e/o CPI, confrontare le tabelle DNP prodotte
   con quelle usate dalle analisi successive; CPI deve mantenere i ruoli e gli

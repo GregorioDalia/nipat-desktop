@@ -138,7 +138,7 @@ class ReleaseGuards(unittest.TestCase):
             evidence["installation_profile"] = self.manifest["installation_profile"]
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
-    def make_desktop_package(self):
+    def make_desktop_package(self, version="0.6.0"):
         profile_path = Path(__file__).resolve().parents[2] / publisher.INSTALLATION_PROFILE_SOURCE
         profile_bytes = profile_path.read_bytes()
         self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = profile_bytes
@@ -147,7 +147,7 @@ class ReleaseGuards(unittest.TestCase):
             name: hashlib.sha256(content).hexdigest() for name, content in self.sources.items()
         }
         self.manifest["installation_profile"] = json.loads(profile_bytes)
-        self.make_wsl_package("0.6.0")
+        self.make_wsl_package(version)
 
     def make_docker_installer(self):
         self.make_dual_package("0.4.1")
@@ -175,18 +175,18 @@ class ReleaseGuards(unittest.TestCase):
         }
         (self.desktop / "docker-installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
-    def joint_fixture(self):
-        self.make_desktop_package()
+    def joint_fixture(self, version="0.6.0"):
+        self.make_desktop_package(version)
         linux = self.root / "linux"
         evidence = self.root / "pair"
         linux.mkdir()
         evidence.mkdir()
-        package = linux / "nipat-desktop_0.6.0_amd64.deb"
+        package = linux / f"nipat-desktop_{version}_amd64.deb"
         package.write_bytes(b"deb fixture; actual package validation is covered by builder tests")
         for name in ("linux-installer-build.json", "linux-installation-check.json", "linux-dependency-check.json"):
             (linux / name).write_text("{}")
         actual = {
-            "schema_version": 1, "version": "0.6.0", "source_commit": COMMIT,
+            "schema_version": 1, "version": version, "source_commit": COMMIT,
             "installer_manifest_sha256": publisher.sha256(self.setup / publisher.MANIFEST),
             "scientific_archive": self.manifest["assets"]["scientific_image"],
             "windows": {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(self.setup / "NIPAT-Setup.exe")},
@@ -281,6 +281,46 @@ class ReleaseGuards(unittest.TestCase):
         (self.root / "release/NIPAT-Setup.exe").write_bytes(b"different installer")
         with self.assertRaisesRegex(ValueError, "differs from the accepted build"):
             publisher.write_update_manifest(self.root / "release", self.manifest, parts[2], "testing")
+
+    def test_reviewed_research_release_publishes_client_evidence_and_exact_delta(self):
+        parts = self.joint_fixture("0.7.1")
+        validator, record = parts[-2:]
+        for name in ("windows-client-check.json", "application-files.json"):
+            (self.setup / name).write_text(json.dumps({"fixture": name}), encoding="utf-8")
+        record.pop("tests")
+        evidence = ["https://github.com/example/repository/blob/commit/evidence.md"]
+        delta = [{"path": "src/nipat/wizard.py", "before_sha256": "1" * 64, "after_sha256": "2" * 64}]
+        record.update(schema_version=3, decision="accepted-for-research", scope="pre-1.0-research",
+                      review={"reviewer": "Test reviewer", "reviewed_at": "2026-01-01T12:00:00Z",
+                              "evidence": evidence},
+                      observed_baseline={"source_commit": "c" * 40,
+                          "observations": ["installation_ready", "automatic_workflow_sample_analysis"],
+                          "evidence": evidence, "source_equivalence_scope": validator.REVIEWED_SOURCE_SCOPE},
+                      deferred_desktop_scenarios=sorted(validator.SCENARIOS),
+                      domain_validation="pending-domain-researchers", reviewed_source_changes=delta)
+        check = {"baseline_source_commit": "c" * 40, "source_commit": COMMIT,
+                 "scope": validator.REVIEWED_SOURCE_SCOPE, "unchanged_files_verified": 170,
+                 "reviewed_source_changes": delta, "candidate_windows_installation_claimed": False}
+        with patch.object(validator, "verify_baseline", return_value=check) as compare:
+            self.prepare_joint(*parts)
+        compare.assert_called_once_with(record, publisher.source_bytes)
+        output = self.root / "release"
+        self.assertEqual(json.loads((output / "baseline-source-check.json").read_text()), check)
+        for name in ("windows-client-check.json", "application-files.json"):
+            self.assertEqual((output / name).read_bytes(), (self.setup / name).read_bytes())
+            self.assertEqual(publisher.checksums(output / "SHA256SUMS")[name], publisher.sha256(output / name))
+        provenance = json.loads((output / "release-provenance.json").read_text())
+        self.assertEqual(provenance["release_notes_commit"], "b" * 40)
+        self.assertEqual(provenance["acceptance_scope"], "pre-1.0-research")
+        update = json.loads((output / "update-manifest.json").read_text())
+        self.assertEqual(update["version"], "0.7.1")
+        self.assertEqual({asset["name"] for asset in update["assets"]},
+                         {"NIPAT-Setup.exe", "nipat-desktop_0.7.1_amd64.deb"})
+
+    def test_07_joint_release_requires_retained_windows_evidence(self):
+        parts = self.joint_fixture("0.7.1")
+        with self.assertRaisesRegex(ValueError, "joint release asset"):
+            self.prepare_joint(*parts)
 
     def test_update_manifest_requires_both_matching_source_and_installer_name(self):
         parts = self.joint_fixture()
@@ -1009,6 +1049,14 @@ class ResearchSourceGuards(unittest.TestCase):
         with patch.object(publisher.subprocess, "run", return_value=SimpleNamespace(returncode=0)), \
                 self.assertRaisesRegex(ValueError, "different bytes"):
             publisher.verify_research_baseline(record, validator)
+
+    def test_schema_three_fetches_and_verifies_baseline_instead_of_skipping_it(self):
+        record = {"schema_version": 3, "observed_baseline": {"source_commit": "c" * 40}}
+        calls = []
+        validator = SimpleNamespace(verify_baseline=lambda value, reader: calls.append((value, reader)))
+        with patch.object(publisher.subprocess, "run", return_value=SimpleNamespace(returncode=0)):
+            publisher.verify_research_baseline(record, validator)
+        self.assertEqual(calls, [(record, publisher.source_bytes)])
         with patch.object(publisher.subprocess, "run", side_effect=[SimpleNamespace(returncode=1),
                 subprocess.CalledProcessError(1, ["git", "fetch"])]), self.assertRaises(subprocess.CalledProcessError):
             publisher.verify_research_baseline(record, validator)
@@ -1020,7 +1068,7 @@ class ResearchSourceGuards(unittest.TestCase):
         run.assert_not_called()
 
     def test_notes_are_pinned_to_preparation_for_research_and_built_source_for_full_acceptance(self):
-        for schema, expected in ((1, COMMIT), (2, "b" * 40)):
+        for schema, expected in ((1, COMMIT), (2, "b" * 40), (3, "b" * 40)):
             with self.subTest(schema=schema), patch.object(publisher, "source_bytes",
                     return_value=b"# Release\n\n[Guide](GUIDA_UTILIZZO.md)\n") as read:
                 notes = publisher.release_notes(COMMIT, "b" * 40, "0.6.0", {"schema_version": schema})

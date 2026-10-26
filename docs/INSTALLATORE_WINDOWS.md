@@ -5,10 +5,9 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive il pacchetto Windows di NIPAT Desktop, comune
-alla release 0.6.0 e alla candidata 0.7.0a1. Le
-[note della candidata](RELEASE_0.7.0a1.md) descrivono la prima prova dei
-workflow automatici dopo l'installazione.
+Questo documento descrive il pacchetto Windows di **NIPAT Desktop 0.7.1**.
+Le [note della versione](RELEASE_0.7.1.md) descrivono funzionalità e ambito
+delle verifiche.
 Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate e gli installatori disponibili. I pacchetti degli

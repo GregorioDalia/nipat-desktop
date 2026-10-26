@@ -265,9 +265,12 @@ class Terminal:
 
     def _menu_lines(
         self, choices: list[tuple[str, str, str]], selected: int, width: int,
+        groups: dict[str, str] | None = None,
     ) -> list[str]:
         lines = []
         for index, (key, label, description) in enumerate(choices):
+            if groups and key.casefold() in groups:
+                lines.append(self._styled(_clip(groups[key.casefold()], width), "muted"))
             text = f"{'>' if index == selected else ' '} {key}  {label}"
             if description:
                 text += f"  - {description}"
@@ -282,6 +285,7 @@ class Terminal:
 
     def menu(
         self, title: str, choices: list[tuple[str, str, str]], default: str | None = None,
+        *, groups: dict[str, str] | None = None,
     ) -> str:
         if not choices:
             raise ValueError("A menu must contain at least one choice.")
@@ -289,14 +293,24 @@ class Terminal:
         keys = [choice[0].casefold() for choice in clean]
         if len(set(keys)) != len(keys) or any(not key for key in keys):
             raise ValueError("Menu keys must be nonempty and unique.")
+        group_names = {key.casefold(): _clean(label) for key, label in (groups or {}).items()}
+        if not set(group_names).issubset(keys):
+            raise ValueError("Menu group headings must refer to existing choices.")
         self.heading(title)
         size = self._size() if self._live else None
-        if size and size.columns >= 52 and size.lines >= len(clean) + 5 + int(self.cancel_to_menu) and all(len(k) == 1 for k in keys):
+        minimum_rows = len(clean) + len(group_names) + 5 + int(self.cancel_to_menu)
+
+        def fits(dimensions: os.terminal_size | None) -> bool:
+            return bool(dimensions and dimensions.columns >= 52 and dimensions.lines >= minimum_rows)
+
+        rendered = False
+        if fits(size) and all(len(k) == 1 for k in keys):
             selected = keys.index(default.casefold()) if default and default.casefold() in keys else 0
             try:
                 with self._key_reader() as read_key:
-                    lines = self._menu_lines(clean, selected, size.columns)
+                    lines = self._menu_lines(clean, selected, size.columns, group_names)
                     self._emit("\n".join(lines))
+                    rendered = True
                     while True:
                         key = read_key()
                         if key == "enter":
@@ -307,20 +321,50 @@ class Terminal:
                             return clean[keys.index(key)][0]
                         if key not in ("up", "down"):
                             continue
-                        if self._size() != size:
-                            # Reflow may have changed the old row count; avoid
-                            # moving the cursor into previous output after resize.
-                            raise _Unavailable
                         selected = (selected + (1 if key == "down" else -1)) % len(clean)
+                        current_size = self._size()
+                        if current_size != size:
+                            # Reflow makes the old cursor offsets unreliable. A
+                            # fresh, explicitly labelled rendering is safe and
+                            # retains both selection and earlier log output.
+                            if fits(current_size):
+                                size = current_size
+                                self.message("Finestra ridimensionata: menu aggiornato; le frecce restano attive.", "muted")
+                                lines = self._menu_lines(clean, selected, size.columns, group_names)
+                                self._emit("\n".join(lines))
+                                continue
+                            reason = ("dimensioni della console non disponibili" if current_size is None else
+                                      "finestra troppo piccola dopo il ridimensionamento")
+                            self.message(f"Menu testuale: {reason}. Digitare il numero o la lettera della voce e premere Invio. Le frecce saranno riprovate al prossimo menu.", "muted")
+                            default = clean[selected][0]
+                            break
                         # Only the menu is redrawn; previous analysis/log text stays
                         # available in terminal scrollback.
-                        lines = self._menu_lines(clean, selected, size.columns)
+                        lines = self._menu_lines(clean, selected, size.columns, group_names)
                         self._emit(f"\x1b[{len(lines)}A" + "\n".join("\r\x1b[2K" + line for line in lines))
-            except (_Unavailable, OSError, ValueError):
+            except (_Unavailable, OSError, ValueError) as exc:
                 self._live = False
-                self.message("Navigazione a frecce non disponibile: digitare il numero o la lettera della voce.", "muted")
-        for key, label, description in clean:
-            self.message(f"  {key}  {label}" + (f" - {description}" if description else ""))
+                # Do not include exception messages: an OS error can contain
+                # user paths. Type and numeric OS code are sufficient to
+                # distinguish a read failure from a harmless resize.
+                cause = exc.__cause__ if isinstance(exc, _Unavailable) and exc.__cause__ else exc
+                diagnostic = type(cause).__name__
+                error_code = getattr(cause, "winerror", None) or getattr(cause, "errno", None)
+                if isinstance(error_code, int):
+                    diagnostic += f", codice {error_code}"
+                self.message(f"Navigazione a frecce non disponibile ({diagnostic}). Modalita' testuale per questa sessione: digitare il numero o la lettera della voce e premere Invio.", "muted")
+                if rendered:
+                    default = clean[selected][0]
+        elif self._live and all(len(k) == 1 for k in keys):
+            reason = "dimensioni della console non disponibili" if size is None else "finestra troppo piccola per le frecce"
+            self.message(f"Menu testuale: {reason}. Digitare il numero o la lettera della voce e premere Invio.", "muted")
+        # If the live list is already on screen, do not duplicate it solely
+        # because input switches to line mode. Its keys remain valid.
+        if not rendered:
+            for key, label, description in clean:
+                if key.casefold() in group_names:
+                    self.message(group_names[key.casefold()], "muted")
+                self.message(f"  {key}  {label}" + (f" - {description}" if description else ""))
         answer = self.prompt("Scelta", default=default or "").strip()
         if not answer and default is not None:
             return default

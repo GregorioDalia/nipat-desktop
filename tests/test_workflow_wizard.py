@@ -89,6 +89,29 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertIn(str(self.run / "output" / "workflow" / "steps" / "contamination" / "output"), output)
         self.assertIn("workflow-state.json", output)
 
+    def test_reference_index_can_be_corrected_in_every_bam_workflow_before_dispatch(self):
+        index = Path(str(self.reference) + ".fai")
+        cases = [
+            (self.inputs(), "dnp_contamination"),
+            (self.cpi_inputs(preset="2"), "dnp_cpi"),
+            (self.cpi_inputs(preset="3"), "dnp_cpi"),
+            (["W", "4", "1", self.bam, "", self.reference, self.snp_panel, "snp-chain"], "snp_batch"),
+        ]
+        for answers, method in cases:
+            with self.subTest(method=method, preset=answers[1]):
+                self.workflows.reset_mock()
+                selected = answers.index(self.reference)
+                answers = answers[:selected] + [index] + answers[selected:]
+                status, output = self.invoke(answers + ["1", "0", "0"])
+                self.assertEqual(status, 0)
+                self.assertIn("non il file FASTA delle sequenze", output)
+                self.assertNotIn(".fai.fai", output)
+                dispatched = getattr(self.workflows, method)
+                dispatched.assert_called_once()
+                self.assertEqual(dispatched.call_args.kwargs["reference"], self.reference)
+                prompts = [call.args[0] for call in self.reader.call_args_list]
+                self.assertEqual(prompts.count("File FASTA di riferimento: "), 2)
+
     def test_bamlist_parallel_and_distinct_contamination_panel(self):
         bamlist = self.file("bams.txt", '"sample with spaces.bam"\n')
         status, output = self.invoke([

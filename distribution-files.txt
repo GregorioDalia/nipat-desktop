@@ -241,6 +241,7 @@ tests/test_workflow_wizard.py
 src/nipat/workflow_forms.py
 tests/fixtures/workflow_cpi/README.md
 docs/RELEASE_0.7.0a1.md
+docs/RELEASE_0.7.1.md
 installer/windows/test-packaged-client.ps1
 scripts/verify_windows_payload.py
 tests/test_windows_payload.py

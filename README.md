@@ -10,15 +10,13 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione documentata: NIPAT Desktop 0.7.0a1, in sviluppo.** La release
-ufficiale disponibile è la 0.6.0. Consultare la pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
-versioni effettivamente pubblicate, gli installatori e le rispettive note.
-Gli artefatti GitHub Actions sono pacchetti di verifica tecnica, distinti dalle
-release. NIPAT è software per la ricerca: gli autotest verificano casi noti,
-mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
-Le [note della candidata 0.7.0a1](docs/RELEASE_0.7.0a1.md) descrivono i
-pacchetti di revisione e la prima prova dei workflow installati.
+**Versione documentata: NIPAT Desktop 0.7.1**, destinata alla valutazione
+tecnica e scientifica da parte dei ricercatori. Scaricare gli installatori
+dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
+e consultare le [note della versione](docs/RELEASE_0.7.1.md).
+Gli artefatti GitHub Actions sono pacchetti di revisione tecnica, distinti
+dalle release. NIPAT è software per la ricerca: gli autotest verificano casi
+noti, mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
 
 ## Analisi disponibili
 
@@ -128,8 +126,12 @@ usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
 cartella dell'applicazione; condivisioni UNC e unità di rete non sono supportate.
-I percorsi possono contenere spazi. Nel workflow automatico non occorre
-copiare o riselezionare le tabelle fra i passaggi. Le altre sequenze si
+I percorsi possono contenere spazi. I percorsi relativi partono dalla cartella
+corrente indicata nel campo: la cartella configurata come **Dati** non è una
+base di ricerca automatica. Per il riferimento scegliere il file FASTA delle
+sequenze, ad esempio `genome.fa`; `.fai` e `.gzi` sono indici associati e non
+vanno selezionati al suo posto. Nel workflow automatico non occorre copiare
+o riselezionare le tabelle fra i passaggi. Le altre sequenze si
 compongono selezionando gli output compatibili di un run come input del successivo.
 
 ### CLI diretta
@@ -264,7 +266,7 @@ indipendenti e problemi riproducibili.
 ## Documentazione e licenza
 
 - [Sintesi del prodotto](SUNTO.md)
-- [Note della versione 0.6.0](docs/RELEASE_0.6.0.md)
+- [Note della versione 0.7.1](docs/RELEASE_0.7.1.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)

@@ -1,15 +1,13 @@
 # Distribuzione e requisiti
 
-Questo documento descrive l'installazione di **NIPAT Desktop**, comune alla
-release 0.6.0 e alla candidata 0.7.0a1. Consultare la pagina
+Questo documento descrive l'installazione di **NIPAT Desktop 0.7.1**. Consultare la pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
 versioni pubblicate, i pacchetti disponibili e le relative evidenze.
 Gli artefatti GitHub Actions servono alla verifica tecnica e sono distinti
 dalle release; la loro costruzione non autorizza da sola la pubblicazione.
-Le [note della candidata 0.7.0a1](RELEASE_0.7.0a1.md) descrivono i pacchetti
-di revisione e il collaudo dei workflow automatici. La candidata utilizza
-la stessa identità applicativa: installarla su un PC con NIPAT Desktop
-aggiorna quell'applicazione, senza creare un'edizione affiancata.
+Le [note della versione 0.7.1](RELEASE_0.7.1.md) descrivono funzionalità e
+ambito delle verifiche. L'installazione su un PC con NIPAT Desktop aggiorna
+quell'applicazione, senza creare un'edizione affiancata.
 
 ## Piattaforme
 
@@ -235,11 +233,12 @@ La verifica di un pacchetto comprende installazione, avvio, diagnostica,
 autotest e analisi con dati appropriati sul sistema dichiarato. L'esito della
 CI non sostituisce una prova dell’installer sul computer destinatario né la
 validazione di dominio. Il [protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md)
-distingue l'accettazione per ricerca della 0.6, basata su prove manuali
-circoscritte e verifiche automatiche, dalla qualificazione desktop completa.
-La decisione documenta le evidenze disponibili e i casi ancora da verificare;
-la scelta del canale `stable` non estende la copertura dichiarata.
-La campagna con le esperte di dominio è prevista sulla 0.7. La
+distingue l'accettazione per ricerca pre-1.0, basata su prove manuali
+circoscritte, verifiche automatiche e revisione delle modifiche, dalla
+qualificazione desktop completa. La decisione documenta le evidenze disponibili
+e i casi ancora da verificare; la scelta del canale `stable` non estende la
+copertura dichiarata. La versione 0.7.1 è destinata alla campagna di valutazione
+con le esperte di dominio. La
 [scheda di validazione](VALIDAZIONE.md) consente di registrare separatamente
 i risultati scientifici.
 

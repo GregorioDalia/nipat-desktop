@@ -1,10 +1,13 @@
 import tempfile
 import unittest
+from contextlib import chdir
 from pathlib import Path
 
 from nipat.cli import DEFAULT_ERR_CONST
 from nipat.paths import ProjectLayout
-from nipat.wizard_forms import Cancelled, WorkflowForm
+from nipat.errors import ValidationError
+from nipat.wizard_forms import Cancelled, Field, WorkflowForm, check_reference
+from nipat.workflow_forms import DnpContaminationForm, DnpCpiForm, SnpBatchForm
 
 
 class RecordingUI:
@@ -124,6 +127,116 @@ class WizardGuidanceTests(unittest.TestCase):
                     form.collect()
                 self.assert_no_errors(ui)
                 self.assertNotIn("run_name", form.values)
+
+    def test_reference_index_selection_is_actionable_and_never_silently_replaced(self):
+        compressed = self.file("genome.fa.gz", "fixture")
+        for suffix in (".fai", ".gzi", ".FAI"):
+            reference = compressed if suffix == ".gzi" else self.reference
+            index = self.file(reference.name + suffix, "index fixture")
+            with self.subTest(suffix=suffix):
+                ui = RecordingUI([index, ":annulla"])
+                form = WorkflowForm("1", ui, self.layout, DEFAULT_ERR_CONST)
+                field = next(field for field in form.fields() if field.key == "reference")
+                with self.assertRaises(Cancelled):
+                    form._read(field)
+                errors = [text for kind, text in ui.events if kind == "error"]
+                self.assertEqual(len(errors), 1)
+                self.assertIn("non il file FASTA delle sequenze", errors[0])
+                self.assertIn(str(reference), errors[0])
+                self.assertNotIn(".fai.fai", errors[0])
+                self.assertNotIn("reference", form.values)
+                self.assertEqual([text for kind, text in ui.events if kind == "prompt"],
+                                 ["File FASTA di riferimento"] * 2)
+
+    def test_reference_validation_preserves_bgzf_and_real_missing_index_errors(self):
+        check_reference(self.reference)
+        missing = self.file("unindexed.fa", ">chr1\nACGT\n")
+        with self.assertRaisesRegex(ValidationError, "Indice FASTA non trovato"):
+            check_reference(missing)
+        for extension in (".gz", ".bgz", ".bgzf"):
+            compressed = self.file("indexed.fa" + extension, "fixture")
+            self.file(compressed.name + ".fai", "index fixture")
+            with self.subTest(extension=extension):
+                with self.assertRaisesRegex(ValidationError, "Indice FASTA BGZF non trovato"):
+                    check_reference(compressed)
+                self.file(compressed.name + ".gzi", "index fixture")
+                check_reference(compressed)
+
+    def test_all_bam_forms_share_clear_reference_and_dnp_panel_guidance(self):
+        ui = RecordingUI([])
+        forms = [WorkflowForm("1", ui, self.layout, DEFAULT_ERR_CONST),
+                 WorkflowForm("2", ui, self.layout, DEFAULT_ERR_CONST),
+                 DnpContaminationForm("1", ui, self.layout, DEFAULT_ERR_CONST),
+                 DnpCpiForm(ui, self.layout, DEFAULT_ERR_CONST, include_contamination=False),
+                 DnpCpiForm(ui, self.layout, DEFAULT_ERR_CONST, include_contamination=True),
+                 SnpBatchForm(ui, self.layout, DEFAULT_ERR_CONST)]
+        for form in forms:
+            with self.subTest(form=form.title):
+                ui.events.clear()
+                reference = next(field for field in form.fields() if field.key == "reference")
+                self.assertEqual(reference.label, "File FASTA di riferimento")
+                form._guide(reference)
+                guidance = "\n".join(text for _, text in ui.events)
+                self.assertIn("non il suo indice .fai o .gzi", guidance)
+                self.assertIn("BGZF", guidance)
+                if form.choice == "1":
+                    form._guide(next(field for field in form.fields() if field.key == "panel"))
+                    guidance = "\n".join(text for _, text in ui.events)
+                    self.assertIn("posizioni e gli alleli da analizzare", guidance)
+                    self.assertIn("il file puo' avere un altro nome", guidance)
+
+    def test_relative_path_base_is_shown_at_each_file_and_list_prompt(self):
+        with chdir(self.root):
+            form, ui = self.collect("1", ["1", self.bam.name, "", self.reference.name,
+                                           self.panel.name, "1", ""])
+        self.assertEqual(form.arguments()["bams"], [self.bam])
+        self.assertEqual(form.arguments()["panel"], self.panel)
+        self.assertNotEqual(self.root, self.layout.data_dir)
+        previous_prompt = -1
+        file_prompts = {"Percorso del primo BAM", "Altro file (Invio per continuare)",
+                        "File FASTA di riferimento", "Pannello DNP"}
+        for index, (kind, label) in enumerate(ui.events):
+            if kind != "prompt":
+                continue
+            if label in file_prompts:
+                guidance = "\n".join(text for _, text in ui.events[previous_prompt + 1:index])
+                self.assertIn(f"Base dei percorsi relativi: {self.root}", guidance)
+                self.assertIn("L'impostazione Dati non cambia questa base", guidance)
+            previous_prompt = index
+
+    def test_cutoff_file_and_native_map_explain_relative_base(self):
+        with chdir(self.root):
+            for field, answers in (
+                (Field("cutoff_file", "File cutoff", "file"), [self.panel.name]),
+                (Field("cutoff_map", "Mappa cutoff"), ["panel=" + self.panel.name]),
+            ):
+                with self.subTest(field=field.key):
+                    ui = RecordingUI(answers)
+                    form = WorkflowForm("4", ui, self.layout, DEFAULT_ERR_CONST)
+                    result = form._read(field)
+                    self.assertEqual(result, self.panel if field.kind == "file" else answers[0])
+                    self.assertIn(("muted", f"Base dei percorsi relativi: {self.root}"), ui.events)
+
+    def test_pair_labels_and_file_roles_are_explained_before_input(self):
+        father = self.file("father.bam", "fixture")
+        ui = RecordingUI(["Coppia01", self.bam.name, father.name, ""])
+        form = DnpCpiForm(ui, self.layout, DEFAULT_ERR_CONST, include_contamination=True)
+        with chdir(self.root):
+            pairs = form._pairs()
+        self.assertEqual(pairs, [("Coppia01", self.bam, father)])
+        first_prompt = next(index for index, event in enumerate(ui.events) if event == ("prompt", "ID coppia"))
+        guidance = "\n".join(text for _, text in ui.events[:first_prompt])
+        for phrase in ("etichetta scelta dall'utente", "Coppia01", "Non e' un parametro scientifico o un barcode",
+                       "non deve coincidere con i nomi dei file", "ID distinto per ogni coppia",
+                       "due campioni con ruolo noto", "Un solo BAM non basta"):
+            self.assertIn(phrase, guidance)
+        previous_prompt = first_prompt
+        for index, (kind, label) in enumerate(ui.events[first_prompt + 1:], first_prompt + 1):
+            if kind == "prompt":
+                if label in {"BAM cfDNA materno", "BAM campione paterno"}:
+                    self.assertIn(("muted", f"Base dei percorsi relativi: {self.root}"),
+                                  ui.events[previous_prompt + 1:index])
+                previous_prompt = index
 
 
 if __name__ == "__main__":

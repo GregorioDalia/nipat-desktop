@@ -1,12 +1,12 @@
 # Integrazione continua e distribuzione
 
 NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
-pubblicazione. La versione 0.6.0 appartiene al canale desktop. La pipeline
+pubblicazione. La versione 0.7.1 appartiene al canale desktop. La pipeline
 produce installatori Windows WSL e Ubuntu per revisione. La pubblicazione
 richiede una coppia di pacchetti verificata e un record di accettazione
-revisionato, riferito agli stessi file. La serie 0.6 ammette un'accettazione
-per ricerca pre-1.0 con prova manuale documentata e scenari estesi dichiarati
-come rinviati. Il publisher verifica il record prima di modificare una release.
+revisionato, riferito agli stessi file. La distribuzione per ricerca pre-1.0
+mantiene separate prove manuali documentate, controlli automatici e scenari
+estesi rinviati. Il publisher verifica il record prima di modificare una release.
 
 ## Workflow GitHub Actions
 
@@ -50,7 +50,7 @@ del programma non bastano a identificare un installatore.
 | Motore scientifico reale | CI selettiva; sempre nella CI manuale e nella build installatori. | Container autonomo, quattro workflow, BAM sintetici, risultati numerici, casi non validi e isolamento degli input. | Casi sintetici e regressioni non equivalgono a validazione di dominio. |
 | Componenti Windows | CI e build installatori. | PowerShell, percorsi, migrazione, riparazione, rimozione, blocchi attività, aggiornamento, launcher e compilazione Inno Setup. | Le simulazioni WSL e il passaggio a un installatore di prova non sono una prima installazione o un aggiornamento reale fra versioni. |
 | Pacchetti completi | Build installatori manuale. | Archivio comune, importazione nel motore distribuito, confezionamento Windows/Ubuntu e ciclo APT reale sul runner. | Il runner predisposto e il container delle dipendenze non sono un desktop utente pulito. |
-| Accettazione per ricerca 0.6 | Prova manuale documentata e revisione esplicita, integrate con la build verificata. | Installazione pronta ed esecuzione scientifica; equivalenza dei sorgenti se si riutilizza un riferimento precedente. | Non attesta una prova manuale di ogni nuovo installer o il completamento dei sei scenari desktop. |
+| Accettazione per ricerca pre-1.0 | Prova manuale documentata e revisione esplicita, integrate con la build verificata. | Schema 2: equivalenza dei sorgenti operativi; schema 3: sorgenti scientifici/runtime invariati e differenze client/packaging revisionate tramite hash. | Non attesta una prova manuale di ogni nuovo installer o il completamento dei sei scenari desktop. |
 | Qualificazione desktop completa | Prove registrate sui due installatori esatti. | Sei scenari Windows/Ubuntu, avvio, riavvio, conservazione dei dati e rimozione. | Percorso progressivo distinto dalla distribuzione pre-1.0; la valutazione scientifica rimane separata. |
 
 I nomi e il numero dei test possono evolvere; la copertura viene valutata
@@ -258,8 +258,8 @@ accettazione restano associate alla coppia Windows/Ubuntu.
 
 Gli artefatti sono conservati per **14 giorni** dalla creazione e non
 equivalgono a una release pubblica. Conservare il riferimento al run per
-identificare la build usata nelle prove. La versione 0.6 non produce un
-installatore Docker Desktop.
+identificare la build usata nelle prove. La distribuzione desktop non produce
+un installatore Docker Desktop.
 
 ## Pubblicazione dei canali di aggiornamento
 
@@ -284,8 +284,9 @@ Nell'accettazione per ricerca, le note della versione provengono dal commit
 di preparazione e vengono mantenute nella pubblicazione. La provenienza
 identifica tale revisione separatamente dal commit del pacchetto; i collegamenti
 puntano alla stessa revisione documentale. `baseline-source-check.json` conserva
-il confronto dei sorgenti con la build osservata manualmente. Nessuna di queste
-operazioni ricompila gli installatori.
+il confronto dei sorgenti con la build osservata manualmente. Per lo schema 3,
+il controllo verifica anche l'elenco completo delle modifiche operative
+revisionate e i relativi hash. Nessuna di queste operazioni ricompila gli installatori.
 
 Dopo le verifiche, il publisher genera `update-manifest.json`, lo include in
 `SHA256SUMS` e lo pubblica con gli installatori. Il manifest identifica prodotto,
@@ -328,19 +329,22 @@ non verifica riavvio, autorizzazione dell’account o apertura del collegamento
 in un desktop reale.
 
 Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) distingue la
-distribuzione per ricerca della 0.6 dalla qualificazione completa dei desktop.
+distribuzione per ricerca pre-1.0 dalla qualificazione completa dei desktop.
 La prima richiede una prova manuale di installazione e funzionamento e una
-decisione del manutentore, conservando esplicitamente i limiti della prova e
-gli scenari rinviati. Se la prova riguarda una build precedente, il publisher
-confronta i sorgenti operativi distribuiti; un cambiamento fuori dall'ambito
-ammesso impedisce il riutilizzo del riferimento. L'equivalenza dei sorgenti
-non dichiara identici i binari né provata l'installazione della nuova candidata.
+decisione del manutentore, conservando i limiti della prova e gli scenari
+rinviati. Con lo schema 3 della serie 0.7, il publisher verifica che i sorgenti
+scientifici e del runtime siano invariati rispetto alla build di riferimento
+e che ogni modifica operativa del client o dei pacchetti sia revisionata con
+hash precedenti e nuovi. Cambiamenti scientifici, differenze non dichiarate
+o digest errati impediscono il riutilizzo. Lo schema 2 conserva il confronto
+più restrittivo previsto per la serie 0.6. L'equivalenza dei sorgenti non
+attesta identità dei binari o installazione manuale della nuova candidata.
 
 La qualificazione completa conserva i sei scenari Windows/Ubuntu: sistema
 pulito, coesistenza, riavvio, percorsi personalizzati, riparazione e rimozione
 con protezione dei dati. Gli aggiornamenti fra versioni differenti richiedono
 casi dedicati. Questi collaudi sono organizzati progressivamente; la campagna
-con le esperte di dominio è prevista sulla 0.7.
+con le esperte di dominio usa la versione 0.7.1.
 
 Il record revisionato su `main` identifica build, commit, manifest, archivio
 scientifico e checksum dei due installatori. Il publisher verifica i requisiti
@@ -350,12 +354,11 @@ pubblicazione. Gli artefatti accettati non vengono ricostruiti; file differenti
 richiedono una nuova decisione associata ai nuovi checksum.
 
 La CI viene ampliata con casi riproducibili per i difetti osservati, i valori
-di confine e i nuovi comportamenti. Per la 0.7 le priorità comprendono
+di confine e i nuovi comportamenti. La copertura della 0.7.1 comprende
 propagazione dei parametri, impostazioni scientifiche fisse, equivalenza
-tra analisi separate e workflow concatenati e gestione dei fallimenti tra
-passaggi dipendenti. La 0.7.0a1 comprende i controlli del catalogo e la catena
-DNPcall → Contamination, le composizioni CPI e i piani SNPcall descritti sopra.
-Queste verifiche non vengono attribuite retroattivamente alla 0.6.
+tra analisi separate e workflow concatenati, gestione dei fallimenti fra
+passaggi, navigazione e annullamento. Le verifiche sono associate ai commit
+eseguiti dalla pipeline e non vengono attribuite retroattivamente ad altre versioni.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
 regressione. Esiti, versioni e limiti sono registrati nella

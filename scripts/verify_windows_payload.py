@@ -190,8 +190,14 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
             {"dnp-call", "snp-call", "contamination", "cpi"}, "Incomplete packaged scientific catalog.")
     menu = invoke("wizard", ["--dry-run", "wizard"], "w\n0\n0\n")
     require(all(label in menu for label in ("Workflow automatici", "DNPcall -> Contamination",
-            "DNPcall -> CPI", "DNPcall -> Contamination e CPI", "SNPcall su piu' campioni")),
+            "DNPcall -> CPI", "DNPcall -> Contamination e CPI", "SNPcall su piu' campioni",
+            "Analisi singole", "Configurazione e strumenti", "Ctrl+C")),
             "Packaged workflow menu is incomplete.")
+    cancelled = invoke("wizard-cancellation", ["--dry-run", "wizard"],
+                       "7\n6\n1\n:annulla\nW\n1\n1\n:annulla\n5\n1\n2\n:annulla\n0\n")
+    require(cancelled.count("Operazione annullata. Ritorno al menu principale.") == 3 and
+            not list((work / "runs").rglob("run.json")),
+            "Packaged cancellation did not return to the main menu without creating runs.")
     paths = fixtures(work)
     hashes = {path: digest(path) for path in paths.values()}
     bams = [paths["mother.bam"], paths["father.bam"]]

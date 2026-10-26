@@ -1,6 +1,6 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.7.0a1, in sviluppo**, è un'applicazione locale per eseguire quattro workflow
+**NIPAT Desktop 0.7.1**, è un'applicazione locale per eseguire quattro workflow
 scientifici da un menu testuale guidato o dalla riga di comando. Le analisi
 possono essere avviate singolarmente oppure nei workflow automatici
 **DNPcall → Contamination**, **DNPcall → CPI** e **DNPcall → Contamination e CPI**.
@@ -13,9 +13,9 @@ descrive in italiano e inglese le opzioni R, le regole interne e la
 preparazione degli input. Il motore convalida i piani concatenati e ne
 esegue le quattro analisi in sequenza, rispettandone le dipendenze. SNPcall
 rimane un'attività indipendente anche quando appartiene allo stesso piano.
-La release ufficiale per l'installazione rimane la 0.6.0.
-Le [note della candidata 0.7.0a1](docs/RELEASE_0.7.0a1.md) descrivono
-installazione di verifica e collaudo dei workflow automatici.
+La versione è destinata alla valutazione da parte dei ricercatori.
+Le [note della versione 0.7.1](docs/RELEASE_0.7.1.md) descrivono funzionalità,
+pacchetti e ambito delle verifiche.
 
 | Workflow | Funzione |
 | --- | --- |
@@ -57,7 +57,14 @@ sono funzioni separate. **W — Workflow automatici** configura le analisi
 successive a DNPcall e SNPcall su più campioni; per CPI si indicano
 esplicitamente le coppie e i ruoli cfDNA materno e paterno. Le preferenze non cambiano la CLI diretta. Gli input
 possono restare nelle cartelle originali e vengono letti senza modificarli.
-Su Windows sono supportati dischi locali fissi.
+Su Windows sono supportati dischi locali fissi. I percorsi relativi partono
+dalla cartella corrente indicata nell'interfaccia, non automaticamente da
+**Dati**. Per il riferimento si sceglie il file FASTA, accompagnato dai suoi indici.
+
+`:annulla` nei campi testuali e Ctrl+C anche durante il calcolo riportano al
+menu principale. Durante un'analisi NIPAT esegue prima la procedura di arresto,
+conservando log e risultati già prodotti. Le impostazioni non salvate vengono
+scartate; quelle già salvate restano disponibili.
 
 **Verifica aggiornamenti** propone gli installatori completi delle versioni
 pubblicate e approvate su GitHub. Download e installazione sono scelte esplicite;
@@ -89,6 +96,6 @@ validazione scientifica sui campioni e sullo scenario d'uso.
 
 La [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) descrive la procedura operativa;
 la [scheda di validazione](docs/VALIDAZIONE.md) aiuta a documentare le prove.
-Il [piano di sviluppo](docs/ROADMAP.md) descrive i workflow automatici previsti
-per la 0.7, la trasparenza delle impostazioni e il supporto italiano/inglese.
+Il [piano di sviluppo](docs/ROADMAP.md) descrive la valutazione dei workflow,
+il supporto italiano/inglese e la futura interfaccia grafica.
 Il codice originale è distribuito con licenza [GPL-3.0-or-later](LICENSE).
