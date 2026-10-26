@@ -84,12 +84,22 @@ non implica il successo del successivo Contamination o dell'intero piano.
 Il record del client usa `interrupted` per l'interruzione intercettata;
 il motore usa `cancelled` nello stato del piano.
 
-Ctrl+C tenta di fermare il container corrente. Per un piano, il motore inoltra
-l'interruzione al gruppo di processi scientifici e il client concede un
-intervallo di arresto prima della rimozione forzata. Una chiusura forzata del
-programma o uno spegnimento possono lasciare `preparing` o `running`:
-questi stati non indicano successo e non provano che il container sia ancora
-attivo. Conservare il run e usare un nuovo nome per ripetere l'analisi.
+Nel menu guidato, Ctrl+C interrompe l'operazione corrente e riporta al menu
+principale dopo la procedura di arresto. Nei campi e nei menu a inserimento
+testuale è disponibile anche `:annulla`; durante il calcolo usare Ctrl+C.
+Prima dell'avvio, l'annullamento scarta la compilazione senza creare un run.
+Durante un'esecuzione, conserva invece i log e tutti gli output già prodotti.
+
+Il client tenta di fermare il container corrente. Per un piano, il motore
+inoltra l'interruzione al gruppo di processi scientifici e il client concede
+un intervallo di arresto prima della rimozione forzata. Se l'arresto non viene
+confermato, l'avviso e il log richiedono una verifica dello stato del runtime;
+il ritorno al menu non costituisce una conferma di arresto in questo caso.
+Una chiusura forzata del programma o uno spegnimento possono lasciare
+`preparing` o `running`: questi stati non indicano successo e non provano che
+il container sia ancora attivo. Conservare il run e usare un nuovo nome per
+ripetere l'analisi. I comandi CLI diretti terminano dopo l'interruzione,
+senza aprire il menu guidato.
 
 ## Metadati e riproducibilità
 

@@ -46,6 +46,15 @@ def _native_cutoffs(value: str) -> str:
     return ",".join(entries)
 
 
+def _menu(ui: Terminal, title: str, choices: list[tuple[str, str, str]],
+          *, default: str) -> str:
+    """Keep local back navigation separate from cancellation to the main menu."""
+    selected = ui.menu(title, choices, default=default).strip().casefold()
+    if selected == ":annulla":
+        raise Cancelled
+    return selected
+
+
 class DefaultsForm(WorkflowForm):
     """Reuse workflow labels, choices and validation without collecting samples."""
 
@@ -144,14 +153,14 @@ class GuidedSettings:
         while True:
             ui.message("Le cartelle impostate vengono utilizzate dalle prossime analisi guidate. I file esistenti non vengono spostati o eliminati.", kind="muted")
             ui.message("La cartella dati e' una destinazione di lavoro indicata da NIPAT; i file di input possono essere scelti anche altrove. I percorsi relativi partono dalla cartella corrente.", kind="muted")
-            ui.message("Selezionare un campo da modificare, poi 9 per salvare. 0 annulla le modifiche di questa schermata.", kind="muted")
-            action = ui.menu("Configura / Cartelle dati e risultati", [
+            ui.message("Selezionare un campo da modificare, poi 9 per salvare. 0 torna a Configura senza salvare; :annulla o Ctrl+C tornano al menu principale senza salvare le modifiche di questa schermata.", kind="muted")
+            action = _menu(ui, "Configura / Cartelle dati e risultati", [
                 ("1", "Cartella dati", str(values["data_dir"])),
                 ("2", "Cartella risultati", str(values["runs_dir"])),
                 ("9", "Salva modifiche", "Per i prossimi avvii della CLI guidata"),
                 ("0", "Annulla modifiche", "Torna a Configura"),
             ], default="0")
-            if action in {"0", ":indietro", ":annulla"}:
+            if action in {"0", ":indietro"}:
                 return
             if action == "9":
                 try:
@@ -165,13 +174,13 @@ class GuidedSettings:
                 ui.message("Scegliere 1 o 2 per modificare, 9 per salvare oppure 0 per annullare.", kind="muted")
                 continue
             key = "data_dir" if action == "1" else "runs_dir"
-            ui.message("Incollare il percorso, anche tra virgolette. Invio mantiene il valore; :indietro torna a questa schermata.", kind="muted")
+            ui.message("Incollare il percorso, anche tra virgolette. Invio mantiene il valore; :indietro torna a questa schermata; :annulla o Ctrl+C tornano al menu principale.", kind="muted")
             try:
                 answer = navigation(ui.prompt("Cartella dati" if action == "1" else "Cartella risultati",
                                               default=str(values[key]), path=True))
                 candidate = Path(unquote(answer or str(values[key]))).expanduser()
                 values[key] = candidate
-            except (Back, Cancelled):
+            except Back:
                 continue
             except (OSError, ValueError) as exc:
                 ui.message(str(exc), kind="error")
@@ -182,14 +191,14 @@ class GuidedSettings:
         while True:
             ui.message("Questi valori saranno proposti all'apertura dell'analisi e potranno essere modificati nel suo riepilogo.", kind="muted")
             ui.message("Campioni, coppie CPI e nome dell'esecuzione vengono scelti per ogni analisi. Le costanti interne degli script R non sono modificate.", kind="muted")
-            ui.message("Selezionare un campo da modificare, poi 9 per salvare. 0 annulla le modifiche di questa schermata.", kind="muted")
+            ui.message("Selezionare un campo da modificare, poi 9 per salvare. 0 torna a Configura senza salvare; :annulla o Ctrl+C tornano al menu principale senza salvare le modifiche di questa schermata.", kind="muted")
             fields = form.fields()
-            action = ui.menu(f"Configura / {form.title}", [
+            action = _menu(ui, f"Configura / {form.title}", [
                 (str(index + 1), field.label, form.display_value(field))
                 for index, field in enumerate(fields)
             ] + [("9", "Salva modifiche", "Per i prossimi avvii della CLI guidata"),
                  ("0", "Annulla modifiche", "Torna a Configura")], default="0")
-            if action in {"0", ":indietro", ":annulla"}:
+            if action in {"0", ":indietro"}:
                 return
             if action == "9":
                 try:
@@ -208,7 +217,7 @@ class GuidedSettings:
             field = numbers[action]
             try:
                 form.values[field.key] = form.read_default(field)
-            except (Back, Cancelled):
+            except Back:
                 continue
 
     def _summary(self, ui: Terminal, err_const: float) -> None:
@@ -232,15 +241,15 @@ class GuidedSettings:
         channel = self.preferences.update_channel
         startup = self.preferences.check_updates_on_startup
         while True:
-            ui.message("La verifica consulta le release pubblicate su GitHub. Download e installazione richiedono sempre una scelta esplicita.", kind="muted")
+            ui.message("La verifica consulta le release pubblicate su GitHub. Download e installazione richiedono sempre una scelta esplicita. :annulla o Ctrl+C tornano al menu principale senza salvare le modifiche di questa schermata.", kind="muted")
             ui.message("La verifica all'avvio mostra soltanto un avviso e non avvia download. Si puo' verificare in qualsiasi momento dal punto 9 del menu principale.", kind="muted")
-            action = ui.menu("Configura / Aggiornamenti", [
+            action = _menu(ui, "Configura / Aggiornamenti", [
                 ("1", "Canale", "Testing" if channel == "testing" else "Stabile"),
                 ("2", "Verifica all'avvio", "Attivata" if startup else "Disattivata"),
                 ("9", "Salva modifiche", "Per i prossimi avvii della CLI guidata"),
                 ("0", "Annulla modifiche", "Torna a Configura"),
             ], default="0")
-            if action in {"0", ":indietro", ":annulla"}:
+            if action in {"0", ":indietro"}:
                 return
             if action == "9":
                 self._save(replace(self.preferences, update_channel=channel,
@@ -248,7 +257,7 @@ class GuidedSettings:
                 self._saved_message(ui)
                 return
             if action == "1":
-                selected = ui.menu("Canale degli aggiornamenti", [
+                selected = _menu(ui, "Canale degli aggiornamenti", [
                     ("1", "Testing", "Release di test e release stabili"),
                     ("2", "Stabile", "Solo release pubblicate come stabili"),
                     ("0", "Indietro", "Mantiene la scelta attuale"),
@@ -256,7 +265,7 @@ class GuidedSettings:
                 if selected in {"1", "2"}:
                     channel = "testing" if selected == "1" else "stable"
             elif action == "2":
-                selected = ui.menu("Verificare gli aggiornamenti all'avvio?", [
+                selected = _menu(ui, "Verificare gli aggiornamenti all'avvio?", [
                     ("1", "Attiva", "Solo avviso; richiede una connessione a GitHub"),
                     ("2", "Disattiva", "Verifica manuale dal menu principale"),
                     ("0", "Indietro", "Mantiene la scelta attuale"),
@@ -268,7 +277,7 @@ class GuidedSettings:
 
     def _reset(self, ui: Terminal) -> None:
         ui.message("Il ripristino elimina solo le preferenze della CLI guidata. Dati, risultati e installazione restano disponibili; nessun file di analisi viene spostato o cancellato.", kind="muted")
-        action = ui.menu("Ripristinare le impostazioni iniziali?", [
+        action = _menu(ui, "Ripristinare le impostazioni iniziali?", [
             ("1", "Ripristina impostazioni", "Cartelle di installazione e parametri iniziali"),
             ("0", "Annulla", "Conserva le preferenze attuali"),
         ], default="0")
@@ -285,9 +294,9 @@ class GuidedSettings:
     def configure(self, ui: Terminal, *, err_const: float) -> ProjectLayout:
         while True:
             ui.message("Impostare cartelle e valori predefiniti della CLI guidata. Ogni analisi permette ancora di modificare gli input e i parametri prima dell'avvio.", kind="muted")
-            ui.message("I comandi diretti conservano le proprie opzioni e i propri valori predefiniti; queste preferenze riguardano il menu guidato.", kind="muted")
+            ui.message("I comandi diretti conservano le proprie opzioni e i propri valori predefiniti; queste preferenze riguardano il menu guidato. :annulla o Ctrl+C tornano al menu principale.", kind="muted")
             self.explain(ui)
-            action = ui.menu("Configura", [
+            action = _menu(ui, "Configura", [
                 ("1", "Cartelle dati e risultati", "Destinazioni delle analisi guidate"),
                 ("2", "DNPcall", "Input, riferimento, pannello ed esecuzione"),
                 ("3", "SNPcall", "Input, riferimento e pannello"),
@@ -298,7 +307,7 @@ class GuidedSettings:
                 ("8", "Aggiornamenti", "Canale e verifica all'avvio"),
                 ("0", "Torna al menu", ""),
             ], default="0")
-            if action in {"0", ":indietro", ":annulla"}:
+            if action in {"0", ":indietro"}:
                 return self.layout
             try:
                 if action == "6":

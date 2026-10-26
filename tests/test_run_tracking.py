@@ -1,6 +1,8 @@
 import hashlib
 import io
 import json
+import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -19,6 +21,7 @@ from nipat.paths import ProjectLayout
 
 class RunTrackingTests(unittest.TestCase):
     def setUp(self):
+        self.enterContext(patch("nipat.execution.tracking.platform.platform", return_value="test-host"))
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         root = Path(self.temp.name)
@@ -146,6 +149,104 @@ class RunTrackingTests(unittest.TestCase):
         self.assertTrue(stop.call_args.args[0].startswith("nipat-run-"))
         self.assertEqual(self.record("interrupted-client")["status"], "interrupted")
         self.assertEqual(self.record("interrupted-client")["commands"][0]["returncode"], 130)
+
+    def test_repeated_ctrl_c_cannot_abandon_container_stop_or_run_evidence(self):
+        run = self.layout.new_run_dir("test", "repeated-interrupt")
+        partial = run / "output" / "partial.txt"
+        partial.write_text("preserve completed output\n")
+        process = MagicMock()
+        process.stdout.__iter__.side_effect = KeyboardInterrupt()
+        process.poll.return_value = 130
+        handler = signal.getsignal(signal.SIGINT)
+
+        def cleanup(command, **kwargs):
+            signal.raise_signal(signal.SIGINT)
+            self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+            self.assertIsNotNone(kwargs["timeout"])
+            if os.name == "nt":
+                self.assertEqual(kwargs["creationflags"], subprocess.CREATE_NEW_PROCESS_GROUP)
+            else:
+                self.assertTrue(kwargs["start_new_session"])
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with redirect_stdout(self.output), patch(
+            "nipat.execution.runner.subprocess.Popen", return_value=process,
+        ), patch("nipat.execution.runner.subprocess.run", side_effect=cleanup) as stop:
+            with self.assertRaises(KeyboardInterrupt):
+                with self.runner.record_run(run, workflow="test", inputs=[], parameters={}):
+                    self.runner._bundled_workflow = "workflow-plan"
+                    self.runner.run(["python3", "execute-plan"])
+        self.assertEqual(stop.call_count, 2)
+        self.assertEqual(signal.getsignal(signal.SIGINT), handler)
+        record = self.record("repeated-interrupt")
+        self.assertEqual(record["status"], "interrupted")
+        self.assertEqual(record["commands"][0]["container_cleanup"]["status"], "removed")
+        self.assertIsNotNone(record["finished_at"])
+        self.assertEqual(partial.read_text(), "preserve completed output\n")
+        self.assertEqual(self.runner.last_run_dir, run)
+        self.assertIsNone(self.runner._record)
+
+    def test_interrupt_bounds_client_kill_wait_and_keeps_original_interrupt(self):
+        run = self.layout.new_run_dir("test", "unresponsive-client")
+        process = MagicMock()
+        process.stdout.__iter__.side_effect = KeyboardInterrupt()
+        process.poll.return_value = None
+        process.wait.side_effect = [subprocess.TimeoutExpired("client", 10),
+                                    subprocess.TimeoutExpired("client", 5)]
+        with redirect_stdout(self.output), patch(
+            "nipat.execution.runner.subprocess.Popen", return_value=process,
+        ), patch.object(self.runner, "_stop_container", return_value={"status": "removed"}):
+            with self.assertRaises(KeyboardInterrupt):
+                with self.runner.record_run(run, workflow="test", inputs=[], parameters={}):
+                    self.runner.run(["Rscript", "test.R"])
+        process.terminate.assert_called_once()
+        process.kill.assert_called_once()
+        self.assertEqual([call.kwargs["timeout"] for call in process.wait.call_args_list], [10, 5])
+        record = self.record("unresponsive-client")
+        self.assertEqual(record["status"], "interrupted")
+        self.assertIn("client_cleanup_error", record["commands"][0])
+        self.assertIn("non confermato", self.output.getvalue())
+
+    def test_cancelled_runtime_probe_is_removed_and_recorded_before_return(self):
+        run = self.layout.new_run_dir("test", "cancelled-probe")
+        probe = "nipat-probe-cancel-test"
+        handler = signal.getsignal(signal.SIGINT)
+
+        def execute(command, **kwargs):
+            if command[1] == "run":
+                raise KeyboardInterrupt
+            self.assertEqual(command, ["docker", "rm", "--force", probe])
+            signal.raise_signal(signal.SIGINT)
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        with redirect_stdout(self.output), patch(
+            "nipat.execution.runner.subprocess.run", side_effect=execute,
+        ), self.assertRaises(KeyboardInterrupt):
+            with self.runner.record_run(run, workflow="test", inputs=[], parameters={}):
+                self.runner._capture_process(["docker", "run", "--name", probe, "image"],
+                                             container_name=probe)
+        record = self.record("cancelled-probe")
+        self.assertEqual(record["status"], "interrupted")
+        self.assertEqual(record["commands"], [])
+        self.assertEqual(record["checks"][0]["container_cleanup"]["status"], "removed")
+        self.assertIsNotNone(record["checks"][0]["finished_at"])
+        self.assertEqual(signal.getsignal(signal.SIGINT), handler)
+
+    def test_interrupted_runner_can_start_a_new_run_and_keeps_latest_directory(self):
+        self.assertIsNone(self.runner.last_run_dir)
+        first = self.layout.new_run_dir("test", "first-interrupted")
+        with redirect_stdout(self.output), self.assertRaises(KeyboardInterrupt):
+            with self.runner.record_run(first, workflow="test", inputs=[], parameters={}):
+                raise KeyboardInterrupt()
+        self.assertEqual(self.runner.last_run_dir, first)
+        second = self.layout.new_run_dir("test", "second-planned")
+        self.runner.dry_run = True
+        with redirect_stdout(self.output):
+            with self.runner.record_run(second, workflow="test", inputs=[], parameters={}):
+                self.runner.run(["Rscript", "test.R"])
+        self.assertEqual(self.runner.last_run_dir, second)
+        self.assertEqual(self.record("first-interrupted")["status"], "interrupted")
+        self.assertEqual(self.record("second-planned")["status"], "planned")
 
     def test_changed_scientific_source_fails_before_runtime(self):
         run = self.layout.new_run_dir("test", "changed-source")

@@ -155,9 +155,11 @@ def _posix_reader(fd: int) -> Iterator[Callable[[], str]]:
 class Terminal:
     def __init__(
         self, read: Callable[[str], str] = input, write: Callable[[str], None] = print,
+        *, cancel_to_menu: bool = False,
     ) -> None:
         self.read = read
         self.write = write
+        self.cancel_to_menu = cancel_to_menu
         self._console: _WindowsConsole | None = None
         self._live = False
         self._color = False
@@ -239,7 +241,13 @@ class Terminal:
         if self.read is input:
             encoding = sys.stdout.encoding or "utf-8"
             prompt = prompt.encode(encoding, errors="replace").decode(encoding)
-        return self.read(prompt)
+        if self.cancel_to_menu:
+            self.message("Ctrl+C oppure :annulla e Invio: torna al menu principale.", "muted")
+        answer = self.read(prompt)
+        if self.cancel_to_menu and answer.strip().casefold() == ":annulla":
+            from nipat.errors import Cancelled
+            raise Cancelled
+        return answer
 
     @contextmanager
     def _key_reader(self) -> Iterator[Callable[[], str]]:
@@ -265,8 +273,11 @@ class Terminal:
                 text += f"  - {description}"
             text = _clip(text, width)
             lines.append(self._styled(text, "accent") if index == selected else text)
-        lines.append(self._styled("Su/Giu: seleziona | Invio: conferma | Esc: indietro | Numero: scelta", "muted")
-                     if width >= 68 else "Su/Giu e Invio | Esc: indietro | Numero: scelta")
+        lines.append(self._styled(_clip(
+            "Su/Giu e Invio | Esc: indietro | Numero/lettera: scelta", width,
+        ), "muted"))
+        if self.cancel_to_menu:
+            lines.append(self._styled("Ctrl+C: annulla e torna al menu principale", "muted"))
         return lines
 
     def menu(
@@ -280,7 +291,7 @@ class Terminal:
             raise ValueError("Menu keys must be nonempty and unique.")
         self.heading(title)
         size = self._size() if self._live else None
-        if size and size.columns >= 52 and size.lines >= len(clean) + 5 and all(len(k) == 1 for k in keys):
+        if size and size.columns >= 52 and size.lines >= len(clean) + 5 + int(self.cancel_to_menu) and all(len(k) == 1 for k in keys):
             selected = keys.index(default.casefold()) if default and default.casefold() in keys else 0
             try:
                 with self._key_reader() as read_key:
@@ -307,7 +318,7 @@ class Terminal:
                         self._emit(f"\x1b[{len(lines)}A" + "\n".join("\r\x1b[2K" + line for line in lines))
             except (_Unavailable, OSError, ValueError):
                 self._live = False
-                self.message("Navigazione a frecce non disponibile: usare i numeri.", "muted")
+                self.message("Navigazione a frecce non disponibile: digitare il numero o la lettera della voce.", "muted")
         for key, label, description in clean:
             self.message(f"  {key}  {label}" + (f" - {description}" if description else ""))
         answer = self.prompt("Scelta", default=default or "").strip()

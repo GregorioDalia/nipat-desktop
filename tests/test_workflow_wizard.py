@@ -264,7 +264,7 @@ class WorkflowWizardTests(unittest.TestCase):
         status, output = self.invoke(["W", "2", "Pair1", self.bam, ":annulla", "0"])
         self.assertEqual(status, 0)
         self.workflows.dnp_cpi.assert_not_called()
-        self.assertIn("annullata prima dell'avvio", output)
+        self.assertIn("Operazione annullata. Ritorno al menu principale.", output)
 
     def test_full_chain_dry_run_does_not_claim_scientific_results(self):
         status, output = self.invoke(self.cpi_inputs(preset="3") + ["1", "0", "0"], dry_run=True)

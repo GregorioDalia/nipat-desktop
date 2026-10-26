@@ -10,6 +10,9 @@ from nipat.cli import DEFAULT_ERR_CONST
 from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences, PreferencesStore
 from nipat.wizard import run_wizard
+from nipat.terminal import Terminal
+from nipat.wizard_forms import Cancelled
+from nipat.wizard_settings import GuidedSettings
 
 
 class WizardSettingsTests(unittest.TestCase):
@@ -82,6 +85,60 @@ class WizardSettingsTests(unittest.TestCase):
         self.assertFalse(self.store.path.exists())
         self.assertFalse((self.root / "discarded").exists())
         self.assert_no_analyses()
+
+    def test_cancel_returns_to_main_from_settings_menus_and_fields_without_saving(self):
+        # Both keyboard interruption and the text command escape every nesting level.
+        scenarios = {
+            "configuration": [],
+            "directory_menu": ["1"],
+            "directory_field": ["1", "2"],
+            "changed_directory": ["1", "2", str(self.root / "discarded")],
+            "dnp_menu": ["2"],
+            "dnp_mode": ["2", "1"],
+            "dnp_reference": ["2", "2"],
+            "snp_menu": ["3"],
+            "contamination_menu": ["4"],
+            "cpi_menu": ["5"],
+            "cpi_prefix": ["5", "1"],
+            "cpi_cutoff_label": ["5", "4", "2", "5"],
+            "cpi_cutoff_path": ["5", "4", "2", "5", "Panel1"],
+            "cpi_cutoff_map": ["5", "4", "3", "5"],
+            "updates": ["8"],
+            "update_channel": ["8", "1"],
+            "update_startup": ["8", "2"],
+            "changed_update_channel": ["8", "1", "1"],
+            "reset_confirmation": ["7"],
+        }
+        self.store.save(Preferences(runs_dir=self.layout.runs_dir))
+        original = self.store.path.read_bytes()
+        for name, answers in scenarios.items():
+            for cancellation in (":annulla", " :AnNuLlA ", KeyboardInterrupt()):
+                with self.subTest(screen=name, cancellation=repr(cancellation)):
+                    settings = GuidedSettings(self.layout, self.store)
+                    reader = Mock(side_effect=[*answers, cancellation])
+                    ui = Terminal(read=reader, write=lambda text: None)
+                    expected = KeyboardInterrupt if isinstance(cancellation, KeyboardInterrupt) else Cancelled
+                    with self.assertRaises(expected):
+                        settings.configure(ui, err_const=DEFAULT_ERR_CONST)
+                    self.assertEqual(reader.call_count, len(answers) + 1)
+                    self.assertEqual(self.store.path.read_bytes(), original)
+                    self.assertEqual(settings.layout.runs_dir, self.layout.runs_dir)
+                    self.assertFalse((self.root / "discarded").exists())
+        self.assert_no_analyses()
+
+    def test_back_stays_in_configuration_without_saving_pending_edits(self):
+        for answers in (["1", "2", ":indietro", "0", "0"],
+                        ["2", "4", ":indietro", "0", "0"],
+                        ["8", "1", ":indietro", "0", "0"],
+                        ["8", "2", ":indietro", "0", "0"]):
+            with self.subTest(answers=answers):
+                settings = GuidedSettings(self.layout, self.store)
+                reader = Mock(side_effect=answers)
+                ui = Terminal(read=reader, write=lambda text: None)
+                result = settings.configure(ui, err_const=DEFAULT_ERR_CONST)
+                self.assertEqual(result, self.layout)
+                self.assertEqual(reader.call_count, len(answers))
+                self.assertFalse(self.store.path.exists())
 
     def test_dnp_defaults_are_reused_but_sample_and_run_are_selected_each_time(self):
         self.invoke(["5", "2", "1", "2", "2", self.ref, "3", self.panel, "4", "2", "9", "0", "0"])

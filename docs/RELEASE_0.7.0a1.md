@@ -44,6 +44,15 @@ la traduzione completa dell'applicazione e della documentazione è ancora
 pianificata. La consultazione del catalogo non modifica i parametri e non
 avvia analisi.
 
+La navigazione permette il ritorno diretto al menu principale con
+`:annulla` nei campi e nei menu testuali, oppure con Ctrl+C anche durante
+un'analisi. Il calcolo viene interrotto conservando log e risultati già
+prodotti; i passaggi successivi di un workflow automatico non vengono
+avviati. Le modifiche di configurazione non ancora salvate vengono scartate,
+mentre quelle già salvate restano attive. Esc e `:indietro` mantengono la
+navigazione al passaggio precedente; **0 — Esci** chiude NIPAT dal menu
+principale.
+
 ## Pacchetti e requisiti
 
 | Piattaforma | File da eseguire | Requisiti principali |

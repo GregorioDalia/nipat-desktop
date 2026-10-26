@@ -9,16 +9,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 from nipat.adapters.panels import read_dnp_list, read_position_panel, read_snp_positions
-from nipat.errors import ValidationError
+from nipat.errors import Cancelled, ValidationError
 from nipat.paths import ProjectLayout, _SAFE_RUN_NAME
 from nipat.validation.files import (
     require_columns, require_contamination_input, require_directory, require_file,
     require_sidecar, require_snp_pileup,
 )
-
-
-class Cancelled(Exception):
-    """Return to the main menu before starting an analysis."""
 
 
 class Back(Exception):

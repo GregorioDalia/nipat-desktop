@@ -70,6 +70,7 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "Negli altri campi Invio mantiene il valore tra parentesi oppure lascia vuoto un campo facoltativo.",
             "Un campo obbligatorio senza valore iniziale richiede una risposta prima di proseguire.",
             ":indietro torna al campo precedente; :annulla torna al menu; :vuoto svuota un campo facoltativo.",
+            "Ctrl+C annulla l'operazione e torna al menu principale, anche durante il calcolo. Attendere l'arresto: i log e i risultati gia' prodotti vengono conservati.",
             "I percorsi relativi contenuti in una bamlist partono dalla cartella della bamlist.",
             "Il riepilogo permette di correggere gli input. Per eseguire gli script scientifici scegliere esplicitamente Avvia analisi; Invio sul riepilogo annulla.",
             "Con --dry-run vengono preparati i comandi, senza eseguire l'analisi o produrre risultati scientifici.",
@@ -152,6 +153,7 @@ def _check_environment(ui: Terminal, workflows: Workflows, dry_run: bool) -> Non
         return
     ui.message("Il controllo avvia l'ambiente e verifica gli strumenti; non esegue analisi sui dati.", kind="muted")
     ui.message("Verifica in corso...")
+    ui.message("Ctrl+C interrompe il controllo e torna al menu principale.", kind="muted")
     workflows.runner.doctor(True)
     ui.message("Controllo completato: ambiente di analisi, R e samtools disponibili.", kind="success")
     ui.message("Il controllo riguarda gli strumenti. Gli input saranno verificati quando si prepara un'analisi.", kind="muted")
@@ -169,7 +171,7 @@ def run_wizard(
     write: Callable[[str], None] = print,
 ) -> int:
     """Collect and review values, then call a workflow only after confirmation."""
-    ui = Terminal(read=read, write=write)
+    ui = Terminal(read=read, write=write, cancel_to_menu=True)
     settings = GuidedSettings(layout, preferences_store, directory_overrides)
     layout = settings.layout
     workflows.layout = workflows.runner.layout = layout
@@ -186,19 +188,34 @@ def run_wizard(
         else:
             ui.message("Input in cartelle accessibili a Docker.", kind="muted")
         ui.message(":indietro corregge il campo precedente; :annulla torna al menu.", kind="muted")
+        ui.message("Ctrl+C annulla l'operazione corrente e torna al menu principale. Per uscire scegliere 0 dal menu principale.", kind="muted")
         if not settings.error and settings.preferences.check_updates_on_startup:
-            run_updates(ui, layout, settings.preferences, dry_run=dry_run, startup=True)
+            try:
+                run_updates(ui, layout, settings.preferences, dry_run=dry_run, startup=True)
+            except (Cancelled, KeyboardInterrupt):
+                ui.message("Verifica iniziale annullata. Ritorno al menu principale.")
         while True:
-            choice = ui.menu("Menu principale", MAIN_MENU).strip().casefold()
-            if choice in {"0", ":annulla", ":indietro"}:
+            try:
+                choice = ui.menu("Menu principale", MAIN_MENU).strip().casefold()
+            except (Cancelled, KeyboardInterrupt):
+                ui.message("Menu principale. Per uscire scegliere 0.", kind="muted")
+                continue
+            if choice == "0":
                 return 2 if had_failure else 0
+            if choice == ":indietro":
+                continue
             if choice not in {item[0].casefold() for item in MAIN_MENU}:
                 ui.message("Scegliere una delle opzioni indicate (0-9 oppure W).", kind="error")
                 continue
             try:
                 if choice == "5":
-                    layout = settings.configure(ui, err_const=err_const)
-                    workflows.layout = workflows.runner.layout = layout
+                    try:
+                        settings.configure(ui, err_const=err_const)
+                    finally:
+                        # A prior screen may have been saved before a later
+                        # pending edit was cancelled; keep that saved layout.
+                        layout = settings.layout
+                        workflows.layout = workflows.runner.layout = layout
                     continue
                 if choice == "6":
                     if last_run is None:
@@ -246,7 +263,9 @@ def run_wizard(
                 while form.review(dry_run=dry_run):
                     ui.heading(f"{form.title} / {'Preparazione dry-run' if dry_run else 'Esecuzione'}")
                     ui.message("I dettagli del processo vengono conservati anche in execution.log.")
+                    ui.message("Ctrl+C: interrompi e torna al menu principale. Attendere l'arresto; log e risultati gia' prodotti saranno conservati.", kind="muted")
                     started = time.monotonic()
+                    previous_run = workflows.runner.last_run_dir
                     try:
                         method = {
                             "1": workflows.dnp_contamination, "2": workflows.dnp_cpi,
@@ -256,6 +275,13 @@ def run_wizard(
                             "3": workflows.contamination, "4": workflows.cpi,
                         }[choice]
                         run_dir = method(**form.arguments())
+                    except KeyboardInterrupt:
+                        interrupted_run = workflows.runner.last_run_dir
+                        if isinstance(interrupted_run, Path) and interrupted_run != previous_run:
+                            last_run = interrupted_run
+                            ui.message(f"Esecuzione interrotta: {last_run}", kind="warning")
+                            ui.message("Log e risultati parziali sono conservati; la voce 6 permette di consultarli. Il workflow non viene ripreso automaticamente.", kind="muted")
+                        raise
                     except (NipatError, OSError) as exc:
                         had_failure = True
                         ui.message(f"Operazione non riuscita: {exc}", kind="error")
@@ -281,8 +307,8 @@ def run_wizard(
                     break
                 else:
                     ui.message("Operazione annullata prima dell'avvio.")
-            except (Cancelled, Back):
-                ui.message("Operazione annullata prima dell'avvio.")
+            except (Cancelled, Back, KeyboardInterrupt):
+                ui.message("Operazione annullata. Ritorno al menu principale.")
             except (NipatError, OSError) as exc:
                 had_failure = True
                 ui.message(f"Operazione non riuscita: {exc}", kind="error")

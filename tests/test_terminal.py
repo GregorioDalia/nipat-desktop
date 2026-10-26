@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
 from nipat.terminal import Terminal, _clean, _clip, _decode_key, _posix_reader
+from nipat.errors import Cancelled
 
 
 CHOICES = [("1", "DNPcall", "BAM"), ("2", "SNPcall", "BAM o pileup"), ("0", "Esci", "")]
@@ -26,6 +27,31 @@ class TerminalTests(unittest.TestCase):
         self.assertEqual(terminal.menu("Analisi", CHOICES, default="2"), "2")
         self.assertEqual(terminal.prompt("Nome", default="originale"), "")
         self.assertEqual(terminal.prompt("File", path=True), '"a b.txt"')
+
+    def test_wizard_cancel_command_is_global_and_opt_in(self):
+        output = []
+        terminal = Terminal(read=Mock(return_value="  :AnNuLlA  "), write=output.append,
+                            cancel_to_menu=True)
+        with self.assertRaises(Cancelled):
+            terminal.prompt("BAM", path=True)
+        with self.assertRaises(Cancelled):
+            terminal.menu("Catalogo", CHOICES, default="1")
+        self.assertIn("Ctrl+C", "\n".join(output))
+        terminal.cancel_to_menu = False
+        self.assertEqual(terminal.prompt("Test"), "  :AnNuLlA  ")
+
+    def test_live_cancel_guidance_and_keyboard_interrupt_leave_reader(self):
+        terminal, output, _ = self.make_live([KeyboardInterrupt()])
+        terminal.cancel_to_menu = True
+        with self.assertRaises(KeyboardInterrupt):
+            terminal.menu("Workflow", CHOICES)
+        self.assertIn("Ctrl+C: annulla e torna al menu principale", "\n".join(output))
+
+    def test_live_wizard_redraw_accounts_for_cancel_hint_and_accepts_letter(self):
+        terminal, output, _ = self.make_live(["down", "w"])
+        terminal.cancel_to_menu = True
+        self.assertEqual(terminal.menu("Workflow", CHOICES + [("W", "Workflow", "")]), "W")
+        self.assertIn("\x1b[6A", "\n".join(output))
 
     def test_displayed_input_cannot_emit_terminal_commands(self):
         output = []

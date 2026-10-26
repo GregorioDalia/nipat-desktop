@@ -105,7 +105,13 @@ sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
 5. Consultare risultati e log dalla schermata finale.
 
 Le indicazioni contestuali spiegano ogni campo. `:indietro` corregge il campo
-precedente, `:annulla` torna al menu e `:vuoto` svuota un campo facoltativo.
+precedente e `:vuoto` svuota un campo facoltativo. Nei campi di testo e nei
+menu a inserimento testuale, `:annulla` torna direttamente al menu principale.
+**Ctrl+C** annulla l'operazione corrente anche durante un'analisi: NIPAT
+esegue la procedura di arresto prima di tornare al menu, conservando log e
+risultati già prodotti e segnalando eventuali problemi di arresto. Le modifiche
+di configurazione non ancora salvate vengono scartate.
+Per chiudere il programma scegliere **0 — Esci** nel menu principale.
 **5 — Configura** salva cartelle dati e risultati, riferimenti, modalità e
 parametri predefiniti dei workflow per gli avvii successivi del menu.
 Ogni analisi permette di modificarli prima della conferma; campioni, coppie

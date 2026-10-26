@@ -4,8 +4,10 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
+import threading
 import uuid
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
@@ -42,6 +44,28 @@ PLAN_WORKFLOWS = {
 }
 
 
+@contextmanager
+def _finish_cleanup() -> Iterator[None]:
+    """Do not let a repeated Ctrl+C abandon a bounded stop or its evidence."""
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    previous = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+def _cleanup_process_options() -> dict[str, Any]:
+    # Cleanup commands must survive a repeated console Ctrl+C too. They have
+    # explicit timeouts and never read the user's input.
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
 class DockerComposeRunner:
     def __init__(
         self, layout: ProjectLayout, dry_run: bool = False, *,
@@ -59,6 +83,7 @@ class DockerComposeRunner:
             dry_run=dry_run,
         )
         self._backend_ready = False
+        self.last_run_dir: Path | None = None
 
     def _base_command(self) -> list[str]:
         if self._engine_compose_file is not None:
@@ -293,11 +318,12 @@ class DockerComposeRunner:
                 + self._transport.unavailable_message
             ) from exc
         finally:
-            if container_name is not None and check["returncode"] != 0:
-                check["container_cleanup"] = self._stop_container(container_name)
-            check["finished_at"] = utc_now()
-            if self._record:
-                self._record.save()
+            with _finish_cleanup():
+                if container_name is not None and check["returncode"] != 0:
+                    check["container_cleanup"] = self._stop_container(container_name)
+                check["finished_at"] = utc_now()
+                if self._record:
+                    self._record.save()
 
     def _prepare_runtime(self) -> None:
         os_type = self._capture(["docker", "info", "--format", "{{.OSType}}"])
@@ -363,6 +389,7 @@ class DockerComposeRunner:
                 and bundled_workflow not in PLAN_WORKFLOWS):
             raise ValidationError(f"Workflow incorporato non supportato: {bundled_workflow}")
         record = RunRecord(run_dir, workflow, parameters)
+        self.last_run_dir = run_dir
         self._record = record
         self._bundled_workflow = bundled_workflow
         # A wizard can reuse this runner after WSL has stopped between analyses.
@@ -409,18 +436,20 @@ class DockerComposeRunner:
                     record.save()
                     yield record
                 except BaseException as exc:
-                    record.data["status"] = (
-                        "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
-                    )
-                    record.data["error"] = {"type": type(exc).__name__, "message": str(exc)}
-                    self._write(f"{record.data['status']}: {type(exc).__name__}: {exc}\n")
+                    with _finish_cleanup():
+                        record.data["status"] = (
+                            "interrupted" if isinstance(exc, (KeyboardInterrupt, SystemExit)) else "failed"
+                        )
+                        record.data["error"] = {"type": type(exc).__name__, "message": str(exc)}
+                        self._write(f"{record.data['status']}: {type(exc).__name__}: {exc}\n")
                     raise
                 else:
                     record.data["status"] = "planned" if self.dry_run else "succeeded"
                     self._write(f"{record.data['status']}: {workflow}\n")
                 finally:
-                    record.data["finished_at"] = utc_now()
-                    record.save()
+                    with _finish_cleanup():
+                        record.data["finished_at"] = utc_now()
+                        record.save()
         finally:
             self._log = None
             self._record = None
@@ -484,28 +513,40 @@ class DockerComposeRunner:
             raise RuntimeExecutionError(self._transport.unavailable_message) from exc
         except BaseException as exc:
             interrupted = isinstance(exc, (KeyboardInterrupt, SystemExit))
-            if interrupted or (process is not None and process.poll() is None):
-                # Stopping the client alone can leave its container running in the engine.
-                stage["container_cleanup"] = self._stop_container(container_name)
-            if process is not None and process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-            stage["status"] = (
-                "interrupted" if interrupted else "failed"
-            )
-            if process is not None:
-                stage["returncode"] = process.poll()
+            with _finish_cleanup():
+                if interrupted:
+                    self._write("Annullamento richiesto. Attendere l'arresto del calcolo e il salvataggio dei log.\n")
+                if interrupted or (process is not None and process.poll() is None):
+                    # Stopping the client alone can leave its container running in the engine.
+                    stage["container_cleanup"] = self._stop_container(container_name)
+                if process is not None and process.poll() is None:
+                    try:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=5)
+                    except (OSError, subprocess.SubprocessError) as cleanup_error:
+                        stage["client_cleanup_error"] = str(cleanup_error)
+                        self._write("Arresto del processo di collegamento al runtime non confermato; consultare execution.log.\n")
+                stage["status"] = (
+                    "interrupted" if interrupted else "failed"
+                )
+                if process is not None:
+                    stage["returncode"] = process.poll()
             raise
         finally:
-            stage["finished_at"] = utc_now()
-            if self._record:
-                self._record.save()
+            with _finish_cleanup():
+                stage["finished_at"] = utc_now()
+                if self._record:
+                    self._record.save()
 
     def _stop_container(self, container_name: str) -> dict[str, Any]:
+        with _finish_cleanup():
+            return self._stop_container_protected(container_name)
+
+    def _stop_container_protected(self, container_name: str) -> dict[str, Any]:
         command = None
         graceful = None
         if self._bundled_workflow in PLAN_WORKFLOWS:
@@ -519,6 +560,7 @@ class DockerComposeRunner:
                 stopped = subprocess.run(
                     stop_command, env=self._environment(), capture_output=True,
                     text=True, encoding="utf-8", errors="replace", timeout=20, check=False,
+                    stdin=subprocess.DEVNULL, **_cleanup_process_options(),
                 )
                 graceful = {"returncode": stopped.returncode, "message": stopped.stderr.strip()}
             except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
@@ -531,6 +573,7 @@ class DockerComposeRunner:
                 command, env=self._environment(),
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=15, check=False,
+                stdin=subprocess.DEVNULL, **_cleanup_process_options(),
             )
             cleanup = {
                 "status": ("removed" if result.returncode == 0 else

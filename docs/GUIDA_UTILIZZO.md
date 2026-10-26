@@ -118,12 +118,21 @@ restano leggibili in testo semplice negli altri terminali.
 | Invio in una lista con almeno un file | Termina l'elenco. |
 | Invio in una lista vuota | Ripropone le istruzioni; serve almeno un file. |
 | `:indietro` | Torna al campo precedente conservando i valori inseriti. |
-| `:annulla` | Abbandona la compilazione e torna al menu. |
+| `:annulla` | Nei campi e nei menu a inserimento testuale, annulla l'operazione corrente e torna direttamente al menu principale. |
+| Ctrl+C | Annulla l'operazione corrente e torna al menu principale, anche nei menu a frecce e durante il calcolo. |
 | `:vuoto` | Cancella un valore facoltativo, come nome del run o prefisso CPI. |
 
 Nei campi di testo e nei percorsi, `0` è un valore: per annullare usare
-`:annulla`. Nei menu che lo prevedono, Esc torna indietro. Il completamento
-dei percorsi con Tab non è disponibile.
+`:annulla` oppure Ctrl+C. Nei menu che lo prevedono, Esc torna al passaggio
+precedente; Ctrl+C torna direttamente al menu principale. La voce `0` segue
+l'azione indicata nel menu: soltanto **0 — Esci** nel menu principale chiude
+NIPAT. Il completamento dei percorsi con Tab non è disponibile.
+
+Durante il calcolo usare Ctrl+C e attendere il completamento dell'arresto.
+NIPAT conserva la cartella del run, i log e gli output già prodotti. Nei
+workflow automatici i passaggi successivi non vengono avviati; i risultati
+parziali non attestano il completamento dell'analisi. Per ripetere il lavoro
+occorre avviare un nuovo run: non è prevista la ripresa automatica.
 
 Al termine della compilazione, controllare input, parametri e destinazione
 nel riepilogo. È possibile correggere i campi prima di scegliere
@@ -151,6 +160,10 @@ le indicazioni spiegano il valore richiesto. **9 — Salva modifiche** registra
 la categoria, mentre **0 — Annulla modifiche** la chiude senza salvare.
 Invio mantiene il valore mostrato durante la modifica di un campo; nel menu
 della categoria equivale ad annullare senza salvare.
+`:annulla` oppure Ctrl+C abbandonano la configurazione e tornano direttamente
+al menu principale, scartando le modifiche della schermata non ancora salvate.
+Le categorie già salvate rimangono attive; annullare non ripristina i valori
+precedenti a un salvataggio.
 
 | Categoria | Impostazioni |
 | --- | --- |
@@ -229,6 +242,12 @@ verifica non impediscono di usare l'installazione già pronta. La ricerca e
 il download richiedono Internet, mentre i calcoli continuano a usare il motore
 locale. In modalità `--dry-run` la voce aggiornamenti non esegue connessioni,
 download o installazioni.
+
+Ctrl+C interrompe la verifica o il download e torna al menu principale.
+Prima dell'avvio dell'installatore, `:annulla` nei menu testuali consente lo
+stesso ritorno. Dopo la conferma e l'avvio del programma di installazione,
+seguire i suoi comandi: l'annullamento nel menu NIPAT non controlla un
+installatore esterno già avviato.
 
 L'installatore dello stesso prodotto conserva percorsi configurati, preferenze,
 dati e risultati. Un aggiornamento non modifica i record delle analisi già
@@ -754,7 +773,10 @@ Una cartella di output parziale non dimostra il completamento del workflow.
 | Analisi interrotta o fallita | Conservare l'intera cartella del run e consultare `execution.log`. |
 | Risultato inatteso | Confrontare input e parametri con il caso di riferimento e compilare la [scheda di validazione](VALIDAZIONE.md). |
 
-Ctrl+C tenta di interrompere anche il container corrente. Una chiusura forzata
+Nel menu guidato, Ctrl+C interrompe l'operazione e torna al menu principale
+dopo la procedura di arresto del container corrente. Se l'arresto non può
+essere confermato, NIPAT mostra un avviso: conservare il log e verificare lo
+stato del runtime prima di avviare un'altra analisi. Una chiusura forzata
 o uno spegnimento possono lasciare lo stato `preparing` o `running`: non sono
 esiti positivi. Una nuova prova deve usare una nuova cartella.
 
