@@ -1,13 +1,17 @@
 """Report-only SBOM and vulnerability monitoring of the exact published runtime archives."""
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
+import gzip
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tarfile
+import tempfile
 import uuid
 
 _SPEC = importlib.util.spec_from_file_location("nipat_security_release", Path(__file__).with_name("release_inputs.py"))
@@ -21,6 +25,8 @@ TOOLS = {
               "url": "https://github.com/anchore/grype/releases/download/v0.121.0/grype_0.121.0_linux_amd64.tar.gz",
               "sha256": "64e07133d3486115de647a66581461dccf5c732748a0a3119077395565f15519"},
 }
+MAX_SCAN_TAR_BYTES = 8 * 1024**3
+MIN_FREE_BYTES = 512 * 1024**2
 
 
 def install_tool(name, directory):
@@ -48,6 +54,29 @@ def run_to_file(command, output):
         subprocess.run(command, stdout=handle, check=True, timeout=1800)
 
 
+@contextmanager
+def scientific_scan_tar(archive, directory, *, maximum=MAX_SCAN_TAR_BYTES,
+                        minimum_free=MIN_FREE_BYTES):
+    """Unwrap verified gzip bytes for Syft's plain Docker-tar reader, never extract members."""
+    release.require(type(maximum) is int and maximum > 0
+                    and type(minimum_free) is int and minimum_free >= 0,
+                    "Invalid scientific scan resource bounds")
+    with tempfile.TemporaryDirectory(prefix="scan-input-", dir=directory) as temporary:
+        target = Path(temporary) / "scientific-image.tar"
+        total = 0
+        with gzip.open(archive, "rb") as source, target.open("xb") as destination:
+            while block := source.read(1024 * 1024):
+                total += len(block)
+                release.require(total <= maximum, "Scientific scan tar exceeds its expanded-size bound")
+                release.require(shutil.disk_usage(temporary).free >= len(block) + minimum_free,
+                                "Insufficient free space for the temporary scientific scan tar")
+                destination.write(block)
+        # Reading to EOF also verifies gzip CRC and truncation. The caller keeps
+        # the published compressed digest as its identity; no archive is changed.
+        release.require(total > 0, "Scientific scan tar is empty")
+        yield target
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", default="latest")
@@ -68,19 +97,20 @@ def main():
         grype = install_tool("grype", tools_dir)
         imported = "nipat-security-rootfs:" + uuid.uuid4().hex
         subprocess.run(["docker", "image", "import", str(downloads["rootfs"]), imported], check=True)
-        for name, source in (("scientific", "docker-archive:" + str(downloads["scientific_image"])),
-                             ("wsl", "docker:" + imported)):
-            sbom = output / (name + ".syft.json")
-            vulnerabilities = output / (name + ".grype.json")
-            run_to_file([str(syft), source, "-o", "syft-json"], sbom)
-            run_to_file([str(grype), "sbom:" + str(sbom), "-o", "json"], vulnerabilities)
-            report = json.loads(vulnerabilities.read_text())
-            summary["archives"][name] = {
-                "sbom_sha256": hashlib.sha256(sbom.read_bytes()).hexdigest(),
-                "vulnerability_report_sha256": hashlib.sha256(vulnerabilities.read_bytes()).hexdigest(),
-                "candidate_associations": len(report.get("matches", [])),
-                "database": report.get("descriptor", {}).get("db", {}),
-            }
+        with scientific_scan_tar(downloads["scientific_image"], output) as scientific_tar:
+            for name, source in (("scientific", "docker-archive:" + str(scientific_tar)),
+                                 ("wsl", "docker:" + imported)):
+                sbom = output / (name + ".syft.json")
+                vulnerabilities = output / (name + ".grype.json")
+                run_to_file([str(syft), source, "-o", "syft-json"], sbom)
+                run_to_file([str(grype), "sbom:" + str(sbom), "-o", "json"], vulnerabilities)
+                report = json.loads(vulnerabilities.read_text())
+                summary["archives"][name] = {
+                    "sbom_sha256": hashlib.sha256(sbom.read_bytes()).hexdigest(),
+                    "vulnerability_report_sha256": hashlib.sha256(vulnerabilities.read_bytes()).hexdigest(),
+                    "candidate_associations": len(report.get("matches", [])),
+                    "database": report.get("descriptor", {}).get("db", {}),
+                }
         summary["status"] = "completed"
     except Exception as exc:
         summary["error"] = {"type": type(exc).__name__, "message": str(exc)}
