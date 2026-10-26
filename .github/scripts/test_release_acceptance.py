@@ -386,6 +386,7 @@ class ReviewedResearchAcceptanceTests(unittest.TestCase):
         self.validate()
         result = acceptance.verify_baseline(self.record, self.read_source)
         self.assertEqual(result["reviewed_source_changes"], self.record["reviewed_source_changes"])
+
         self.assertEqual(result["scope"], acceptance.REVIEWED_SOURCE_SCOPE)
         self.assertFalse(result["candidate_windows_installation_claimed"])
         self.assertGreater(result["unchanged_files_verified"], 0)
@@ -484,6 +485,15 @@ class ReliabilityResearchAcceptanceTests(ReviewedResearchAcceptanceTests):
         self.assertFalse(result["candidate_windows_installation_claimed"])
         self.assertTrue(result["r_sources_unchanged"])
         self.assertEqual(result["reviewed_source_changes"], self.record["reviewed_source_changes"])
+
+    def test_coverage_ignore_rules_require_the_same_exact_source_review(self):
+        delta = self.change(".gitignore")
+        with self.assertRaisesRegex(ValueError, "exact baseline-to-candidate"):
+            acceptance.verify_baseline(self.record, self.read_source)
+        self.record["reviewed_source_changes"] = [delta]
+        self.validate()
+        result = acceptance.verify_baseline(self.record, self.read_source)
+        self.assertEqual(result["reviewed_source_changes"], [delta])
 
     def test_scientific_and_runtime_changes_cannot_be_approved_as_client_changes(self):
         original = copy.deepcopy(self.sources)

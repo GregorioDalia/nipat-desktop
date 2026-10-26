@@ -63,7 +63,7 @@ def reviewable_path(path, *, reliability=False):
         # The Python preparation, orchestration and packaging may evolve, but
         # this research policy never authorizes a change to the R algorithms.
         return (PurePosixPath(path).suffix.casefold() != ".r"
-                and (path in REVIEWABLE_CLIENT_FILES | {"compose.yaml"}
+                and (path in REVIEWABLE_CLIENT_FILES | {"compose.yaml", ".gitignore"}
                      or path.startswith(REVIEWABLE_OPERATIVE_PREFIXES)))
     return path in REVIEWABLE_CLIENT_FILES or path.startswith(REVIEWABLE_CLIENT_PREFIXES)
 
