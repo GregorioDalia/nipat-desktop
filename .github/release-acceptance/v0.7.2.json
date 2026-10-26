@@ -15,7 +15,7 @@
     "reviewer": "Codex, revisione tecnica su incarico di Gregorio Dalia",
     "reviewed_at": "2026-10-26T17:03:38Z",
     "evidence": [
-      "https://github.com/GregorioDalia/nipat-desktop/blob/f1953fe800a21ed31c4e5e91d590762e6ff1f6dc/.github/release-acceptance/v0.7.2-evidence.md",
+      "https://github.com/GregorioDalia/nipat-desktop/blob/23f284469f005d81d516e0a44d795530a706e858/.github/release-acceptance/v0.7.2-evidence.md",
       "https://github.com/GregorioDalia/nipat-desktop/actions/runs/40360043319",
       "https://github.com/GregorioDalia/nipat-desktop/actions/runs/40359756734"
     ]
