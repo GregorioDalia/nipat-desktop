@@ -99,6 +99,39 @@ class EnginePackageTests(unittest.TestCase):
             self.assertEqual(actual["sha256"],
                              hashlib.sha256((self.root / actual["script"]).read_bytes()).hexdigest())
 
+    def test_numeric_regression_provenance_accepts_complete_engine_source_inventory(self):
+        from nipat.errors import ValidationError
+        from nipat.paths import ProjectLayout
+
+        spec = importlib.util.spec_from_file_location(
+            "nipat_regression_provenance", PROJECT_ROOT / "scripts/verify_contamination_update.py")
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        code, output, errors = self.call_main(["describe", "--json"])
+        self.assertEqual(code, 0, errors)
+        metadata = json.loads(output)
+        layout = ProjectLayout(self.root, self.root, self.root / "data", self.root / "runs",
+                               self.root / "compose.yaml")
+        run = self.root / "runs/provenance"
+        (run / "work").mkdir(parents=True)
+        compose = run / "work/engine-compose.json"
+        compose.write_text(json.dumps({"services": {"scientific": {
+            "read_only": True, "network_mode": "none", "volumes": [{
+                "type": "bind", "source": str(run), "target": str(layout.container_path(run)),
+                "bind": {"create_host_path": False},
+            }],
+        }}}), encoding="utf-8")
+        record = {"status": "succeeded", "workflow": "contamination", "source": {"role": "client"},
+                  "input_mounts": [], "runtime": {"engine": metadata, "image_id": "sha256:" + "a" * 64},
+                  "commands": [{"argv": ["docker", "compose", "-f", str(compose), "run", "scientific",
+                                           "python3", "/opt/nipat/engine/main.py", "execute", "contamination"]}]}
+        (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
+        helper.check_bundled_run(run, layout)
+        del metadata["preparation"]["file_sha256"]["lib/nipat_scientific/outputs.py"]
+        (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
+        with self.assertRaisesRegex(ValidationError, "preparazione"):
+            helper.check_bundled_run(run, layout)
+
     def test_modified_or_missing_script_prevents_execution(self):
         source = self.root / "scientific" / engine.SCRIPT_PATHS["cpi"]
         for condition in ("modified", "missing"):
