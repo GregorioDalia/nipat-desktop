@@ -231,3 +231,8 @@ installer/windows/test-activity-lock.ps1
 installer/windows/test-update-handoff.ps1
 tests/test_activity.py
 tests/test_update_handoff.py
+src/nipat_scientific/executor.py
+scripts/verify_workflow_execution.py
+tests/test_workflow_execution.py
+tests/test_workflow_client.py
+tests/test_workflow_wizard.py

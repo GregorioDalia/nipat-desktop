@@ -1,7 +1,9 @@
 """Execution boundaries for image-owned scientific workflows."""
 
 import io
+import copy
 import json
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -109,6 +111,92 @@ class BundledRunnerTests(unittest.TestCase):
             self.assertNotIn("--volume", command)
             self.assertNotIn("-v", command)
         self.assertEqual(probes[-1][-4:], ["python3", "/opt/nipat/engine/main.py", "describe", "--json"])
+
+    def plan_metadata(self):
+        description = engine_metadata()
+        description["plan_execution"] = {
+            "interface": "workflow-plan-execution-v1", "schema_version": 1,
+            "workflows": ["dnp-call", "contamination"], "scheduling": "sequential", "resume": False,
+        }
+        for name in ("plan", "executor"):
+            description["preparation"]["file_sha256"][f"lib/nipat_scientific/{name}.py"] = "e" * 64
+        return description
+
+    def test_plan_negotiates_its_own_contract_before_analysis(self):
+        description = self.plan_metadata()
+        run, context = self.begin("plan", "workflow-plan")
+        with redirect_stdout(self.stdout), patch.object(
+            self.runner, "_capture", side_effect=self.captured(description),
+        ), patch("nipat.execution.runner.subprocess.Popen", return_value=self.process()) as popen:
+            with context:
+                self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute-plan"])
+        self.assertEqual(popen.call_count, 1)
+        record = json.loads((run / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["runtime"]["engine"]["plan_execution"], description["plan_execution"])
+        self.assertEqual(record["status"], "succeeded")
+
+    def test_plan_rejects_legacy_or_partial_runtime_before_analysis(self):
+        variants = [engine_metadata()]
+        for key, value in (
+            ("interface", "workflow-plan-execution-v2"), ("schema_version", True),
+            ("workflows", ["dnp-call"]), ("scheduling", "parallel"), ("resume", True),
+        ):
+            item = self.plan_metadata()
+            item["plan_execution"][key] = value
+            variants.append(item)
+        for name in ("plan", "executor"):
+            item = self.plan_metadata()
+            del item["preparation"]["file_sha256"][f"lib/nipat_scientific/{name}.py"]
+            variants.append(item)
+        for workflow in ("dnp-call", "contamination"):
+            item = self.plan_metadata()
+            del item["workflow_interfaces"][workflow]
+            variants.append(item)
+        for index, item in enumerate(variants):
+            with self.subTest(index=index):
+                original = copy.deepcopy(item)
+                run, context = self.begin(f"plan-invalid-{index}", "workflow-plan")
+                with redirect_stdout(self.stdout), patch.object(
+                    self.runner, "_capture", side_effect=self.captured(item),
+                ), patch("nipat.execution.runner.subprocess.Popen") as popen:
+                    with self.assertRaisesRegex(RuntimeExecutionError, "workflow-plan-execution-v1"):
+                        with context:
+                            self.fail("The incompatible plan engine must not start.")
+                popen.assert_not_called()
+                self.assertEqual(item, original)
+                self.assertEqual(json.loads((run / "run.json").read_text(encoding="utf-8"))["status"], "failed")
+
+    def test_plan_cancellation_allows_state_flush_before_removal(self):
+        self.runner._bundled_workflow = "workflow-plan"
+        result = subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        with patch("nipat.execution.runner.subprocess.run", return_value=result) as execute:
+            cleanup = self.runner._stop_container("nipat-run-plan")
+        self.assertEqual(execute.call_args_list[0].args[0],
+                         ["docker", "stop", "--time", "10", "nipat-run-plan"])
+        self.assertEqual(execute.call_args_list[1].args[0],
+                         ["docker", "rm", "--force", "nipat-run-plan"])
+        self.assertEqual(cleanup["graceful_stop"]["returncode"], 0)
+
+    def test_plan_stop_timeout_still_removes_container(self):
+        self.runner._bundled_workflow = "workflow-plan"
+        with patch("nipat.execution.runner.subprocess.run", side_effect=[
+            subprocess.TimeoutExpired("docker stop", 20),
+            subprocess.CompletedProcess([], 0, stdout="", stderr=""),
+        ]) as execute:
+            cleanup = self.runner._stop_container("nipat-run-plan")
+        self.assertEqual(execute.call_count, 2)
+        self.assertEqual(cleanup["status"], "removed")
+        self.assertIsNone(cleanup["graceful_stop"]["returncode"])
+
+    def test_plan_auto_removal_after_stop_is_not_reported_as_failed_stop(self):
+        self.runner._bundled_workflow = "workflow-plan"
+        with redirect_stdout(self.stdout), patch("nipat.execution.runner.subprocess.run", side_effect=[
+            subprocess.CompletedProcess([], 0, stdout="nipat-run-plan", stderr=""),
+            subprocess.CompletedProcess([], 1, stdout="", stderr="No such container: nipat-run-plan"),
+        ]):
+            cleanup = self.runner._stop_container("nipat-run-plan")
+        self.assertEqual(cleanup["status"], "stopped")
+        self.assertNotIn("non confermato", self.stdout.getvalue())
 
     def test_doctor_rejects_each_missing_or_wrong_workflow_contract(self):
         for workflow in ("dnp-call", "snp-call", "contamination", "cpi"):

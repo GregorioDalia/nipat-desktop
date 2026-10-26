@@ -497,10 +497,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          202,
-          217
+          288,
+          303
         ],
-        "sha256": "b37457e48abd32aebc8aea9dda384823287b6025a4e94013755df33bb926713e"
+        "sha256": "e937eaf642a3ce2283c399546b2ee70165bf2fed0a9e757793a4cc8b3b50fb6c"
       }
     },
     {
@@ -518,10 +518,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          218,
-          237
+          304,
+          324
         ],
-        "sha256": "b37457e48abd32aebc8aea9dda384823287b6025a4e94013755df33bb926713e"
+        "sha256": "e937eaf642a3ce2283c399546b2ee70165bf2fed0a9e757793a4cc8b3b50fb6c"
       }
     },
     {

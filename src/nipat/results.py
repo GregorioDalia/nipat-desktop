@@ -22,6 +22,9 @@ _STATUS_LABELS = {
     "succeeded": "Completata",
     "failed": "Non riuscita",
     "interrupted": "Interrotta",
+    "cancelled": "Interrotta",
+    "pending": "In attesa",
+    "blocked": "Non avviata: workflow arrestato",
 }
 
 
@@ -74,16 +77,99 @@ def _output_inventory(directory: Path) -> tuple[list[str], bool]:
     return inventory, False
 
 
+def _local_descendant(run_dir: Path, relative: str) -> Path:
+    """Resolve only fixed, run-owned locations; do not follow linked entries."""
+    path = run_dir
+    for component in Path(relative).parts:
+        path = path / component
+        if path.is_symlink():
+            raise ValueError(f"Percorso collegato non consultabile: {relative}")
+    if not path.resolve().is_relative_to(run_dir):
+        raise ValueError(f"Percorso esterno alla cartella del run: {relative}")
+    return path
+
+
+def _read_metadata(run_dir: Path, relative: str) -> dict:
+    path = _local_descendant(run_dir, relative)
+    if not path.is_file():
+        raise ValueError(f"File non disponibile: {relative}")
+    # Bound the actual read as well as its reported size, including a file
+    # replaced or extended between the size check and open.
+    if path.stat().st_size > _MAX_METADATA_BYTES:
+        raise ValueError(f"{relative} supera il limite di lettura del riepilogo (2 MiB)")
+    with path.open("rb") as stream:
+        content = stream.read(_MAX_METADATA_BYTES + 1)
+    if len(content) > _MAX_METADATA_BYTES:
+        raise ValueError(f"{relative} supera il limite di lettura del riepilogo (2 MiB)")
+    try:
+        metadata = json.loads(content.decode("utf-8"))
+    except RecursionError as exc:
+        raise ValueError(f"Struttura JSON troppo complessa: {relative}") from exc
+    if (not isinstance(metadata, dict) or type(metadata.get("schema_version")) is not int
+            or metadata["schema_version"] != 1):
+        raise ValueError(f"Formato di {relative} non supportato")
+    return metadata
+
+
+def _workflow_state(run_dir: Path) -> dict:
+    state = _read_metadata(run_dir, "output/workflow/workflow-state.json")
+    steps = state.get("steps")
+    allowed = {"pending", "running", "succeeded", "failed", "cancelled", "blocked"}
+    expected = {"dnp": "dnp-call", "contamination": "contamination"}
+    if (state.get("interface") != "workflow-plan-execution-v1"
+            or not isinstance(state.get("status"), str)
+            or state.get("status") not in {"running", "succeeded", "failed", "cancelled"}
+            or not isinstance(steps, list) or len(steps) != 2
+            or any(not isinstance(step, dict) or not isinstance(step.get("id"), str)
+                   or step.get("id") not in expected
+                   or step.get("workflow") != expected[step["id"]]
+                   or not isinstance(step.get("status"), str) or step["status"] not in allowed
+                   for step in steps)
+            or {step["id"] for step in steps} != set(expected)):
+        raise ValueError("Stato del workflow DNPcall → Contamination non valido")
+    if state["status"] == "succeeded" and any(step["status"] != "succeeded" for step in steps):
+        raise ValueError("Stato complessivo e stati dei passaggi non coerenti")
+    return state
+
+
+def _recorded_status(run_dir: Path) -> str | None:
+    try:
+        metadata = _read_metadata(run_dir, "run.json")
+        status = metadata.get("status")
+        if not isinstance(status, str):
+            return None
+        if metadata.get("workflow") == "dnp-contamination" and status == "succeeded":
+            # A completed parent invocation is insufficient if the persisted
+            # scientific step report is unavailable or records another outcome.
+            return _workflow_state(run_dir)["status"]
+        return status
+    except (OSError, ValueError):
+        return None
+
+
+def _show_workflow_summary(ui: Terminal, run_dir: Path) -> None:
+    ui.message("Passaggi del workflow automatico:")
+    try:
+        state = _workflow_state(run_dir)
+        steps = {step["id"]: step for step in state["steps"]}
+        for step_id, label in (("dnp", "DNPcall"), ("contamination", "Contamination")):
+            step = steps[step_id]
+            ui.message(f"  {label}: {_STATUS_LABELS[step['status']]}")
+            output = _local_descendant(run_dir, f"output/workflow/steps/{step_id}/output")
+            if output.is_dir():
+                ui.message(f"    Cartella {label}: {output}")
+            elif step["status"] == "succeeded":
+                ui.message(f"    Cartella risultati {label} non disponibile.", kind="warning")
+        ui.message(f"Stato dei passaggi: {run_dir / 'output/workflow/workflow-state.json'}")
+    except (OSError, ValueError) as exc:
+        ui.message(f"Stato dei passaggi non consultabile: {exc}", kind="warning")
+
+
 def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
     ui.heading("Riepilogo dell'esecuzione")
     ui.message(f"Cartella: {run_dir}")
-    metadata_path = run_dir / "run.json"
     try:
-        if metadata_path.stat().st_size > _MAX_METADATA_BYTES:
-            raise ValueError("run.json supera il limite di lettura del riepilogo (2 MiB)")
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        if not isinstance(metadata, dict) or metadata.get("schema_version") != 1:
-            raise ValueError("formato di run.json non supportato")
+        metadata = _read_metadata(run_dir, "run.json")
         ui.message(f"Workflow: {_short_value(metadata.get('workflow'))}")
         status = metadata.get("status")
         label = (
@@ -99,6 +185,8 @@ def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
         source = metadata.get("source")
         if isinstance(source, dict) and source.get("nipat_version"):
             ui.message(f"Versione NIPAT: {_short_value(source['nipat_version'])}")
+        if metadata.get("workflow") == "dnp-contamination" and not dry_run:
+            _show_workflow_summary(ui, run_dir)
     except (OSError, ValueError) as exc:
         ui.message(f"Metadati non consultabili: {exc}", kind="warning")
 
@@ -128,11 +216,16 @@ def show_results(
     dry_run: bool = False,
     open_path: Callable[[Path], None] | None = None,
 ) -> None:
-    """Show the result of a successful workflow and offer explicit local file actions."""
+    """Show recorded run status and offer explicit local file actions."""
     run_dir = run_dir.expanduser().resolve()
     opener = open_local_path if open_path is None else open_path
-    ui.heading("Esecuzione pianificata" if dry_run else "Esecuzione completata")
-    ui.message(f"Esecuzione: {run_dir}", kind="info" if dry_run else "success")
+    status = "planned" if dry_run else _recorded_status(run_dir)
+    titles = {"planned": "Esecuzione pianificata", "succeeded": "Esecuzione completata",
+              "failed": "Esecuzione non riuscita", "interrupted": "Esecuzione interrotta",
+              "cancelled": "Esecuzione interrotta", "running": "Esecuzione in corso",
+              "preparing": "Preparazione dell'esecuzione"}
+    ui.heading(titles.get(status, "Risultati dell'esecuzione"))
+    ui.message(f"Esecuzione: {run_dir}", kind="success" if status == "succeeded" else "info")
     ui.message(f"Dettagli: {run_dir / 'run.json'}")
     ui.message(f"Log: {run_dir / 'execution.log'}")
     if dry_run:

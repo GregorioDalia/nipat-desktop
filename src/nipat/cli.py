@@ -63,6 +63,29 @@ def build_parser() -> argparse.ArgumentParser:
     parameters.add_argument("--section", choices=("all", "parameters", "rules", "preparation"), default="all")
     parameters.add_argument("--json", action="store_true", help="catalogo strutturato bilingue")
 
+    workflow = subparsers.add_parser(
+        "workflow", help="esegue automaticamente analisi scientifiche collegate",
+    )
+    workflow_presets = workflow.add_subparsers(dest="preset", required=True)
+    dnp_contamination = workflow_presets.add_parser(
+        "dnp-contamination",
+        help="esegue DNPcall e passa le tabelle individuali a Contamination",
+    )
+    workflow_input = dnp_contamination.add_mutually_exclusive_group(required=True)
+    workflow_input.add_argument("--bam", type=_path, action="append", help="ripetibile per piu' BAM")
+    workflow_input.add_argument("--bamlist", type=_path, help="file con un percorso BAM per riga")
+    dnp_contamination.add_argument("--reference", type=_path, required=True)
+    dnp_contamination.add_argument("--panel", type=_path, required=True, help="pannello DNPcall")
+    dnp_contamination.add_argument(
+        "--contamination-panel", type=_path,
+        help="pannello Contamination; se omesso usa il pannello DNPcall",
+    )
+    dnp_contamination.add_argument(
+        "--parallel", action="store_true",
+        help="parallelismo fra campioni in DNPcall; i due passaggi restano sequenziali",
+    )
+    dnp_contamination.add_argument("--run-name")
+
     dnp = subparsers.add_parser("dnp-call", help="esegue DNPcall da BAM")
     dnp_input = dnp.add_mutually_exclusive_group(required=True)
     dnp_input.add_argument("--bam", type=_path, action="append", help="ripetibile per piu' BAM")
@@ -158,6 +181,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif args.command == "self-test":
             run_self_tests(layout)
+        elif args.command == "workflow":
+            run_dir = workflows.dnp_contamination(
+                bams=args.bam, bamlist=args.bamlist, reference=args.reference,
+                panel=args.panel, contamination_panel=args.contamination_panel,
+                parallel=args.parallel, run_name=args.run_name,
+            )
+            print(f"{completion_label}: {run_dir}")
         elif args.command == "dnp-call":
             run_dir = workflows.dnp_call(
                 bams=args.bam,

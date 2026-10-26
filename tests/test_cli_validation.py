@@ -40,6 +40,10 @@ class WizardTests(unittest.TestCase):
         self.popfreq = self.file('pop.tsv', 'chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t1\t2\t0.5\t0.5\n')
         self.run = self.layout.runs_dir / 'test'
         (self.run / 'output').mkdir(parents=True)
+        (self.run / 'run.json').write_text(
+            '{"schema_version": 1, "workflow": "fixture", "status": "succeeded"}',
+            encoding='utf-8',
+        )
         self.workflows = Mock()
         for name in ('dnp_call', 'snp_call', 'contamination', 'cpi'):
             getattr(self.workflows, name).return_value = self.run

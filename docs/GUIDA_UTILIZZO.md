@@ -7,13 +7,13 @@ Consultare la pagina
 versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
 artefatti GitHub Actions sono destinati alla revisione tecnica.
 
-La release ufficiale disponibile è la 0.6.0. Questo incremento aggiunge
-**Guida e informazioni → Catalogo scientifico**, consultabile in italiano
-e inglese, e il comando `nipat parameters`. Il
-[riferimento del catalogo](CATALOGO_SCIENTIFICO.md) distingue opzioni
-configurabili, regole interne e preparazione degli input. La verifica tecnica
-dei [piani di workflow](WORKFLOW_CONTRACT.md) non ne esegue i passaggi;
-le analisi dal menu continuano a essere avviate singolarmente.
+La release ufficiale disponibile è la 0.6.0. La versione documentata offre
+**W — Workflow automatici** per eseguire DNPcall → Contamination con un'unica
+configurazione e conferma. Le quattro analisi singole rimangono disponibili.
+**Guida e informazioni → Catalogo scientifico** e `nipat parameters`
+descrivono in italiano e inglese opzioni configurabili, regole interne e
+preparazione degli input. Il [riferimento del catalogo](CATALOGO_SCIENTIFICO.md)
+e il [contratto dei piani](WORKFLOW_CONTRACT.md) documentano queste interfacce.
 
 NIPAT esegue DNPcall, SNPcall, Contamination e CPI sul computer dell'utente.
 Il motore scientifico contiene gli script R e gli strumenti necessari.
@@ -87,8 +87,9 @@ conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`.
 ## Menu guidato
 
 Il banner riporta la versione e il menu mostra le analisi disponibili.
-Nei terminali interattivi supportati si usano frecce e Invio oppure i numeri;
-negli altri terminali è disponibile la scelta numerica in testo semplice.
+Nei terminali interattivi supportati si usano frecce e Invio oppure il tasto
+indicato accanto alla voce. Negli altri terminali si digita la scelta in testo
+semplice: un numero oppure `W` per i workflow automatici.
 
 | Scelta | Funzione |
 | --- | --- |
@@ -101,6 +102,7 @@ negli altri terminali è disponibile la scelta numerica in testo semplice.
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
 | 9 | Verifica aggiornamenti: ricerca, download verificato e avvio dell'installatore dopo conferma. |
+| W | Workflow automatici: DNPcall seguito da Contamination nella stessa esecuzione. |
 | 0 | Uscita dal programma. |
 
 Ogni campo presenta indicazioni sul formato richiesto e sul significato di
@@ -130,8 +132,9 @@ La schermata finale consente di aprire risultati, cartella del run e log,
 o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file
 e metadati; non interpreta il significato scientifico dei risultati.
 Il richiamo dell'ultima esecuzione vale per la sessione corrente. I run
-precedenti restano sul disco; non sono presenti una cronologia tra sessioni
-o il concatenamento automatico delle analisi.
+precedenti restano sul disco; non è presente una cronologia tra sessioni.
+Il workflow DNPcall → Contamination conserva i risultati separati dei due
+passaggi all'interno di un solo run.
 
 **7 — Guida e informazioni** è dedicata alla consultazione. **8 — Verifica
 ambiente** controlla il motore e gli strumenti senza elaborare campioni.
@@ -496,19 +499,69 @@ Le quattro analisi non sono quattro passaggi obbligatori della stessa catena:
 | SNPcall sullo stesso BAM | È un'analisi separata con pannello SNP. Il suo output non è direttamente compatibile con gli schemi DNP di Contamination e CPI. |
 
 Contamination produce stime e filtra i siti secondo il proprio metodo: non
-genera automaticamente tabelle «decontaminate» da inviare a CPI.
-Il menu esegue un'analisi alla volta e non avvia automaticamente i passaggi
-successivi. L'opzione parallela di DNPcall riguarda i campioni all'interno
-di quella singola analisi, non l'orchestrazione degli altri workflow.
+modifica i conteggi DNPcall e non genera tabelle «decontaminate» da inviare a CPI.
+L'opzione parallela di DNPcall riguarda i campioni all'interno di quel passaggio;
+Contamination viene avviato successivamente.
 
-Per una sequenza **DNPcall → Contamination**:
+### Workflow automatico DNPcall → Contamination
 
-1. Completare DNPcall e verificare stato, campioni e risultati.
-2. Scegliere **3 — Contamination**.
-3. Selezionare le tabelle richieste in `output\individual_outputs` del run
-   DNPcall, oppure quella sottocartella come input. La radice del run contiene
-   anche file non compatibili con Contamination.
-4. Indicare il pannello appropriato e avviare un nuovo run.
+1. Scegliere **W — Workflow automatici**.
+2. Indicare uno o più BAM, oppure una lista di BAM, il FASTA indicizzato e
+   il pannello DNP. Scegliere l'esecuzione DNPcall seriale o parallela.
+3. Per Contamination, mantenere il pannello DNP oppure selezionare un diverso
+   pannello di coordinate coerente con i conteggi da analizzare.
+4. Controllare i due passaggi, i file e la destinazione nel riepilogo, quindi
+   scegliere **Avvia analisi**. È richiesta una sola conferma.
+5. Attendere il completamento. Il motore verifica le tabelle prodotte da DNPcall
+   e le prepara automaticamente come input di Contamination.
+
+Il menu ripropone le impostazioni DNPcall salvate in **Configura**. La scelta
+di un pannello diverso per Contamination vale per quella esecuzione e non
+modifica le preferenze salvate.
+
+Non occorre copiare file o indicare percorsi di risultati che ancora non esistono.
+I nomi interni identificano i campioni senza dipendere dai nomi originali dei BAM;
+`run.json` conserva l'associazione con gli input selezionati.
+
+La stessa esecuzione può essere avviata dalla CLI:
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow dnp-contamination `
+  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
+  --run-name "dnp-contamination-01"
+```
+
+In alternativa a `--bam`, utilizzare `--bamlist "..\campioni\bamlist.txt"`.
+`--contamination-panel` seleziona un pannello diverso per il secondo passaggio;
+se omesso, viene utilizzato quello di `--panel`. `--parallel` abilita il
+parallelismo interno a DNPcall. Su Ubuntu usare `nipat` e percorsi Linux.
+`nipat workflow dnp-contamination --help` elenca tutte le opzioni.
+
+| Percorso nel run automatico | Contenuto |
+| --- | --- |
+| `work/engine-plan.json` | Piano inviato al motore, con campioni e collegamento fra i passaggi. |
+| `output/workflow/workflow-state.json` | Stato complessivo e stato di ciascun passaggio. |
+| `output/workflow/steps/dnp/output` | Tabelle, riepiloghi e grafici DNPcall. |
+| `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination. |
+| `output/workflow/steps/<id>/request.json` | Richiesta concreta del passaggio. |
+| `output/workflow/steps/<id>/command.log` | Messaggi scientifici del passaggio. |
+| `output/workflow/steps/<id>/work` | Pannelli, liste e tabelle preparati per il passaggio. |
+
+Un errore o un'interruzione impediscono l'avvio dei passaggi successivi; risultati
+parziali e log rimangono disponibili. Controllare lo stato complessivo e quello
+dei singoli passaggi, senza dedurre il successo dalla sola presenza di file.
+Non è prevista la ripresa automatica: correggere la causa e avviare un nuovo run.
+La simulazione `--dry-run` prepara il piano e i mount, ma non esegue nessun
+passaggio e non produce risultati scientifici.
+
+Per usare **tabelle DNPcall già disponibili**, avviare invece **3 — Contamination**
+e selezionare i file richiesti in `output/individual_outputs` del run DNPcall,
+oppure quella sottocartella come input. Nel workflow automatico le tabelle
+si trovano in `output/workflow/steps/dnp/output/individual_outputs`.
+La radice del run contiene anche file non compatibili con Contamination.
+
+### Altre composizioni
 
 Per una sequenza **DNPcall → CPI**, verificare prima la corrispondenza fra
 alias DNPcall e campioni originali in `run.json`. Preparare una cartella con

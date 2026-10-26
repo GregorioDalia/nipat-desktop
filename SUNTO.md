@@ -1,14 +1,16 @@
 # NIPAT in sintesi
 
 **NIPAT Desktop 0.7.0a1, in sviluppo**, è un'applicazione locale per eseguire quattro workflow
-scientifici da un menu testuale guidato o dalla riga di comando. Ogni avvio
-elabora un'analisi; questa versione non include una GUI grafica né il
-concatenamento automatico dei workflow.
+scientifici da un menu testuale guidato o dalla riga di comando. Le analisi
+possono essere avviate singolarmente; il workflow **DNPcall → Contamination**
+esegue automaticamente i due passaggi dopo una sola conferma.
+Questa versione non include una GUI grafica.
 
 Il catalogo scientifico consultabile dal menu o con `nipat parameters`
 descrive in italiano e inglese le opzioni R, le regole interne e la
-preparazione degli input. Il motore dispone del contratto per convalidare
-i piani concatenati; la loro esecuzione automatica è ancora da implementare.
+preparazione degli input. Il motore convalida i piani concatenati e ne
+esegue attualmente i passaggi DNPcall e Contamination, in sequenza.
+L'integrazione di CPI e SNPcall nell'esecutore dei piani non è ancora disponibile.
 La release ufficiale per l'installazione rimane la 0.6.0.
 
 | Workflow | Funzione |
@@ -20,7 +22,7 @@ La release ufficiale per l'installazione rimane la 0.6.0.
 
 Il client Python gestisce selezione degli input, parametri e registrazione
 delle esecuzioni. Un'immagine scientifica autonoma contiene la preparazione
-degli input, gli script R, samtools e le dipendenze. Su Windows l'immagine
+degli input, l'esecuzione dei piani, gli script R, samtools e le dipendenze. Su Windows l'immagine
 viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
 nativo. I calcoli e i dati rimangono sul computer.
 
@@ -47,7 +49,8 @@ spiegano formati, valori predefiniti e comandi di navigazione. **Configura**
 conserva cartelle e impostazioni del menu fra gli avvii; ogni analisi consente
 di correggere i valori proposti. Campioni, coppie e nome del run si scelgono
 sempre per la singola analisi. **Guida e informazioni** e **Verifica ambiente**
-sono funzioni separate. Le preferenze non cambiano la CLI diretta. Gli input
+sono funzioni separate. **W — Workflow automatici** permette di impostare
+DNPcall e Contamination insieme. Le preferenze non cambiano la CLI diretta. Gli input
 possono restare nelle cartelle originali e vengono letti senza modificarli.
 Su Windows sono supportati dischi locali fissi.
 
@@ -59,11 +62,16 @@ L'eventuale verifica all'avvio è disattivata inizialmente e mostra solo un avvi
 
 Ogni analisi crea un nuovo run con risultati in `output`, intermedi conservati
 in `work`, metadati in `run.json` e messaggi in `execution.log`. Le cartelle
-esistenti non vengono sovrascritte. Per concatenare analisi si selezionano i
-risultati compatibili del run precedente: le tabelle individuali DNPcall
-alimentano Contamination e, con campioni materni/paterni appropriati e frequenze
-di popolazione, CPI. SNPcall usa un proprio pannello e produce una tabella SNP,
-che non è un input diretto degli altri due workflow.
+esistenti non vengono sovrascritte. Il workflow automatico conserva in
+`output/workflow` lo stato complessivo, gli output e i log di ogni passaggio.
+DNPcall produce le tabelle individuali utilizzate direttamente da Contamination;
+se un passaggio fallisce, il successivo non viene avviato. Contamination non
+modifica i conteggi DNPcall e non produce tabelle «decontaminate».
+
+Le altre sequenze richiedono la selezione degli output del run precedente.
+CPI utilizza le tabelle DNP dei campioni cfDNA materni e paterni, coppie esplicite
+e frequenze di popolazione. SNPcall usa un proprio pannello e produce una
+tabella SNP, che non è un input diretto di Contamination o CPI.
 
 La verifica degli strumenti controlla l'ambiente di esecuzione; gli autotest
 confrontano casi noti. Il completamento di un run non sostituisce la

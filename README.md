@@ -29,19 +29,22 @@ mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
 
 Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
 cartella distinta con risultati, intermedi conservati, metadati e log.
-I run esistenti non vengono sovrascritti. I quattro workflow sono disponibili
-sia nel menu sia nella CLI diretta. Ogni avvio esegue una singola analisi;
-le sequenze si compongono selezionando gli output compatibili del run precedente.
-L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
+I run esistenti non vengono sovrascritti. Le quattro analisi sono disponibili
+sia nel menu sia nella CLI diretta. **DNPcall → Contamination** può essere
+eseguito automaticamente come un unico workflow: il motore passa le tabelle
+individuali al secondo passaggio e conserva lo stato di entrambi.
+Le altre composizioni richiedono ancora la selezione manuale degli output
+compatibili. L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
 e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
 scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
 input senza modificare gli algoritmi o avviare analisi.
 
-Il motore convalida inoltre il [contratto dei piani](docs/WORKFLOW_CONTRACT.md)
-per le composizioni compatibili. Questo incremento verifica struttura,
-riferimenti e ordine dei passaggi; l'esecuzione automatica dei piani non è
-ancora disponibile. Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md)
-descrive modalità di consultazione e significato delle informazioni esposte.
+Il [contratto dei piani](docs/WORKFLOW_CONTRACT.md) identifica campioni,
+dipendenze e risultati. La validazione ammette le quattro analisi; l'esecutore
+supporta attualmente i passaggi DNPcall e Contamination, in ordine sequenziale.
+CPI nei piani e SNPcall come attività indipendente del piano non sono ancora
+eseguibili. Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
+modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
 
@@ -108,12 +111,15 @@ e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
 approvate su GitHub; download e installazione richiedono conferme distinte.
 In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
 all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
-Per spostare applicazione, ambiente WSL o cache usare il setup.
+**W — Workflow automatici** prepara DNPcall → Contamination con un unico
+riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
+usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
 cartella dell'applicazione; condivisioni UNC e unità di rete non sono supportate.
-I percorsi possono contenere spazi. Le analisi in sequenza si compongono
-selezionando gli output compatibili di un run come input del successivo.
+I percorsi possono contenere spazi. Nel workflow automatico non occorre
+copiare o riselezionare le tabelle fra i passaggi. Le altre sequenze si
+compongono selezionando gli output compatibili di un run come input del successivo.
 
 ### CLI diretta
 
@@ -135,6 +141,19 @@ workflow del menu. Sostituire i percorsi relativi di esempio con i propri:
 .\nipat.cmd cpi --input-dir "..\campioni\cpi" --pairs "A1:A1" `
   --popfreq "..\pannelli\pop_allFreq.txt" --panel "..\pannelli\DNP_list.txt"
 ```
+
+Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
+
+```powershell
+.\nipat.cmd --runs-dir "..\risultati" workflow dnp-contamination `
+  --bam "..\campioni\campione.bam" `
+  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt"
+```
+
+`--bam` è ripetibile; `--bamlist` accetta un elenco di BAM. Contamination usa
+il pannello DNP selezionato, oppure quello indicato con `--contamination-panel`.
+`--parallel` riguarda soltanto il calcolo DNPcall sui campioni: Contamination
+inizia dopo il completamento e la verifica degli output DNPcall.
 
 Le opzioni globali, come `--runs-dir` e `--dry-run`, precedono il sottocomando.
 `--dry-run` valida gli input e registra un'esecuzione `planned`, senza eseguire
@@ -174,6 +193,11 @@ conservare il checkout completo e seguire i requisiti della
 ## Risultati e verifiche
 
 Ogni run contiene `output`, `work`, `run.json` ed `execution.log`.
+Nel workflow automatico, `output/workflow` conserva il piano, lo stato
+complessivo e le sottocartelle `steps/dnp` e `steps/contamination`, ciascuna
+con risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
+successivi; le evidenze già prodotte restano disponibili. Non è prevista
+la ripresa del run: una nuova prova usa una nuova cartella.
 Il record identifica input, parametri e immagine effettivamente usata;
 la [guida alle esecuzioni](docs/ESECUZIONI.md) ne descrive significato e limiti.
 Lo stato `succeeded` indica il completamento tecnico del workflow. La
@@ -182,7 +206,8 @@ concordanza scientifica richiede il confronto con risultati attesi appropriati.
 `doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
 `self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
 modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
-La CI esegue inoltre regressioni DNPcall sintetiche e controlli del motore;
+La CI esegue inoltre regressioni DNPcall sintetiche e il confronto fra
+DNPcall → Contamination automatico e le due analisi separate nel motore;
 la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
 verifica degli installatori e pubblicazione. La
 [scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove

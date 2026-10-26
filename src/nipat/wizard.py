@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Callable
 
 from nipat import __version__
+from nipat.adapters.panels import read_position_panel
 from nipat.catalog_ui import show_catalog
 from nipat.errors import NipatError
 from nipat.execution.workflows import Workflows
@@ -16,7 +17,7 @@ from nipat.preferences import PreferencesStore
 from nipat.results import show_results
 from nipat.terminal import Terminal
 from nipat.update_ui import HANDOFF_EXIT_CODE, run_updates
-from nipat.wizard_forms import Back, Cancelled, WorkflowForm
+from nipat.wizard_forms import Back, Cancelled, Field, WorkflowForm
 from nipat.wizard_settings import GuidedSettings
 
 
@@ -25,6 +26,7 @@ MAIN_MENU = [
     ("2", "SNPcall", "SNP da BAM o pileup esistente"),
     ("3", "Contamination", "Stima da tabelle compatibili"),
     ("4", "CPI", "Frazione fetale e indice di paternita'"),
+    ("W", "Workflow automatici", "DNPcall seguito da Contamination"),
     ("5", "Configura", "Cartelle e parametri predefiniti"),
     ("6", "Ultima esecuzione", "Risultati e log della sessione"),
     ("7", "Guida e informazioni", "Cosa fa NIPAT e come utilizzarlo"),
@@ -32,6 +34,87 @@ MAIN_MENU = [
     ("9", "Verifica aggiornamenti", "Release disponibili, download e installazione"),
     ("0", "Esci", ""),
 ]
+
+
+class DnpContaminationForm(WorkflowForm):
+    """Review one automatic chain without duplicating scientific orchestration."""
+
+    @property
+    def title(self) -> str:
+        return "Workflow automatico / DNPcall -> Contamination"
+
+    def fields(self) -> list[Field]:
+        fields = super().fields()
+        panel_fields = [Field(
+            "contamination_panel_mode", "Pannello per Contamination", "choice", "1",
+            options=(("1", "Stesso pannello DNP", "Usa le coordinate del pannello gia' selezionato"),
+                     ("2", "Pannello diverso", "Seleziona un altro insieme di coordinate DNP")),
+        )]
+        if self.values.get("contamination_panel_mode") == "2":
+            panel_fields.append(Field(
+                "contamination_panel", "Pannello di coordinate per Contamination", "file",
+                check=read_position_panel,
+            ))
+        return fields[:-1] + panel_fields + fields[-1:]
+
+    def _guide(self, field: Field, default: str = "") -> None:
+        if field.key not in {"contamination_panel_mode", "contamination_panel"}:
+            super()._guide(field, default)
+            return
+        if field.key == "contamination_panel_mode":
+            self.ui.message(
+                "Contamination riceve automaticamente tutte le tabelle prodotte da DNPcall. "
+                "Scegliere quali coordinate usare per questa seconda fase; non occorre selezionare i file intermedi.",
+                kind="muted",
+            )
+            self.ui.message("Invio conferma il pannello proposto; scegliere 2 per indicarne uno diverso.", kind="muted")
+        else:
+            self.ui.message(
+                "Scegliere le coordinate DNP per la stima della contaminazione: colonne chr, pos1, pos2, "
+                "con o senza intestazione. E' accettato anche un pannello DNP a cinque colonne. "
+                "Il pannello deve riferirsi alla stessa assembly e ai siti analizzati da DNPcall.",
+                kind="muted",
+            )
+            self.ui.message(
+                "Incollare un percorso completo o relativo alla cartella corrente, anche tra virgolette.",
+                kind="muted",
+            )
+            self.ui.message(
+                "Invio mantiene il valore proposto." if default else
+                "Inserire il percorso richiesto e premere Invio; il campo non puo' essere lasciato vuoto.",
+                kind="muted",
+            )
+        self.ui.message(":indietro torna al campo precedente; :annulla torna al menu.", kind="muted")
+
+    def _selected(self, field: Field, answer: str) -> None:
+        if field.key != "contamination_panel_mode":
+            super()._selected(field, answer)
+            return
+        self.ui.message(
+            "Selezione: stesso pannello DNP. Contamination usera' le coordinate del pannello selezionato per DNPcall."
+            if answer == "1" else
+            "Selezione: pannello diverso. Indicare ora il file di coordinate per Contamination.",
+            kind="muted",
+        )
+
+    def review(self, *, dry_run: bool = False) -> bool:
+        self.ui.message(
+            "Sequenza: 1. DNPcall su tutti i BAM selezionati; 2. Contamination sulle tabelle prodotte. "
+            "Le due fasi sono automatiche e conservano risultati e stato separati.", kind="muted",
+        )
+        self.ui.message(
+            "In caso di errore il workflow si arresta. Contamination parte solo dopo il completamento "
+            "di DNPcall e la verifica delle sue tabelle; non sono richieste altre conferme fra le fasi.",
+            kind="muted",
+        )
+        return super().review(dry_run=dry_run)
+
+    def arguments(self) -> dict:
+        return {
+            **super().arguments(),
+            "contamination_panel": self.values["contamination_panel"]
+            if self.values["contamination_panel_mode"] == "2" else None,
+        }
 
 
 def _help(ui: Terminal, layout: ProjectLayout) -> None:
@@ -54,6 +137,7 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "SNPcall: un BAM con FASTA oppure un pileup con QNAME, e una lista SNP; produce una tabella di conteggi allelici.",
             "Contamination: tabelle compatibili con l'output DNPcall e coordinate DNP; produce stime per sito e un riepilogo per campione.",
             "CPI: tabelle cfDNA materno e presunto padre, coppie e frequenze di popolazione; produce stime di frazione fetale, CPI e grafici.",
+            "Workflow automatici: la voce W esegue DNPcall e poi Contamination con una sola conferma, trasferendo le tabelle fra le due fasi.",
             "I pannelli e i riferimenti devono essere coerenti con i campioni. La verifica degli input non sostituisce la valutazione scientifica dei risultati.",
         )),
         "3": ("Cartelle e parametri", (
@@ -69,9 +153,11 @@ def _help(ui: Terminal, layout: ProjectLayout) -> None:
             "Ogni esecuzione ha una cartella distinta: output contiene i risultati, work i file intermedi.",
             "run.json registra gli input, i parametri e lo stato; execution.log conserva i dettagli del processo.",
             "Ultima esecuzione riapre i risultati e i log della sessione. Le esecuzioni precedenti rimangono nelle rispettive cartelle.",
-            "Per concatenare analisi, selezionare i file prodotti come input del workflow successivo.",
-            "Esempio: dopo DNPcall, aprire Contamination e scegliere le tabelle full_output_*.txt della cartella output/individual_outputs, insieme al pannello DNP pertinente.",
-            "La concatenazione non e' automatica: verificare campioni, schema delle tabelle e pannello per ogni passaggio.",
+            "La voce W, Workflow automatici, esegue DNPcall e poi Contamination: scegliere i BAM, il FASTA e i pannelli, controllare il riepilogo e confermare una sola volta.",
+            "Le tabelle passano automaticamente alla seconda fase. Se DNPcall fallisce o non produce le tabelle attese, Contamination non viene avviato.",
+            "Nel workflow automatico, output/workflow/workflow-state.json registra lo stato delle fasi; output/workflow/steps contiene una cartella per ciascuna fase, con work, output e log.",
+            "Le tabelle individuali DNPcall si chiamano full_output_*.txt e si trovano nella sottocartella output/individual_outputs della fase DNPcall.",
+            "Le altre combinazioni richiedono la selezione esplicita dei risultati come input dell'analisi successiva. Verificare campioni, schema delle tabelle e pannelli pertinenti.",
         )),
         "5": ("Informazioni su NIPAT", (
             f"NIPAT {__version__} - piattaforma locale per l'esecuzione e la validazione dei workflow scientifici.",
@@ -153,11 +239,11 @@ def run_wizard(
         if not settings.error and settings.preferences.check_updates_on_startup:
             run_updates(ui, layout, settings.preferences, dry_run=dry_run, startup=True)
         while True:
-            choice = ui.menu("Menu principale", MAIN_MENU)
+            choice = ui.menu("Menu principale", MAIN_MENU).strip().casefold()
             if choice in {"0", ":annulla", ":indietro"}:
                 return 2 if had_failure else 0
-            if choice not in {item[0] for item in MAIN_MENU}:
-                ui.message("Scegliere una delle opzioni indicate (0-9).", kind="error")
+            if choice not in {item[0].casefold() for item in MAIN_MENU}:
+                ui.message("Scegliere una delle opzioni indicate (0-9 oppure W).", kind="error")
                 continue
             try:
                 if choice == "5":
@@ -183,24 +269,41 @@ def run_wizard(
                 if settings.error:
                     settings.explain(ui)
                     continue
-                form = WorkflowForm(choice, ui, layout, err_const,
-                                    defaults=settings.preferences.workflow_defaults(choice))
+                if choice == "w":
+                    ui.heading("Workflow automatico DNPcall -> Contamination")
+                    ui.message("Selezionare gli input una sola volta. I risultati DNPcall verranno forniti automaticamente a Contamination.", kind="muted")
+                    form = DnpContaminationForm(
+                        "1", ui, layout, err_const,
+                        defaults=settings.preferences.workflow_defaults("1"),
+                    )
+                else:
+                    form = WorkflowForm(choice, ui, layout, err_const,
+                                        defaults=settings.preferences.workflow_defaults(choice))
                 form.collect()
                 while form.review(dry_run=dry_run):
                     ui.heading(f"{form.title} / {'Preparazione dry-run' if dry_run else 'Esecuzione'}")
                     ui.message("I dettagli del processo vengono conservati anche in execution.log.")
                     started = time.monotonic()
                     try:
-                        method = {"1": workflows.dnp_call, "2": workflows.snp_call,
-                                  "3": workflows.contamination, "4": workflows.cpi}[choice]
+                        method = workflows.dnp_contamination if choice == "w" else {
+                            "1": workflows.dnp_call, "2": workflows.snp_call,
+                            "3": workflows.contamination, "4": workflows.cpi,
+                        }[choice]
                         run_dir = method(**form.arguments())
                     except (NipatError, OSError) as exc:
                         had_failure = True
                         ui.message(f"Operazione non riuscita: {exc}", kind="error")
                         ui.message("I valori inseriti sono conservati: modificarli dal riepilogo.")
+                        if choice == "w":
+                            ui.message("Consultare gli stati delle fasi e i log nella cartella indicata dal processo. Per ripetere il workflow scegliere un nuovo nome: i risultati gia' presenti sono conservati.", kind="muted")
                         continue
                     last_run = run_dir
                     ui.message(f"Tempo trascorso: {time.monotonic() - started:.1f} s")
+                    if choice == "w" and not dry_run:
+                        workflow_dir = run_dir / "output" / "workflow"
+                        ui.message(f"Stati delle fasi: {workflow_dir / 'workflow-state.json'}")
+                        for step, label in (("dnp", "DNPcall"), ("contamination", "Contamination")):
+                            ui.message(f"Risultati {label}: {workflow_dir / 'steps' / step / 'output'}")
                     show_results(ui, run_dir, dry_run=dry_run)
                     break
                 else:

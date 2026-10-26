@@ -31,6 +31,7 @@ from verify_contamination_update import check_outputs as check_contamination
 from verify_cpi_update import check_outputs as check_cpi
 from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_workflow
 from verify_cpi_engine import check_cpi_client_without_host_scripts, check_cpi_workflow
+from verify_workflow_execution import check_workflow_execution
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -111,13 +112,18 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("The engine lacks the complete DNPcall interface.")
     if description.get("workflow_interfaces", {}).get("cpi") != "cpi-v1":
         raise ValueError("The engine lacks the complete CPI interface.")
+    if description.get("plan_execution") != {
+        "interface": "workflow-plan-execution-v1", "schema_version": 1,
+        "workflows": ["dnp-call", "contamination"], "scheduling": "sequential", "resume": False,
+    }:
+        raise ValueError("Unexpected supported workflow plan execution interface.")
     preparation = description.get("preparation", {})
     if preparation.get("interface") != "workflow-preparation-v1":
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
     for name in (
         "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
-        "dnp.py", "cpi.py", "catalog.py", "plan.py", "catalog_data/dnp-call.json",
+        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "catalog_data/dnp-call.json",
         "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
     ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
@@ -515,6 +521,8 @@ def main() -> int:
         dnp_inputs = check_dnp_workflow(identifier, root, run_container=run_container,
                                       run_image=run_image, write_request=write_request)
         check_dnp_client_without_host_scripts(identifier, root, dnp_inputs)
+        check_workflow_execution(identifier, root, dnp_inputs, run_image=run_image,
+                                 write_request=write_request)
         check_contamination_fixture(identifier, root)
         check_contamination_workflow(identifier, root)
         check_cpi_fixture(identifier, root)
@@ -528,7 +536,7 @@ def main() -> int:
         return 1
     shutil.rmtree(root)
     print("PASS: numeric regressions and validation failures without application/source mounts or network.")
-    print("Complete DNPcall, SNPcall, Contamination and CPI workflows verified inside the bundled engine.")
+    print("Complete DNPcall, SNPcall, Contamination and CPI, plus automatic DNPcall -> Contamination, verified inside the bundled engine.")
     return 0
 
 

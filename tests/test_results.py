@@ -119,6 +119,115 @@ class ResultsTests(unittest.TestCase):
                 opener.assert_not_called()
 
 
+    def prepare_workflow(self, *, status="succeeded", dnp="succeeded", contamination="succeeded"):
+        self.metadata.update(workflow="dnp-contamination", status=status)
+        self.save_metadata()
+        root = self.run / "output" / "workflow"
+        root.mkdir(exist_ok=True)
+        state = {
+            "schema_version": 1, "interface": "workflow-plan-execution-v1",
+            "status": "cancelled" if status == "interrupted" else status,
+            "steps": [
+                {"id": "dnp", "workflow": "dnp-call", "status": dnp},
+                {"id": "contamination", "workflow": "contamination", "status": contamination},
+            ],
+        }
+        path = root / "workflow-state.json"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return root, path, state
+
+    def test_composed_summary_shows_both_steps_and_fixed_result_locations(self):
+        root, path, state = self.prepare_workflow()
+        for step in ("dnp", "contamination"):
+            (root / "steps" / step / "output").mkdir(parents=True)
+        state["steps"][0]["output_dir"] = str(self.run.parent / "outside")
+        state["steps"][1]["log"] = "../../bad.cmd"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        ui, opener = FakeTerminal(["2", "0"]), Mock()
+        show_results(ui, self.run, open_path=opener)
+        self.assertIn("Esecuzione completata", ui.lines)
+        self.assertIn("  DNPcall: Completata", ui.lines)
+        self.assertIn("  Contamination: Completata", ui.lines)
+        text = "\n".join(ui.lines)
+        self.assertIn(str(root / "steps" / "dnp" / "output"), text)
+        self.assertIn(str(root / "steps" / "contamination" / "output"), text)
+        self.assertNotIn("outside", text)
+        self.assertNotIn("bad.cmd", text)
+        opener.assert_not_called()
+
+    def test_failed_or_cancelled_step_is_not_presented_as_completed(self):
+        for status, dnp, expected in (("failed", "failed", "Esecuzione non riuscita"),
+                                      ("interrupted", "cancelled", "Esecuzione interrotta")):
+            with self.subTest(status=status):
+                self.prepare_workflow(status=status, dnp=dnp, contamination="blocked")
+                ui = FakeTerminal(["2", "0"])
+                show_results(ui, self.run)
+                self.assertIn(expected, ui.lines)
+                self.assertNotIn("Esecuzione completata", ui.lines)
+                self.assertIn("  Contamination: Non avviata: workflow arrestato", ui.lines)
+
+    def test_failed_step_report_overrides_success_title_from_parent_record(self):
+        _, path, state = self.prepare_workflow()
+        state["status"] = "failed"
+        state["steps"][0]["status"] = "failed"
+        state["steps"][1]["status"] = "blocked"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertIn("Esecuzione non riuscita", ui.lines)
+        self.assertNotIn("Esecuzione completata", ui.lines)
+
+    def test_missing_or_malformed_step_state_keeps_navigation_available(self):
+        _, path, good = self.prepare_workflow()
+        malformed = [None, "not json", "[]", json.dumps({**good, "schema_version": True}),
+                     json.dumps({**good, "steps": []}), json.dumps({**good, "status": []}),
+                     json.dumps({**good, "steps": [good["steps"][0], good["steps"][0]]}),
+                     json.dumps({**good, "steps": [{**good["steps"][0], "status": "failed"},
+                                                    good["steps"][1]]})]
+        for content in malformed:
+            with self.subTest(content=content):
+                if content is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    path.write_text(content, encoding="utf-8")
+                ui, opener = FakeTerminal(["2", "4", "0"]), Mock()
+                show_results(ui, self.run, open_path=opener)
+                self.assertTrue(any("Stato dei passaggi non consultabile" in line for line in ui.lines))
+                self.assertNotIn("Esecuzione completata", ui.lines)
+                opener.assert_called_once_with(self.run)
+
+    def test_step_metadata_read_is_bounded(self):
+        _, path, _ = self.prepare_workflow()
+        path.write_bytes(b" " * (2 * 1024 * 1024 + 1))
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertTrue(any("supera il limite" in line for line in ui.lines))
+        self.assertNotIn("Esecuzione completata", ui.lines)
+
+    def test_symlinked_step_state_is_not_followed(self):
+        _, path, state = self.prepare_workflow()
+        external = self.run.parent / "external-state.json"
+        external.write_text(json.dumps(state), encoding="utf-8")
+        path.unlink()
+        try:
+            path.symlink_to(external)
+        except (NotImplementedError, OSError):
+            self.skipTest("Platform does not permit symbolic links")
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        self.assertTrue(any("Percorso collegato non consultabile" in line for line in ui.lines))
+        self.assertNotIn("  DNPcall: Completata", ui.lines)
+
+    def test_dry_run_does_not_read_or_claim_step_results(self):
+        self.prepare_workflow()
+        ui = FakeTerminal(["2", "0"])
+        with patch("nipat.results._workflow_state") as read:
+            show_results(ui, self.run, dry_run=True)
+        read.assert_not_called()
+        self.assertNotIn("Passaggi del workflow automatico:", ui.lines)
+        self.assertIn("Esecuzione pianificata", ui.lines)
+
+
 class DesktopOpenerTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

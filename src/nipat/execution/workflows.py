@@ -23,6 +23,7 @@ from nipat.validation.files import (
     require_snp_pileup,
 )
 from nipat_scientific.cpi import normalize_pairs
+from nipat_scientific.plan import validate_plan
 
 
 def _bind_bam(mounts: InputMounts, bam: Path, target: PurePosixPath) -> list[Path]:
@@ -61,6 +62,34 @@ def _write_engine_request(destination: Path, request: dict) -> None:
         handle.write("\n")
 
 
+def _select_bams(
+    *, bam: Path | None, bams: list[Path] | None, bamlist: Path | None,
+) -> tuple[list[Path], Path | None]:
+    """Resolve BAM selection once for direct analyses and composed workflows."""
+    if sum((bam is not None, bams is not None, bamlist is not None)) != 1:
+        raise ValidationError("Indicare uno o più --bam oppure un solo --bamlist.")
+    source_list = None
+    if bamlist is not None:
+        source_list = require_file(bamlist, "Lista BAM")
+        selected = []
+        for line in source_list.read_text(encoding="utf-8-sig").splitlines():
+            value = line.strip()
+            if not value:
+                continue
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1]
+            entry = Path(value).expanduser()
+            selected.append(entry if entry.is_absolute() else source_list.parent / entry)
+    else:
+        selected = [bam] if bam is not None else list(bams or [])
+    if not selected:
+        raise ValidationError("La lista BAM è vuota.")
+    checked = [require_file(path, "BAM") for path in selected]
+    if len(set(checked)) != len(checked):
+        raise ValidationError("Lo stesso BAM compare più volte nella lista.")
+    return checked, source_list
+
+
 class Workflows:
     def __init__(self, layout: ProjectLayout, runner: DockerComposeRunner) -> None:
         self.layout = layout
@@ -71,27 +100,7 @@ class Workflows:
         bamlist: Path | None = None, reference: Path, panel: Path,
         parallel: bool = False, run_name: str | None = None,
     ) -> Path:
-        if sum((bam is not None, bams is not None, bamlist is not None)) != 1:
-            raise ValidationError("Indicare uno o più --bam oppure un solo --bamlist.")
-        source_list = None
-        if bamlist is not None:
-            source_list = require_file(bamlist, "Lista BAM")
-            selected = []
-            for line in source_list.read_text(encoding="utf-8-sig").splitlines():
-                value = line.strip()
-                if not value:
-                    continue
-                if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-                    value = value[1:-1]
-                entry = Path(value).expanduser()
-                selected.append(entry if entry.is_absolute() else source_list.parent / entry)
-        else:
-            selected = [bam] if bam is not None else list(bams or [])
-        if not selected:
-            raise ValidationError("La lista BAM è vuota.")
-        checked = [require_file(path, "BAM") for path in selected]
-        if len(set(checked)) != len(checked):
-            raise ValidationError("Lo stesso BAM compare più volte nella lista.")
+        checked, source_list = _select_bams(bam=bam, bams=bams, bamlist=bamlist)
         panel = require_file(panel, "Pannello DNP")
         read_dnp_list(panel)
         mounts = InputMounts(self.layout)
@@ -134,6 +143,83 @@ class Workflows:
                 ["python3", "/opt/nipat/engine/main.py", "execute", "dnp-call",
                  "--request", self.layout.container_path(request_file)],
                 working_dir=self.layout.container_path(run_dir),
+            )
+        return run_dir
+
+    def dnp_contamination(
+        self, *, bam: Path | None = None, bams: list[Path] | None = None,
+        bamlist: Path | None = None, reference: Path, panel: Path,
+        contamination_panel: Path | None = None, parallel: bool = False,
+        run_name: str | None = None,
+    ) -> Path:
+        """Submit one DNPcall → Contamination plan to the bundled executor.
+
+        The host only selects and mounts inputs. Scientific preparation, the
+        handoff of individual DNP tables and step execution stay in the image.
+        """
+        checked, source_list = _select_bams(bam=bam, bams=bams, bamlist=bamlist)
+        panel = require_file(panel, "Pannello DNP")
+        read_dnp_list(panel)
+        contamination_panel = (panel if contamination_panel is None else
+                               require_file(contamination_panel, "Pannello Contamination"))
+        read_position_panel(contamination_panel)
+        mounts = InputMounts(self.layout)
+        panel_path = mounts.bind_file(panel, target=INPUT_ROOT / "dnp-panel.txt")
+        contamination_panel_path = (
+            panel_path if contamination_panel == panel else
+            mounts.bind_file(contamination_panel, target=INPUT_ROOT / "contamination-panel.txt")
+        )
+        reference_path, reference_inputs = _bind_reference(mounts, reference)
+        input_files = [*reference_inputs, panel]
+        if contamination_panel != panel:
+            input_files.append(contamination_panel)
+        if source_list is not None:
+            input_files.append(source_list)
+        samples = []
+        for number, path in enumerate(checked, 1):
+            sample_id = f"sample_{number:04d}"
+            target = INPUT_ROOT / "bams" / f"{sample_id}.bam"
+            input_files.extend(_bind_bam(mounts, path, target))
+            samples.append({"sample_id": sample_id, "original_path": str(path),
+                            "container_path": str(target)})
+        plan = {
+            "schema_version": 1,
+            "samples": [{"id": sample["sample_id"], "kind": "bam",
+                         "path": sample["container_path"]} for sample in samples],
+            "steps": [
+                {"id": "dnp", "workflow": "dnp-call",
+                 "inputs": {"samples": [sample["sample_id"] for sample in samples],
+                            "reference": str(reference_path), "panel": str(panel_path)},
+                 "parameters": {"parallel": parallel}},
+                {"id": "contamination", "workflow": "contamination",
+                 "inputs": {"samples": [
+                     {"step": "dnp", "output": "dnp-tables", "sample": sample["sample_id"]}
+                     for sample in samples
+                 ], "panel": str(contamination_panel_path)},
+                 "parameters": {}},
+            ],
+        }
+        # Reject invalid contracts before allocating an immutable run. The
+        # bundled executor validates this same plan again against its version.
+        plan = validate_plan(plan)["plan"]
+        run_dir = self.layout.new_run_dir("dnp-contamination", run_name)
+        with self.runner.record_run(
+            run_dir, workflow="dnp-contamination", inputs=input_files, mounts=mounts,
+            bundled_workflow="workflow-plan",
+            parameters={"preset": "dnp-contamination",
+                        "bams": [str(path) for path in checked],
+                        "bamlist": str(source_list) if source_list else None,
+                        "reference": str(reference_inputs[0]), "panel": str(panel),
+                        "contamination_panel": str(contamination_panel),
+                        "parallel": parallel, "sample_mapping": samples},
+        ):
+            plan_file = run_dir / "work" / "engine-plan.json"
+            _write_engine_request(plan_file, plan)
+            self.runner.run(
+                ["python3", "/opt/nipat/engine/main.py", "execute-plan",
+                 "--plan", self.layout.container_path(plan_file),
+                 "--run-dir", self.layout.container_path(run_dir / "output" / "workflow")],
+                working_dir=self.layout.container_path(run_dir / "work"),
             )
         return run_dir
 

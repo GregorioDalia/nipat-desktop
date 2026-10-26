@@ -8,8 +8,14 @@ dal menu Windows, da una GUI o dalla lingua dell'interfaccia.
 Il comando del motore `validate-plan --plan FILE` controlla la struttura e
 le dipendenze e restituisce JSON. **Questa validazione non esegue il piano**:
 non avvia R o samtools, non crea risultati e non controlla esistenza,
-contenuto o compatibilità biologica dei file. L'esecuzione automatica dei
-piani non è disponibile tramite questo contratto di validazione.
+contenuto o compatibilità biologica dei file.
+
+Il comando distinto `execute-plan --plan FILE --run-dir DIR` esegue
+attualmente piani composti da DNPcall e Contamination. Un piano valido che
+contiene CPI o SNPcall non è ancora eseguibile e viene rifiutato prima
+dell'avvio dei passaggi. Le analisi singole restano disponibili tramite
+`execute`. Il menu e la CLI desktop offrono il workflow predefinito
+DNPcall → Contamination senza richiedere la scrittura manuale del JSON.
 
 ## Struttura della richiesta
 
@@ -100,7 +106,9 @@ negativo e non introduce un limite superiore assente nell'adattatore.
 
 L'esempio seleziona due BAM, elabora i conteggi una sola volta e riferisce
 esplicitamente quei risultati nelle due analisi successive. La stima di
-contaminazione non modifica i dati usati dal CPI.
+contaminazione non modifica i dati usati dal CPI. L'esempio descrive il
+contratto completo e viene accettato da `validate-plan`; la presenza di CPI
+lo rende non eseguibile nell'attuale sottoinsieme di `execute-plan`.
 
 ```json
 {
@@ -182,15 +190,97 @@ Il resoconto completo non è invece una richiesta: l'input non ammette
 essere imposto dal chiamante. I cicli e i riferimenti a passaggi, campioni o
 tipi di output inesistenti vengono respinti.
 
-La successiva esecuzione dovrà risolvere i riferimenti in file effettivi e
-produrre le richieste già supportate dagli adattatori dei quattro script.
-I nomi interni e i prefissi CPI `mother_prefix` e `father_prefix` saranno
-assegnati durante questa preparazione conservando la mappa delle identità
-esplicite. Non sono parametri scientifici rimossi: appartengono alla selezione
-dei file nativa R, qui rappresentata dai riferimenti delle coppie. Le cartelle
-`work` e `output` appartengono alla singola esecuzione e non sono impostate
-arbitrariamente nel piano. Non viene promessa una corrispondenza fra ID
-del piano e nomi generati dal codice R.
+Le cartelle `work` e `output` appartengono alla singola esecuzione e non
+sono impostate arbitrariamente nel piano. Gli ID del piano identificano i
+campioni; non devono essere interpretati come nomi generati dal codice R.
+Per CPI, il contratto rappresenta le selezioni di file mediante riferimenti
+espliciti alle coppie. L'esecutore CPI dovrà tradurre tali riferimenti nei
+prefissi `mother_prefix` e `father_prefix`, conservandone la corrispondenza.
+Questa preparazione CPI non è ancora implementata per i piani.
+
+## Esecuzione dei piani
+
+```sh
+python3 /opt/nipat/engine/main.py execute-plan \
+  --plan /workspace/run/work/engine-plan.json \
+  --run-dir /workspace/run/output/workflow
+```
+
+`execute-plan` usa la stessa struttura di richiesta di `validate-plan`, ma
+aggiunge i controlli necessari all'esecuzione. Al termine mostra un riepilogo
+e il percorso dello stato; `--json` scrive il resoconto completo su stdout,
+riservando stderr ai messaggi di avanzamento. Il codice di uscita non dipende
+dal formato di presentazione. Il descrittore del motore
+espone `plan_execution.interface: workflow-plan-execution-v1`, i workflow
+eseguibili `dnp-call` e `contamination`, la pianificazione `sequential` e
+`resume: false`.
+
+La destinazione deve essere nuova, con directory padre già esistente:
+una directory già presente, anche vuota, non viene riutilizzata. Il motore
+controlla l'intero piano, il sottoinsieme
+di analisi supportate e gli input già disponibili prima di creare la
+destinazione. Riferimenti, pannelli, indici e alias richiesti devono essere
+validi. Le tabelle prodotte da un passaggio sono verificate quando diventano
+disponibili, prima di utilizzarle nel passaggio dipendente.
+
+DNPcall richiede BAM esposti con nomi `sample_0001.bam`, `sample_0002.bam` e
+successivi, nell'ordine della lista `inputs.samples` del passaggio. I percorsi
+interni devono essere compatibili con l'interfaccia R e i suoi comandi samtools.
+Il client prepara alias mediante mount in sola lettura, senza copiare i BAM.
+Un piano tecnico con più passaggi DNPcall deve rispettare questa associazione
+in ciascun passaggio: un ordine diverso che rende gli alias incompatibili
+viene rifiutato. Un ID del piano, per esempio `cfDNA_a`, può essere diverso
+dall'alias `sample_0001`; la corrispondenza è conservata nei risultati.
+
+Le analisi vengono eseguite una per volta, nell'ordine derivato dalle
+dipendenze. `parallel: true` abilita esclusivamente il parallelismo interno
+di DNPcall sui campioni; non esegue contemporaneamente i passaggi del piano.
+Il motore passa le tabelle individuali DNPcall a Contamination e conserva
+il riferimento al campione e al passaggio produttore. Lo staging di
+Contamination usa `table_0001.txt`, `table_0002.txt` e successivi nell'ordine
+dichiarato dal consumatore. Questi nomi interni non sostituiscono l'identità
+dei campioni registrata nello stato.
+
+### Evidenze e stati
+
+| Percorso relativo alla destinazione `--run-dir` | Contenuto |
+| --- | --- |
+| `plan.json` | Piano canonico effettivamente eseguito. |
+| `workflow-state.json` | Stato complessivo, stati e comandi dei passaggi, associazione degli output ai campioni. |
+| `steps/<id>/request.json` | Richiesta concreta preparata per l'adattatore del passaggio. |
+| `steps/<id>/command.log` | Output standard e messaggi di errore del processo scientifico. |
+| `steps/<id>/work` | Pannelli, liste e tabelle preparati per R. |
+| `steps/<id>/output` | Risultati scientifici del passaggio. |
+
+Lo stato viene aggiornato con sostituzione atomica. Lo stato complessivo può
+essere `running`, `succeeded`, `failed` o `cancelled`; i passaggi
+possono assumere anche `pending` e `blocked`. I risultati DNPcall sono
+identificati come
+`dnp-tables`, quelli Contamination come `contamination-tables`, con campione,
+nome interno, percorso relativo alla destinazione e SHA-256. Per Contamination
+è conservato anche il riferimento alla tabella sorgente; il riepilogo ha un
+percorso e un checksum distinti. Questi riferimenti evitano la deduzione
+dell'identità dei campioni dai soli nomi dei file.
+
+Un errore o un'interruzione arrestano il piano e marcano `blocked` tutti i
+passaggi non ancora iniziati, anche se indipendenti. I risultati già prodotti
+rimangono disponibili; non vengono presentati come successo dell'intero piano.
+Un processo R con codice zero ma privo degli output richiesti non permette
+di proseguire. Gli stati tecnici e i controlli delle tabelle non attestano
+la validità scientifica del campione o del modello.
+
+La cancellazione viene inoltrata al gruppo di processi scientifici, compresi
+i processi figli. Il client concede un intervallo di arresto prima della
+rimozione forzata del container. Uno spegnimento o un arresto forzato possono
+impedire l'ultimo aggiornamento dello stato: `running` non è un esito positivo
+né una prova che il processo sia ancora attivo. Non sono previsti ripresa
+o riutilizzo del run; correggere la causa e scegliere una destinazione nuova.
+
+Il codice di uscita è `0` solo quando tutti i passaggi sono completati.
+Gli errori di validazione restituiscono `2`; un fallimento scientifico conserva
+il codice del processo e un'interruzione usa `128 + numero del segnale`.
+Lo stato del piano costituisce l'evidenza dei passaggi eseguiti; il record
+`run.json` del client aggiunge input host, immagine e identità dell'applicazione.
 
 ## Errori e limiti della verifica
 

@@ -12,11 +12,14 @@ su Windows e Docker Engine su Linux. Il client conserva interazione,
 configurazione, accesso ai file locali, installazione e aggiornamenti.
 La GUI grafica è successiva alla versione 0.7.
 
-Il primo incremento di sviluppo, 0.7.0a1, rende disponibile il
-[catalogo scientifico](CATALOGO_SCIENTIFICO.md) bilingue e il
-[contratto dei piani](WORKFLOW_CONTRACT.md) con validazione strutturale e
-delle dipendenze. Non esegue ancora piani composti. Gli obiettivi seguenti
-comprendono anche le funzionalità necessarie per completare la 0.7.
+Lo sviluppo 0.7.0a1 comprende il [catalogo scientifico](CATALOGO_SCIENTIFICO.md)
+bilingue, il [contratto dei piani](WORKFLOW_CONTRACT.md) e l'esecuzione
+automatica DNPcall → Contamination dal menu e dalla CLI. L'orchestrazione
+risiede nell'immagine e conserva risultati e stato di ogni passaggio.
+L'esecutore supporta attualmente DNPcall e Contamination; la validazione del
+contratto descrive anche le future composizioni con CPI e SNPcall.
+Gli obiettivi seguenti comprendono le funzionalità necessarie per completare
+la 0.7, la cui release non è ancora disponibile.
 
 ## Versione 0.7: parametri e impostazioni del motore
 
@@ -49,12 +52,12 @@ verifica un riepilogo e conferma l'esecuzione. Il motore gestisce dipendenze,
 preparazione degli input e trasferimento degli output compatibili, conservando
 un risultato identificabile per ciascun passaggio.
 
-| Composizione | Requisiti |
-| --- | --- |
-| DNPcall → Contamination | Tabelle individuali compatibili e pannello di coordinate selezionato. |
-| DNPcall → CPI | Identificazione esplicita dei campioni cfDNA materni e paterni, coppie, frequenze di popolazione ed eventuali pannelli. |
-| DNPcall → Contamination e CPI | Due elaborazioni dei conteggi prodotti, ciascuna con i propri input e parametri. La stima di contaminazione non modifica automaticamente i dati usati dal CPI. |
-| SNPcall | Analisi indipendente o parte autonoma del piano, con un proprio pannello; il suo output non è un input diretto di Contamination o CPI. |
+| Composizione | Stato nella 0.7.0a1 di sviluppo | Requisiti |
+| --- | --- | --- |
+| DNPcall → Contamination | Eseguibile automaticamente. | Tabelle individuali compatibili e pannello di coordinate selezionato. |
+| DNPcall → CPI | Contratto validato; esecuzione da integrare. | Identificazione esplicita dei campioni cfDNA materni e paterni, coppie, frequenze di popolazione ed eventuali pannelli. |
+| DNPcall → Contamination e CPI | Contratto validato; esecuzione CPI da integrare. | Due elaborazioni dei conteggi prodotti, ciascuna con i propri input e parametri. La stima di contaminazione non modifica i dati usati dal CPI. |
+| SNPcall nel piano | Contratto validato; esecuzione da integrare. | Attività indipendente con un proprio pannello; il suo output non è un input diretto di Contamination o CPI. |
 
 La prima implementazione usa un ordine di esecuzione deterministico.
 La selezione delle dipendenze appartiene al motore nell'immagine; il client

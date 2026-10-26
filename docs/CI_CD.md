@@ -59,8 +59,11 @@ rispetto ai comportamenti e ai rischi verificati, non al solo conteggio.
 Il catalogo scientifico è verificato rispetto ai sorgenti R identificati da
 SHA-256, al numero di righe e alla copertura delle sezioni esaminate. I test
 del contratto dei piani verificano struttura, riferimenti tipizzati,
-dipendenze e ordine deterministico. Questi controlli validano la descrizione
-di un workflow composto: non ne eseguono i passaggi e non attestano
+dipendenze e ordine deterministico. La suite dell'esecutore verifica inoltre
+stati dei passaggi, errori, interruzioni, output mancanti e rifiuto di una
+destinazione già utilizzata. Il confronto scientifico reale del workflow
+DNPcall → Contamination è distinto da questi test unitari: viene eseguito
+nell'immagine con R e samtools. Nessuno di questi controlli attesta da solo
 la validità biologica degli input.
 
 ## Controlli sui sorgenti
@@ -88,8 +91,9 @@ Il job `scientific` costruisce il motore e avvia:
 
 - `scripts/verify_engine_package.py`: quattro workflow nell'immagine, senza
   sorgenti applicativi montati, con aspettative numeriche e casi non validi;
-  controlla inoltre il catalogo incorporato e la validazione dei piani
-  senza eseguire workflow composti;
+  controlla inoltre il catalogo incorporato, la validazione dei piani e
+  il workflow automatico DNPcall → Contamination tramite
+  `scripts/verify_workflow_execution.py`;
 - `python -m nipat doctor --runtime`: compatibilità e identità del motore;
 - `python -m nipat self-test`: regressioni distribuite e modalità di input.
 
@@ -98,13 +102,23 @@ parità sequenziale/parallela e confronto con l'invocazione R. Le prove CPI
 comprendono modalità dei pannelli, assenza di siti informativi e variazione
 della costante d'errore. Le fixture dichiarano dati, valori attesi e tolleranze.
 
+La regressione del workflow automatico usa due BAM sintetici ed esegue
+DNPcall → Contamination in un solo container, senza sorgenti del client montati.
+Confronta conteggi, genotipi, verosimiglianze e grafici DNPcall con il caso
+atteso, poi confronta le tabelle con le analisi separate. Per Contamination
+controlla due siti per campione, media e deviazione standard attese pari a zero.
+Verifica anche l'associazione fra identità dei campioni e risultati, stato e
+manifest, conservazione degli input, rifiuto del riutilizzo della destinazione
+e arresto della catena su input non valido. I casi negativi non equivalgono
+alla validazione scientifica su campioni reali.
+
 La selezione delle verifiche scientifiche è definita in
 [`ci_changes.py`](../.github/scripts/ci_changes.py). Modifiche al motore, ai
 sorgenti scientifici, a qualsiasi file sotto `src/` o `tests/`, agli script
 di verifica scientifica e alla configurazione CI pertinente le rendono
 obbligatorie. Anche una modifica ai soli test può quindi eseguire il motore.
-I dati JSON del catalogo e il validatore dei piani appartengono a questi
-percorsi: le loro modifiche richiedono le prove nell'immagine reale.
+I dati JSON del catalogo, il validatore e l'esecutore dei piani appartengono
+a questi percorsi: le loro modifiche richiedono le prove nell'immagine reale.
 Un avvio manuale le richiede sempre.
 Se il confronto Git non riesce, vengono richieste per precauzione.
 Le modifiche esclusivamente documentali possono evitare la ricostruzione
@@ -284,8 +298,9 @@ La CI viene ampliata con casi riproducibili per i difetti osservati, i valori
 di confine e i nuovi comportamenti. Per la 0.7 le priorità comprendono
 propagazione dei parametri, impostazioni scientifiche fisse, equivalenza
 tra analisi separate e workflow concatenati e gestione dei fallimenti tra
-passaggi dipendenti. Questi incrementi sono pianificati; non descrivono test
-già presenti nella 0.6.
+passaggi dipendenti. La 0.7.0a1 comprende i controlli del catalogo e la catena
+DNPcall → Contamination descritti sopra; le altre composizioni richiederanno
+casi dedicati. Queste verifiche non vengono attribuite retroattivamente alla 0.6.
 
 Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
 regressione. Esiti, versioni e limiti sono registrati nella

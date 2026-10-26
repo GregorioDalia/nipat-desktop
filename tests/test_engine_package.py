@@ -68,9 +68,13 @@ class EnginePackageTests(unittest.TestCase):
             "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
             "cpi": "cpi-v1",
         })
+        self.assertEqual(metadata["plan_execution"], {
+            "interface": "workflow-plan-execution-v1", "schema_version": 1,
+            "workflows": ["dnp-call", "contamination"], "scheduling": "sequential", "resume": False,
+        })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 15)
+        self.assertEqual(len(hashes), 16)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)
@@ -78,6 +82,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertIn("lib/nipat_scientific/cpi.py", hashes)
         self.assertIn("lib/nipat_scientific/catalog.py", hashes)
         self.assertIn("lib/nipat_scientific/plan.py", hashes)
+        self.assertIn("lib/nipat_scientific/executor.py", hashes)
         for workflow in engine.SCRIPT_PATHS:
             self.assertIn(f"lib/nipat_scientific/catalog_data/{workflow}.json", hashes)
         for relative, digest in hashes.items():
@@ -345,6 +350,104 @@ class EnginePackageTests(unittest.TestCase):
         invalid = self.relocated_command("validate-plan", "--plan", str(plan_file))
         self.assertEqual(invalid.returncode, 2)
         self.assertEqual(invalid.stdout, "")
+
+    def test_execute_plan_dispatches_only_verified_bundled_scripts_and_exit_code(self):
+        plan_file = self.root / "plan.json"
+        document = {"schema_version": 1, "samples": [], "steps": []}
+        plan_file.write_text(json.dumps(document), encoding="utf-8")
+        run_dir = self.root / "new-workflow"
+        report = {"status": "failed", "exit_code": 37}
+        with patch("nipat_scientific.executor.execute_plan", return_value=report) as execute:
+            code, output, errors = self.call_main([
+                "execute-plan", "--plan", str(plan_file), "--run-dir", str(run_dir), "--json",
+            ])
+        self.assertEqual(code, 37, errors)
+        self.assertEqual(json.loads(output), report)
+        execute.assert_called_once_with(document, run_dir=run_dir, script_paths={
+            name: self.root / "scientific" / engine.SCRIPT_PATHS[name]
+            for name in ("dnp-call", "contamination")
+        })
+        self.assertFalse(run_dir.exists())
+
+    def test_execute_plan_default_output_is_a_short_status_and_report_location(self):
+        plan_file = self.root / "plan.json"
+        plan_file.write_text("{}", encoding="utf-8")
+        run_dir = self.root / "new-workflow"
+        with patch("nipat_scientific.executor.execute_plan", return_value={
+            "status": "failed", "exit_code": 37, "error": "Scientific child failed.",
+        }):
+            code, output, errors = self.call_main([
+                "execute-plan", "--plan", str(plan_file), "--run-dir", str(run_dir),
+            ])
+        self.assertEqual(code, 37)
+        self.assertEqual(output.splitlines(), ["Workflow: failed", f"Report: {run_dir / 'workflow-state.json'}"])
+        self.assertIn("Scientific child failed.", errors)
+
+    def test_execute_plan_malformed_json_does_not_create_a_run(self):
+        plan_file = self.root / "plan.json"
+        plan_file.write_text("{not JSON}", encoding="utf-8")
+        run_dir = self.root / "new-workflow"
+        with patch("nipat_scientific.executor.execute_plan") as execute:
+            code, output, errors = self.call_main([
+                "execute-plan", "--plan", str(plan_file), "--run-dir", str(run_dir),
+            ])
+        self.assertEqual(code, 2)
+        self.assertIn("NIPAT scientific engine:", errors)
+        self.assertEqual(output, "")
+        execute.assert_not_called()
+        self.assertFalse(run_dir.exists())
+
+    def test_modified_source_prevents_plan_execution(self):
+        source = self.root / "scientific" / engine.SCRIPT_PATHS["dnp-call"]
+        source.write_bytes(source.read_bytes() + b"\n# changed\n")
+        with patch("nipat_scientific.executor.execute_plan") as execute:
+            code, _, errors = self.call_main([
+                "execute-plan", "--plan", str(self.root / "absent-plan.json"),
+                "--run-dir", str(self.root / "new-workflow"),
+            ])
+        self.assertEqual(code, 2)
+        self.assertIn("does not match its manifest", errors)
+        execute.assert_not_called()
+
+    @unittest.skipIf(os.name == "nt", "POSIX fixture exercises the scientific image process runner.")
+    def test_relocated_execute_plan_retains_real_child_failure_without_host_sources(self):
+        inputs = self.root / "plan-inputs"
+        inputs.mkdir()
+        panel = inputs / "panel.tsv"
+        panel.write_text("chr\tpos1\tpos2\nchr1\t100\t101\n", encoding="utf-8")
+        sample = inputs / "sample.tsv"
+        sample.write_text("chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\n"
+                          "chr1\t100\t101\t95\t5\t0\n", encoding="utf-8")
+        plan = {
+            "schema_version": 1,
+            "samples": [{"id": "sample_a", "kind": "dnp-table", "path": str(sample)}],
+            "steps": [{"id": "contamination", "workflow": "contamination", "inputs": {
+                "samples": [{"sample": "sample_a"}], "panel": str(panel),
+            }, "parameters": {}}],
+        }
+        plan_file = inputs / "plan.json"
+        plan_file.write_text(json.dumps(plan), encoding="utf-8")
+        fake_bin = self.root / "bin"
+        fake_bin.mkdir()
+        fake_rscript = fake_bin / "Rscript"
+        fake_rscript.write_text("#!/bin/sh\necho retained-scientific-diagnostic\nexit 37\n", encoding="utf-8")
+        fake_rscript.chmod(0o755)
+        run_dir = self.root / "workflow-results"
+        result = self.relocated_command(
+            "execute-plan", "--plan", str(plan_file), "--run-dir", str(run_dir), "--json",
+            extra_env={"PATH": str(fake_bin) + os.pathsep + os.environ.get("PATH", ""),
+                       "PYTHONPATH": str(self.root / "absent-desktop")},
+        )
+        self.assertEqual(result.returncode, 37, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["status"], "failed")
+        self.assertEqual(report["steps"][0]["status"], "failed")
+        self.assertEqual(report, json.loads((run_dir / "workflow-state.json").read_text()))
+        self.assertIn("retained-scientific-diagnostic", (run_dir / report["steps"][0]["log"]).read_text())
+        self.assertEqual((run_dir / "steps/contamination/work/inputs/table_0001.txt").read_bytes(),
+                         sample.read_bytes())
+        self.assertFalse((self.root / "src").exists())
+        self.assertFalse((self.root / "lib/nipat").exists())
 
     def cpi_request(self):
         inputs = self.root / "CPI original inputs ,= è"

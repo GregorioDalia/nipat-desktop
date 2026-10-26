@@ -1,6 +1,7 @@
 # Risultati e registrazione delle esecuzioni
 
-In NIPAT Desktop ogni analisi crea un nuovo **run** nella cartella risultati.
+In NIPAT Desktop ogni analisi singola o workflow automatico crea un nuovo
+**run** nella cartella risultati.
 La destinazione predefinita Windows è
 `%LOCALAPPDATA%\NIPAT-Desktop\runs`; nel pacchetto Ubuntu è
 `${XDG_DATA_HOME:-~/.local/share}/nipat-desktop/runs`. Nel checkout
@@ -17,11 +18,29 @@ Un run esistente non viene sovrascritto.
 | `output` | Tabelle e grafici scientifici. |
 | `work` | Richiesta al motore, configurazione dei mount e intermedi conservati. |
 | `run.json` | Stato, input, parametri, software e identità del motore. |
-| `execution.log` | Comandi eseguiti e output combinato standard/errori. |
+| `execution.log` | Comandi, messaggi del client e output combinato del motore; nei piani, il dettaglio scientifico è nei log dei passaggi. |
 
 I percorsi si possono aprire dalla schermata finale del menu oppure dal
 file system. **6 — Ultima esecuzione** richiama il run più recente della
 sessione. I nomi dei file scientifici sono quelli prodotti dal workflow.
+
+Il workflow automatico DNPcall → Contamination conserva un unico record
+`run.json` e due passaggi distinti nella sottocartella `output/workflow`:
+
+| Percorso nel run automatico | Contenuto |
+| --- | --- |
+| `work/engine-plan.json` | Richiesta con campioni, parametri e dipendenze inviata al motore. |
+| `output/workflow/plan.json` | Piano canonico eseguito dal motore. |
+| `output/workflow/workflow-state.json` | Stato complessivo e dei passaggi, con riferimenti agli output e checksum. |
+| `output/workflow/steps/dnp` | Preparazione, risultati e log DNPcall. |
+| `output/workflow/steps/contamination` | Preparazione, risultati e log Contamination. |
+
+Ogni cartella di passaggio contiene `request.json`, `command.log`, `work`
+e `output`. L'output R e samtools viene conservato in `command.log`; il log
+principale segnala l'avvio dei passaggi e l'esito del piano. Le tabelle individuali DNPcall si trovano in
+`steps/dnp/output/individual_outputs`; il riepilogo Contamination si trova
+in `steps/contamination/output/contamination_summary.txt`.
+Questi percorsi sono relativi a `output/workflow`.
 
 ## Stati e significato dell'esito
 
@@ -46,7 +65,17 @@ verificarne esplicitamente il codice di uscita. Il suo stato finale può
 quindi non rilevare ogni errore interno di samtools: occorre verificare
 anche la completezza e i valori degli output.
 
-Ctrl+C tenta di fermare il container corrente. Una chiusura forzata del
+Nel workflow automatico, `workflow-state.json` conserva anche gli stati
+`pending`, `running`, `succeeded`, `failed`, `cancelled` dei passaggi.
+Dopo un errore o un'interruzione, tutti i passaggi non ancora avviati diventano
+`blocked`, compresi quelli indipendenti. `succeeded` del passaggio DNPcall
+non implica il successo del successivo Contamination o dell'intero piano.
+Il record del client usa `interrupted` per l'interruzione intercettata;
+il motore usa `cancelled` nello stato del piano.
+
+Ctrl+C tenta di fermare il container corrente. Per un piano, il motore inoltra
+l'interruzione al gruppo di processi scientifici e il client concede un
+intervallo di arresto prima della rimozione forzata. Una chiusura forzata del
 programma o uno spegnimento possono lasciare `preparing` o `running`:
 questi stati non indicano successo e non provano che il container sia ancora
 attivo. Conservare il run e usare un nuovo nome per ripetere l'analisi.
@@ -74,13 +103,21 @@ con una nota esplicita sull'assenza dell'hash. Dimensione e data non
 attestano l'identità dei contenuti: per riprodurre un'analisi conservare
 gli originali o un proprio inventario dei checksum.
 
+Il workflow automatico registra inoltre il collegamento fra identità dei
+campioni, alias interni e tabelle prodotte. I risultati collegati tra i passaggi
+hanno percorso relativo e hash SHA-256 nel file `workflow-state.json`.
+Contamination copia e rinomina le tabelle nello staging interno senza alterare
+i conteggi DNPcall; i nomi `table_0001`, ecc. vanno interpretati attraverso
+questa corrispondenza, non confrontati direttamente con i nomi dei BAM.
+
 La corrispondenza tra file originali e percorsi nel container è conservata
 nei metadati e in `work/input-mounts.json`. I BAM e i FASTA vengono montati
 in sola lettura, senza copiarli nella cartella del progetto. DNPcall usa
 alias `sample_0001`, ecc.; la mappa dei campioni permette di attribuire
 tabelle e grafici ai BAM originali.
 
-`work/engine-request.json` descrive la richiesta al motore.
+`work/engine-request.json` descrive la richiesta di un'analisi singola;
+`work/engine-plan.json` descrive invece il workflow automatico.
 `work/engine-compose.json` configura il container con i soli input
 selezionati in sola lettura e il run corrente in scrittura. Il client non
 monta i propri script R per eseguire le analisi. Il record riporta
@@ -114,15 +151,20 @@ nomi `Mother<id>-Father<id>_DNPs`, anche quando i prefissi degli input sono dive
 ## Conservazione e uso successivo
 
 Conservare insieme `output`, `work`, `run.json` ed `execution.log`, oltre agli
-input originali necessari alla riproduzione. Per concatenare analisi,
-selezionare gli output compatibili del run completato come input del
-successivo; ogni passaggio mantiene una propria cartella e un proprio record.
-Le tabelle individuali DNPcall possono alimentare Contamination e, con ruoli
-materni/paterni e frequenze adeguati, CPI. La
-[guida alle sequenze](GUIDA_UTILIZZO.md#risultati-e-analisi-in-sequenza)
-descrive la preparazione richiesta. La 0.6 non registra un workflow globale
-fra più run: documentare i collegamenti e l'eventuale rinomina delle copie
-utilizzate come input.
+input originali necessari alla riproduzione. Nel workflow automatico,
+conservare l'intera sottocartella `output/workflow`: piano, stati, richieste,
+log e output dei due passaggi formano un insieme collegato. Non rinominare
+singoli file al suo interno se si vogliono conservare i riferimenti registrati.
+Non è prevista la ripresa automatica di un piano interrotto; una nuova prova
+richiede un nuovo run.
+
+Le altre sequenze si compongono selezionando gli output compatibili del run
+completato come input del successivo. Le tabelle individuali DNPcall possono
+alimentare Contamination e, con ruoli materni/paterni e frequenze adeguati, CPI.
+La [guida alle sequenze](GUIDA_UTILIZZO.md#risultati-e-analisi-in-sequenza)
+descrive la preparazione richiesta. Per collegare run avviati separatamente,
+documentare il run sorgente e l'eventuale rinomina delle copie utilizzate
+come input; questi collegamenti non vengono ricostruiti automaticamente.
 
 I metadati contengono nomi e percorsi dei campioni e non sono anonimizzati.
 Prima di condividere una segnalazione o pubblicare un allegato, controllare

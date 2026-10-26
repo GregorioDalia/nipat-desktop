@@ -18,6 +18,7 @@ python3 /opt/nipat/engine/main.py describe --json
 python3 /opt/nipat/engine/main.py verify
 python3 /opt/nipat/engine/main.py catalog cpi --json
 python3 /opt/nipat/engine/main.py validate-plan --plan /inputs/plan.json
+python3 /opt/nipat/engine/main.py execute-plan --plan /inputs/plan.json --run-dir /run/workflow
 python3 /opt/nipat/engine/main.py execute dnp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
@@ -45,8 +46,12 @@ al manifest scientifico incluso. `describe --json` restituisce:
 | `interface` | `native-r-v1` |
 | `workflow_interfaces` | `dnp-call-v1`, `snp-call-v1`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
 | `preparation.interface` | `workflow-preparation-v1` |
+| `plan_execution.interface` | `workflow-plan-execution-v1` |
+| `plan_execution.workflows` | `dnp-call`, `contamination` |
+| `plan_execution.scheduling` | `sequential` |
+| `plan_execution.resume` | `false` |
 | Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
-| `preparation.file_sha256` | Hash dell'ingresso del motore, dei dieci moduli Python condivisi e delle quattro schede JSON del catalogo |
+| `preparation.file_sha256` | Hash dell'ingresso del motore, degli undici moduli Python condivisi e delle quattro schede JSON del catalogo |
 
 Moduli mancanti e percorsi esterni al bundle sono rifiutati. Gli hash della
 preparazione identificano i byte nell'immagine; gli hash R vengono inoltre
@@ -54,8 +59,9 @@ confrontati con il manifest. La descrizione non identifica da sola una release:
 commit, archivio distribuito e ID immagine appartengono alle evidenze di build
 e ai metadati del run.
 
-L'avvio di R sostituisce il processo del motore con `Rscript`, preservandone
-codice di uscita e ricezione dei segnali. Gli errori di verifica o avvio
+Nei comandi `run` ed `execute`, l'avvio di R sostituisce il processo del motore
+con `Rscript`, preservandone codice di uscita e ricezione dei segnali.
+Gli errori di verifica o avvio
 restituiscono 2. Nella preparazione SNPcall da BAM, i segnali sono inoltrati
 anche al processo samtools; un suo errore impedisce l'avvio di R.
 Nessun comando del motore scarica o installa dipendenze.
@@ -66,7 +72,29 @@ restituisce il piano canonico e l'ordine derivato dalle dipendenze. Non legge
 i campioni, non crea risultati e non avvia R o samtools. Il
 [contratto dei piani](../docs/WORKFLOW_CONTRACT.md) specifica campi e limiti;
 il [catalogo scientifico](../docs/CATALOGO_SCIENTIFICO.md) ne descrive la
-consultazione. L'esecuzione dei piani concatenati è un incremento distinto.
+consultazione.
+
+`execute-plan` convalida ed esegue un piano usando una destinazione nuova.
+Al termine mostra l'esito e il percorso di `workflow-state.json`; `--json`
+restituisce invece il resoconto completo in formato JSON su stdout, con gli
+avvisi di avanzamento su stderr. In entrambe le modalità il codice di uscita
+riflette l'esito del piano.
+Sono supportati i passaggi DNPcall e Contamination; un piano che include CPI
+o SNPcall viene rifiutato prima di creare la destinazione o avviare analisi.
+Le dipendenze determinano l'ordine sequenziale. Ogni passaggio conserva la
+propria richiesta, i file preparati, i risultati e il log; lo stato complessivo
+è registrato in `workflow-state.json`. Il processo del motore rimane attivo
+per gestire la sequenza e inoltrare l'interruzione al gruppo di processi
+scientifici. Dopo un errore o un'interruzione, i passaggi successivi non
+vengono avviati. Non sono previsti riutilizzo o ripresa della destinazione.
+
+Per DNPcall, i BAM devono essere già esposti con alias `sample_0001.bam`,
+`sample_0002.bam` e successivi nell'ordine del passaggio, su percorsi interni
+compatibili con l'interfaccia R. Il client NIPAT prepara questi mount senza
+copiare i BAM. I riferimenti ai risultati prodotti vengono risolti dal motore;
+il client non deve cercare file intermedi né comporre nomi di output futuri.
+Per struttura, limiti ed evidenze consultare il
+[contratto dei piani](../docs/WORKFLOW_CONTRACT.md#esecuzione-dei-piani).
 
 ## Regole comuni delle richieste
 

@@ -28,7 +28,9 @@ BUNDLED_WORKFLOW_INTERFACES = {
 }
 BUNDLED_WORKFLOW_LABELS = {
     "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall", "cpi": "CPI",
+    "workflow-plan": "Workflow automatico",
 }
+PLAN_EXECUTION_INTERFACE = "workflow-plan-execution-v1"
 
 
 class DockerComposeRunner:
@@ -112,8 +114,15 @@ class DockerComposeRunner:
             return (isinstance(value, str) and value.startswith(prefix) and "\\" not in value
                     and all(part not in ("", ".", "..") for part in value.split("/")))
 
+        is_plan = workflow == "workflow-plan"
+        if is_plan:
+            required_preparation.update({
+                "lib/nipat_scientific/plan.py", "lib/nipat_scientific/executor.py",
+            })
         expected_interfaces = (
             BUNDLED_WORKFLOW_INTERFACES if workflow is None else
+            {name: BUNDLED_WORKFLOW_INTERFACES[name] for name in ("dnp-call", "contamination")}
+            if is_plan else
             {workflow: BUNDLED_WORKFLOW_INTERFACES.get(workflow)}
         )
         valid = isinstance(description, dict) and all(expected_interfaces.values())
@@ -147,10 +156,26 @@ class DockerComposeRunner:
                     (path == "engine/main.py" or relative_path(path, "lib/nipat_scientific/"))
                     and has_digest(value) for path, value in files.items()
                 )
+            if valid and is_plan:
+                execution = description.get("plan_execution")
+                valid = (
+                    isinstance(execution, dict)
+                    and execution.get("interface") == PLAN_EXECUTION_INTERFACE
+                    and type(execution.get("schema_version")) is int
+                    and execution["schema_version"] == 1
+                    and isinstance(execution.get("workflows"), list)
+                    and {"dnp-call", "contamination"}.issubset(
+                        value for value in execution["workflows"] if isinstance(value, str)
+                    )
+                    and execution.get("scheduling") == "sequential"
+                    and execution.get("resume") is False
+                )
         if not valid:
             label = (BUNDLED_WORKFLOW_LABELS.get(workflow, workflow)
                      if workflow is not None else "dei quattro workflow")
             contracts = ", ".join(str(value) for value in expected_interfaces.values())
+            if is_plan:
+                contracts = PLAN_EXECUTION_INTERFACE + ", " + contracts
             raise RuntimeExecutionError(
                 f"L'immagine non offre il contratto {label} "
                 f"incorporato richiesto ({contracts}), con metadati scientifici completi. "
@@ -325,7 +350,8 @@ class DockerComposeRunner:
     ) -> Iterator[RunRecord]:
         if self._record is not None:
             raise RuntimeExecutionError("Questo runner sta già registrando un'esecuzione.")
-        if bundled_workflow is not None and bundled_workflow not in BUNDLED_WORKFLOW_INTERFACES:
+        if (bundled_workflow is not None and bundled_workflow not in BUNDLED_WORKFLOW_INTERFACES
+                and bundled_workflow != "workflow-plan"):
             raise ValidationError(f"Workflow incorporato non supportato: {bundled_workflow}")
         record = RunRecord(run_dir, workflow, parameters)
         self._record = record
@@ -472,6 +498,22 @@ class DockerComposeRunner:
 
     def _stop_container(self, container_name: str) -> dict[str, Any]:
         command = None
+        graceful = None
+        if self._bundled_workflow == "workflow-plan":
+            # The plan coordinator must receive SIGTERM before removal so it
+            # can stop its child process group and persist cancelled/blocked
+            # step states. Forced removal remains a bounded fallback.
+            try:
+                stop_command = self._transport.command(
+                    ["docker", "stop", "--time", "10", container_name], self._environment(),
+                )
+                stopped = subprocess.run(
+                    stop_command, env=self._environment(), capture_output=True,
+                    text=True, encoding="utf-8", errors="replace", timeout=20, check=False,
+                )
+                graceful = {"returncode": stopped.returncode, "message": stopped.stderr.strip()}
+            except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
+                graceful = {"returncode": None, "message": str(exc)}
         try:
             command = self._transport.command(
                 ["docker", "rm", "--force", container_name], self._environment(),
@@ -482,12 +524,16 @@ class DockerComposeRunner:
                 timeout=15, check=False,
             )
             cleanup = {
-                "status": "removed" if result.returncode == 0 else "not_confirmed",
+                "status": ("removed" if result.returncode == 0 else
+                           "stopped" if graceful and graceful["returncode"] == 0 else "not_confirmed"),
                 "returncode": result.returncode, "message": result.stderr.strip(),
             }
         except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
-            cleanup = {"status": "not_confirmed", "returncode": None, "message": str(exc)}
+            cleanup = {"status": "stopped" if graceful and graceful["returncode"] == 0 else "not_confirmed",
+                       "returncode": None, "message": str(exc)}
         cleanup["argv"] = command
+        if graceful is not None:
+            cleanup["graceful_stop"] = graceful
         if cleanup["status"] == "not_confirmed":
             self._write(
                 f"Arresto del container {container_name} non confermato; "
