@@ -64,7 +64,7 @@ try {
     Assert-LocalPath $Descriptor | Out-Null
     $record = Get-Content -LiteralPath $Descriptor -Raw -Encoding UTF8 | ConvertFrom-Json
     if (@($record.PSObject.Properties).Count -ne 10 -or $record.schema_version -ne 1 -or
-        $record.installation_channel -cne 'desktop' -or $record.parent_pid -le 0 -or
+        $record.installation_channel -cne 'experimental08' -or $record.parent_pid -le 0 -or
         $record.sha256 -cnotmatch '^[a-f0-9]{64}$' -or $record.size -le 0 -or
         $record.source_commit -cnotmatch '^[a-f0-9]{40}$' -or
         $record.version -cnotmatch '^\d+\.\d+\.\d+(?:a\d+|b\d+|rc\d+)?$') {
@@ -92,7 +92,7 @@ try {
     if ($parent.ExitCode -ne 85) {
         throw 'La sessione non ha confermato il passaggio all installer. Nessun aggiornamento viene avviato.'
     }
-    $lockPath = Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\activity.lock'
+    $lockPath = Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\activity.lock'
     Assert-LocalPath $lockPath | Out-Null
     try { $activity = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
     catch { throw 'Sono aperte altre sessioni o analisi NIPAT. Chiuderle al termine del lavoro e ripetere l aggiornamento. Nessuna analisi e stata interrotta.' }
@@ -125,9 +125,9 @@ try {
         $runner = Join-Path $project 'scripts\windows\run.ps1'
         $stateFile = Join-Path $project '.runtime\installer\state.json'
         $state = Get-Content -LiteralPath $stateFile -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($state.phase -cne 'ready' -or $state.installation_channel -cne 'desktop' -or
+        if ($state.phase -cne 'ready' -or $state.installation_channel -cne 'experimental08' -or
             $state.version -cne $record.version -or $state.source_commit -cne $record.source_commit) {
-            throw 'Preparazione non conclusa. Completare NIPAT Desktop dal menu Start prima di avviare analisi.'
+            throw 'Preparazione non conclusa. Completare NIPAT Experimental08 dal menu Start prima di avviare analisi.'
         }
         $powershell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
         $launch = New-Object Diagnostics.ProcessStartInfo

@@ -35,7 +35,7 @@ class PreferencesTests(unittest.TestCase):
         record = self.project / ".runtime" / "install-layout.json"
         record.parent.mkdir(exist_ok=True)
         data = {
-            "schema_version": 1, "installation_channel": "desktop",
+            "schema_version": 1, "installation_channel": "experimental08",
             "app_dir": str(self.project), "runtime_dir": str(self.root / "managed-runtime"),
             "cache_dir": str(self.root / "managed-cache"),
             "data_dir": str(self.layout.data_dir), "runs_dir": str(self.layout.runs_dir),
@@ -292,10 +292,10 @@ class PreferencesTests(unittest.TestCase):
         with patch.dict(os.environ, {"LOCALAPPDATA": str(self.root),
                                      "XDG_CONFIG_HOME": str(self.root / "xdg")}, clear=True):
             with patch("nipat.preferences.sys.platform", "win32"):
-                self.assertEqual(preferences_path(), self.root / "NIPAT-Desktop" / "preferences.json")
+                self.assertEqual(preferences_path(), self.root / "NIPAT-Experimental08" / "preferences.json")
             with patch("nipat.preferences.sys.platform", "linux"):
-                self.assertEqual(preferences_path(), self.root / "xdg" / "nipat-desktop" / "preferences.json")
-        self.assertFalse((self.root / "NIPAT-Desktop").exists())
+                self.assertEqual(preferences_path(), self.root / "xdg" / "nipat-experimental08" / "preferences.json")
+        self.assertFalse((self.root / "NIPAT-Experimental08").exists())
         self.assertFalse((self.root / "xdg").exists())
         with patch.dict(os.environ, {"NIPAT_SETTINGS_FILE": str(self.store.path)}, clear=True):
             self.assertEqual(preferences_path(), self.store.path)

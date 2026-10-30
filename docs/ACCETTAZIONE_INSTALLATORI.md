@@ -1,5 +1,32 @@
 # Accettazione degli installatori
 
+## Esperimento 0.8
+
+NIPAT Experimental08 0.8.0a1 esplora Windows 10 22H2 x64 e macOS 14 o
+successivo, Intel e Apple Silicon, mantenendo Windows 11 x64. È separato
+dalla distribuzione stabile: non usa il relativo manifest di aggiornamento
+e non costituisce una promozione a `Latest`.
+
+Le prove della candidata devono identificare versione, commit, checksum e
+architettura. Registrare distintamente:
+
+- test automatici del client e dei contratti;
+- decisioni Windows simulate e build effettiva degli installer;
+- regressioni scientifiche Linux AMD64;
+- confezionamento Mac su runner ospitati;
+- eventuale esecuzione Lima reale per ciascuna architettura;
+- installazioni e analisi effettivamente osservate sui dispositivi.
+
+Una distribuzione sperimentale può avvenire prima del completamento del
+collaudo desktop esteso. Le note riportano i casi non eseguiti; test simulati
+e osservazioni su un'altra piattaforma non vengono attribuiti al dispositivo
+ancora da provare. La [scheda di validazione](VALIDAZIONE.md) raccoglie i
+risultati. Questa sperimentazione non modifica i criteri o le evidenze della
+0.7.2 già distribuita.
+
+## Protocollo del canale stabile
+
+
 Questo documento definisce i criteri di distribuzione e il piano di collaudo
 progressivo di **NIPAT Desktop** su Windows 11 x64 con WSL2 e Ubuntu 24.04 LTS
 x86_64. Ogni decisione identifica gli installatori tramite commit, build

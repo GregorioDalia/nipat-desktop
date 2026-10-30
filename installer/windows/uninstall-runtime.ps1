@@ -149,7 +149,7 @@ function Get-NipatRuntimeRemovalPlan([string] $Project, [switch] $InspectOnly) {
             foreach ($file in @(Get-ChildItem -LiteralPath $receiptDirectory -Filter '*.json' -File)) {
                 $distro = [IO.Path]::GetFileNameWithoutExtension($file.Name)
                 if (-not $distro.StartsWith($profile.distro_prefix, [StringComparison]::Ordinal)) {
-                    throw "Registro di una distribuzione estranea nella cartella NIPAT Desktop: $($file.FullName)."
+                    throw "Registro di una distribuzione estranea nella cartella NIPAT Experimental08: $($file.FullName)."
                 }
                 $receipt = Read-NipatOwnership $file.FullName $distro
                 Assert-NipatRuntimeNamespace $distro $receipt.rootfs_sha256 $runtime

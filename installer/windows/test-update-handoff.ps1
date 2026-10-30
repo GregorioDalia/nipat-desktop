@@ -61,7 +61,7 @@ function Wait-TestRelaunch([string] $Root) {
 try {
     [IO.Directory]::CreateDirectory($temporary) | Out-Null
     $env:LOCALAPPDATA = Join-Path $temporary 'user-local'
-    [IO.Directory]::CreateDirectory((Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop')) | Out-Null
+    [IO.Directory]::CreateDirectory((Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08')) | Out-Null
     $fixture = Join-Path $temporary 'recording-installer.exe'
     Add-Type -TypeDefinition @'
 using System;
@@ -79,7 +79,7 @@ class RecordingInstaller {
       string app = Path.Combine(root,"app & space");
       string commit = new string('b',40);
       string runtime = "sha256:" + new string('c',64);
-      string state = "{\"schema_version\":1,\"installation_channel\":\"desktop\",\"phase\":\""+behavior[1]+"\",\"version\":\"0.6.1\",\"source_commit\":\""+commit+"\",\"runtime_image\":\""+runtime+"\"}";
+      string state = "{\"schema_version\":1,\"installation_channel\":\"experimental08\",\"phase\":\""+behavior[1]+"\",\"version\":\"0.6.1\",\"source_commit\":\""+commit+"\",\"runtime_image\":\""+runtime+"\"}";
       File.WriteAllText(Path.Combine(app,".runtime","installer","state.json"),state);
       File.WriteAllText(Path.Combine(app,".distribution","installer-manifest.json"),state);
     }
@@ -105,7 +105,7 @@ exit $Code
         }
         $sentinel = Join-Path $data 'preserve.txt'
         [IO.File]::WriteAllText($sentinel,'research data stays unchanged')
-        $preference = Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'
+        $preference = Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\preferences.json'
         [IO.File]::WriteAllText($preference,'{"schema_version":1,"language":"en"}')
         $sentinelHash = (Get-FileHash -LiteralPath $sentinel -Algorithm SHA256).Hash
         $preferenceHash = (Get-FileHash -LiteralPath $preference -Algorithm SHA256).Hash
@@ -129,7 +129,7 @@ function Assert-NipatRuntimeBinding($Manifest,$State,$Configuration) {
  if($Manifest.source_commit -cne $State.source_commit){throw 'binding mismatch'}
 }
 '@)
-        $state = [ordered]@{schema_version=1;installation_channel='desktop';phase='ready';version='0.6.0';source_commit=('a'*40);runtime_image=('sha256:'+('c'*64))}
+        $state = [ordered]@{schema_version=1;installation_channel='experimental08';phase='ready';version='0.6.0';source_commit=('a'*40);runtime_image=('sha256:'+('c'*64))}
         Write-TestJson (Join-Path $app '.runtime\installer\state.json') $state
         Write-TestJson (Join-Path $app '.distribution\installer-manifest.json') $state
         Write-TestJson (Join-Path $app '.runtime\backend.json') @{schema_version=1}
@@ -143,7 +143,7 @@ function Assert-NipatRuntimeBinding($Manifest,$State,$Configuration) {
         $parent = Start-TestProcess ('-NoLogo -NoProfile -ExecutionPolicy Bypass -File ' + (Quote-Test $holder) + ' -Release ' + (Quote-Test $release) + ' -Code ' + $parentCode)
         $descriptor = Join-Path $work 'handoff.json'
         Write-TestJson $descriptor ([ordered]@{
-            schema_version=1;installation_channel='desktop';parent_pid=$parent.Id;project_dir=$app;package=$package
+            schema_version=1;installation_channel='experimental08';parent_pid=$parent.Id;project_dir=$app;package=$package
             sha256=(Get-FileHash -LiteralPath $package -Algorithm SHA256).Hash.ToLowerInvariant();size=(Get-Item -LiteralPath $package).Length
             version='0.6.1';source_commit=('b'*40);data_dir=$data
         })
@@ -159,7 +159,7 @@ function Assert-NipatRuntimeBinding($Manifest,$State,$Configuration) {
         $shared = $null
         try {
             if($case -eq 'busy') {
-                $shared=[IO.File]::Open((Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\activity.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
+                $shared=[IO.File]::Open((Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\activity.lock'),[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
             }
             if($case -eq 'tampered'){[IO.File]::AppendAllText($package,'modified after download')}
             if($case -eq 'canceled'){[IO.File]::WriteAllText((Join-Path $work 'cancel'),'cancel')}

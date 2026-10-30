@@ -73,7 +73,7 @@ public static class NipatActivityNative {
         uint process;
         if (!match.Success || !UInt32.TryParse(match.Groups[1].Value, out process) || !IsAncestor(process)) { return false; }
         using (SafeWaitHandle handle = OpenEventW(0x00100000, false,
-            "Local\\NIPAT-Desktop-SetupLease-" + match.Groups[2].Value)) {
+            "Local\\NIPAT-Experimental08-SetupLease-" + match.Groups[2].Value)) {
             return !handle.IsInvalid;
         }
     }
@@ -99,7 +99,7 @@ function Get-NipatActivityLockPath {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA) -or $env:LOCALAPPDATA -notmatch '^[A-Za-z]:[\\/]') {
         throw 'LOCALAPPDATA non disponibile per coordinare le sessioni NIPAT.'
     }
-    $path = Join-Path (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop') 'activity.lock'
+    $path = Join-Path (Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08') 'activity.lock'
     Assert-NipatActivityPathWithoutLinks $path
     [IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
     Assert-NipatActivityPathWithoutLinks $path
@@ -124,7 +124,7 @@ function Enter-NipatInstallationActivity {
         $nonce = [Guid]::NewGuid().ToString('N')
         $created = $false
         $event = [Threading.EventWaitHandle]::new($false, [Threading.EventResetMode]::ManualReset,
-            ('Local\NIPAT-Desktop-SetupLease-' + $nonce), [ref] $created)
+            ('Local\NIPAT-Experimental08-SetupLease-' + $nonce), [ref] $created)
         if (-not $created) { throw 'Il coordinamento temporaneo NIPAT non e stato creato; riprovare.' }
         $token = "$PID`:$nonce"
         [Environment]::SetEnvironmentVariable('NIPAT_SETUP_ACTIVITY_TOKEN', $token, 'Process')

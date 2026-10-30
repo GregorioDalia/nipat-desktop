@@ -139,8 +139,8 @@ class ReleaseGuards(unittest.TestCase):
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     def make_desktop_package(self, version="0.6.0"):
-        profile_path = Path(__file__).resolve().parents[2] / publisher.INSTALLATION_PROFILE_SOURCE
-        profile_bytes = profile_path.read_bytes()
+        # Stable publication tests must not inherit an experimental checkout identity.
+        profile_bytes = json.dumps(publisher.DESKTOP_INSTALLATION_PROFILE).encode()
         self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = profile_bytes
         self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
         self.manifest["source_sha256"] = {

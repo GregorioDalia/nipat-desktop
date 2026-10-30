@@ -4,7 +4,7 @@ $ErrorActionPreference = 'Stop'
 
 function Read-NipatInstallerManifest([string] $Path) {
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.7.2' -or
+    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.8.0a1' -or
         $manifest.release_tag -cne ('v' + $manifest.version) -or
         $manifest.source_commit -cnotmatch '^[a-f0-9]{40}$' -or
         $manifest.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$') {
@@ -91,21 +91,50 @@ function Get-NipatAsset($Asset, [string] $CacheDirectory, [string] $AssetDirecto
     }
 }
 
-function Assert-NipatWindowsUser {
-    if (-not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitProcess) {
-        throw 'L installer richiede Windows 11 x64 e PowerShell a 64 bit.'
+function Assert-NipatWindowsPlatform([bool] $Is64BitOS, [bool] $Is64BitProcess,
+    [string] $Architecture, [int] $Build, [int] $ProductType) {
+    # Windows Server can have newer build numbers but is not a desktop target.
+    if (-not $Is64BitOS -or -not $Is64BitProcess -or $Architecture -ine 'AMD64') {
+        throw 'NIPAT richiede Windows x64 Intel/AMD e PowerShell a 64 bit. Windows ARM e Windows a 32 bit non sono supportati.'
     }
+    if ($ProductType -ne 1 -or ($Build -ne 19045 -and $Build -lt 22000)) {
+        throw "NIPAT richiede Windows 10 22H2 x64 (build 19045) oppure Windows 11 x64. Windows Server non e supportato. Build rilevata: $Build; ProductType: $ProductType."
+    }
+}
+
+function Assert-NipatWindowsUser {
     $architecture = $env:PROCESSOR_ARCHITECTURE
     if ($env:PROCESSOR_ARCHITEW6432) { $architecture = $env:PROCESSOR_ARCHITEW6432 }
-    if ($architecture -ne 'AMD64') { throw 'Questa versione supporta Windows x64, non ARM64.' }
     $build = [int](Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuildNumber
     $product = (Get-CimInstance -ClassName Win32_OperatingSystem).ProductType
-    if ($build -lt 22000 -or $product -ne 1) { throw 'Questa versione richiede Windows 11 x64 (build 22000 o successiva).' }
+    Assert-NipatWindowsPlatform ([Environment]::Is64BitOperatingSystem) ([Environment]::Is64BitProcess) $architecture $build $product
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($identity)
     if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
         throw 'Avviare NIPAT normalmente, senza Esegui come amministratore. Solo l abilitazione WSL richiede UAC; dati e distribuzione devono appartenere all utente normale.'
     }
+}
+
+function Get-NipatWslReadiness {
+    if (-not (Test-Path -LiteralPath $script:NipatWsl -PathType Leaf)) {
+        return [pscustomobject]@{ Ready = $false; Kind = 'missing'; Version = ''; Detail = 'WSL non installato.' }
+    }
+    $versionResult = Invoke-NipatWsl @('--version') -AllowFailure -TimeoutSeconds 30
+    # Later lines describe the kernel and Windows, not the WSL package version.
+    # An empty pipeline produces AutomationNull in Windows PowerShell 5.1;
+    # casting that value at a .NET method boundary can still pass a null input.
+    # Keep an explicit string even when the executable produces no output.
+    $line = ''
+    foreach ($candidate in ([string] $versionResult.Text -split '[\r\n]+')) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) { $line = $candidate; break }
+    }
+    $match = [regex]::Match($line, '\b[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\b')
+    if ($versionResult.ExitCode -ne 0 -or -not $match.Success -or [version] $match.Value -lt [version] '1.0.0') {
+        return [pscustomobject]@{ Ready = $false; Kind = 'legacy'; Version = ''; Detail = 'WSL deve essere installato o aggiornato alla versione distribuita da Microsoft.' }
+    }
+    $status = Invoke-NipatWsl @('--status') -AllowFailure -TimeoutSeconds 30
+    $ready = $status.ExitCode -eq 0 -and $null -ne (Get-Service -Name vmcompute -ErrorAction SilentlyContinue)
+    return [pscustomobject]@{ Ready = $ready; Kind = $(if ($ready) { 'ready' } else { 'configuration' }); Version = $match.Value; Detail = $status.Text }
 }
 
 function ConvertTo-NipatNativeArgument([string] $Value) {

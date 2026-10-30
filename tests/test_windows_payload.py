@@ -21,7 +21,7 @@ class WindowsPayloadTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
-        self.root = Path(temporary.name)
+        self.root = Path(temporary.name).resolve()
         self.app = self.root / "app"
         self.app.mkdir()
 
@@ -55,7 +55,7 @@ class WindowsPayloadTests(unittest.TestCase):
     def reinventory(self, manifest):
         entries = [{"path": path.relative_to(self.app).as_posix(), "sha256": check.digest(path)}
                    for path in sorted(self.app.rglob("*")) if path.is_file() and path.name != "application-files.json"]
-        inventory = {"schema_version": 1, "installation_channel": "desktop",
+        inventory = {"schema_version": 1, "installation_channel": "experimental08",
                      "source_commit": manifest["source_commit"], "files": entries}
         self.write(".distribution/application-files.json", json.dumps(inventory))
 

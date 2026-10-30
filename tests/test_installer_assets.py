@@ -37,6 +37,34 @@ ROOTFS = "sha256:" + "c" * 64
 
 
 class InstallerAssetTests(unittest.TestCase):
+    def test_experimental_profile_is_disjoint_from_supported_desktop(self):
+        profile = assets.EXPECTED_INSTALLATION_PROFILE
+        stable = {
+            "schema_version": 1, "channel": "desktop", "display_name": "NIPAT Desktop",
+            "app_dir_name": "NIPAT-Desktop", "data_dir_name": "NIPAT-Desktop",
+            "distro_prefix": "NIPAT-Desktop-", "resume_key": "NIPAT-Desktop-ResumeSetup",
+            "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
+            "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45",
+        }
+        for key in stable.keys() - {"schema_version"}:
+            self.assertNotEqual(profile[key], stable[key], key)
+        with self.assertRaises(ValueError):
+            assets.validate_installation_profile(stable)
+
+    def test_windows_entry_points_keep_the_same_supported_client_builds(self):
+        root = Path(__file__).resolve().parents[1] / "installer/windows"
+        inno = (root / "NIPAT.iss").read_text()
+        self.assertIn("MinVersion=10.0.19045", inno)
+        self.assertIn("ArchitecturesAllowed=x64compatible and not arm64", inno)
+        self.assertIn("Version.ProductType = VER_NT_WORKSTATION", inno)
+        self.assertIn("(Version.Build = 19045) or (Version.Build >= 22000)", inno)
+        # Actual PowerShell/C# decisions run in test-windows-environment.ps1;
+        # this cross-language guard prevents a silent mismatch in the Inno gate.
+        bootstrap = (root / "bootstrap-common.ps1").read_text()
+        helper = (root / "EnableWsl.cs").read_text()
+        self.assertIn("$Build -ne 19045 -and $Build -lt 22000", bootstrap)
+        self.assertIn("build == 19045 || build >= 22000", helper)
+
     def test_repository_release_versions_agree(self):
         # Packaging spans Python, PowerShell and Inno Setup. Catch a version
         # bump that the installer would reject before exporting large assets.
@@ -205,11 +233,11 @@ class InstallerAssetTests(unittest.TestCase):
         definitions = dict(re.findall(r'^#define (\w+) "([^\"]+)"$', include, re.MULTILINE))
         self.assertEqual(definitions, {
             "NipatVersion": "0.6.0",
-            "NipatAppId": "{{6B1702B6-F75C-4F8C-956F-86626C60AF45}",
-            "NipatDisplayName": "NIPAT Desktop",
-            "NipatAppDirectory": "NIPAT-Desktop",
-            "NipatDataDirectory": "NIPAT-Desktop",
-            "NipatResumeKey": "NIPAT-Desktop-ResumeSetup",
+            "NipatAppId": "{{A83D7E42-162C-438A-9B56-17F86C9F0800}",
+            "NipatDisplayName": "NIPAT Experimental08",
+            "NipatAppDirectory": "NIPAT-Experimental08",
+            "NipatDataDirectory": "NIPAT-Experimental08",
+            "NipatResumeKey": "NIPAT-Experimental08-ResumeSetup",
         })
         bad = copy.deepcopy(self.manifest)
         bad["installation_profile"]["display_name"] += '\"\n#define Injected "1'
@@ -339,7 +367,7 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(assets.verify_application_payload(stage), inventory)
         record = json.loads(inventory.read_text())
         self.assertEqual(record["source_commit"], COMMIT)
-        self.assertEqual(record["installation_channel"], "desktop")
+        self.assertEqual(record["installation_channel"], "experimental08")
         entries = {entry["path"]: entry["sha256"] for entry in record["files"]}
         self.assertEqual(set(entries), {p.relative_to(app).as_posix() for p in app.rglob("*")
                                        if p.is_file() and p != inventory})
@@ -462,7 +490,7 @@ class InstallerAssetTests(unittest.TestCase):
             assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
         include = stage / assets.PROFILE_INCLUDE_NAME
         original = include.read_text(encoding="utf-8")
-        include.write_text(original.replace("NIPAT-Desktop", "NIPAT"), encoding="utf-8")
+        include.write_text(original.replace("NIPAT-Experimental08", "NIPAT"), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "profilo Inno"):
             assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
         include.write_text(original, encoding="utf-8")

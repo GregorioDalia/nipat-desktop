@@ -1,4 +1,4 @@
-"""Native Docker and a Windows-to-dedicated-WSL Docker bridge.
+"""Native Docker, Windows WSL and macOS Lima Docker bridges.
 
 Only host filesystem paths and a small environment allowlist cross the bridge.
 Container paths, scientific arguments and R code remain opaque argv elements.
@@ -10,6 +10,7 @@ import ntpath
 import os
 import re
 import subprocess
+import sys
 import unicodedata
 from pathlib import Path, PureWindowsPath
 from typing import Mapping
@@ -88,7 +89,9 @@ class DockerTransport:
                     "di questa installazione. Ripetere la preparazione NIPAT."
                 )
             return WslDockerTransport(distro, dry_run=dry_run)
-        raise ValidationError("NIPAT_BACKEND deve essere 'native' oppure 'wsl'.")
+        if backend == "lima":
+            return LimaDockerTransport(dry_run=dry_run)
+        raise ValidationError("NIPAT_BACKEND deve essere 'native', 'wsl' oppure 'lima'.")
 
     @property
     def metadata(self) -> dict[str, str]:
@@ -198,3 +201,42 @@ class WslDockerTransport(DockerTransport):
         return self._prefix() + [
             "env", "-i", *self._linux_environment({}), "/usr/local/bin/nipat-engine", "ensure",
         ]
+
+
+class LimaDockerTransport(DockerTransport):
+    """Arguments cross Lima through its argv API; never interpolate a shell."""
+
+    backend = "lima"
+
+    def __init__(self, *, dry_run: bool = False):
+        super().__init__(dry_run=dry_run)
+        from nipat.macos_runtime import LimaRuntime
+        self.runtime = LimaRuntime.from_environment()
+        self.executable = str(self.runtime.executable)
+
+    @property
+    def metadata(self) -> dict[str, str]:
+        from nipat.macos_runtime import INSTANCE
+        return {"backend": self.backend, "lima_instance": INSTANCE,
+                "lima_home": str(self.runtime.lima_home), "path_mapping": "virtiofs-same-path",
+                "scientific_platform": "linux/amd64"}
+
+    @property
+    def unavailable_message(self) -> str:
+        return "Runtime Lima NIPAT non disponibile. Avviare nuovamente l'applicazione macOS."
+
+    def host_path(self, path: Path | str) -> str:
+        return self.runtime.host_path(path)
+
+    def command(self, argv: list[str], environment: Mapping[str, str]) -> list[str]:
+        if not argv or argv[0] != "docker":
+            raise ValidationError("Il bridge Lima accetta esclusivamente comandi Docker.")
+        return self.runtime.docker_command(argv[1:], dict(environment))
+
+    def ensure_command(self) -> list[str]:
+        # The bundled interpreter is isolated and the application is not pip
+        # installed. An in-process sys.path entry does not reach this child.
+        return [sys.executable, "-I", "-c",
+                "import runpy,sys;sys.path.insert(0,sys.argv.pop(1));"
+                "runpy.run_module('nipat.macos_runtime',run_name='__main__')",
+                str(self.runtime.project / "src"), "ensure"]

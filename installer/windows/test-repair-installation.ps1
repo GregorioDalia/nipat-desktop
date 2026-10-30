@@ -26,7 +26,7 @@ function Get-RepairTestHash([string] $Text) {
 }
 function New-RepairTestPayload($Entries) {
     return [pscustomobject]@{
-        schema_version = 1; installation_channel = 'desktop'; source_commit = ('a' * 40)
+        schema_version = 1; installation_channel = 'experimental08'; source_commit = ('a' * 40)
         files = [object[]]@($Entries)
     }
 }
@@ -40,12 +40,12 @@ function New-RepairTestLayout([string] $Name, [switch] $Empty) {
     $root = Join-Path $temporary $Name
     [IO.Directory]::CreateDirectory($root) | Out-Null
     $layout = [pscustomobject]@{
-        schema_version = 1; installation_channel = 'desktop'; app_dir = (Join-Path $root 'app')
+        schema_version = 1; installation_channel = 'experimental08'; app_dir = (Join-Path $root 'app')
         runtime_dir = (Join-Path $root 'wsl'); cache_dir = (Join-Path $root 'cache')
         data_dir = (Join-Path $root 'research'); runs_dir = (Join-Path $root 'results')
     }
     if (-not $Empty) {
-        Add-RepairTestFile $layout.app_dir '.nipat-app.ini' "[NIPAT]`nschema_version=1`ninstallation_channel=desktop`nrole=application`n" | Out-Null
+        Add-RepairTestFile $layout.app_dir '.nipat-app.ini' "[NIPAT]`nschema_version=1`ninstallation_channel=experimental08`nrole=application`n" | Out-Null
     }
     return $layout
 }
@@ -103,7 +103,7 @@ try {
 
     $legacy = Get-NipatDefaultInstallLayout
     Write-RepairTestJson (Join-Path $legacy.app_dir '.runtime\installer\state.json') ([pscustomobject]@{
-        schema_version = 1; installation_channel = 'desktop'; phase = 'ready'
+        schema_version = 1; installation_channel = 'experimental08'; phase = 'ready'
         rootfs_sha256 = ('c' * 64); source_commit = ('b' * 40)
     })
     $legacyNeighbor = Add-RepairTestFile $legacy.app_dir 'local-notes.txt' 'Neighbor left beside generated runtime.'

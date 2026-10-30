@@ -4,6 +4,12 @@ on:
   # Installer candidates are explicit, expensive review builds. Ordinary pushes
   # and PRs run CI without generating or publishing new installers.
   workflow_dispatch:
+    inputs:
+      qualify_macos_runtime:
+        description: Run real VM tests on trusted dedicated Mac runners (requires both architectures)
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,7 +20,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  experimental-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout the requested experiment
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Require the isolated manual 0.8 pre-release source
+        run: python .github/scripts/verify_experimental_source.py
+
   windows-checks:
+    name: Windows client (Server 2022; simulated Windows 10/11 decisions)
+    needs: experimental-source
     # Run the quick Windows checks before exporting the large Linux runtime assets.
     runs-on: windows-2022
     timeout-minutes: 15
@@ -132,16 +155,17 @@ jobs:
             --entrypoint /bin/bash \
             nipat-wsl-rootfs:installer-test -euc \
             '/usr/local/bin/nipat-engine ensure; /usr/local/bin/nipat-engine ensure; docker info --format "{{.OSType}}"; docker compose version'
-      - name: Fetch the exact previous published WSL component for verified reuse
-        run: python .github/scripts/release_inputs.py --kind rootfs --output-dir build/previous-runtime
       - name: Export pinned assets and trusted installer manifest
         run: |
           python scripts/build_windows_installer_assets.py export \
             --output-dir build/assets --source-commit "$(git rev-parse HEAD)" \
-            --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:installer-test \
-            --reuse-rootfs-directory build/previous-runtime
+            --scientific-image "$NIPAT_RUNTIME_IMAGE" --rootfs-image nipat-wsl-rootfs:installer-test
           python scripts/build_windows_installer_assets.py stage \
             --manifest build/assets/installer-manifest.json --stage-dir build/windows-installer
+      - name: Record the description from the exact scientific image
+        run: |
+          docker run --rm --network none --read-only --tmpfs /tmp "$NIPAT_RUNTIME_IMAGE" \
+            python3 /opt/nipat/engine/main.py describe --json > build/assets/engine-description.json
       - name: Import the exact selected rootfs archive for qualification
         run: |
           python - <<'PYCODE'
@@ -308,12 +332,11 @@ jobs:
           import importlib.util
           import json
           from pathlib import Path
-          spec = importlib.util.spec_from_file_location("publisher", ".github/scripts/publish_windows_release.py")
+          spec = importlib.util.spec_from_file_location("publisher", ".github/scripts/verify_experimental_installers.py")
           publisher = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(publisher)
           manifest = json.loads(Path("build/assets/installer-manifest.json").read_text())
-          publisher.prepare_assets(Path("build/output"), Path("build/assets"),
-                                   Path("build/verified-release"), manifest["source_commit"])
+          publisher.verify_windows(Path("build/output"), Path("build/assets"), manifest["source_commit"])
           print("PASS: WSL installer identifies the verified source, installation profile, launcher and runtime archives.")
           '@ | python -
           if ($LASTEXITCODE -ne 0) { throw 'Final distribution verification failed.' }
@@ -349,10 +372,18 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  linux-installer:
+  macos-installer:
     needs: linux-runtime
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            architecture: arm64
+          - runner: macos-15-intel
+            architecture: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     env:
       PYTHONPATH: src
     steps:
@@ -360,91 +391,58 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Set up Python
+      - name: Set up native Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
-      - name: Download the exact runtime archives used by Windows
+      - name: Check native client (no Linux VM on hosted runners)
+        env:
+          EXPECTED_ARCHITECTURE: ${{ matrix.architecture }}
+        run: python .github/scripts/check_macos.py --output build/macos-client-check.json
+      - name: Download the exact shared AMD64 scientific archive
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nipat-runtime-assets
           path: build/assets
-      - name: Build the self-contained Ubuntu package
+      - name: Build the self-contained macOS package
+        env:
+          PACKAGE_ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          python scripts/build_linux_installer.py \
+          python scripts/build_macos_installer.py --project . \
             --manifest build/assets/installer-manifest.json \
-            --output-dir build/linux-output
-      - name: Install with missing dependencies in a clean Ubuntu container
-        # No host Docker socket or writable mount is exposed to the container.
-        # This verifies APT resolution, not a fresh Ubuntu Desktop installation.
+            --output build/macos-output --architecture "$PACKAGE_ARCHITECTURE"
+      - name: Verify the native package and embedded client
+        # Successful packaging is not evidence of Lima/Rosetta execution.
         run: |
-          package=(build/linux-output/*.deb)
+          package=(build/macos-output/*.pkg)
           test "${#package[@]}" -eq 1
-          python scripts/verify_linux_dependencies.py \
-            --package "${package[0]}" \
+          python scripts/verify_macos_package.py --package "${package[0]}" \
             --manifest build/assets/installer-manifest.json \
-            --output build/linux-output/linux-dependency-check.json
-      - name: Install and exercise the package as a non-root user
-        # The runner already has Docker access. This is not a clean Ubuntu Desktop test.
-        run: |
-          package=(build/linux-output/*.deb)
-          test "${#package[@]}" -eq 1
-          python scripts/verify_linux_installer.py \
-            --package "${package[0]}" \
-            --manifest build/assets/installer-manifest.json \
-            --work-dir "$RUNNER_TEMP/NIPAT Linux installation check" \
-            --output build/linux-output/linux-installation-check.json \
-            --system-package-test
-      - name: Fetch the exact published 0.7.1 upgrade baseline
-        run: python .github/scripts/release_inputs.py --tag v0.7.1 --kind deb --output-dir build/upgrade-baseline
-      - name: Upgrade the real previous package and preserve research data
-        run: |
-          package=(build/linux-output/*.deb)
-          test "${#package[@]}" -eq 1
-          set -o pipefail
-          python scripts/verify_linux_upgrade.py \
-            --previous-package build/upgrade-baseline/nipat-desktop_0.7.1_amd64.deb \
-            --package "${package[0]}" --manifest build/assets/installer-manifest.json \
-            --work-dir "$RUNNER_TEMP/NIPAT Linux upgrade check" \
-            --output build/linux-output/linux-upgrade-check.json --system-package-test \
-            2>&1 | tee build/linux-output/linux-upgrade.log
-      - name: Retain the Ubuntu package and installation evidence
+            --report build/macos-output/macos-package-verification.json
+      - name: Retain the package and bound verification report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: nipat-linux-setup
-          path: build/linux-output/
+          name: nipat-macos-setup-${{ matrix.architecture }}
+          path: build/macos-output/
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Retain Linux installation and scientific diagnostics
+      - name: Retain native client diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: nipat-linux-installation-logs
-          path: |
-            build/linux-output/linux-dependency-check.json
-            build/linux-output/linux-installation-check.json
-            build/linux-output/linux-upgrade-check.json
-            build/linux-output/linux-upgrade.log
-            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/setup.log
-            ${{ runner.temp }}/NIPAT Linux installation check/user state with spaces/nipat-desktop/state.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/run.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/execution.log
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/workflow-state.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/engine-plan.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/request.json
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/command.log
-            ${{ runner.temp }}/NIPAT Linux installation check/user data with spaces/nipat-desktop/runs/**/preparation.log
+          name: nipat-macos-client-${{ matrix.architecture }}
+          path: build/macos-client-check.json
           retention-days: 14
           if-no-files-found: ignore
 
   installer-required:
     if: always()
-    needs: [windows-installer, linux-installer]
+    needs: [windows-installer, macos-installer]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Require both installer checks
+      - name: Require Windows and both native macOS package checks
         env:
           CHECK_RESULTS: ${{ toJSON(needs) }}
         run: |
@@ -452,9 +450,9 @@ jobs:
           import json
           import os
           results = json.loads(os.environ["CHECK_RESULTS"])
-          failed = {name: job["result"] for name, job in results.items() if job["result"] != "success"}
-          if failed:
-              raise SystemExit(f"Both installers must pass: {failed}")
+          expected = {"windows-installer", "macos-installer"}
+          if set(results) != expected or any(job.get("result") != "success" for job in results.values()):
+              raise SystemExit(f"Every experimental installer must pass: {results}")
           PY
       - name: Checkout exact source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -464,67 +462,40 @@ jobs:
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.10'
-      - name: Record the exact checkout identity
-        id: source
-        run: python .github/scripts/ci_control.py source
-      - name: Download the verified Windows installer
+      - name: Download the Windows installer
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nipat-windows-setup
           path: build/windows-output
-      - name: Download the verified Linux installer
+      - name: Download the Apple Silicon package
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: nipat-linux-setup
-          path: build/linux-output
+          name: nipat-macos-setup-arm64
+          path: build/macos-arm64
+      - name: Download the Intel package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-macos-setup-x86_64
+          path: build/macos-x86_64
       - name: Download the shared runtime identity
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: nipat-runtime-assets
           path: build/assets
-      - name: Download synthetic scientific diagnostics
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: nipat-scientific-check-logs
-          path: build/evidence/scientific
-      - name: Download staged Windows client diagnostics
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: nipat-windows-client-logs
-          path: build/evidence/windows
-      - name: Download installed Linux diagnostics
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          name: nipat-linux-installation-logs
-          path: build/evidence/linux
-      - name: Verify both installers identify the same source and scientific archive
+      - name: Bind all three packages to exact source and scientific archive
         run: |
-          python .github/scripts/verify_installer_set.py \
-            --windows-dir build/windows-output --linux-dir build/linux-output \
-            --assets-dir build/assets --output-dir build/verified-installers \
-            --source-commit "$(git rev-parse HEAD)"
-      - name: Preserve bounded synthetic qualification evidence for accepted releases
-        run: |
-          python .github/scripts/qualification_evidence.py \
-            --installer-set build/verified-installers/installer-set-check.json \
-            --output-dir build/verified-installers \
-            --source scientific build/evidence/scientific \
-            --source windows-client build/evidence/windows \
-            --source installed-linux build/evidence/linux \
-            --source windows-package build/windows-output \
-            --source linux-package build/linux-output \
-            --source components build/assets \
-            --source synthetic-fixtures tests/fixtures \
-            --redact-root "$GITHUB_WORKSPACE" --redact-root "$RUNNER_TEMP"
-      - name: Retain the installer-set verification without publishing
+          python .github/scripts/verify_experimental_installers.py \
+            --windows-dir build/windows-output --assets-dir build/assets \
+            --macos-arm64-dir build/macos-arm64 --macos-x86-64-dir build/macos-x86_64 \
+            --source-commit "$(git rev-parse HEAD)" --output-dir build/verified-installers
+      - name: Retain experimental evidence without authorizing publication
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: nipat-installer-set-evidence
+          name: nipat-experimental-installer-evidence
           path: build/verified-installers/
-          compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - name: Provide the verified Windows setup as one downloadable file
+      - name: Provide Windows as one downloadable installer
         id: windows-download
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -532,46 +503,88 @@ jobs:
           archive: false
           retention-days: 14
           if-no-files-found: error
-      - name: Provide the verified Ubuntu package as one downloadable file
-        id: linux-download
+      - name: Provide Apple Silicon as one downloadable package
+        id: arm64-download
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          path: build/linux-output/*.deb
+          path: build/macos-arm64/*.pkg
           archive: false
           retention-days: 14
           if-no-files-found: error
-      - name: Summarize the candidate installer downloads
+      - name: Provide Intel Mac as one downloadable package
+        id: intel-download
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: build/macos-x86_64/*.pkg
+          archive: false
+          retention-days: 14
+          if-no-files-found: error
+      - name: Summarize verified experimental downloads
         env:
-          WINDOWS_SETUP_URL: ${{ steps.windows-download.outputs.artifact-url }}
-          WINDOWS_SETUP_SHA256: ${{ steps.windows-download.outputs.artifact-digest }}
-          LINUX_SETUP_URL: ${{ steps.linux-download.outputs.artifact-url }}
-          LINUX_SETUP_SHA256: ${{ steps.linux-download.outputs.artifact-digest }}
+          WINDOWS_URL: ${{ steps.windows-download.outputs.artifact-url }}
+          WINDOWS_SHA256: ${{ steps.windows-download.outputs.artifact-digest }}
+          ARM64_URL: ${{ steps.arm64-download.outputs.artifact-url }}
+          ARM64_SHA256: ${{ steps.arm64-download.outputs.artifact-digest }}
+          INTEL_URL: ${{ steps.intel-download.outputs.artifact-url }}
+          INTEL_SHA256: ${{ steps.intel-download.outputs.artifact-digest }}
         run: |
-          python - <<'PY'
-          import hashlib
-          import os
-          from pathlib import Path
-          setup_hash = os.environ["WINDOWS_SETUP_SHA256"]
-          # The unarchived upload must identify the same bytes as the reviewed setup.
-          with Path("build/windows-output/NIPAT-Setup.exe").open("rb") as installer:
-              expected = hashlib.file_digest(installer, "sha256").hexdigest()
-          if setup_hash != expected:
-              raise SystemExit("Direct Windows download differs from the verified installer")
-          packages = list(Path("build/linux-output").glob("*.deb"))
-          if len(packages) != 1:
-              raise SystemExit("Expected exactly one verified Ubuntu package")
-          linux_hash = os.environ["LINUX_SETUP_SHA256"]
-          with packages[0].open("rb") as installer:
-              expected = hashlib.file_digest(installer, "sha256").hexdigest()
-          if linux_hash != expected:
-              raise SystemExit("Direct Ubuntu download differs from the verified installer")
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
-              summary.write("## Candidate installer downloads\n\n")
-              summary.write(f"[Download NIPAT-Setup.exe]({os.environ['WINDOWS_SETUP_URL']})\n\n")
-              summary.write(f"Windows SHA-256: `{setup_hash}`\n\n")
-              summary.write(f"[Download {packages[0].name}]({os.environ['LINUX_SETUP_URL']})\n\n")
-              summary.write(f"Ubuntu SHA-256: `{linux_hash}`\n\n")
-              summary.write("One self-contained installer per platform; no ZIP extraction or separate runtime downloads. ")
-              summary.write("Sign in to GitHub to download. Available for 14 days.\n\n")
-              summary.write("Internal unsigned candidate. This build is not a published or accepted release.\n")
-          PY
+          python .github/scripts/experimental_downloads.py --evidence build/verified-installers/experimental-installer-check.json
+
+  macos-runtime:
+    # Only a deliberate dispatch of the reviewed experiment may reach trusted
+    # physical/dedicated machines. PRs/forks never execute on these runners.
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.qualify_macos_runtime == true &&
+      github.repository == 'GregorioDalia/nipat-desktop' &&
+      github.ref == 'refs/heads/experiment/0.8-portability'
+    needs: installer-required
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: arm64
+            runner_architecture: ARM64
+          - architecture: x86_64
+            runner_architecture: X64
+    runs-on: [self-hosted, macOS, '${{ matrix.runner_architecture }}', nipat-runtime]
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    env:
+      PYTHONPATH: src
+    steps:
+      - name: Checkout the manually selected trusted source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up native Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Download the verified package from this exact build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-macos-setup-${{ matrix.architecture }}
+          path: build/qualified-macos
+      - name: Install and test the dedicated experimental Lima runtime
+        # The runner operator must provision noninteractive sudo and consent to
+        # installing the experimental app and Rosetta on this dedicated machine.
+        # The verifier preserves results and the owned VM; it never deletes other VMs.
+        run: |
+          package=(build/qualified-macos/*.pkg)
+          test "${#package[@]}" -eq 1
+          sudo -n /usr/sbin/installer -pkg "${package[0]}" -target /
+          python scripts/verify_macos_runtime.py \
+            --app '/Applications/NIPAT Experimental08.app' \
+            --output build/macos-runtime-verification.json
+      - name: Retain actual runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-macos-runtime-${{ matrix.architecture }}
+          path: |
+            build/macos-runtime-verification.json
+            build/macos-runtime-verification-logs/
+          retention-days: 14
+          if-no-files-found: ignore

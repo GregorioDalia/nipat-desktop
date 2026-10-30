@@ -63,7 +63,7 @@ def verify_payload(app: Path) -> tuple[dict, dict]:
             re.fullmatch(r"[0-9a-f]{40}", manifest.get("source_commit", "")) is not None,
             "Invalid installer identity.")
     require(inventory.get("schema_version") == 1 and
-            inventory.get("installation_channel") == "desktop" and
+            inventory.get("installation_channel") == "experimental08" and
             inventory.get("source_commit") == manifest["source_commit"], "Inventory identity mismatch.")
     sources = manifest.get("source_sha256")
     require(isinstance(sources, dict) and bool(sources), "Missing source inventory.")

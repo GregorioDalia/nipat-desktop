@@ -7,6 +7,7 @@ import time
 from typing import Any, Callable
 
 from nipat import __version__
+from nipat.distribution import EXPERIMENT_URL, is_experimental_version
 from nipat.errors import NipatError
 from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences
@@ -76,6 +77,15 @@ def run_updates(
         if not startup:
             ui.heading("Verifica aggiornamenti")
             ui.message("Modalita' simulazione (--dry-run): nessuna connessione, download o installazione viene eseguita.", kind="muted")
+        return False
+    if is_experimental_version(current_version):
+        if not startup:
+            ui.heading("Aggiornamenti dell'esperimento 0.8")
+            ui.message(f"Versione installata: NIPAT {current_version}")
+            ui.message("Questa installazione sperimentale e' separata dalla versione stabile. "
+                       "Gli aggiornamenti automatici sono disabilitati per evitare il cambio di distribuzione.")
+            ui.message("I nuovi installer sperimentali saranno disponibili su GitHub: " + EXPERIMENT_URL,
+                       kind="muted")
         return False
     handoff_started = False
     try:

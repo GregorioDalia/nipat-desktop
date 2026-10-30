@@ -2,7 +2,7 @@ name: nipat
 
 services:
   scientific:
-    image: ${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.7.0a1}
+    image: ${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:0.8.0a1}
     build:
       context: .
       dockerfile: docker/scientific-runtime/Dockerfile

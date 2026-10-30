@@ -1,21 +1,22 @@
 # Piano di sviluppo
 
-**NIPAT Desktop 0.7.2** offre quattro analisi singole, workflow automatici e
-un catalogo delle impostazioni scientifiche. La priorità è raccogliere la
-valutazione delle esperte di dominio su input rappresentativi e rendere
-riproducibili le segnalazioni. Le funzionalità disponibili e i requisiti sono
-nelle [note della versione](RELEASE_0.7.2.md) e nella
-[guida per l'utilizzo](GUIDA_UTILIZZO.md).
+**NIPAT Experimental08 0.8.0a1** estende la portabilità a Windows 10 e macOS,
+conservando le quattro analisi, i workflow automatici e il catalogo scientifico.
+La distribuzione stabile NIPAT Desktop 0.7.2 rimane separata e disponibile
+per la valutazione di dominio. L'esperimento ha identità, installer e cartelle
+propri; non viene proposto come aggiornamento della stabile.
+Ambito e requisiti sono nelle [note della versione](RELEASE_0.8.0a1.md)
+e nella [guida per l'utilizzo](GUIDA_UTILIZZO.md).
 
 Il core scientifico rimane in R. Preparazione ed esecuzione delle analisi
-risiedono nell'immagine Linux autonoma, usata tramite WSL2 su Windows e Docker
+risiedono nell'immagine Linux autonoma, usata tramite WSL2 su Windows, Lima su macOS e Docker
 Engine su Ubuntu. Il client gestisce interazione, configurazione, accesso ai
 file locali, installazione e aggiornamenti. La GUI è un incremento successivo
 alla valutazione della CLI.
 
 ## Funzionalità disponibili
 
-| Area | Comportamento della 0.7.2 |
+| Area | Comportamento della 0.8.0a1 |
 | --- | --- |
 | Analisi singole | DNPcall, SNPcall, Contamination e CPI dal menu e dalla CLI diretta. |
 | Composizioni DNPcall | DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI. |
@@ -27,7 +28,7 @@ alla valutazione della CLI.
 | Provenienza e diagnosi | Checksum integrali facoltativi degli input, consultazione dei run incompleti e arresto dei soli container identificati. |
 | Manutenzione Windows | Inventario dello spazio, rimozione selettiva di componenti precedenti verificati e ripresa della preparazione della versione installata. |
 | Interazione | Campi modificabili, configurazione persistente, annullamento globale, indicazioni contestuali e navigazione testuale alternativa alle frecce. |
-| Distribuzione | Un installatore Windows e un pacchetto Ubuntu, con immagine scientifica incorporata e verifica degli aggiornamenti dal menu. |
+| Distribuzione | Esperimento Windows 10/11 e macOS Intel/Apple Silicon, installatori distinti e immagine scientifica AMD64 comune; aggiornamenti stabili esclusi. |
 
 Contamination e CPI consumano le tabelle originali DNPcall; la stima di
 contaminazione non filtra gli input CPI. SNPcall usa un proprio pannello e
@@ -43,6 +44,26 @@ R richiede una valutazione scientifica distinta e casi di verifica appropriati.
 Il [contratto dei piani](WORKFLOW_CONTRACT.md) separa la presentazione del
 client dalla logica scientifica, consentendone l'uso da client Windows, Linux
 o da un futuro servizio.
+
+## Qualificazione della portabilità
+
+La CI estende le prove del client a macOS e verifica le decisioni del bootstrap
+Windows per build, architettura e stato WSL. Il confezionamento Mac viene
+verificato per entrambe le architetture. Le regressioni scientifiche continuano
+su Linux; una prova Lima reale è distinta dal controllo del client su runner
+macOS ospitati.
+
+Le prove da raccogliere sull'esperimento sono installazione Windows 10 con e
+senza WSL pronto, ripresa dopo riavvio, avvio su Windows 11, prima installazione
+e riapertura su Mac Intel/Apple Silicon, percorsi con spazi, accesso ai file,
+interruzione di un calcolo e conservazione dei risultati. Rosetta richiede
+confronti numerici e osservazione dei tempi e delle risorse sui due tipi di Mac.
+Una casella ancora da provare resta esplicita; non impedisce di distribuire
+un esperimento chiaramente identificato, né viene presentata come superata.
+
+La documentazione deve identificare i pacchetti effettivamente costruiti e
+separare test simulati, runtime reali e osservazioni sui computer dei ricercatori.
+L'eventuale promozione a distribuzione generale dipenderà da queste evidenze.
 
 ## Valutazione di dominio e affidabilità
 

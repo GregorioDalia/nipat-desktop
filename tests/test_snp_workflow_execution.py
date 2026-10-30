@@ -18,7 +18,7 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="nipat-snp-plan-")
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.inputs = self.root / "original inputs $ ,="
         self.inputs.mkdir()
         self.bam = self.inputs / "sample_0001.bam"

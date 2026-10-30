@@ -1,4 +1,4 @@
-# Explicit source allowlist for the NIPAT Windows and Linux installers.
+# Explicit source allowlist for the NIPAT installers and source distribution.
 # Update explicitly when adding a deliverable; local data and outputs never belong here.
 .dockerignore
 .gitattributes
@@ -278,3 +278,48 @@ tests/test_scientific_preflight.py
 .github/dependabot.yml
 tests/test_installation_client.py
 .github/scripts/test_component_inventory.py
+
+# Experimental 0.8 portability.
+.github/scripts/check_macos.py
+.github/scripts/experimental_downloads.py
+.github/scripts/test_experimental_ci.py
+.github/scripts/verify_experimental_installers.py
+.github/scripts/verify_experimental_source.py
+docs/INSTALLATORE_MACOS.md
+docs/RELEASE_0.8.0a1.md
+installer/macos/NIPAT.command
+installer/macos/dependencies.json
+installer/macos/launch.py
+installer/macos/launcher.c
+installer/macos/package-guard.c
+installer/windows/test-windows-environment.ps1
+scripts/build_macos_installer.py
+scripts/verify_macos_package.py
+scripts/verify_macos_runtime.py
+src/nipat/distribution.py
+src/nipat/macos_runtime.py
+tests/test_experimental_distribution.py
+tests/test_lima_transport.py
+tests/test_macos_installer.py
+tests/test_macos_runtime.py
+installer/macos/licenses/python-build-standalone/LICENSE.bdb.txt
+installer/macos/licenses/python-build-standalone/LICENSE.bzip2.txt
+installer/macos/licenses/python-build-standalone/LICENSE.cpython.txt
+installer/macos/licenses/python-build-standalone/LICENSE.expat.txt
+installer/macos/licenses/python-build-standalone/LICENSE.libX11.txt
+installer/macos/licenses/python-build-standalone/LICENSE.libXau.txt
+installer/macos/licenses/python-build-standalone/LICENSE.libedit.txt
+installer/macos/licenses/python-build-standalone/LICENSE.libffi.txt
+installer/macos/licenses/python-build-standalone/LICENSE.liblzma.txt
+installer/macos/licenses/python-build-standalone/LICENSE.libuuid.txt
+installer/macos/licenses/python-build-standalone/LICENSE.libxcb.txt
+installer/macos/licenses/python-build-standalone/LICENSE.mpdecimal.txt
+installer/macos/licenses/python-build-standalone/LICENSE.ncurses.txt
+installer/macos/licenses/python-build-standalone/LICENSE.openssl-3.txt
+installer/macos/licenses/python-build-standalone/LICENSE.sqlite.txt
+installer/macos/licenses/python-build-standalone/LICENSE.tcl.txt
+installer/macos/licenses/python-build-standalone/LICENSE.tix.txt
+installer/macos/licenses/python-build-standalone/LICENSE.zlib-ng.txt
+installer/macos/licenses/python-build-standalone/LICENSE.zlib.txt
+installer/macos/licenses/python-build-standalone/LICENSE.zstd.txt
+installer/macos/licenses/python-build-standalone/provenance.json

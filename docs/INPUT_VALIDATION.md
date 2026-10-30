@@ -1,6 +1,6 @@
 # Controlli degli input e dei risultati
 
-NIPAT Desktop 0.7.2 controlla gli input nel livello Python prima di avviare
+NIPAT Experimental08 0.8.0a1 controlla gli input nel livello Python prima di avviare
 gli script R. I validatori sono condivisi dal client e dal motore scientifico
 incorporato nell'immagine. Il menu e la CLI diretta applicano gli stessi
 requisiti ai file selezionati; il motore ripete i controlli nell'ambiente

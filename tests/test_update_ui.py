@@ -35,6 +35,7 @@ class UpdateUITests(unittest.TestCase):
         self.messages = []
 
     def invoke(self, answers=(), **kwargs):
+        kwargs.setdefault("current_version", "0.7.2")
         ui = Terminal(read=Mock(side_effect=list(answers)), write=self.messages.append)
         return run_updates(ui, self.layout, Preferences(), client=self.client,
                            download_directory=self.root / "updates", handoff=self.handoff,
@@ -71,7 +72,7 @@ class UpdateUITests(unittest.TestCase):
         ui = Terminal(read=Mock(side_effect=["1", "1"]), write=write)
         started = run_updates(ui, self.layout, Preferences(), client=self.client,
                               download_directory=self.root / "updates", handoff=self.handoff,
-                              platform="windows-x86_64")
+                              platform="windows-x86_64", current_version="0.7.2")
         self.assertTrue(started)
         self.handoff.assert_called_once()
         self.assertNotIn("annullata", "\n".join(self.messages))

@@ -99,6 +99,7 @@ class RequiredGate(unittest.TestCase):
         return {
             "changes": {"result": "success", "outputs": {"run_checks": "true", "scientific": scientific, "runtime": scientific, "packaging": scientific}},
             "linux-checks": {"result": "success"}, "windows-checks": {"result": "success"},
+            "macos-checks": {"result": "success"},
             "scientific": {"result": "success" if scientific == "true" else "skipped"},
             "runtime": {"result": "success" if scientific == "true" else "skipped"},
             "packaging": {"result": "success" if scientific == "true" else "skipped"},
@@ -112,7 +113,7 @@ class RequiredGate(unittest.TestCase):
         self.assertEqual(self.errors(self.results("false")), [])
 
     def test_failed_cancelled_skipped_or_missing_required_jobs_fail_closed(self):
-        for name in ("changes", "linux-checks", "windows-checks", "scientific", "runtime", "packaging"):
+        for name in ("changes", "linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging"):
             for result in ("failure", "cancelled", "skipped", None):
                 with self.subTest(job=name, result=result):
                     results = self.results()
@@ -137,7 +138,7 @@ class RequiredGate(unittest.TestCase):
     def test_only_branch_context_may_report_delegation(self):
         results = self.results()
         results["changes"]["outputs"].update(run_checks="false", duplicate_pr="42")
-        for name in ("linux-checks", "windows-checks", "scientific", "runtime", "packaging"):
+        for name in ("linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging"):
             results[name]["result"] = "skipped"
         self.assertEqual(self.errors(results, "push", "refs/heads/feature/new"), [])
         self.assertTrue(self.errors(results))

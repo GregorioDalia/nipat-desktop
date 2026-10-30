@@ -1,23 +1,24 @@
 # Validazione tecnica e di dominio
 
-Questa scheda consente di registrare separatamente installazione, esecuzione
-e concordanza scientifica di **NIPAT Desktop 0.7.2**, distribuito per la
-valutazione da parte delle esperte di dominio. Registrare in ogni scheda la
-versione effettivamente utilizzata, senza trasferire automaticamente gli
-esiti a versioni successive.
+Questa scheda registra separatamente installazione, esecuzione e concordanza
+scientifica di **NIPAT Experimental08 0.8.0a1**. Identificare sempre versione,
+commit, pacchetto e piattaforma realmente provati. Gli esiti della stabile
+0.7.2 non attestano automaticamente il comportamento dell'esperimento.
 
-Un autotest superato verifica i casi inclusi; non attesta la validità per
-ogni campione o scenario d’impiego. Per la pubblicazione applicare il
-[protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md), che distingue
-l'accettazione per ricerca pre-1.0 dalla qualificazione desktop completa.
-Questa scheda non sostituisce il record di decisione associato ai pacchetti.
+La prova può procedere per incrementi: registrare ciò che è stato eseguito
+e ciò che rimane da verificare, senza considerare un caso non eseguito come
+superato. Gli autotest controllano soltanto i casi inclusi; il giudizio
+scientifico su dati rappresentativi richiede una valutazione distinta.
+Il [protocollo dei pacchetti](ACCETTAZIONE_INSTALLATORI.md) separa l'esperimento
+dalla pubblicazione stabile e dalla qualificazione desktop completa.
 
 ## Ambiente e preparazione
 
-Compilare una scheda per ciascuna combinazione di sistema e pacchetto.
-Per Windows il perimetro è Windows 11 x64 con WSL2. Il pacchetto Linux
-richiede Ubuntu 24.04 LTS x86_64, Docker Engine locale con Compose v2
-e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
+Compilare una scheda per ciascuna combinazione di sistema e pacchetto:
+Windows 10 22H2 x64 build 19045, Windows 11 x64, macOS 14 o successivo Intel,
+macOS 14 o successivo Apple Silicon. Windows usa WSL2; macOS usa Lima, con
+immagine scientifica AMD64 e Rosetta su Apple Silicon. Il checkout Linux
+con Docker Engine locale è una prova da sorgenti, distinta dagli installatori.
 
 | Campo | Valore da registrare |
 | --- | --- |
@@ -25,39 +26,39 @@ e accesso autorizzato dall’account utente, senza rootless o rimappatura UID.
 | Versione NIPAT e commit o identificativo del pacchetto | |
 | Origine del pacchetto e checksum, se disponibile | |
 | Windows: versione e disponibilità iniziale di WSL2 | |
-| Linux: versioni Docker Engine e Compose, origine dei pacchetti e accesso utente | |
-| Prima installazione o aggiornamento dello stesso canale | |
+| macOS: modello, architettura, versione Lima e disponibilità Rosetta | |
+| Linux da sorgenti: versioni Docker Engine e Compose, origine e accesso utente | |
+| Prima installazione o aggiornamento dello stesso profilo sperimentale | |
 | Cartelle dati e risultati configurate | |
 | Esito del setup, eventuali autorizzazioni o riavvii | |
 | Esito di `doctor --runtime` | |
 | Esito finale di `self-test` | |
 | Apertura e interazione con il menu | |
-| Aggiornamenti: canale, verifica all'avvio e versione proposta, se presente | |
+| Isolamento: nessuna proposta di migrazione al/dal canale stabile | |
 | Preferenze salvate in Configura e valori effettivi nel riepilogo dell'analisi | |
 | Modalità checksum degli input e limiti CPU, memoria e processi | |
 
 Nel pacchetto Windows verificare l'avvio con doppio clic di `NIPAT-Setup.exe`,
-il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Desktop**.
+il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Experimental08**.
 Annotare eventuali passaggi manuali non previsti. Conservare `setup.log` e
 `state.json` nella sottocartella `.runtime\installer` dell'applicazione
 selezionata nel setup.
 L'attivazione iniziale di WSL, la ripresa dopo riavvio e un aggiornamento
 costituiscono prove distinte dall'installazione su WSL già funzionante.
 
-Nel pacchetto Ubuntu verificare installazione tramite APT, apertura del
-collegamento nel menu applicazioni e avvio con `nipat`. Provare
-la preparazione iniziale da un account non root, input privati e risultati
-leggibili e scrivibili dallo stesso utente. Conservare stato e log nella
-cartella `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`. Registrare
-se Docker era già installato e autorizzato: una prova su un sistema
-preparato non copre l’esperienza iniziale su Ubuntu Desktop pulito.
+Sul Mac verificare l'apertura del `.pkg` della propria architettura, l'avvio
+da Applicazioni, la preparazione Lima e l'apertura del menu nel Terminale.
+Conservare `runtime.json` e `setup.log` in
+`~/Library/Application Support/NIPAT-Experimental08/.runtime/macos`.
+Annotare richieste di autorizzazione e limitazioni di Gatekeeper o dei percorsi.
+Su Apple Silicon registrare esplicitamente il funzionamento AMD64 tramite
+Rosetta: la sola riuscita su Intel non copre questa configurazione.
 
-Per entrambi i pacchetti, verificare reinstallazione della stessa build,
-ripresa dopo un errore, nuova apertura e rimozione con conservazione dei
-dati. Documentare separatamente un aggiornamento tra versioni differenti
-quando esiste un pacchetto precedente dello stesso canale: una
-reinstallazione non costituisce una prova di aggiornamento. Su Ubuntu controllare anche che installazione e rimozione non
-modifichino configurazioni o immagini Docker estranee a NIPAT.
+Per ogni pacchetto provare progressivamente riapertura, reinstallazione,
+ripresa di una preparazione interrotta e conservazione dei dati. Un aggiornamento
+fra versioni differenti è distinto da una reinstallazione della stessa build.
+Non modificare installazioni stabili o VM estranee; per la rimozione del runtime
+Mac usare il comando documentato che ne verifica la proprietà.
 
 I controlli automatici del repository sono descritti in
 [CI_CD.md](CI_CD.md). Una build riuscita non dimostra il completamento
@@ -176,18 +177,19 @@ Per DNPcall verificare anche gli output, poiché lo script R non propaga
 esplicitamente tutti gli errori della propria chiamata interna a samtools.
 Gli stati e i limiti dei record sono descritti in [ESECUZIONI.md](ESECUZIONI.md).
 
-## Verifica degli aggiornamenti
+## Verifica dell'isolamento e degli aggiornamenti
 
-Documentare separatamente ricerca, download, installazione e riapertura.
-Provare **Più tardi**, una connessione assente e un file scaricato non valido;
-l'installazione pronta e i run esistenti devono restare utilizzabili e invariati.
-La verifica facoltativa all'avvio deve essere soltanto informativa.
+Nel profilo sperimentale, **Verifica aggiornamenti** non deve proporre né
+scaricare il pacchetto stabile. L'installazione 0.7.2, se presente, mantiene
+configurazione, runtime, dati e risultati. Verificare la separazione dei
+percorsi e il nome dell'applicazione prima di avviare le analisi.
 
-Per un aggiornamento effettivo, conservare versioni iniziale e finale, checksum
-degli installatori e log. Verificare le preferenze e i percorsi dopo la riapertura,
+Per provare una nuova build sperimentale, registrare versioni iniziale e
+finale, checksum degli installatori e log. Chiudere le analisi prima di
+installare. Controllare preferenze, percorsi e conservazione dei risultati,
 quindi eseguire un caso noto. I record dei run devono identificare le versioni
-con cui sono stati prodotti. Le prove tecniche complete sono nel
-[protocollo degli installatori](ACCETTAZIONE_INSTALLATORI.md#verifiche-degli-aggiornamenti).
+con cui sono stati prodotti. Una reinstallazione della stessa build non
+costituisce una prova di aggiornamento fra versioni differenti.
 
 ## Conservazione e segnalazioni
 
