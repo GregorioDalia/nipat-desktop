@@ -44,12 +44,28 @@ files used by NIPAT. Preserve these records when distributing a modified copy.
 
 ## Software supplied with the runtime
 
-The Windows packages and Linux runtime also contain software with its own
+The Windows, Linux and experimental macOS packages also contain software with its own
 licenses. The NIPAT license does not replace those licenses.
 
 - **Python:** the Windows embedded distribution is obtained from python.org.
   Its license and third-party notices are included in that distribution and
   must remain with the extracted runtime.
+- **Python on macOS:** the native CPython 3.12.16 distributions are supplied by
+  [python-build-standalone](https://github.com/astral-sh/python-build-standalone),
+  release `20261026`. Python retains its Python Software Foundation license and
+  associated historical notices. The package preserves `python/lib/python3.12/LICENSE.txt`
+  and the bundled pip dependency notices. The upstream build dependency notices
+  are also retained, unmodified, in
+  [installer/macos/licenses/python-build-standalone](installer/macos/licenses/python-build-standalone);
+  `provenance.json` records the source archives and notice digests. The NIPAT
+  license does not replace the individual terms for OpenSSL, libffi, SQLite,
+  compression libraries or other Python build dependencies.
+- **Lima on macOS:** native Lima 2.2.1 binaries are supplied by
+  [lima-vm/lima](https://github.com/lima-vm/lima), under the Apache License 2.0.
+  The complete upstream distribution is retained, including
+  `lima/share/doc/lima/LICENSE`, guest agents and their supplied notices.
+  [installer/macos/dependencies.json](installer/macos/dependencies.json) records
+  the exact architecture-specific Python and Lima archive hashes.
 - **R, R packages, samtools and HTSlib:** the scientific image is assembled by
   [docker/scientific-runtime/Dockerfile](docker/scientific-runtime/Dockerfile).
   Each component retains its own terms. R package descriptions and their
@@ -73,7 +89,7 @@ for the license and notice files of every dependency in a runtime image.
 ## Redistribution and release records
 
 Distribute this notice, the root LICENSE and the original third-party license
-files with the Windows installer and Ubuntu package. The release's source commit identifies
+files with the Windows installer, Ubuntu package and macOS installer. The release's source commit identifies
 the matching NIPAT source, including launcher and build scripts, at
 <https://github.com/GregorioDalia/nipat-desktop>.
 

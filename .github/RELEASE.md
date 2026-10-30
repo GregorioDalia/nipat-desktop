@@ -1,5 +1,37 @@
 # Verifica e pubblicazione dei pacchetti
 
+## Distribuzione sperimentale 0.8
+
+La serie `0.8.0a1` del branch `experiment/0.8-portability` è separata dal
+canale stabile `desktop`. Usa il profilo `experimental08`, installatori
+Windows e macOS Intel/Apple Silicon e lo stesso archivio scientifico AMD64.
+Non produce un nuovo pacchetto Ubuntu, non sostituisce gli asset 0.7.2 e non
+viene pubblicata attraverso il manifest di aggiornamento stabile.
+
+Avviare manualmente **Installers (review build)** sul commit sperimentale.
+Conservare gli artefatti `nipat-windows-setup`, `nipat-macos-setup-arm64`,
+`nipat-macos-setup-x86_64` e `nipat-experimental-installer-evidence`, insieme
+ai rapporti scientifici. Il parametro `qualify_macos_runtime` consente prove
+Lima reali sui runner dedicati; se non vengono eseguite, tale limite deve
+rimanere esplicito nelle note. Le build su runner ospitati non qualificano
+automaticamente Windows 10 o un desktop Mac.
+
+La riuscita della build non crea una release. Un'eventuale distribuzione
+tramite GitHub Releases usa una **pre-release sperimentale**, senza `Latest`,
+con commit, checksum e perimetro delle prove realmente eseguite. Non richiede
+di dichiarare superati i casi desktop ancora da verificare. I file offerti
+sono gli stessi artefatti verificati; una ricostruzione richiede una nuova
+identificazione. La [documentazione CI/CD](../docs/CI_CD.md) descrive i job
+sperimentali e i loro limiti.
+
+## Canale stabile desktop
+
+Le sezioni seguenti descrivono il protocollo del canale stabile Windows/Ubuntu.
+Il relativo publisher rimane distinto dall'esperimento 0.8: questo documento
+non estende automaticamente i suoi schemi di accettazione o i suoi asset
+ai pacchetti macOS.
+
+
 NIPAT distribuisce artefatti costruiti e verificati da GitHub Actions. La
 pubblicazione non ricompila applicazione o runtime e non richiede al manutentore
 di trasferire manualmente gli archivi dal proprio computer.

@@ -1,6 +1,6 @@
 # Architettura di NIPAT
 
-NIPAT Desktop è un'applicazione locale con interfaccia a riga di comando e menu
+NIPAT Experimental08 è un'applicazione locale con interfaccia a riga di comando e menu
 guidato. Il client Python gestisce l'interazione, i percorsi, la configurazione
 e i registri delle esecuzioni. Un'immagine Linux autosufficiente contiene R,
 samtools, le dipendenze, gli script scientifici e il codice necessario alla
@@ -15,7 +15,7 @@ di analisi remoto.
 | `src/nipat/cli.py` e `wizard.py` | Comandi, menu, raccolta degli input e conferma dell'analisi. |
 | `src/nipat/execution/workflows.py` | Selezione e convalida preliminare degli input, richiesta del workflow e creazione del run. |
 | `src/nipat/execution/runner.py` | Identificazione del motore, isolamento del container, esecuzione, interruzione e diagnostica. |
-| `src/nipat/execution/transport.py` | Accesso al Docker Engine nativo su Linux o al motore gestito nella distribuzione WSL2 su Windows. |
+| `src/nipat/execution/transport.py` | Accesso al Docker Engine locale su Linux, al motore WSL2 su Windows o alla VM Lima su macOS. |
 | `src/nipat/storage.py` | Regole condivise per separare dati e risultati dalle cartelle applicative e dalle destinazioni riservate. |
 | `engine/main.py` | Contratto del motore, verifica dei sorgenti scientifici e avvio dei workflow nell'immagine. |
 | `src/nipat_scientific/` | Validatori, catalogo e preparazione dei file, condivisi dal client e dal motore. |
@@ -34,7 +34,7 @@ con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
 come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
 workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
-singoli. Questo documento descrive la versione 0.7.2.
+singoli. Questo documento descrive la versione sperimentale 0.8.0a1.
 
 ### Confini dei workflow automatici
 
@@ -43,7 +43,7 @@ un solo container. Il motore incorporato nell'immagine determina l'ordine dei
 passaggi, prepara i loro parametri e associa output e input successivi.
 Non dipende dalla presenza della CLI o di una GUI dentro il container.
 Il contratto usa percorsi Linux assegnati dai mount e può essere utilizzato
-su Windows tramite WSL2, su Linux nativo e da un futuro servizio.
+su Windows tramite WSL2, su macOS tramite Lima, su Linux nativo e da un futuro servizio.
 
 Il validatore e l'esecutore supportano le quattro analisi e controllano i
 collegamenti tipizzati. SNPcall può condividere un BAM con DNPcall, ma non
@@ -68,6 +68,14 @@ configurazione. Il comando `nipat-engine ensure` avvia il Docker Engine interno
 quando necessario. Le operazioni di controllo, analisi e interruzione usano
 sempre questo stesso motore; non viene selezionato il contesto Docker dell'utente.
 Il trasporto Docker nativo non è ammesso sul client Windows.
+
+Su macOS, il client e la CLI operano nel sistema host. Il trasporto seleziona
+una VM Lima dedicata e il suo Docker Engine; la VM espone al container gli input
+selezionati e il singolo run. Python e Lima sono incorporati nell'applicazione.
+Su Intel il guest e il container sono AMD64. Su Apple Silicon il guest è ARM64
+e Rosetta esegue la stessa immagine scientifica Linux AMD64. La verifica del
+motore precede le analisi: non è ammesso un ripiego silenzioso su un'immagine
+con diversa architettura o contratto.
 
 Su Linux, il client usa Docker Engine e Compose del sistema con un container
 `linux/amd64`. La piattaforma Linux di riferimento è Ubuntu 24.04 LTS x86_64.
@@ -146,8 +154,8 @@ associati nello stato del piano; i CSV scientifici non vengono riscritti.
 
 Le preferenze dell'utente sono separate dal backend installato e dai record
 delle analisi. Su Windows risiedono in
-`%LOCALAPPDATA%\NIPAT-Desktop\preferences.json`; su Linux in
-`${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json`. Comprendono
+`%LOCALAPPDATA%\NIPAT-Experimental08\preferences.json`; su macOS in
+`~/Library/Application Support/NIPAT-Experimental08/preferences.json`. Comprendono
 cartelle dati e risultati, modalità, riferimenti e parametri proposti per i
 workflow. Non comprendono campioni, coppie CPI o nomi dei run.
 Comprendono anche modalità dei checksum e limiti facoltativi del container.
@@ -192,25 +200,20 @@ del container e conserva un rapporto separato.
 
 ## Verifica degli aggiornamenti
 
-Il client consulta le release pubblicate del repository ufficiale e il relativo
-`update-manifest.json`. Verifica prodotto, versione, canale, piattaforma,
-commit del tag e URL degli asset previsti. Il manifest associa i due installatori
-completi a dimensione e SHA-256; è generato dopo l'accettazione della coppia
-Windows/Ubuntu. Il download viene verificato prima del passaggio all'installatore.
-La fiducia deriva da HTTPS e dal controllo del repository ufficiale; il manifest
-non è una firma digitale del pacchetto.
+Il profilo sperimentale `experimental08` esclude la verifica e l'installazione
+degli aggiornamenti del canale stabile. Una nuova build viene scaricata
+esplicitamente. Il numero di versione maggiore non autorizza il client stabile
+a proporre una migrazione al profilo sperimentale; analogamente, l'esperimento
+non sostituisce la propria installazione con un pacchetto `desktop`.
 
-Le preferenze distinguono `testing`, che comprende pre-release e stabili,
-da `stable`, limitato alle release stabili. La verifica facoltativa all'avvio
-è disattivata inizialmente e produce soltanto un avviso. La sessione guidata
-richiede conferme separate per download e installazione e viene chiusa prima
-della sostituzione dei componenti. Non vengono sostituiti client o motore
-durante un'analisi; i controlli dell'installazione regolano la riapertura.
-Un errore di rete non modifica il backend pronto o i record esistenti.
+I manifest identificano versione, commit, archivi e identità del prodotto.
+I checksum degli archivi verificano il contenuto, non sono firme digitali.
+I record delle analisi restano associati al client e all'immagine realmente
+utilizzati, indipendentemente dalla disponibilità di build successive.
 
 ## Installazione Windows
 
-Il profilo `desktop` identifica applicazione, collegamenti e stato di
+Il profilo `experimental08` identifica applicazione, collegamenti e stato di
 configurazione. Il setup gestisce cinque radici configurabili per applicazione,
 ambiente WSL, cache, dati e risultati. Le radici devono essere locali, fisse,
 scrivibili e indipendenti, senza sovrapposizioni o collegamenti nel percorso.
@@ -257,28 +260,30 @@ ripete le verifiche prima di modificare componenti. L'esito è un rapporto
 separato; i dati dell'utente restano fuori dalla pulizia. I backup selettivi
 non realizzano un rollback completo della versione applicativa.
 
-## Installazione Ubuntu
+## Installazione macOS
 
-Il pacchetto `nipat-desktop` installa i file applicativi in
-`/opt/nipat-desktop`. Il launcher usa Python 3.12 del sistema in modalità
-isolata e seleziona l’applicazione installata, il backend locale e le cartelle
-XDG dell’utente. Le variabili ereditate non possono sostituire il backend,
-il progetto o l’immagine verificata; le opzioni CLI restano disponibili
-per selezionare dati e risultati.
+I due pacchetti `.pkg` contengono il client, Python portabile e Lima nativi
+per l'architettura host, insieme allo stesso archivio scientifico AMD64 usato
+su Windows. L'applicazione è `/Applications/NIPAT Experimental08.app`.
+La configurazione per utente vive in
+`~/Library/Application Support/NIPAT-Experimental08`; `LIMA_HOME` è
+`~/.nipat08/lima`, un percorso breve dedicato alla VM.
+L'installer non riutilizza automaticamente le VM Lima dell'utente.
 
-La preparazione è eseguita dall’utente normale, sotto un lock esclusivo.
-Verifica dimensione e SHA-256 dell’archivio scientifico incluso, importa
-l’immagine e verifica l’identificativo restituito dal daemon locale.
-La configurazione pronta viene scritta atomicamente dopo diagnostica e
-autotest riusciti. Il record collega commit, manifest, archivio e ID locale;
-un aggiornamento o un’immagine rimossa richiedono una nuova preparazione.
+Il primo avvio prepara il guest e il motore e verifica l'archivio incorporato
+prima di abilitarne l'utilizzo. Il provisioning può richiedere la rete; le
+analisi si svolgono in container senza rete dopo la preparazione. La CLI
+viene aperta nel Terminale dal launcher dell'applicazione. Dettagli e limiti
+sono nella [guida macOS](INSTALLATORE_MACOS.md).
 
-Lo stesso archivio scientifico viene incorporato nei pacchetti Windows
-e Ubuntu senza nuove esportazioni. L’ID locale dell’immagine può dipendere
-dal motore Docker; l’identità condivisa di distribuzione è il checksum
-dell’archivio. Il pacchetto non gestisce il daemon di sistema, i gruppi utenti
-o la cancellazione delle immagini. Requisiti e ciclo di vita sono descritti
-nell’[installatore Linux](INSTALLATORE_LINUX.md).
+## Utilizzo Linux
+
+La 0.8 conserva il trasporto Docker Engine locale e i controlli scientifici
+Ubuntu, ma non produce un nuovo pacchetto `.deb`. La distribuzione Ubuntu
+stabile mantiene la propria identità e il proprio ciclo di pubblicazione.
+Il checkout sperimentale è utilizzabile da sorgenti in un ambiente separato,
+secondo la [guida di distribuzione](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti).
+Non sono richieste modifiche agli script R per selezionare il trasporto.
 
 ## Limiti tecnici
 

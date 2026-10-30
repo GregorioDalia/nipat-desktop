@@ -81,7 +81,7 @@ public static class NipatInstallerActivityContract {
     # The actual validation wrapper supplies a fresh nonce, without persisting it as configuration.
     $env:LOCALAPPDATA = Join-Path $temporary 'isolated local app data'
     [IO.Directory]::CreateDirectory($env:LOCALAPPDATA) | Out-Null
-    $selection = [ordered]@{ schema_version = 1; installation_channel = 'desktop' }
+    $selection = [ordered]@{ schema_version = 1; installation_channel = 'experimental08' }
     foreach ($role in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
         $selection[$role] = Join-Path $temporary ('nonce-' + $role)
     }
@@ -126,7 +126,7 @@ public static class NipatInstallerActivityContract {
         -NoLogo -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'validate-install-layout.ps1') `
         -Project $selection.app_dir -DefaultsFile $defaultsFile -ErrorFile $errorFile
     if ($LASTEXITCODE -eq 0) { throw 'Un aggiornamento non deve adottare il layout di un altro canale.' }
-    $selection.installation_channel = 'desktop'
+    $selection.installation_channel = 'experimental08'
     $originalAppDirectory = $selection.app_dir
     $selection.app_dir = Join-Path $temporary 'another-app'
     [IO.File]::WriteAllText($installedLayoutFile, ($selection | ConvertTo-Json), (New-Object Text.UTF8Encoding($false)))
@@ -157,7 +157,7 @@ public static class NipatInstallerActivityContract {
     )
     $inventory = [ordered]@{
         schema_version = 1
-        installation_channel = 'desktop'
+        installation_channel = 'experimental08'
         source_commit = ('0' * 40)
         files = $applicationFiles
     }

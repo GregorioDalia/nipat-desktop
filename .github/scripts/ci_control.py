@@ -88,11 +88,11 @@ def gate_errors(results, *, event_name, ref):
                 or not ref.startswith("refs/heads/") or not duplicate.isdecimal()
                 or int(duplicate) < 1):
             errors.append("only a matching development-branch push may delegate checks to a PR")
-        expected = dict.fromkeys(("linux-checks", "windows-checks", "scientific", "runtime", "packaging"), "skipped")
+        expected = dict.fromkeys(("linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging"), "skipped")
     else:
         if selected != "true":
             errors.append("unknown check-ownership decision")
-        expected = {"linux-checks": "success", "windows-checks": "success"}
+        expected = {"linux-checks": "success", "windows-checks": "success", "macos-checks": "success"}
         for layer in ("scientific", "runtime", "packaging"):
             selected_layer = outputs.get(layer)
             if selected_layer not in {"true", "false"}:

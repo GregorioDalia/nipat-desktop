@@ -124,6 +124,9 @@ class DockerComposeRunner:
             "environment": {"HOME": "/tmp", "TMPDIR": "/tmp", "LANG": "C.UTF-8",
                             "LC_ALL": "C.UTF-8", "TZ": "Europe/Rome"},
         }
+        if self._transport.backend == "lima":
+            # The experimental macOS clients share the validated AMD64 engine.
+            service["platform"] = "linux/amd64"
         service.update(self.options.compose_limits())
         destination = run_dir / "work" / "engine-compose.json"
         with destination.open("x", encoding="utf-8", newline="\n") as handle:

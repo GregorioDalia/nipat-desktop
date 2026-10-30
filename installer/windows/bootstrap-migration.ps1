@@ -234,7 +234,7 @@ function Get-NipatPreviousDataRoots([string] $Project, [string] $BaseDirectory) 
             # Earlier installation metadata did not always persist the full rootfs hash.
             $profile = Get-NipatInstallationProfile
             if ($configuration.wsl_distro -cnotmatch ('^' + [regex]::Escape($profile.distro_prefix) + '[a-f0-9]{40}$')) {
-                throw 'Il runtime della configurazione precedente non appartiene a NIPAT Desktop.'
+                throw 'Il runtime della configurazione precedente non appartiene a NIPAT Experimental08.'
             }
         }
         return [pscustomobject]@{ data_dir = $configuration.data_dir; runs_dir = $configuration.runs_dir }

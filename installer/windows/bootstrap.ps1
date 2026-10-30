@@ -82,12 +82,9 @@ try {
     $wslDirectory = $layout.runtime_dir
     Initialize-NipatWritableDirectory $cache 'della cache installer'
     Initialize-NipatWritableDirectory $wslDirectory 'della distribuzione Linux'
-    $ready = $false
-    if (Test-Path -LiteralPath $script:NipatWsl -PathType Leaf) {
-        $version = Invoke-NipatWsl @('--version') -AllowFailure -TimeoutSeconds 30
-        $status = Invoke-NipatWsl @('--status') -AllowFailure -TimeoutSeconds 30
-        $ready = ($version.ExitCode -eq 0 -and $status.ExitCode -eq 0 -and $null -ne (Get-Service -Name vmcompute -ErrorAction SilentlyContinue))
-    }
+    $wsl = Get-NipatWslReadiness
+    $ready = $wsl.Ready
+    Write-Host ("WSL: " + $wsl.Kind + $(if ($wsl.Version) { " (" + $wsl.Version + ")" } else { '' }))
     if (-not $ready) {
         $computer = Get-CimInstance -ClassName Win32_ComputerSystem
         $processors = @(Get-CimInstance -ClassName Win32_Processor)
@@ -96,21 +93,25 @@ try {
             throw 'La virtualizzazione hardware risulta disabilitata. Abilitarla nel BIOS/UEFI o chiedere al reparto IT di abilitarla nella macchina virtuale, quindi riaprire il setup.'
         }
         Save-NipatPhase 'enabling_wsl'
-        Write-Host 'Windows richiedera UAC per abilitare WSL2. Il componente elevato non importa distribuzioni e non esegue analisi.'
+        Write-Host 'Windows richiedera UAC per abilitare o aggiornare WSL2 da Microsoft. Il componente elevato non importa distribuzioni e non esegue analisi.'
         $helper = Join-Path $PSScriptRoot 'EnableWsl.exe'
         if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) { throw 'Componente prerequisiti assente: reinstallare usando NIPAT-Setup.exe.' }
         $process = Start-Process -FilePath $helper -Verb RunAs -Wait -PassThru
         if ($process.ExitCode -in @(3010, 1641)) {
             Request-NipatReboot
             $result = 3010
+        } elseif ($process.ExitCode -eq 50) {
+            throw 'Questa installazione Windows/WSL non espone ancora le opzioni richieste. Installare gli aggiornamenti Windows e la versione WSL distribuita da Microsoft, quindi riaprire il setup. Istruzioni: https://learn.microsoft.com/windows/wsl/install'
+        } elseif ($process.ExitCode -eq 1460) {
+            throw 'La configurazione WSL ha superato il tempo disponibile. Controllare la connessione e attendere la conclusione delle operazioni Windows prima di riaprire il setup.'
         } elseif ($process.ExitCode -ne 0) {
             throw "Attivazione WSL non completata (codice $($process.ExitCode)). Verificare autorizzazioni/policy aziendali con il reparto IT e riprovare."
         } else {
-            $version = Invoke-NipatWsl @('--version') -AllowFailure -TimeoutSeconds 30
-            $status = Invoke-NipatWsl @('--status') -AllowFailure -TimeoutSeconds 30
-            $ready = ($version.ExitCode -eq 0 -and $status.ExitCode -eq 0 -and $null -ne (Get-Service -Name vmcompute -ErrorAction SilentlyContinue))
+            $wsl = Get-NipatWslReadiness
+            $ready = $wsl.Ready
             if (-not $ready) {
-                if ($Resume) { throw "WSL non e pronto anche dopo la ripresa. Verificare virtualizzazione e policy con il reparto IT. $($status.Text)" }
+                if ($wsl.Kind -in @('missing', 'legacy')) { throw "WSL non risulta aggiornato. Installare gli aggiornamenti Windows e WSL Microsoft, quindi riaprire il setup. $($wsl.Detail)" }
+                if ($Resume) { throw "WSL non e pronto anche dopo la ripresa. Verificare virtualizzazione e policy con il reparto IT. $($wsl.Detail)" }
                 Request-NipatReboot
                 $result = 3010
             }

@@ -20,7 +20,7 @@ class HandoffTests(unittest.TestCase):
         self.project = self.root / 'app'
         self.project.mkdir()
         (self.project / '.runtime').mkdir()
-        layout = dict(schema_version=1, installation_channel='desktop')
+        layout = dict(schema_version=1, installation_channel='experimental08')
         for key, name in [('app_dir', 'app'), ('runtime_dir', 'runtime'), ('cache_dir', 'cache'),
                           ('data_dir', 'data'), ('runs_dir', 'runs')]:
             layout[key] = str(self.root / name)

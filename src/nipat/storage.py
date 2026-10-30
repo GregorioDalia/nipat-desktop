@@ -6,11 +6,13 @@ runtime/cache locations, independently of which interface starts a run.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path, PureWindowsPath
 import sys
 from typing import TYPE_CHECKING, Any
 
 from nipat.errors import ValidationError
+from nipat.distribution import CHANNEL
 
 if TYPE_CHECKING:
     from nipat.paths import ProjectLayout
@@ -59,6 +61,17 @@ def validate_managed_directories(layout: ProjectLayout) -> None:
     A checkout and Linux package have no Windows installation record. When a
     record is present, malformed metadata cannot silently waive the policy.
     """
+    if os.environ.get("NIPAT_BACKEND") == "lima":
+        protected_roots = (Path.home() / ".nipat08", layout.workspace_dir / ".runtime",
+                           layout.project_dir)
+        for role in ("data_dir", "runs_dir"):
+            selected = getattr(layout, role).resolve()
+            if any(selected.is_relative_to(root.resolve()) or root.resolve().is_relative_to(selected)
+                   for root in protected_roots):
+                raise ValidationError(
+                    f"La cartella {role} si sovrappone all'applicazione o all'ambiente Lima dedicato. "
+                    "Scegliere una cartella separata per dati e risultati."
+                )
     record = layout.project_dir / ".runtime" / "install-layout.json"
     if not record.exists() and not record.is_symlink():
         return
@@ -74,7 +87,7 @@ def validate_managed_directories(layout: ProjectLayout) -> None:
         if (not isinstance(data, dict)
                 or data.keys() != fields | {"schema_version", "installation_channel"}
                 or type(data["schema_version"]) is not int or data["schema_version"] != 1
-                or data["installation_channel"] != "desktop"):
+                or data["installation_channel"] != CHANNEL):
             raise ValueError("formato o identita del record")
         directories = {}
         for key in fields:

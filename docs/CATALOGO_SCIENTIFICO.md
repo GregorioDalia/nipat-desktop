@@ -20,6 +20,8 @@ nipat parameters --json
 
 In un checkout di sviluppo si può usare `python -m nipat` al posto di
 `nipat`. Su Windows il wrapper `nipat.cmd` accetta gli stessi argomenti.
+Su macOS usare il launcher `NIPAT.command` del pacchetto, come descritto nella
+[guida macOS](INSTALLATORE_MACOS.md#cli-e-diagnostica).
 Il JSON contiene entrambe le lingue; `--lang` e `--section` riguardano
 soltanto la presentazione testuale. Il comando non cambia configurazione,
 non crea run e non richiede Docker o WSL.

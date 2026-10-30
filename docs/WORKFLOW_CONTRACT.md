@@ -3,7 +3,7 @@
 Un piano descrive campioni, analisi e collegamenti fra risultati attraverso
 identificatori espliciti. Il contratto `schema_version: 1` appartiene al
 motore scientifico `nipat_scientific`, incluso nell'immagine Linux. Non dipende
-dal menu Windows, da una GUI o dalla lingua dell'interfaccia.
+dal sistema host, dal menu, da una GUI o dalla lingua dell'interfaccia.
 
 Il comando del motore `validate-plan --plan FILE` controlla la struttura e
 le dipendenze e restituisce JSON. **Questa validazione non esegue il piano**:

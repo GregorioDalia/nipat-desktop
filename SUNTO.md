@@ -1,6 +1,6 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.7.2** è un'applicazione locale per eseguire quattro workflow
+**NIPAT Experimental08 0.8.0a1** è un'applicazione locale per eseguire quattro workflow
 scientifici da un menu testuale guidato o dalla riga di comando. Le analisi
 possono essere avviate singolarmente oppure nei workflow automatici
 **DNPcall → Contamination**, **DNPcall → CPI** e **DNPcall → Contamination e CPI**.
@@ -13,9 +13,11 @@ descrive in italiano e inglese le opzioni R, le regole interne e la
 preparazione degli input. Il motore convalida i piani concatenati e ne
 esegue le quattro analisi in sequenza, rispettandone le dipendenze. SNPcall
 rimane un'attività indipendente anche quando appartiene allo stesso piano.
-La versione è destinata alla valutazione da parte dei ricercatori.
-Le [note della versione 0.7.2](docs/RELEASE_0.7.2.md) descrivono funzionalità,
-pacchetti e ambito delle verifiche.
+La versione è un esperimento di portabilità separato da NIPAT Desktop 0.7.2,
+che rimane la distribuzione stabile. Windows 10 e macOS sono nuovi obiettivi
+di collaudo, non piattaforme già qualificate. Le
+[note della versione](docs/RELEASE_0.8.0a1.md) distinguono funzionalità,
+pacchetti e verifiche ancora da eseguire.
 
 | Workflow | Funzione |
 | --- | --- |
@@ -27,8 +29,9 @@ pacchetti e ambito delle verifiche.
 Il client Python gestisce selezione degli input, parametri e registrazione
 delle esecuzioni. Un'immagine scientifica autonoma contiene la preparazione
 degli input, l'esecuzione dei piani, gli script R, samtools e le dipendenze. Su Windows l'immagine
-viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
-nativo. I calcoli e i dati rimangono sul computer.
+viene eseguita in un ambiente WSL2 dedicato; su macOS in una VM Lima.
+Su Apple Silicon Rosetta esegue la medesima immagine Linux AMD64.
+Il codice R non viene riscritto. I calcoli e i dati rimangono sul computer.
 
 Prima di R, il motore Python controlla formato e contenuto degli input.
 I pannelli vengono normalizzati in copie di lavoro; conteggi e frequenze
@@ -38,22 +41,24 @@ Il menu mostra gli avvisi anche dopo un completamento tecnico riuscito.
 Checksum integrali degli input e limiti di risorse sono configurabili;
 le esecuzioni incomplete possono essere consultate senza riscrivere i risultati.
 
-Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
-installazione con doppio clic e avvio dal collegamento **NIPAT Desktop**
-sul desktop o nel menu Start. Il setup consente di scegliere cinque cartelle
-separate per applicazione, ambiente WSL, cache, dati e risultati e ricorda le
-scelte nelle reinstallazioni. L'aggiornamento e la riparazione riutilizzano
-la cartella di NIPAT Desktop riconosciuta. La rimozione dell'applicazione conserva
-dati e risultati; eliminare l'ambiente NIPAT e la cache è facoltativo. Non richiede
-l'installazione separata degli strumenti scientifici.
-Ubuntu 24.04 x86_64 utilizza un singolo
-pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
-**NIPAT Desktop** o dal comando `nipat`. APT installa
-automaticamente le dipendenze mancanti, inclusi Docker Engine e Compose v2;
-l’accesso dell’utente a Docker richiede autorizzazione amministrativa.
-Le versioni pubblicate e i relativi pacchetti sono elencati nella pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases); gli
-artefatti GitHub Actions sono invece destinati alla revisione tecnica.
+Windows 10 22H2 x64 (build 19045) e Windows 11 x64 usano un singolo
+`NIPAT-Setup.exe`. Il setup rileva WSL, prepara i componenti mancanti e può
+richiedere Internet, autorizzazione amministrativa e riavvio. Il collegamento
+**NIPAT Experimental08** apre il menu. Applicazione, ambiente WSL, cache,
+dati e risultati hanno cartelle configurabili, separate dal canale stabile.
+
+macOS 14 o successivo usa un `.pkg` specifico per Intel oppure Apple Silicon.
+L'applicazione **NIPAT Experimental08** si apre da Applicazioni e avvia la CLI
+nel Terminale. Python e Lima sono inclusi; il primo avvio richiede Internet
+per preparare la VM e il motore. Non occorre installare Homebrew o Docker Desktop.
+Le protezioni di Windows e macOS possono bloccare i pacchetti non firmati;
+questa distribuzione sperimentale non promette un avvio autorizzato su ogni PC.
+
+Gli installatori provengono dalla build sperimentale del repository o da una
+pre-release dedicata. Usano l'identità `experimental08`; non sostituiscono
+NIPAT Desktop e non vengono proposti dal suo aggiornamento automatico.
+Il pacchetto Ubuntu stabile rimane 0.7.2; su Linux la 0.8 è utilizzabile
+per sviluppo da sorgenti con Docker Engine locale.
 
 Per utilizzare NIPAT si sceglie il workflow, si indicano file e parametri e
 si conferma il riepilogo con **Avvia analisi**. Le indicazioni nei campi
@@ -74,11 +79,9 @@ menu principale. Durante un'analisi NIPAT esegue prima la procedura di arresto,
 conservando log e risultati già prodotti. Le impostazioni non salvate vengono
 scartate; quelle già salvate restano disponibili.
 
-**Verifica aggiornamenti** propone gli installatori completi delle versioni
-pubblicate e approvate su GitHub. Download e installazione sono scelte esplicite;
-si può rimandare e continuare a lavorare. Il canale iniziale è `testing`, che
-include pre-release e versioni stabili; `stable` considera solo le stabili.
-L'eventuale verifica all'avvio è disattivata inizialmente e mostra solo un avviso.
+La verifica degli aggiornamenti è disabilitata nel profilo sperimentale.
+Per provare una nuova build si scarica esplicitamente il relativo installatore,
+controllando versione e commit nelle sue note.
 
 Ogni analisi crea un nuovo run con risultati in `output`, intermedi conservati
 in `work`, metadati in `run.json` e messaggi in `execution.log`. Le cartelle

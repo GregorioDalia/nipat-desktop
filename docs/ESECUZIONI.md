@@ -1,10 +1,10 @@
 # Risultati e registrazione delle esecuzioni
 
-In NIPAT Desktop ogni analisi singola o workflow automatico crea un nuovo
+In NIPAT Experimental08 ogni analisi singola o workflow automatico crea un nuovo
 **run** nella cartella risultati.
 La destinazione predefinita Windows è
-`%LOCALAPPDATA%\NIPAT-Desktop\runs`; nel pacchetto Ubuntu è
-`${XDG_DATA_HOME:-~/.local/share}/nipat-desktop/runs`. Nel checkout
+`%LOCALAPPDATA%\NIPAT-Experimental08\runs`; nel pacchetto macOS è
+`~/Library/Application Support/NIPAT-Experimental08/runs`. Nel checkout
 da sorgenti è `runs` accanto al progetto. Si può impostare una destinazione con `--runs-dir`
 prima del sottocomando oppure, nel menu guidato, salvando la destinazione
 in **5 — Configura → Cartelle dati e risultati**. La preferenza del menu

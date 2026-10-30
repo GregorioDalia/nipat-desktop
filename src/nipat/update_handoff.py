@@ -16,6 +16,7 @@ import uuid
 
 from .activity import _safe_parent
 from .errors import NipatError
+from .distribution import CHANNEL, UNIX_DIRECTORY
 
 HANDOFF_EXIT_CODE = 85
 
@@ -27,7 +28,7 @@ def _windows_layout(project_dir: Path) -> dict:
         fields = ("app_dir", "runtime_dir", "cache_dir", "data_dir", "runs_dir")
         if (set(layout) != {"schema_version", "installation_channel", *fields}
                 or type(layout["schema_version"]) is not int or layout["schema_version"] != 1
-                or layout["installation_channel"] != "desktop"):
+                or layout["installation_channel"] != CHANNEL):
             raise ValueError("identita installazione non valida")
         roots = []
         for field in fields:
@@ -65,7 +66,7 @@ def update_cache_directory(project_dir: Path) -> Path:
         if base and not Path(base).is_absolute():
             raise NipatError("XDG_CACHE_HOME deve essere un percorso assoluto prima di scaricare aggiornamenti.")
         root = Path(base) if base else Path.home() / ".cache"
-        path = root / "nipat-desktop" / "updates"
+        path = root / UNIX_DIRECTORY / "updates"
     _safe_parent(path)
     try:
         path.mkdir(parents=True, exist_ok=True)
@@ -114,7 +115,7 @@ def _start_windows_update(offer, package: Path, project_dir: Path) -> bool:
     shutil.copyfile(worker, copied_worker)
     descriptor = directory / "handoff.json"
     descriptor.write_text(json.dumps({
-        "schema_version": 1, "installation_channel": "desktop", "parent_pid": os.getpid(),
+        "schema_version": 1, "installation_channel": CHANNEL, "parent_pid": os.getpid(),
         "project_dir": str(layout["app_dir"]), "package": str(package),
         "sha256": offer.asset.sha256, "size": offer.asset.size,
         "version": offer.version, "source_commit": offer.source_commit, "data_dir": str(layout["data_dir"]),

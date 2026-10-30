@@ -30,6 +30,13 @@ def _command(project: Path, operation: str) -> list[str]:
 
 
 def installation_inventory(project: Path) -> dict:
+    if sys.platform == "darwin":
+        return {"schema_version": 1, "platform": "macos", "runtimes": [], "cache": [],
+                "backups": [], "recovery": {"id": "current-installation", "recoverable": False,
+                "reason": "NIPAT usa un ambiente Lima dedicato in ~/.nipat08/lima. "
+                          "Impostazioni e risultati sono in ~/Library/Application Support/NIPAT-Experimental08. "
+                          "Per preparazione, diagnostica e rimozione consultare la guida macOS inclusa nell'applicazione."},
+                "warnings": []}
     if sys.platform != "win32":
         return {"schema_version": 1, "platform": "linux", "runtimes": [], "cache": [],
                 "backups": [], "recovery": {"id": "current-installation", "recoverable": False,

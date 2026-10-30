@@ -1,5 +1,12 @@
 # Installazione di NIPAT su Ubuntu
 
+**Ambito di questa guida: pacchetto stabile NIPAT Desktop 0.7.2.**
+La sperimentazione 0.8 produce installatori Windows e macOS, non un nuovo
+`.deb`. Il pacchetto qui descritto conserva identità e percorsi del canale
+stabile. Per eseguire il checkout sperimentale su Linux usare la
+[procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti)
+in un ambiente separato.
+
 Il pacchetto Linux di **NIPAT Desktop** è un unico file `.deb`, con versione
 nel nome: `nipat-desktop_0.7.2_amd64.deb` per la versione 0.7.2.
 Contiene applicazione, documentazione

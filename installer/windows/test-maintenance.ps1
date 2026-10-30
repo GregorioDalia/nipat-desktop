@@ -59,7 +59,7 @@ try {
         (Get-Item -LiteralPath $receipt).LastWriteTimeUtc = [DateTime]::UtcNow.AddDays(
             $(if ($name -ceq 'obsolete') { -2 } else { -1 }))
         $targets += [pscustomobject]@{
-            Distro = ('NIPAT-Desktop-' + $name); Directory = $directory; OwnershipPath = $receipt
+            Distro = ('NIPAT-Experimental08-' + $name); Directory = $directory; OwnershipPath = $receipt
             RootfsSha256 = $(if ($name -ceq 'active') { '1' * 64 } elseif ($name -ceq 'previous') { '3' * 64 } else { '4' * 64 })
         }
     }
@@ -69,13 +69,13 @@ try {
         $cache += [pscustomobject]@{ Path = $path; Sha256 = ($digit * 64) }
     }
     $script:plan = [pscustomobject]@{ Targets = $targets; CacheFiles = $cache; ProtectedRoots = @($project) }
-    Add-MaintenanceFile (Join-Path $project '.runtime\backend.json') '{"installation_channel":"desktop","wsl_distro":"NIPAT-Desktop-active"}' | Out-Null
+    Add-MaintenanceFile (Join-Path $project '.runtime\backend.json') '{"installation_channel":"experimental08","wsl_distro":"NIPAT-Experimental08-active"}' | Out-Null
     $inventory = Get-NipatMaintenanceInventory $project $plan
     Assert-Test ($inventory.schema_version -eq 1 -and $inventory.runtimes.Count -eq 3) 'inventory contains exact owned runtimes'
     $active = @($inventory.runtimes | Where-Object active)[0]
     $previous = @($inventory.runtimes | Where-Object retained)[0]
     $obsolete = @($inventory.runtimes | Where-Object removable)[0]
-    Assert-Test (-not $active.removable -and -not $previous.removable -and $obsolete.name -ceq 'NIPAT-Desktop-obsolete') 'active and most recent previous runtimes are protected'
+    Assert-Test (-not $active.removable -and -not $previous.removable -and $obsolete.name -ceq 'NIPAT-Experimental08-obsolete') 'active and most recent previous runtimes are protected'
     Assert-Test ($obsolete.size_bytes -gt 0 -and @($inventory.cache | Where-Object removable).Count -eq 1) 'sizes reported and current/previous archives retained'
     Assert-Rejected { Assert-NipatMaintenanceSelection $inventory 'cleanup' $active.id } 'active runtime cannot be selected'
     Assert-Rejected { Assert-NipatMaintenanceSelection $inventory 'cleanup' $previous.id } 'retained runtime cannot be selected'
@@ -133,7 +133,7 @@ try {
     Set-Item Function:Assert-NipatRepairableInstallation -Value $repairFunction
     $source = Add-MaintenanceFile (Join-Path $project 'source.py') 'verified source'
     $payload = [pscustomobject]@{
-        schema_version = 1; installation_channel = 'desktop'; source_commit = $manifest.source_commit
+        schema_version = 1; installation_channel = 'experimental08'; source_commit = $manifest.source_commit
         files = [object[]]@([pscustomobject]@{ path = 'source.py'; sha256 = (Get-NipatRepairFileHash $source) })
     }
     Add-MaintenanceFile (Join-Path $project '.distribution\application-files.json') ($payload | ConvertTo-Json -Depth 8) | Out-Null
