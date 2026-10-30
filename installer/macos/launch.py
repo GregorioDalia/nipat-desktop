@@ -20,6 +20,7 @@ RUNTIME_CODE = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
 
 
 def load_manifest(app: Path) -> dict:
+    app = app.resolve()
     manifest = json.loads((app / ".distribution/macos-manifest.json").read_text())
     if (manifest.get("schema_version") != 1 or manifest.get("channel") != "experimental08"
             or manifest.get("architecture") not in {"arm64", "x86_64"}

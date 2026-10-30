@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -27,7 +28,9 @@ LOADED_ID = "sha256:" + "b" * 64
 @unittest.skipUnless(os.name == "posix", "Lima lifecycle is exercised on Linux/macOS hosts")
 class MacRuntimeTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="nm-")
+        # macOS TMPDIR is a long /var/folders/... path. These fixtures represent
+        # a real user home and must leave space for Lima's bounded Unix socket.
+        self.temp = tempfile.TemporaryDirectory(prefix="nm-", dir="/tmp" if sys.platform == "darwin" else None)
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name).resolve()
         self.project = self.home / "App with spaces" / "app"
@@ -49,6 +52,13 @@ class MacRuntimeTests(unittest.TestCase):
         _write_json(self.project / ".distribution" / "macos-manifest.json", self.manifest)
         self.owner = {"channel": CHANNEL, "instance": INSTANCE, "lima_home": str(self.runtime.lima_home),
                       "token": "d" * 32, "mounts": self.runtime.default_mounts()}
+
+    def test_overlong_home_is_still_rejected_before_creating_files(self):
+        home = self.home / ("long-name-" * 15)
+        workspace = home / "Library/Application Support/NIPAT-Experimental08"
+        with self.assertRaisesRegex(ValidationError, "troppo lungo"):
+            LimaRuntime(self.project, workspace, self.executable, home=home)
+        self.assertFalse(home.exists())
 
     def owned_vm(self):
         _write_json(self.runtime.owner_path, self.owner)

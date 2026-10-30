@@ -15,7 +15,7 @@ from nipat.execution.transport import DockerTransport, LimaDockerTransport
 @unittest.skipUnless(os.name == "posix", "Lima transport targets POSIX hosts")
 class LimaTransportTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix="nl-")
+        self.temp = tempfile.TemporaryDirectory(prefix="nl-", dir="/tmp" if sys.platform == "darwin" else None)
         self.addCleanup(self.temp.cleanup)
         self.home = Path(self.temp.name).resolve()
         self.project = self.home / "application"

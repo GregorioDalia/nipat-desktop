@@ -22,7 +22,7 @@ from nipat.update_ui import run_updates
 class ExperimentalDistributionTests(unittest.TestCase):
     def test_macos_data_cannot_overwrite_runtime_or_application(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
+            root = Path(folder).resolve()
             app = root / "app"
             workspace = root / "workspace"
             with patch.dict(os.environ, {"NIPAT_BACKEND": "lima"}), patch("nipat.storage.Path.home", return_value=root):
@@ -43,7 +43,7 @@ class ExperimentalDistributionTests(unittest.TestCase):
 
     def test_experimental_updater_never_contacts_feed_or_handoff(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
+            root = Path(folder).resolve()
             layout = ProjectLayout(root / "app", root, root / "data", root / "runs", root / "compose.yaml")
             client, handoff, read = Mock(), Mock(), Mock()
             messages = []
@@ -60,12 +60,12 @@ class ExperimentalDistributionTests(unittest.TestCase):
 
     def test_windows_preferences_and_lease_never_touch_stable_directory(self):
         with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
+            root = Path(folder).resolve()
             stable = root / "NIPAT-Desktop"
             stable.mkdir()
             sentinel = stable / "preferences.json"
             sentinel.write_text('{"stable":true}')
-            with patch.dict(os.environ, {"LOCALAPPDATA": folder}, clear=True), \
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(root)}, clear=True), \
                     patch("nipat.preferences.sys.platform", "win32"):
                 self.assertEqual(preferences_path(), root / WINDOWS_DIRECTORY / "preferences.json")
                 self.assertEqual(windows_activity_path(), root / WINDOWS_DIRECTORY / "activity.lock")
@@ -74,7 +74,7 @@ class ExperimentalDistributionTests(unittest.TestCase):
 
     def test_macos_preferences_and_inventory_use_macos_contract(self):
         with tempfile.TemporaryDirectory() as folder:
-            home = Path(folder)
+            home = Path(folder).resolve()
             with patch.dict(os.environ, {}, clear=True), patch("nipat.preferences.sys.platform", "darwin"), \
                     patch("nipat.preferences.Path.home", return_value=home):
                 expected = home / "Library/Application Support/NIPAT-Experimental08/preferences.json"

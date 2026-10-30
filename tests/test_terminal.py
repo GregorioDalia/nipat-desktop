@@ -1,5 +1,6 @@
 import io
 import os
+import sys
 import unittest
 from contextlib import contextmanager
 from unittest.mock import Mock, patch
@@ -289,11 +290,20 @@ class TerminalTests(unittest.TestCase):
         master, slave = pty.openpty()
         try:
             original = termios.tcgetattr(slave)
-            with self.assertRaises(KeyboardInterrupt):
-                with _posix_reader(slave):
-                    self.assertNotEqual(termios.tcgetattr(slave), original)
-                    raise KeyboardInterrupt
-            self.assertEqual(termios.tcgetattr(slave), original)
+            with patch.object(termios, "tcsetattr", wraps=termios.tcsetattr) as set_attributes:
+                with self.assertRaises(KeyboardInterrupt):
+                    with _posix_reader(slave):
+                        self.assertEqual(termios.tcgetattr(slave)[3] & (termios.ECHO | termios.ICANON), 0)
+                        raise KeyboardInterrupt
+                set_attributes.assert_called_with(slave, termios.TCSANOW, original)
+            restored = termios.tcgetattr(slave)
+            expected = original.copy()
+            if sys.platform == "darwin":
+                # XNU sets PENDIN when restoring ICANON so queued input is
+                # reprocessed. It is kernel state, not an unrestored setting.
+                restored[3] &= ~termios.PENDIN
+                expected[3] &= ~termios.PENDIN
+            self.assertEqual(restored, expected)
         finally:
             os.close(master)
             os.close(slave)

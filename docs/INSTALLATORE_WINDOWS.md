@@ -24,6 +24,13 @@ Windows Server, Windows ARM, Windows a 32 bit e build Windows 10 precedenti
 non sono supportati. Il setup legge edizione, build e architettura prima di
 preparare l'ambiente; il controllo non dipende dalla lingua del sistema.
 
+**Windows 10 Pro 22H2, build 19045.6466**, rientra in questo target.
+Il numero `6466` indica la revisione dell'aggiornamento cumulativo: il setup
+controlla la build `19045`, senza imporre quella specifica revisione o escludere
+gli aggiornamenti successivi della stessa build. L'idoneità del sistema al
+controllo iniziale non attesta che l'installazione o il runtime siano già stati
+collaudati su tale configurazione.
+
 La disponibilità di WSL viene rilevata sul dispositivo. Il setup distingue
 un componente utilizzabile da prerequisiti mancanti o non pronti e avvia
 la preparazione necessaria. La versione del sistema non basta da sola:

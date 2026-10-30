@@ -25,6 +25,10 @@ nell'immagine insieme a samtools, dipendenze e orchestrazione. Non include GUI.
 Windows usa una distribuzione WSL2 dedicata con rilevamento automatico dei
 prerequisiti. Non sono supportati Windows Server, ARM o 32 bit. La preparazione
 può richiedere Internet, consenso amministrativo e riavvio.
+Windows 10 Pro 22H2 build `19045.6466` soddisfa il requisito di versione;
+la revisione dell'aggiornamento cumulativo non è vincolata a `6466`.
+L'installazione e il funzionamento WSL su questa configurazione restano da
+collaudare su un dispositivo reale.
 
 macOS usa Lima con Python e strumenti nativi inclusi nel pacchetto. Il primo
 avvio richiede Internet per preparare il guest. I due tipi di Mac usano la

@@ -34,6 +34,10 @@ def require_virtualization_entitlement(stdout: bytes, stderr: bytes) -> None:
 
 
 def verify_payload(payload: Path, common: dict, record: dict) -> dict:
+    # macOS exposes its temporary directory through /var -> /private/var.
+    # Compare canonical roots as well as canonical children; file symlinks
+    # inside the payload are still rejected separately below.
+    payload = payload.resolve()
     app = payload / builder.APP_RELATIVE
     resources = app / "Contents/Resources"
     installed = resources / "app"

@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 import tempfile
 import unittest
@@ -50,6 +51,20 @@ class ExperimentalIdentityTests(unittest.TestCase):
                            ("workflow_dispatch", "refs/heads/unreviewed")):
             with self.subTest(event=event, ref=ref), self.assertRaises(ValueError):
                 source.validate_dispatch(event, ref, "0.8.0a1", verify.PROFILE)
+
+    def test_dedicated_runners_require_explicit_true_on_the_owned_manual_branch(self):
+        workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()
+        self.assertRegex(workflow, r"qualify_macos_runtime:\n(?: +[^\n]*\n)*?"
+                                  r"        required: false\n        default: false\n        type: boolean")
+        match = re.search(r"^  macos-runtime:\n(?:    #[^\n]*\n)*    if: >-\n"
+                          r"(?P<condition>(?:      [^\n]*\n)+)", workflow, re.MULTILINE)
+        self.assertIsNotNone(match)
+        clauses = " ".join(match["condition"].split()).split(" && ")
+        self.assertCountEqual(clauses, [
+            "github.event_name == 'workflow_dispatch'", "inputs.qualify_macos_runtime == true",
+            "github.repository == 'GregorioDalia/nipat-desktop'",
+            "github.ref == 'refs/heads/experiment/0.8-portability'",
+        ])
 
     def test_mac_package_is_bound_to_architecture_source_archive_and_bytes(self):
         with tempfile.TemporaryDirectory() as temporary:

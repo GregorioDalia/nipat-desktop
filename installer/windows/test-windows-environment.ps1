@@ -31,6 +31,15 @@ foreach ($case in @(
     Assert-Test ($helper -eq $case[6]) "elevated platform: $($case -join ',')"
 }
 
+# A reported Windows 10 Pro 22H2 system is 10.0.19045.6466. Its revision
+# (UBR 6466) identifies a cumulative update, not a separate compatibility gate.
+# A later revision on the same 19045 client build remains eligible as well.
+foreach ($windowsVersion in @([version] '10.0.19045.6466', [version] '10.0.19045.9999')) {
+    Assert-NipatWindowsPlatform $true $true 'AMD64' $windowsVersion.Build 1
+    Assert-Test ([NipatWindowsPolicy]::Supports($true, $true, 'AMD64', $windowsVersion.Build, 'Client')) `
+        "Windows 10 Pro 22H2 client accepted independently of cumulative update revision: $windowsVersion"
+}
+
 # Only the WSL/system boundary is mocked. The production readiness parser and
 # sequencing are executed; probes must not change distributions or install one.
 $temporary = Join-Path ([IO.Path]::GetTempPath()) ('nipat-platform-test-' + [Guid]::NewGuid().ToString('N'))
@@ -65,6 +74,8 @@ try {
         @('WSL version: 0.67.6.0', 0, $false),
         @('WSL version: 2.6.1.0', 1, $false),
         @('', 0, $false),
+        @($null, 0, $false),
+        @(" `r`n`t`r`n", 0, $false),
         @("Uso: wsl.exe --help`nWindows: 10.0.26100", 0, $false)
     )) {
         $script:versionText = $case[0]; $script:versionExit = $case[1]; $script:probeCalls = @()

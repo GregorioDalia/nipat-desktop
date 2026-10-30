@@ -7,7 +7,7 @@ on:
     inputs:
       qualify_macos_runtime:
         description: Run real VM tests on trusted dedicated Mac runners (requires both architectures)
-        required: true
+        required: false
         default: false
         type: boolean
 

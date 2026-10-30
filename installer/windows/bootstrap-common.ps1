@@ -121,8 +121,14 @@ function Get-NipatWslReadiness {
     }
     $versionResult = Invoke-NipatWsl @('--version') -AllowFailure -TimeoutSeconds 30
     # Later lines describe the kernel and Windows, not the WSL package version.
-    $line = @($versionResult.Text -split '[\r\n]+' | Where-Object { $_.Trim() }) | Select-Object -First 1
-    $match = [regex]::Match([string] $line, '\b[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\b')
+    # An empty pipeline produces AutomationNull in Windows PowerShell 5.1;
+    # casting that value at a .NET method boundary can still pass a null input.
+    # Keep an explicit string even when the executable produces no output.
+    $line = ''
+    foreach ($candidate in ([string] $versionResult.Text -split '[\r\n]+')) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) { $line = $candidate; break }
+    }
+    $match = [regex]::Match($line, '\b[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?\b')
     if ($versionResult.ExitCode -ne 0 -or -not $match.Success -or [version] $match.Value -lt [version] '1.0.0') {
         return [pscustomobject]@{ Ready = $false; Kind = 'legacy'; Version = ''; Detail = 'WSL deve essere installato o aggiornato alla versione distribuita da Microsoft.' }
     }

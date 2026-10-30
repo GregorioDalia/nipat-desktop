@@ -51,7 +51,7 @@ class MacInstallerTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def fixture(self):
         if os.name == "nt":
@@ -123,6 +123,14 @@ class MacInstallerTests(unittest.TestCase):
         scientific.write_bytes(b"different")
         with self.assertRaisesRegex(ValueError, "scientific archive"):
             verifier.verify_payload(payload, common, record)
+
+    def test_parent_path_alias_does_not_reject_regular_installed_sources(self):
+        payload, app, common, record = self.fixture()
+        alias = self.root / "payload-alias"
+        alias.symlink_to(payload, target_is_directory=True)
+        self.assertEqual(verifier.verify_payload(alias, common, record)["version"], "0.8.0a1")
+        source_alias = alias / builder.APP_RELATIVE / "Contents/Resources/app"
+        self.assertEqual(launcher.load_manifest(source_alias)["version"], "0.8.0a1")
 
     def test_changed_source_cannot_pass_package_verification(self):
         payload, app, common, record = self.fixture()
