@@ -35,7 +35,7 @@ class PublishedUpdateContract(unittest.TestCase):
 
     def check_published_pair(self, channel):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             commit = "c" * 40
             version, tag = "0.6.1", "v0.6.1"
             manifest = {"version": version, "release_tag": tag, "source_commit": commit}
