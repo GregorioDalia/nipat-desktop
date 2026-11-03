@@ -291,9 +291,14 @@ class UpdateDiscoveryTests(unittest.TestCase):
     def test_platform_detection_rejects_unsupported_architecture(self):
         with patch("nipat.updates.sys.platform", "win32"), patch("nipat.updates.host_platform.machine", return_value="AMD64"):
             self.assertEqual(detect_platform(), "windows-x86_64")
-        with patch("nipat.updates.host_platform.machine", return_value="arm64"):
-            with self.assertRaises(UpdateError):
+        for operating_system, architecture in (("win32", "arm64"), ("linux", "arm64"),
+                                                ("darwin", "i386"), ("freebsd", "x86_64")):
+            with self.subTest(operating_system=operating_system, architecture=architecture), \
+                    patch("nipat.updates.sys.platform", operating_system), \
+                    patch("nipat.updates.host_platform.machine", return_value=architecture), \
+                    self.assertRaises(UpdateError) as rejected:
                 detect_platform()
+            self.assertEqual(rejected.exception.status, "unsupported_platform")
 
 
 class UpdateDownloadTests(unittest.TestCase):

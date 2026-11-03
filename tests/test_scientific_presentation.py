@@ -43,25 +43,26 @@ class PresentationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             source, target = Path(tmp) / "native.csv", Path(tmp) / "readable.csv"
             content = 'Pair,GT_sample_0001,N_REF,CPI_medianFF,other\n"pair",0/1,001,6.020000e-1,sample_0001\n'
-            source.write_text(content)
+            source.write_text(content, encoding="utf-8")
             _copy_table(source, target, {"pair": 'Madre: "A" | Padre: B', "GT_sample_0001": "GT_Campione à.bam", "sample_0001": "A.bam"})
-            with target.open(newline="") as handle:
+            with target.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.reader(handle))
             self.assertEqual(rows[0], ["Pair", "GT_Campione à.bam", "N_REF", "CPI_medianFF", "other"])
             self.assertEqual(rows[1], ['Madre: "A" | Padre: B', "0/1", "001", "6.020000e-1", "sample_0001"])
-            self.assertEqual(source.read_text(), content)
+            self.assertEqual(source.read_text(encoding="utf-8"), content)
 
     def test_legacy_command_unchanged(self):
         request = {"workflow": "snp-call"}
         self.assertIsNone(validate_request_presentation(request))
-        self.assertEqual(prepare_presentation(request, Path("/native.R"), ["--a", "b"]), ["Rscript", "/native.R", "--a", "b"])
+        script = Path("/native.R")
+        self.assertEqual(prepare_presentation(request, script, ["--a", "b"]), ["Rscript", str(script), "--a", "b"])
 
     def test_spreadsheet_labels_are_text_but_negative_numbers_stay_numeric(self):
         with tempfile.TemporaryDirectory() as tmp:
             source, target = Path(tmp) / "native.txt", Path(tmp) / "readable.txt"
-            source.write_text("individuo\tGL0\nA\t-1.230\n")
+            source.write_text("individuo\tGL0\nA\t-1.230\n", encoding="utf-8")
             _copy_table(source, target, {"A": ' =1+2&".bam"'})
-            with target.open(newline="") as handle:
+            with target.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.reader(handle, delimiter="\t"))
             self.assertEqual(rows[1], ['\' =1+2&".bam"', "-1.230"])
 
@@ -76,16 +77,16 @@ class PresentationTests(unittest.TestCase):
             self.assertTrue(command[1].endswith("presentation.R"))
             self.assertEqual(command[2:], ["one", "two"])
             native = output / "SNPcall_output.txt"
-            native.write_text("pos\tN_REF\n1\t010\n")
+            native.write_text("pos\tN_REF\n1\t010\n", encoding="utf-8")
             before = native.read_bytes()
             report = finish_presentation(request, root)
             self.assertEqual(report["status"], "complete")
-            index = (root / report["index"]["path"]).read_text()
+            index = (root / report["index"]["path"]).read_text(encoding="utf-8")
             self.assertIn("&lt;script&gt;", index)
             self.assertNotIn("<script>", index)
             self.assertEqual(native.read_bytes(), before)
             readable = root / report["files"][0]["path"]
-            with readable.open(newline="") as handle:
+            with readable.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.reader(handle, delimiter="\t"))
             self.assertEqual(rows, [["Sample", "pos", "N_REF"], ["<script>alert(1)<.pileup", "1", "010"]])
 
@@ -96,10 +97,10 @@ class PresentationTests(unittest.TestCase):
                        "work_dir": str(root / "work"), "out_dir": str(root / "output"),
                        "presentation": {"samples": {"sample_0001": "A.bam"}, "pairs": {}}}
             prepare_presentation(request, Path("/native.R"), [])
-            config = json.loads((root / "work/presentation-config.json").read_text())
+            config = json.loads((root / "work/presentation-config.json").read_text(encoding="utf-8"))
             for source in config["tables"]:
                 target = root / "output" / source; target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text("chr\tGT_sample_0001\n1\t0/0\n")
+                target.write_text("chr\tGT_sample_0001\n1\t0/0\n", encoding="utf-8")
             for source in config["plots"]:
                 target = root / "output" / source; target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(b"%PDF-native")

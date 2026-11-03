@@ -181,6 +181,21 @@ class WslRunnerTests(unittest.TestCase):
         patch("nipat.execution.transport._windows_path", side_effect=simulated_windows_path).start()
         patch("nipat.execution.transport._drive_type", return_value=3).start()
         patch("nipat.execution.tracking.platform.platform", return_value="Windows-test-fixture").start()
+        # This fixture models the WSL command bridge, not the CI host's resource
+        # discovery. ResourceManager has its own platform-specific tests; its
+        # sysctl/WSL-list probes must not enter the Docker-only command mock.
+        self.resource_snapshot = {
+            "schema_version": 1, "backend": "wsl",
+            "host": {"memory_mib": 8192, "cpus": 4},
+            "runtime": {"configured": {"memory_mib": None, "cpus": None},
+                        "effective": {"memory_mib": 4096, "cpus": 2}, "running": True,
+                        "scope": "all-wsl2-distributions", "config_path": None},
+            "container": {"memory_mib": None, "cpus": None},
+            "suggested": {"memory_mib": 4096, "cpus": 3}, "warnings": [],
+        }
+        self.resource_probe = patch(
+            "nipat.resources.ResourceManager.snapshot", return_value=self.resource_snapshot,
+        ).start()
         self.subprocess_run = patch("nipat.execution.runner.subprocess.run", side_effect=self.execute).start()
         self.runner = DockerComposeRunner(self.layout)
         self.stdout = io.StringIO()
@@ -260,6 +275,8 @@ class WslRunnerTests(unittest.TestCase):
         self.assertEqual(record["status"], "succeeded")
         self.assertEqual(record["transport"]["wsl_distro"], "NIPAT-Test")
         self.assertEqual(record["runtime"]["backend"], "wsl")
+        self.assertEqual(record["resource_snapshot"], self.resource_snapshot)
+        self.resource_probe.assert_called_once_with(container_options=self.runner.options)
         self.assertEqual(record["commands"][0]["argv"], popen.call_args.args[0])
         argv = popen.call_args.args[0]
         self.assertEqual(argv[-len(scientific):], scientific)
@@ -330,6 +347,7 @@ class WslRunnerTests(unittest.TestCase):
             with runner.record_run(run, workflow="test", inputs=[self.source], parameters={}, mounts=mounts):
                 runner.run(["Rscript", "test.R", target])
         popen.assert_not_called()
+        self.resource_probe.assert_not_called()
         self.subprocess_run.assert_not_called()
         record = json.loads((run / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(record["status"], "planned")
