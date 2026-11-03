@@ -109,7 +109,7 @@ function Reset-RemovalFixture {
     $script:TestRegistrations = @(
         [pscustomobject]@{ DistributionName = 'docker-desktop'; BasePath = (Join-Path $temporary 'unrelated-docker'); Version = 2 },
         [pscustomobject]@{ DistributionName = 'NIPAT-Runtime'; BasePath = (Join-Path $temporary 'stable-runtime'); Version = 2 },
-        [pscustomobject]@{ DistributionName = ('NIPAT-Desktop-' + ('a' * 40)); BasePath = (Join-Path $temporary 'desktop-runtime'); Version = 2 },
+        [pscustomobject]@{ DistributionName = ('NIPAT-Experimental08-' + ('a' * 40)); BasePath = (Join-Path $temporary 'experimental-runtime'); Version = 2 },
         [pscustomobject]@{ DistributionName = ('NIPAT-05-Preview-' + ('a' * 40)); BasePath = (Join-Path $temporary 'preview-runtime'); Version = 2 }
     )
     $script:TestOwners = @{}
@@ -121,6 +121,7 @@ function Reset-RemovalFixture {
 try {
     Reset-RemovalFixture
     $fixture = New-RemovalFixture 'success with spaces' -LocationBound
+    Assert-Test ($fixture.Distro -cmatch '^NIPAT-Desktop-[a-f0-9]{32}-[a-f0-9]{12}$') 'current runtime names bind the rootfs hash to the installation location'
     $plan = Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir
     Assert-Test ($plan.Targets.Count -eq 1 -and $plan.CacheFiles.Count -eq 1) 'plan selects the owned runtime and verified archive only'
     Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.CacheFile)) 'planning has no destructive operations'
@@ -131,11 +132,28 @@ try {
         (Test-Path -LiteralPath (Join-Path $fixture.Layout.data_dir 'input.txt')) -and
         (Test-Path -LiteralPath (Join-Path $fixture.Layout.runs_dir 'result.txt'))) 'unknown files, inputs and results survive cleanup'
     Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -in @('docker-desktop', 'NIPAT-Runtime') }).Count -eq 2) 'Docker Desktop and stable WSL registrations survive'
-    Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -ceq ('NIPAT-Desktop-' + ('a' * 40)) }).Count -eq 1) 'supported Desktop installation survives experimental uninstall even with the same rootfs hash'
+    Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -ceq ('NIPAT-Experimental08-' + ('a' * 40)) }).Count -eq 1) 'experimental installation survives Desktop uninstall even with the same rootfs hash'
     Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -ceq ('NIPAT-05-Preview-' + ('a' * 40)) }).Count -eq 1) 'the 0.5 Preview registration survives even when its rootfs hash matches'
     $retry = Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir
     Invoke-NipatRuntimeRemoval $retry
     Assert-Test ($retry.Targets.Count -eq 0 -and $retry.CacheFiles.Count -eq 0 -and $script:RemovalCalls.Count -eq 1) 'completed cleanup is idempotent'
+
+    Reset-RemovalFixture
+    $fixture = New-RemovalFixture 'legacy runtime success'
+    Assert-Test ($fixture.Distro -cmatch '^NIPAT-Desktop-[a-f0-9]{40}$') 'legacy Desktop runtime names retain the original 40-character hash'
+    Invoke-NipatRuntimeRemoval (Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir)
+    Assert-Test ($script:RemovalCalls.Count -eq 1 -and $script:RemovalCalls[0] -ceq $fixture.Distro -and
+        -not (Test-Path -LiteralPath $fixture.Receipt)) 'owned legacy Desktop runtime can still be removed'
+    Assert-Test (@($script:TestRegistrations | Where-Object { $_.DistributionName -ceq ('NIPAT-Experimental08-' + ('a' * 40)) }).Count -eq 1) 'legacy removal preserves an experimental runtime with the same rootfs hash'
+
+    Reset-RemovalFixture
+    $fixture = New-RemovalFixture 'ambiguous registration'
+    $script:TestRegistrations += [pscustomobject]@{
+        DistributionName = $fixture.Distro; BasePath = (Join-Path $temporary 'other-runtime'); Version = 2
+    }
+    Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'duplicate registrations remain ambiguous even when one path matches'
+    Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.Receipt) -and
+        (Test-Path -LiteralPath $fixture.CacheFile)) 'ambiguous registration cannot delete the runtime, its receipt or cache'
 
     Reset-RemovalFixture
     $fixture = New-RemovalFixture 'missing receipt'
@@ -143,7 +161,7 @@ try {
     Assert-Rejected { Get-NipatRuntimeRemovalPlan $fixture.Layout.app_dir } 'registered runtime without ownership receipt blocks cleanup'
     Assert-Test ($script:RemovalCalls.Count -eq 0 -and (Test-Path -LiteralPath $fixture.CacheFile)) 'unowned runtime blocks all deletion, including cache'
 
-    foreach ($foreignChannel in @('stable', 'preview-0.5', 'desktop')) {
+    foreach ($foreignChannel in @('stable', 'preview-0.5', 'experimental08')) {
         Reset-RemovalFixture
         $fixture = New-RemovalFixture ('foreign channel ' + $foreignChannel)
         $record = Get-Content -LiteralPath $fixture.Receipt -Raw | ConvertFrom-Json

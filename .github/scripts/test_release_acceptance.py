@@ -495,6 +495,15 @@ class ReliabilityResearchAcceptanceTests(ReviewedResearchAcceptanceTests):
         result = acceptance.verify_baseline(self.record, self.read_source)
         self.assertEqual(result["reviewed_source_changes"], [delta])
 
+    def test_schema_four_does_not_expand_checkout_metadata_policy(self):
+        delta = self.change(".gitattributes", b"*.R text eol=lf\n")
+        self.record["reviewed_source_changes"] = [delta]
+        with self.assertRaisesRegex(ValueError, "non-R operative"):
+            self.validate()
+        self.record["reviewed_source_changes"] = []
+        with self.assertRaisesRegex(ValueError, "Protected scientific or runtime"):
+            acceptance.verify_baseline(self.record, self.read_source)
+
     def test_scientific_and_runtime_changes_cannot_be_approved_as_client_changes(self):
         original = copy.deepcopy(self.sources)
         for path in ("scientific/vendor/example.R", "scientific/SHA256SUMS", "engine/changed.R"):
@@ -576,6 +585,18 @@ class MultiplatformResearchAcceptanceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.validate()
         with self.assertRaisesRegex(ValueError, "protected vendored R"):
+            acceptance.verify_baseline(self.record, self.fixture.read_source)
+
+    def test_checkout_normalization_requires_exact_reviewed_hashes(self):
+        delta = self.fixture.change(".gitattributes", b"*.R text eol=lf\n")
+        with self.assertRaisesRegex(ValueError, "exact baseline-to-candidate"):
+            acceptance.verify_baseline(self.record, self.fixture.read_source)
+        self.record["reviewed_source_changes"] = [delta]
+        self.validate()
+        checked = acceptance.verify_baseline(self.record, self.fixture.read_source)
+        self.assertEqual(checked["reviewed_source_changes"], [delta])
+        self.record["reviewed_source_changes"][0]["after_sha256"] = "f" * 64
+        with self.assertRaisesRegex(ValueError, "exact baseline-to-candidate"):
             acceptance.verify_baseline(self.record, self.fixture.read_source)
 
     def test_new_template_is_pending_and_requires_both_native_packages(self):

@@ -70,9 +70,12 @@ def reviewable_path(path, *, reliability=False, multiplatform=False):
     if reliability:
         # The Python preparation, orchestration and packaging may evolve, but
         # this research policy never authorizes a change to the R algorithms.
+        # Schema 5 also reviews Git's checkout normalization rules: they affect
+        # the exact bytes packaged on each host and must not be silently exempt.
+        metadata = {".gitattributes"} if multiplatform else set()
         return ((PurePosixPath(path).suffix.casefold() != ".r"
                  or multiplatform and not path.startswith("scientific/vendor/"))
-                and (path in REVIEWABLE_CLIENT_FILES | {"compose.yaml", ".gitignore"}
+                and (path in REVIEWABLE_CLIENT_FILES | {"compose.yaml", ".gitignore"} | metadata
                      or path.startswith(REVIEWABLE_OPERATIVE_PREFIXES)))
     return path in REVIEWABLE_CLIENT_FILES or path.startswith(REVIEWABLE_CLIENT_PREFIXES)
 
