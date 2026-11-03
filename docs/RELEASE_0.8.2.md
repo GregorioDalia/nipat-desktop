@@ -42,8 +42,6 @@ Una prova simulata di errore non è una misura di memoria su dati reali.
 Le build Mac ospitate verificano client e pacchetti; l'esecuzione della VM
 Lima e del container tramite Rosetta richiede un ambiente che esponga la
 virtualizzazione. Gli esiti desktop non eseguiti restano indicati come tali.
-La pubblicazione per ricerca pre-1.0 non costituisce validazione scientifica
-sui campioni delle ricercatrici.
 
 - [Guida per l'utilizzo](GUIDA_UTILIZZO.md)
 - [Risultati e tracciabilità](ESECUZIONI.md)

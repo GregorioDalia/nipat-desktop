@@ -10,6 +10,16 @@ osservate sui dispositivi e valutazione di dominio. Le prove desktop estese
 possono essere rinviate esplicitamente. La scelta del canale `stable` identifica
 la versione ufficiale, non una validazione scientifica generale.
 
+## Documentazione pubblica
+
+README, guide e note di versione devono essere autonomi e professionali:
+descrivere funzionalità, requisiti, utilizzo e limiti tecnici pertinenti,
+con esempi generici. Non includere riferimenti a conversazioni private,
+collaboratori specifici o accordi di consegna estranei al funzionamento.
+Conservare le attribuzioni e i riferimenti necessari alla provenienza e
+alle verifiche. I record storici di accettazione mantengono identità,
+ambito ed esiti originali; non attestano prove su versioni successive.
+
 ## Build identificata
 
 Avviare manualmente **Installers (review build)** su un commit revisionato
