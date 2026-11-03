@@ -1,4 +1,4 @@
-"""Exercise the real 0.7.1-to-candidate DEB upgrade on a prepared Ubuntu CI runner."""
+"""Exercise the real published-baseline-to-candidate DEB upgrade on a prepared Ubuntu CI runner."""
 
 from __future__ import annotations
 
@@ -19,6 +19,17 @@ BASELINE = {
     "file": "nipat-desktop_0.7.1_amd64.deb",
     "sha256": "4f0a43710ed92fe0299a182814c93ee6f215f43e00c9050a7cfc5e697846edd5",
 }
+CURRENT_BASELINE = {
+    "version": "0.7.2", "source_commit": "5bc05e00c7e231f7f3d501ace91131dae3bd1458",
+    "file": "nipat-desktop_0.7.2_amd64.deb",
+    "sha256": "e623897ffa46698250b1ee32216b1ab392607b6f7e3082a1932a164ef4992675",
+}
+
+
+def baseline_for(version):
+    return CURRENT_BASELINE if tuple(int(part) for part in version.split(".")[:2]) >= (0, 8) else BASELINE
+
+
 CHECKS = (
     "previous_package_installed", "previous_runtime_ready", "candidate_package_installed",
     "candidate_runtime_ready", "candidate_scientific_self_tests", "existing_results_preserved",
@@ -38,15 +49,16 @@ def verify(previous, candidate, manifest_path, work, output):
                     "Upgrade integration requires Ubuntu 24.04 amd64.")
     install.require(os.getuid() != 0, "Use a non-root CI account with sudo and Docker access.")
     install.require(not work.exists(), "The upgrade workspace must be new.")
-    install.require(previous.name == BASELINE["file"] and install.sha256(previous) == BASELINE["sha256"],
-                    "The previous DEB must be the exact published 0.7.1 baseline.")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    install.require(manifest["version"] != BASELINE["version"], "An upgrade must use distinct versions.")
+    baseline = baseline_for(manifest["version"])
+    install.require(previous.name == baseline["file"] and install.sha256(previous) == baseline["sha256"],
+                    "The previous DEB must be the exact published baseline.")
+    install.require(manifest["version"] != baseline["version"], "An upgrade must use distinct versions.")
     evidence = {
         "schema_version": 1, "platform": "ubuntu-24.04-amd64",
         "scenario": "prepared-ci-runner-real-upgrade", "source_commit": manifest["source_commit"],
         "version": manifest["version"], "installer_manifest_sha256": install.sha256(manifest_path),
-        "package_sha256": install.sha256(candidate), "previous": BASELINE,
+        "package_sha256": install.sha256(candidate), "previous": baseline,
         "runtime_archive_sha256": manifest["assets"]["scientific_image"]["sha256"],
         "nonroot_uid": os.getuid(), "checks": dict.fromkeys(CHECKS, False),
     }
@@ -73,8 +85,8 @@ def verify(previous, candidate, manifest_path, work, output):
             evidence["checks"][key] = True
             installed_manifest = json.loads((install.APP / ".distribution/installer-manifest.json").read_text())
             if package == previous:
-                install.require(installed_manifest["version"] == BASELINE["version"]
-                                and installed_manifest["source_commit"] == BASELINE["source_commit"],
+                install.require(installed_manifest["version"] == baseline["version"]
+                                and installed_manifest["source_commit"] == baseline["source_commit"],
                                 "Installed baseline identity mismatch.")
             else:
                 install.require(install.sha256(install.APP / ".distribution/installer-manifest.json")
@@ -120,7 +132,7 @@ def verify(previous, candidate, manifest_path, work, output):
         install.require(install.docker_configuration(Path.home()) == docker_before,
                         "Upgrade changed shared Docker configuration.")
         evidence["checks"]["shared_docker_configuration_preserved"] = True
-        print("PASS: exact published 0.7.1 DEB upgraded to candidate; runtime, scientific checks and user files verified.")
+        print("PASS: exact published baseline DEB upgraded to candidate; runtime, scientific checks and user files verified.")
     finally:
         output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
         if installed:

@@ -61,6 +61,8 @@ def _windows_layout(project_dir: Path) -> dict:
 def update_cache_directory(project_dir: Path) -> Path:
     if sys.platform == "win32":
         path = _windows_layout(project_dir)["cache_dir"] / "updates"
+    elif sys.platform == "darwin":
+        path = Path.home() / "Library/Caches/NIPAT-Desktop/updates"
     else:
         base = os.environ.get("XDG_CACHE_HOME")
         if base and not Path(base).is_absolute():

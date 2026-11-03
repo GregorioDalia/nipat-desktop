@@ -39,6 +39,18 @@ class QualificationEvidenceTests(unittest.TestCase):
             self.assertIn(b"${CI_WORKSPACE}/fixture.txt", handle.read("science/command.log"))
             self.assertIn(b"0.602,0.602", handle.read("science/result.csv"))
 
+    def test_official_mac_release_evidence_binds_both_package_hashes(self):
+        record = dict(self.installer_set, version="0.8.2", macos_arm64={"sha256": "e" * 64},
+                      macos_x86_64={"sha256": "f" * 64})
+        output = self.root / "mac-output"
+        descriptor = qualification.build(output, record, {"science": self.source})
+        self.assertEqual(descriptor["macos_arm64_installer_sha256"], "e" * 64)
+        self.assertEqual(descriptor["macos_x86_64_installer_sha256"], "f" * 64)
+        changed = copy.deepcopy(record)
+        changed["macos_arm64"]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "identity mismatch"):
+            qualification.verify(output, changed)
+
     def test_rejects_source_package_substitution_and_false_scope(self):
         for key, value in (("source_commit", "e" * 40), ("windows_installer_sha256", "e" * 64),
                            ("linux_installer_sha256", "e" * 64), ("synthetic_only", False)):

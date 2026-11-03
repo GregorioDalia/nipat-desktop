@@ -16,14 +16,14 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
 function New-TestManifest {
     $assets = [ordered]@{}
     foreach ($name in @('rootfs', 'scientific_image')) {
-        $file = $name + '-0.8.0a1.tar.gz'
+        $file = $name + '-0.8.2.tar.gz'
         $assets[$name] = [ordered]@{
             file = $file; sha256 = ('b' * 64); size = 123
-            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.0a1/' + $file)
+            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.2/' + $file)
         }
     }
     return [ordered]@{
-        schema_version = 1; version = '0.8.0a1'; release_tag = 'v0.8.0a1'
+        schema_version = 1; version = '0.8.2'; release_tag = 'v0.8.2'
         installation_profile = (Get-NipatInstallationProfile)
         source_commit = ('a' * 40); runtime_image = ('sha256:' + ('c' * 64)); assets = $assets
     }
@@ -33,11 +33,10 @@ try {
     $manifest = New-TestManifest
     Write-NipatJsonAtomic $manifestPath $manifest
     $parsed = Read-NipatInstallerManifest $manifestPath
-    Assert-Test ($parsed.release_tag -eq 'v0.8.0a1') 'accept valid release manifest'
+    Assert-Test ($parsed.release_tag -eq 'v0.8.2') 'accept valid release manifest'
     $profile = Get-NipatInstallationProfile
-    Assert-Test ($profile.channel -ceq 'experimental08' -and $profile.app_dir_name -cne 'NIPAT-Desktop' -and
-        $profile.data_dir_name -cne 'NIPAT-Desktop' -and $profile.distro_prefix -cne 'NIPAT-Desktop-' -and
-        $profile.app_id -cne '6B1702B6-F75C-4F8C-956F-86626C60AF45') 'experimental identities are separate from the supported Desktop installation'
+    Assert-Test ($profile.channel -ceq 'desktop' -and $profile.app_dir_name -ceq 'NIPAT-Desktop' -and
+        $profile.app_id -ceq '6B1702B6-F75C-4F8C-956F-86626C60AF45') 'official identity preserves supported Desktop upgrades'
     Assert-Test ($profile.app_dir_name -cne 'NIPAT' -and $profile.data_dir_name -cne 'NIPAT' -and
         $profile.resume_key -cne 'NIPAT-ResumeSetup' -and $profile.distro_prefix -cne 'NIPAT-Runtime-') 'candidate identities differ from stable'
     Assert-Test ($profile.app_dir_name -cne 'NIPAT-0.5-Preview' -and $profile.data_dir_name -cne 'NIPAT-0.5-Preview' -and
@@ -64,7 +63,7 @@ try {
     $resumeValues = @{
         'NIPAT-ResumeSetup' = 'stable resume sentinel'
         'NIPAT-05-Preview-ResumeSetup' = 'preview resume sentinel'
-        'NIPAT-Desktop-ResumeSetup' = 'desktop resume sentinel'
+        'NIPAT-Experimental08-ResumeSetup' = 'experimental resume sentinel'
     }
     $registryKey = New-Object PSObject
     $registryKey | Add-Member -MemberType ScriptMethod -Name SetValue -Value {
@@ -85,15 +84,15 @@ try {
         $candidateProject = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') $profile.app_dir_name
         Assert-NipatInstallationLocation $candidateProject
         Assert-Rejected { Assert-NipatInstallationLocation (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'NIPAT') } 'bootstrap rejects stable app folder before writes'
-        Assert-Rejected { Assert-NipatInstallationLocation (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'NIPAT-Desktop') } 'bootstrap rejects Desktop app folder before writes'
+        Assert-Rejected { Assert-NipatInstallationLocation (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'NIPAT-Experimental08') } 'bootstrap rejects experimental app folder before writes'
         Assert-Rejected { Assert-NipatInstallationLocation (Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') 'NIPAT-0.5-Preview') } 'bootstrap rejects the Preview app folder before writes'
         Assert-Test (Register-NipatResume $candidateProject) 'candidate resume registration succeeds'
         Assert-Test ($resumeValues[$profile.resume_key].Contains($candidateProject)) 'candidate resume points to candidate app'
         Assert-Test ($resumeValues['NIPAT-ResumeSetup'] -ceq 'stable resume sentinel') 'register preserves stable pending resume'
         Assert-Test ($resumeValues['NIPAT-05-Preview-ResumeSetup'] -ceq 'preview resume sentinel') 'register preserves Preview pending resume'
-        Assert-Test ($resumeValues['NIPAT-Desktop-ResumeSetup'] -ceq 'desktop resume sentinel') 'register preserves Desktop pending resume'
+        Assert-Test ($resumeValues['NIPAT-Experimental08-ResumeSetup'] -ceq 'experimental resume sentinel') 'register preserves experimental pending resume'
         Unregister-NipatResume
-        Assert-Test ($resumeValues['NIPAT-Desktop-ResumeSetup'] -ceq 'desktop resume sentinel') 'unregister preserves Desktop pending resume'
+        Assert-Test ($resumeValues['NIPAT-Experimental08-ResumeSetup'] -ceq 'experimental resume sentinel') 'unregister preserves experimental pending resume'
         Assert-Test (-not $resumeValues.ContainsKey($profile.resume_key) -and
             $resumeValues['NIPAT-ResumeSetup'] -ceq 'stable resume sentinel' -and
             $resumeValues['NIPAT-05-Preview-ResumeSetup'] -ceq 'preview resume sentinel') 'unregister removes only candidate pending resume'
@@ -106,15 +105,15 @@ try {
         $manifest.version = $unsupportedVersion
         $manifest.release_tag = 'v' + $unsupportedVersion
         foreach ($name in @('rootfs', 'scientific_image')) {
-            $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.8.0a1', $unsupportedVersion)
-            $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.8.0a1', $unsupportedVersion)
+            $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.8.2', $unsupportedVersion)
+            $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.8.2', $unsupportedVersion)
         }
         Write-NipatJsonAtomic $manifestPath $manifest
         Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject unsupported version even with consistent tag and asset URLs'
     }
     foreach ($url in @('https://example.org/rootfs.tar.gz',
-        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.0a1/rootfs-0.8.0a1.tar.gz?redirect=1',
-        'https://github.com/other/repo/releases/download/v0.8.0a1/rootfs-0.8.0a1.tar.gz')) {
+        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.2/rootfs-0.8.2.tar.gz?redirect=1',
+        'https://github.com/other/repo/releases/download/v0.8.2/rootfs-0.8.2.tar.gz')) {
         $manifest = New-TestManifest
         $manifest.assets.rootfs.url = $url
         Write-NipatJsonAtomic $manifestPath $manifest

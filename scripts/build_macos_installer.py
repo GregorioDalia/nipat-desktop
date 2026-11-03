@@ -1,4 +1,4 @@
-"""Build one self-contained experimental macOS package per native architecture.
+"""Build one self-contained official macOS package per native architecture.
 
 The Linux scientific archive is reused byte for byte. This builder performs no VM
 startup, scientific calculation, package installation or public publication.
@@ -29,9 +29,9 @@ assets = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(assets)
 bundle = assets.bundle
 
-APP_NAME = "NIPAT Experimental08.app"
+APP_NAME = "NIPAT Desktop.app"
 APP_RELATIVE = Path("Applications") / APP_NAME
-IDENTIFIER = "org.nipat.experimental08"
+IDENTIFIER = "org.nipat.desktop"
 BUILD_RECORD = "macos-installer-build.json"
 MACHO_MAGICS = {b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xcf",
                 b"\xcf\xfa\xed\xfe", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca"}
@@ -48,10 +48,10 @@ def verified_inputs(project: Path, manifest_path: Path, description_path: Path,
                     *, require_clean: bool = True) -> tuple[dict, list[Path], Path, dict]:
     manifest = read_json(manifest_path)
     assets.validate_manifest(manifest)
-    if not re.fullmatch(r"0\.8\.\d+(?:a|b|rc)\d+", manifest["version"]):
-        raise ValueError("The macOS package requires an experimental 0.8 prerelease.")
-    if manifest.get("installation_profile", {}).get("channel") != "experimental08":
-        raise ValueError("The package must use the isolated experimental08 identity.")
+    if package_version(manifest["version"]) != manifest["version"]:
+        raise ValueError("The macOS package requires an official 0.8.2 or later release.")
+    if manifest.get("installation_profile", {}).get("channel") != "desktop":
+        raise ValueError("The package must use the official desktop identity.")
     if assets.checked_version(project) != manifest["version"]:
         raise ValueError("Source version does not match the scientific manifest.")
     if require_clean:
@@ -142,16 +142,15 @@ def safe_extract(archive: Path, destination: Path) -> None:
 
 
 def package_version(version: str) -> str:
-    match = re.fullmatch(r"(0\.8\.\d+)(?:a|b|rc)(\d+)", version)
-    if not match:
-        raise ValueError("Expected an experimental 0.8 prerelease version.")
-    return f"{match[1]}.{match[2]}"
+    if not re.fullmatch(r"0\.8\.[0-9]+", version) or int(version.split(".")[2]) < 2:
+        raise ValueError("Expected an official 0.8.2 or later version.")
+    return version
 
 
 def mac_manifest(manifest: dict, architecture: str, dependencies: dict, description: dict) -> dict:
     entry = manifest["assets"]["scientific_image"]
     return {
-        "schema_version": 1, "provider": "lima", "channel": "experimental08",
+        "schema_version": 1, "provider": "lima", "channel": "desktop",
         "version": manifest["version"], "release_tag": manifest["release_tag"],
         "source_commit": manifest["source_commit"], "architecture": architecture,
         "minimum_macos": "14.0", "bundle_identifier": IDENTIFIER,
@@ -173,7 +172,7 @@ def distribution_xml(version: str, architecture: str) -> str:
     """Installer rejects incompatible hardware/OS before writing application files."""
     return f'''<?xml version="1.0" encoding="utf-8"?>
 <installer-gui-script minSpecVersion="2">
-  <title>NIPAT Experimental {escape(version)}</title>
+  <title>NIPAT {escape(version)}</title>
   <options customize="never" require-scripts="false" hostArchitectures="{architecture}"/>
   <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
   <allowed-os-versions><os-version min="14.0"/></allowed-os-versions>
@@ -244,8 +243,8 @@ def stage_payload(project: Path, root: Path, manifest: dict, files: list[Path], 
     (resources / "NIPAT.command").chmod(0o755)
     (app / "Contents/MacOS").mkdir()
     plist = {
-        "CFBundleIdentifier": IDENTIFIER, "CFBundleName": "NIPAT Experimental08",
-        "CFBundleDisplayName": "NIPAT Experimental08", "CFBundleExecutable": "NIPAT",
+        "CFBundleIdentifier": IDENTIFIER, "CFBundleName": "NIPAT Desktop",
+        "CFBundleDisplayName": "NIPAT Desktop", "CFBundleExecutable": "NIPAT",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": re.match(r"\d+\.\d+\.\d+", manifest["version"])[0],
         "CFBundleVersion": manifest["version"], "LSMinimumSystemVersion": "14.0",
@@ -266,7 +265,7 @@ def build(project: Path, manifest_path: Path, output: Path, architecture: str,
     manifest, files, scientific, description = verified_inputs(project, manifest_path, description_path)
     dependencies = read_json(project / "installer/macos/dependencies.json")
     output.mkdir(parents=True, exist_ok=True)
-    name = f"NIPAT-Experimental-{manifest['version']}-macos-{architecture}.pkg"
+    name = f"NIPAT-{manifest['version']}-macos-{architecture}.pkg"
     target = output / name
     if target.exists() or (output / BUILD_RECORD).exists():
         raise ValueError("Installer output already exists; choose a new output directory.")
@@ -312,15 +311,15 @@ def build(project: Path, manifest_path: Path, output: Path, architecture: str,
                         "--component-plist", str(components), str(work / "NIPAT-component.pkg")], check=True)
         (work / "Distribution.xml").write_text(distribution_xml(manifest["version"], architecture))
         welcome = (
-            "NIPAT Experimental08\n\n"
-            "Installs a separate experimental CLI application for macOS 14 or later.\n"
-            "Python, Lima and the scientific image are included. Start NIPAT Experimental08\n"
+            "NIPAT Desktop\n\n"
+            "Installs NIPAT Desktop for macOS 14 or later.\n"
+            "Python, Lima and the scientific image are included. Start NIPAT Desktop\n"
             "from Applications after installation. The first start needs an Internet connection\n"
             "to prepare its dedicated Linux VM. On Apple Silicon, Rosetta for Linux is required.\n\n"
             "This package has no Developer ID signature or Apple notarization. Local security\n"
             "policy may prevent installation or launch. No security setting is changed.\n"
             "Runtime execution on physical Intel and Apple Silicon Macs is not yet qualified.\n"
-            "Data and results remain in your Library/Application Support/NIPAT-Experimental08.\n")
+            "Data and results remain in your Library/Application Support/NIPAT-Desktop.\n")
         installer_resources = work / "installer-resources"
         installer_resources.mkdir()
         (installer_resources / "Welcome.txt").write_text(welcome)

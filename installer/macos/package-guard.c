@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define STATE "/Library/Application Support/NIPAT-Experimental08 Installer"
+#define STATE "/Library/Application Support/NIPAT-Desktop Installer"
 #define LOCK STATE "/activity.lock"
 #define MARKER STATE "/update-in-progress"
 
@@ -29,11 +29,11 @@ int main(int argc, char **argv) {
         || info.st_uid != 0 || (info.st_mode & 0777) != 0644)
         return fail("Unsafe package activity lock.");
     if (flock(descriptor, LOCK_EX | LOCK_NB) < 0)
-        return fail("Close all NIPAT Experimental08 sessions before installing.");
+        return fail("Close all NIPAT Desktop sessions before installing.");
     const char *name = strrchr(argv[0], '/');
     name = name ? name + 1 : argv[0];
     if (strcmp(name, "preinstall") == 0) {
-        const char *app = "/Applications/NIPAT Experimental08.app";
+        const char *app = "/Applications/NIPAT Desktop.app";
         if (lstat(app, &info) == 0 && (!S_ISDIR(info.st_mode) || info.st_uid != 0))
             return fail("Application destination is not an installer-owned directory.");
         int marker = open(MARKER, O_CREAT | O_WRONLY | O_NOFOLLOW, 0644);

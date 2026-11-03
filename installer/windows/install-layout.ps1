@@ -171,7 +171,7 @@ function Read-NipatForeignLayoutPaths([string] $File, [string] $Channel) {
         -not (($record.schema_version -is [int]) -or ($record.schema_version -is [long])) -or
         $record.schema_version -ne 1) { throw "Metadati di una precedente installazione non validi: $File" }
     $hasChannel = $null -ne $record.PSObject.Properties['installation_channel']
-    if (($Channel -in @('preview-0.5', 'desktop') -and (-not $hasChannel -or $record.installation_channel -cne $Channel)) -or
+    if (($Channel -in @('preview-0.5', 'experimental08') -and (-not $hasChannel -or $record.installation_channel -cne $Channel)) -or
         ($Channel -ceq 'stable' -and $hasChannel -and $record.installation_channel -cne 'stable')) {
         throw "Identita della precedente installazione non riconosciuta: $File"
     }
@@ -186,13 +186,13 @@ function Read-NipatForeignLayoutPaths([string] $File, [string] $Channel) {
 }
 
 function Get-NipatForeignInstallationPaths {
-    # Read-only protection, including custom Desktop locations retained after
+    # Read-only protection, including custom experimental locations retained after
     # uninstall. Foreign paths never become defaults or ownership receipts.
     $stableApp = Join-Path $env:LOCALAPPDATA 'Programs\NIPAT'
     $paths = @($stableApp, (Join-Path $env:LOCALAPPDATA 'NIPAT'))
     foreach ($foreign in @(
         @{ Channel = 'preview-0.5'; Directory = 'NIPAT-0.5-Preview' },
-        @{ Channel = 'desktop'; Directory = 'NIPAT-Desktop' }
+        @{ Channel = 'experimental08'; Directory = 'NIPAT-Experimental08' }
     )) {
         $foreignApp = Join-Path (Join-Path $env:LOCALAPPDATA 'Programs') $foreign.Directory
         $foreignBase = Join-Path $env:LOCALAPPDATA $foreign.Directory
@@ -237,9 +237,9 @@ function Assert-NipatInstallLayout($Layout, [switch] $CheckExisting, [switch] $H
         -not (($Layout.schema_version -is [int]) -or ($Layout.schema_version -is [long])) -or
         $Layout.schema_version -ne 1) { throw 'Configurazione delle cartelle NIPAT non valida.' }
     Assert-NipatInstallationChannel $Layout 'Le cartelle selezionate'
-    $protected = @((Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\installations'),
-        (Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\preferences.json'),
-        (Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\activity.lock'))
+    $protected = @((Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\installations'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\activity.lock'))
     $protected += @(Get-NipatForeignInstallationPaths)
     foreach ($name in @('WINDIR', 'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432')) {
         $value = [Environment]::GetEnvironmentVariable($name)
@@ -327,9 +327,8 @@ function Get-NipatRuntimeDistroName([string] $RootfsSha256, [string] $RuntimeDir
     $sha = [Security.Cryptography.SHA256]::Create()
     try { $digest = [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($canonical))).Replace('-', '').ToLowerInvariant() }
     finally { $sha.Dispose() }
-    # The experimental prefix is 21 characters. Keep the complete name within
-    # the client's 64-character contract; full SHA-256 remains in the receipt.
-    return (Get-NipatInstallationProfile).distro_prefix + $RootfsSha256.Substring(0, 30) + '-' + $digest.Substring(0, 12)
+    # Preserve the supported Desktop namespace so existing runtimes can be reused.
+    return (Get-NipatInstallationProfile).distro_prefix + $RootfsSha256.Substring(0, 32) + '-' + $digest.Substring(0, 12)
 }
 
 function Get-NipatInstallLayoutHistoryDirectory {

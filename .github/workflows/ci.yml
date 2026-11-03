@@ -198,6 +198,15 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Verify original sample labels and unchanged scientific results
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-presentation-check
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_presentation.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Scientific regression and input-mode checks
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
@@ -215,6 +224,7 @@ jobs:
             ${{ runner.temp }}/nipat-validation/runs/**/run.json
             ${{ runner.temp }}/nipat-validation/runs/**/execution.log
             ${{ runner.temp }}/nipat-engine-check/
+            ${{ runner.temp }}/nipat-presentation-check/
           retention-days: 14
           if-no-files-found: ignore
 

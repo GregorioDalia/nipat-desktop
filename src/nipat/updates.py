@@ -29,7 +29,7 @@ REPOSITORY = "GregorioDalia/nipat-desktop"
 API = f"https://api.github.com/repos/{REPOSITORY}"
 WEB = f"https://github.com/{REPOSITORY}"
 UPDATER_VERSION = 1
-PLATFORMS = frozenset({"windows-x86_64", "linux-x86_64"})
+PLATFORMS = frozenset({"windows-x86_64", "linux-x86_64", "darwin-arm64", "darwin-x86_64"})
 MAX_ASSET_SIZE = 2**31 - 1
 JSON_LIMIT = 2 * 1024 * 1024
 MANIFEST_LIMIT = 128 * 1024
@@ -58,9 +58,17 @@ def version_key(version: str) -> tuple[int, int, int, int, int]:
 
 def detect_platform() -> str:
     machine = host_platform.machine().lower()
-    if machine not in {"amd64", "x86_64"} or sys.platform not in {"win32", "linux"}:
-        raise UpdateError("Gli aggiornamenti richiedono Windows o Linux x86_64.", status="unsupported_platform")
-    return "windows-x86_64" if sys.platform == "win32" else "linux-x86_64"
+    if sys.platform == "darwin" and machine in {"arm64", "x86_64"}:
+        return "darwin-" + machine
+    if machine in {"amd64", "x86_64"} and sys.platform in {"win32", "linux"}:
+        return "windows-x86_64" if sys.platform == "win32" else "linux-x86_64"
+    raise UpdateError("Aggiornamenti disponibili per Windows/Linux x86_64 e macOS Intel/Apple Silicon.",
+                      status="unsupported_platform")
+
+
+def manifest_filename(platform: str) -> str:
+    # Existing Windows/Linux clients reject unknown platforms. Preserve their feed.
+    return "update-manifest-macos.json" if platform.startswith("darwin-") else "update-manifest.json"
 
 
 def _installer_name(version: str, platform: str) -> str:
@@ -70,6 +78,8 @@ def _installer_name(version: str, platform: str) -> str:
     if platform == "linux-x86_64":
         debian_version = re.sub(r"(a|b|rc)([0-9]+)$", r"~\1\2", version)
         return f"nipat-desktop_{debian_version}_amd64.deb"
+    if platform in {"darwin-arm64", "darwin-x86_64"}:
+        return f"NIPAT-{version}-macos-{platform.removeprefix('darwin-')}.pkg"
     raise UpdateError("Piattaforma aggiornamenti non supportata.", status="unsupported_platform")
 
 
@@ -276,12 +286,12 @@ class UpdateClient:
         assets = release.get("assets")
         _required(isinstance(assets, list) and all(isinstance(asset, dict) for asset in assets),
                   "Elenco dei pacchetti della release non valido.")
-        descriptors = [asset for asset in assets if asset.get("name") == "update-manifest.json"]
+        descriptors = [asset for asset in assets if asset.get("name") == manifest_filename(platform)]
         if not descriptors:
             return None
         _required(len(descriptors) == 1, "Manifest di aggiornamento duplicato.")
         descriptor = descriptors[0]
-        url = f"{WEB}/releases/download/{tag}/update-manifest.json"
+        url = f"{WEB}/releases/download/{tag}/{manifest_filename(platform)}"
         _required(descriptor.get("browser_download_url") == url and descriptor.get("state") == "uploaded"
                   and type(descriptor.get("size")) is int and 0 < descriptor["size"] <= MANIFEST_LIMIT,
                   "Manifest di aggiornamento non disponibile o estraneo alla release.")
@@ -343,7 +353,7 @@ class UpdateClient:
                     continue
                 _required(release.get("html_url") == f"{WEB}/releases/tag/{tag}", "Release appartenente a un altro progetto.")
                 has_manifest = isinstance(release.get("assets"), list) and any(
-                    isinstance(asset, dict) and asset.get("name") == "update-manifest.json" for asset in release["assets"])
+                    isinstance(asset, dict) and asset.get("name") == manifest_filename(platform) for asset in release["assets"])
                 if not has_manifest:
                     continue
                 had_managed_release = True

@@ -1,6 +1,6 @@
 # Architettura di NIPAT
 
-NIPAT Experimental08 è un'applicazione locale con interfaccia a riga di comando e menu
+NIPAT Desktop è un'applicazione locale con interfaccia a riga di comando e menu
 guidato. Il client Python gestisce l'interazione, i percorsi, la configurazione
 e i registri delle esecuzioni. Un'immagine Linux autosufficiente contiene R,
 samtools, le dipendenze, gli script scientifici e il codice necessario alla
@@ -34,7 +34,7 @@ con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
 come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
 workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
-singoli. Questo documento descrive la versione sperimentale 0.8.0a1.
+singoli. Questo documento descrive la versione 0.8.2.
 
 ### Confini dei workflow automatici
 
@@ -154,8 +154,8 @@ associati nello stato del piano; i CSV scientifici non vengono riscritti.
 
 Le preferenze dell'utente sono separate dal backend installato e dai record
 delle analisi. Su Windows risiedono in
-`%LOCALAPPDATA%\NIPAT-Experimental08\preferences.json`; su macOS in
-`~/Library/Application Support/NIPAT-Experimental08/preferences.json`. Comprendono
+`%LOCALAPPDATA%\NIPAT-Desktop\preferences.json`; su macOS in
+`~/Library/Application Support/NIPAT-Desktop/preferences.json`. Comprendono
 cartelle dati e risultati, modalità, riferimenti e parametri proposti per i
 workflow. Non comprendono campioni, coppie CPI o nomi dei run.
 Comprendono anche modalità dei checksum e limiti facoltativi del container.
@@ -200,20 +200,15 @@ del container e conserva un rapporto separato.
 
 ## Verifica degli aggiornamenti
 
-Il profilo sperimentale `experimental08` esclude la verifica e l'installazione
-degli aggiornamenti del canale stabile. Una nuova build viene scaricata
-esplicitamente. Il numero di versione maggiore non autorizza il client stabile
-a proporre una migrazione al profilo sperimentale; analogamente, l'esperimento
-non sostituisce la propria installazione con un pacchetto `desktop`.
-
-I manifest identificano versione, commit, archivi e identità del prodotto.
-I checksum degli archivi verificano il contenuto, non sono firme digitali.
-I record delle analisi restano associati al client e all'immagine realmente
-utilizzati, indipendentemente dalla disponibilità di build successive.
+Il canale desktop pubblica pacchetti identificati da versione, commit e
+checksum. Windows e Ubuntu mantengono il manifest compatibile con i client
+precedenti; macOS usa un feed dedicato alle due architetture. Il download
+viene verificato prima del passaggio all'installatore. Le installazioni
+sperimentali conservano identità distinta.
 
 ## Installazione Windows
 
-Il profilo `experimental08` identifica applicazione, collegamenti e stato di
+Il profilo `desktop` identifica applicazione, collegamenti e stato di
 configurazione. Il setup gestisce cinque radici configurabili per applicazione,
 ambiente WSL, cache, dati e risultati. Le radici devono essere locali, fisse,
 scrivibili e indipendenti, senza sovrapposizioni o collegamenti nel percorso.
@@ -264,10 +259,10 @@ non realizzano un rollback completo della versione applicativa.
 
 I due pacchetti `.pkg` contengono il client, Python portabile e Lima nativi
 per l'architettura host, insieme allo stesso archivio scientifico AMD64 usato
-su Windows. L'applicazione è `/Applications/NIPAT Experimental08.app`.
+su Windows. L'applicazione è `/Applications/NIPAT Desktop.app`.
 La configurazione per utente vive in
-`~/Library/Application Support/NIPAT-Experimental08`; `LIMA_HOME` è
-`~/.nipat08/lima`, un percorso breve dedicato alla VM.
+`~/Library/Application Support/NIPAT-Desktop`; `LIMA_HOME` è
+`~/.nipat/lima`, un percorso breve dedicato alla VM.
 L'installer non riutilizza automaticamente le VM Lima dell'utente.
 
 Il primo avvio prepara il guest e il motore e verifica l'archivio incorporato
@@ -278,12 +273,10 @@ sono nella [guida macOS](INSTALLATORE_MACOS.md).
 
 ## Utilizzo Linux
 
-La 0.8 conserva il trasporto Docker Engine locale e i controlli scientifici
-Ubuntu, ma non produce un nuovo pacchetto `.deb`. La distribuzione Ubuntu
-stabile mantiene la propria identità e il proprio ciclo di pubblicazione.
-Il checkout sperimentale è utilizzabile da sorgenti in un ambiente separato,
-secondo la [guida di distribuzione](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti).
-Non sono richieste modifiche agli script R per selezionare il trasporto.
+Ubuntu 24.04 x86_64 usa Docker Engine locale. Il pacchetto `.deb` include
+l'archivio scientifico e viene verificato con installazione, analisi e rimozione
+sul runner Ubuntu. APT installa le dipendenze mancanti; l'accesso dell'utente
+al daemon resta una scelta amministrativa. Non è presente una VM NIPAT.
 
 ## Limiti tecnici
 
@@ -296,3 +289,16 @@ della completezza e correttezza scientifica dei risultati.
 Gli hash identificano i file e rilevano alterazioni rispetto al manifest;
 non costituiscono una validazione scientifica. Le prove del motore, le prove
 dell'installatore e la validazione di dominio sono evidenze separate.
+
+## Presentazione e risorse
+
+Gli identificativi interni dei campioni sono separati dalle etichette visibili.
+La presentazione genera copie per la consultazione con nomi originali, mantenendo
+gli artefatti scientifici canonici e le loro associazioni. La sostituzione riguarda
+soltanto identità e testo, non conteggi o stime. Il run collega entrambe le viste.
+
+La gestione risorse distingue configurazione salvata e ambiente effettivo.
+Un blocco delle analisi coordina le riconfigurazioni; anteprima e hash della
+configurazione impediscono di applicare una proposta divenuta obsoleta.
+WSL richiede una conferma distinta per l'effetto globale; Lima è dedicata;
+Linux nativo usa limiti del container senza riconfigurare il sistema.

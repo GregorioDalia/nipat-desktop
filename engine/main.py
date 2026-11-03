@@ -27,7 +27,7 @@ SCRIPT_PATHS = {
 }
 PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
-    "catalog.py", "plan.py", "executor.py", "outputs.py",
+    "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R",
 )
 CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
@@ -222,16 +222,21 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
     """Supervise unchanged R and validate the same outputs as a plan step."""
     from nipat_scientific.executor import _Cancellation, _run_process, _atomic_json
     from nipat_scientific.outputs import validate_standalone_outputs
+    from nipat_scientific.presentation import prepare_presentation, finish_presentation
 
     cancellation = _Cancellation()
     previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
     try:
         for signum in previous:
             signal.signal(signum, cancellation.receive)
-        code = _run_process(["Rscript", str(script), *native_arguments], Path.cwd(), None, cancellation)
+        command = prepare_presentation(request, script, native_arguments)
+        code = _run_process(command, Path.cwd(), None, cancellation)
         if code or cancellation.signum is not None:
             return cancellation.exit_code if cancellation.signum is not None else code
         artifacts = validate_standalone_outputs(request)
+        presentation = finish_presentation(request, Path(request["out_dir"]).parent)
+        if presentation is not None:
+            artifacts["presentation"] = presentation
         report = Path(request["work_dir"]) / "scientific-validation.json"
         _atomic_json(report, {"schema_version": 1, "workflow": request["workflow"],
                               "status": "validated", "artifacts": artifacts,

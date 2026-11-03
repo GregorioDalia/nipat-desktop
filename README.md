@@ -3,25 +3,24 @@
   <img src="assets/branding/nipat-logo.svg" alt="NIPAT" width="335">
 </picture>
 
-# NIPAT Experimental08
+# NIPAT Desktop
 
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione documentata: NIPAT Experimental08 0.8.0a1.** È una versione
-sperimentale separata dalla distribuzione stabile. Estende l'installazione a
-Windows 10 e macOS conservando CLI, workflow e core scientifico R.
-La compatibilità dichiarata è un obiettivo del collaudo: non equivale a una
-qualificazione già completata su Windows 10 o sui Mac dei ricercatori.
+**Versione documentata: NIPAT Desktop 0.8.2.**
+Scaricare il pacchetto del proprio sistema da
+[GitHub Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+La [guida di distribuzione](docs/DISTRIBUZIONE.md) descrive requisiti e installazione;
+le [note della versione](docs/RELEASE_0.8.2.md) identificano le verifiche effettuate.
 
-I pacchetti sperimentali provengono dalla build dedicata del branch
-`experiment/0.8-portability` o da una pre-release identificata come sperimentale.
-Consultare le [note 0.8.0a1](docs/RELEASE_0.8.0a1.md) e la
-[guida di distribuzione](docs/DISTRIBUZIONE.md). Il canale stabile rimane
-[NIPAT Desktop 0.7.2](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.7.2).
-L'installazione sperimentale usa una propria identità, cartelle e configurazione.
+I risultati per la consultazione conservano i nomi originali dei campioni
+nelle tabelle e nei grafici. Ogni run registra l'associazione con gli
+identificativi interni, i parametri effettivi e gli esiti delle fasi.
+Il menu **Configura** distingue risorse del computer, della VM e del container,
+con anteprima delle modifiche e indicazione di quelle ancora da applicare.
 
 ## Analisi disponibili
 
@@ -61,41 +60,25 @@ modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
 
-| Sistema | Ambiente scientifico | Pacchetto sperimentale |
+| Sistema | Ambiente scientifico | Pacchetto |
 | --- | --- | --- |
-| Windows 10 22H2 x64, build 19045, o Windows 11 x64 | WSL2 dedicato con Docker Engine gestito da NIPAT | Unico `NIPAT-Setup.exe`. |
-| macOS 14 o successivo, Intel | VM Lima con Docker Engine e immagine Linux AMD64 | `NIPAT-Experimental-0.8.0a1-macos-x86_64.pkg`. |
-| macOS 14 o successivo, Apple Silicon | VM Lima ARM64 con Rosetta e immagine Linux AMD64 | `NIPAT-Experimental-0.8.0a1-macos-arm64.pkg`. |
+| Windows 10 22H2 x64, build 19045, o Windows 11 x64 | WSL2 e Docker Engine gestiti da NIPAT | `NIPAT-Setup.exe` |
+| macOS 14 o successivo, Intel | VM Lima e container AMD64 | `NIPAT-0.8.2-macos-x86_64.pkg` |
+| macOS 14 o successivo, Apple Silicon | VM Lima ARM64, Rosetta e container AMD64 | `NIPAT-0.8.2-macos-arm64.pkg` |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale | `nipat-desktop_0.8.2_amd64.deb` |
 
-Su Windows, il setup rileva sistema e disponibilità di WSL, prepara i componenti
-mancanti e conserva un'installazione distinta da NIPAT Desktop. Non sono
-supportati Windows Server, Windows ARM o sistemi a 32 bit. L'attivazione o
-l'aggiornamento di WSL può richiedere Internet, consenso amministrativo e
-riavvio. Non occorre installare Python, R, samtools o Docker Desktop.
-Aprire il setup dal proprio account, completare la preparazione fino a
-`NIPAT: ready`, quindi avviare **NIPAT Experimental08** dal menu Start.
-Le cinque cartelle di applicazione, ambiente WSL, cache, dati e risultati
-sono configurabili. La [guida Windows](docs/INSTALLATORE_WINDOWS.md)
-descrive requisiti, riparazione e rimozione.
+Windows e macOS includono Python e i componenti NIPAT. Docker Desktop, R e
+samtools installati separatamente non sono necessari. Il setup Windows
+prepara WSL e può richiedere consenso amministrativo e riavvio; il primo
+avvio Mac prepara Lima. Queste operazioni possono richiedere Internet.
+Ubuntu usa APT per le dipendenze e richiede accesso autorizzato al daemon Docker.
+Dopo la preparazione, aprire **NIPAT Desktop** per accedere al menu.
 
-Su macOS, scaricare il `.pkg` della propria architettura, installarlo e aprire
-**NIPAT Experimental08** da Applicazioni. Si apre il menu CLI nel Terminale;
-il primo avvio prepara l'ambiente Lima e richiede una connessione Internet.
-Python e Lima sono inclusi; Homebrew e Docker Desktop non sono prerequisiti.
-Su Apple Silicon il calcolo usa inizialmente la stessa immagine AMD64, tramite
-Rosetta: prestazioni ed equivalenza dei risultati richiedono prove specifiche.
-Consultare la [guida macOS](docs/INSTALLATORE_MACOS.md).
-
-I pacchetti sperimentali non dispongono di firma NIPAT riconosciuta né, su
-macOS, di notarizzazione Apple. Le protezioni del dispositivo possono impedirne
-l'esecuzione. Il setup non modifica queste protezioni e non garantisce
-un'installazione senza intervento su computer gestiti.
-
-Ubuntu 24.04 LTS x86_64 continua a essere il riferimento per Docker Engine
-locale, test scientifici e uso da sorgenti. Le modalità di confezionamento
-Linux della distribuzione stabile 0.7.2 sono descritte nella
-[guida Linux](docs/INSTALLATORE_LINUX.md); questa sperimentazione non produce
-un nuovo `.deb`.
+Le guide [Windows](docs/INSTALLATORE_WINDOWS.md), [macOS](docs/INSTALLATORE_MACOS.md)
+e [Ubuntu](docs/INSTALLATORE_LINUX.md) descrivono requisiti, aggiornamento e rimozione.
+I pacchetti non hanno una firma NIPAT riconosciuta dai sistemi; macOS non dispone
+di notarizzazione Apple. La guida Mac spiega l'autorizzazione specifica in
+Privacy e sicurezza. Il setup non disattiva le protezioni del dispositivo.
 
 ## Utilizzo
 
@@ -119,9 +102,9 @@ Ogni analisi permette di modificarli prima della conferma; campioni, coppie
 e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
 CLI diretti. **6 — Ultima esecuzione** riapre il run più recente della sessione;
 **7 — Guida e informazioni** e **8 — Verifica ambiente** separano consultazione
-e diagnostica. Nel profilo sperimentale la verifica degli aggiornamenti è
-disabilitata: una nuova build 0.8 va scaricata esplicitamente dalla sua pagina.
-Non è prevista la migrazione automatica dal canale stabile o verso di esso.
+e diagnostica. **9 — Verifica aggiornamenti** consulta le release compatibili
+e verifica il download del pacchetto. Le installazioni sperimentali conservano
+identità e dati separati e non vengono adottate automaticamente.
 Dopo la preparazione l'applicazione esegue le analisi offline.
 **W — Workflow automatici** offre le tre composizioni DNPcall e SNPcall su più
 campioni, con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
@@ -275,12 +258,13 @@ indipendenti e problemi riproducibili.
 ## Documentazione e licenza
 
 - [Sintesi del prodotto](SUNTO.md)
-- [Note della versione sperimentale 0.8.0a1](docs/RELEASE_0.8.0a1.md)
+- [Risorse e memoria](docs/RISORSE.md)
+- [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
 - [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [macOS](docs/INSTALLATORE_MACOS.md)
-- [Installatore Ubuntu della distribuzione stabile](docs/INSTALLATORE_LINUX.md)
+- [Installatore Ubuntu](docs/INSTALLATORE_LINUX.md)
 - [Architettura](docs/ARCHITECTURE.md)
 - [Piano di sviluppo: workflow e lingue](docs/ROADMAP.md)
 - [Controlli CI/CD](docs/CI_CD.md)

@@ -308,16 +308,18 @@ class GuidedSettings:
         from dataclasses import asdict
 
         values = asdict(self.preferences.execution_options())
-        labels = {"cpus": "Quota CPU", "memory_mb": "Memoria massima (MiB)",
+        labels = {"cpus": "Quota CPU per analisi", "memory_mb": "Limite RAM per analisi (MiB)",
                   "pids_limit": "Numero massimo di processi"}
         while True:
             ui.message("Le opzioni regolano le risorse del container e la provenienza dei file, senza modificare i parametri scientifici R.", kind="muted")
+            ui.message("Il limite RAM dell'analisi non aumenta la RAM di Lima o WSL. Scegliere 5 per vedere le risorse disponibili e configurare l'ambiente di calcolo.", kind="muted")
             ui.message("SHA-256 completo legge tutti i BAM e FASTA: puo' richiedere tempo. Ctrl+C annulla. La quota CPU non limita direttamente i worker di DNPcall; mantenere seriale se le risorse sono limitate.", kind="muted")
             ui.message("Un limite insufficiente di memoria o processi puo' interrompere un'analisi. :vuoto rimuove un limite; 9 salva, 0 scarta le modifiche.", kind="muted")
-            action = _menu(ui, "Configura / Esecuzione e provenienza", [
+            action = _menu(ui, "Configura / Risorse e provenienza", [
                 ("1", "Checksum degli input", "Completi" if values["input_hashes"] == "full" else "Automatici fino a 16 MiB"),
                 *[(str(index), labels[key], str(values[key]) if values[key] is not None else "Nessun limite NIPAT")
                   for index, key in enumerate(("cpus", "memory_mb", "pids_limit"), 2)],
+                ("5", "Risorse dell'ambiente di calcolo", "RAM e CPU del computer, Lima o WSL e limiti per analisi"),
                 ("9", "Salva modifiche", "Per le prossime analisi guidate"),
                 ("0", "Annulla modifiche", "Torna a Configura"),
             ], default="0")
@@ -335,6 +337,10 @@ class GuidedSettings:
                 ], default="2" if values["input_hashes"] == "full" else "1")
                 if selected in {"1", "2"}:
                     values["input_hashes"] = "auto" if selected == "1" else "full"
+                continue
+            if action == "5":
+                from nipat.resource_ui import configure_resources
+                configure_resources(ui, self.layout, ExecutionOptions(**values))
                 continue
             key = {"2": "cpus", "3": "memory_mb", "4": "pids_limit"}.get(action)
             if key is None:
@@ -369,7 +375,7 @@ class GuidedSettings:
                 ("6", "Riepilogo impostazioni", "Valori in uso e file delle preferenze"),
                 ("7", "Ripristina impostazioni", "Conferma richiesta; dati conservati"),
                 ("8", "Aggiornamenti", "Canale e verifica all'avvio"),
-                ("9", "Esecuzione e provenienza", "Checksum degli input e limiti delle risorse"),
+                ("9", "Risorse e provenienza", "RAM, CPU, ambiente di calcolo e checksum degli input"),
                 ("0", "Torna al menu", ""),
             ], default="0")
             if action in {"0", ":indietro"}:

@@ -88,6 +88,7 @@ class DnpWorkflowTests(unittest.TestCase):
             self.request_for(run), {
                 "schema_version": 1, "workflow": "dnp-call",
                 "panel": "/workspace/inputs/dnp-panel.txt",
+                "presentation": {"samples": {"sample_0001": self.bam.name}, "pairs": {}},
                 "samples": [{"path": "/workspace/inputs/bams/sample_0001.bam",
                              "sample_id": "sample_0001"}],
                 "reference": "/workspace/inputs/reference/genome.fa", "parallel": False,

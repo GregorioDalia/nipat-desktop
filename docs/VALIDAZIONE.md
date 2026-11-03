@@ -1,24 +1,23 @@
 # Validazione tecnica e di dominio
 
 Questa scheda registra separatamente installazione, esecuzione e concordanza
-scientifica di **NIPAT Experimental08 0.8.0a1**. Identificare sempre versione,
-commit, pacchetto e piattaforma realmente provati. Gli esiti della stabile
-0.7.2 non attestano automaticamente il comportamento dell'esperimento.
+scientifica di **NIPAT Desktop 0.8.2**. Identificare sempre versione,
+commit, pacchetto e piattaforma realmente provati. Le evidenze delle versioni
+precedenti restano storiche e non attestano automaticamente la candidata.
 
 La prova può procedere per incrementi: registrare ciò che è stato eseguito
 e ciò che rimane da verificare, senza considerare un caso non eseguito come
 superato. Gli autotest controllano soltanto i casi inclusi; il giudizio
 scientifico su dati rappresentativi richiede una valutazione distinta.
-Il [protocollo dei pacchetti](ACCETTAZIONE_INSTALLATORI.md) separa l'esperimento
-dalla pubblicazione stabile e dalla qualificazione desktop completa.
+Il [protocollo dei pacchetti](ACCETTAZIONE_INSTALLATORI.md) distingue pubblicazione per ricerca e qualificazione desktop completa.
 
 ## Ambiente e preparazione
 
 Compilare una scheda per ciascuna combinazione di sistema e pacchetto:
 Windows 10 22H2 x64 build 19045, Windows 11 x64, macOS 14 o successivo Intel,
 macOS 14 o successivo Apple Silicon. Windows usa WSL2; macOS usa Lima, con
-immagine scientifica AMD64 e Rosetta su Apple Silicon. Il checkout Linux
-con Docker Engine locale è una prova da sorgenti, distinta dagli installatori.
+immagine scientifica AMD64 e Rosetta su Apple Silicon. Ubuntu 24.04 x86_64 usa
+Docker Engine locale; distinguere pacchetto installato e checkout da sorgenti.
 
 | Campo | Valore da registrare |
 | --- | --- |
@@ -27,19 +26,19 @@ con Docker Engine locale è una prova da sorgenti, distinta dagli installatori.
 | Origine del pacchetto e checksum, se disponibile | |
 | Windows: versione e disponibilità iniziale di WSL2 | |
 | macOS: modello, architettura, versione Lima e disponibilità Rosetta | |
-| Linux da sorgenti: versioni Docker Engine e Compose, origine e accesso utente | |
-| Prima installazione o aggiornamento dello stesso profilo sperimentale | |
+| Ubuntu: versioni Docker Engine e Compose, origine e accesso utente | |
+| Prima installazione o aggiornamento dello profilo desktop | |
 | Cartelle dati e risultati configurate | |
 | Esito del setup, eventuali autorizzazioni o riavvii | |
 | Esito di `doctor --runtime` | |
 | Esito finale di `self-test` | |
 | Apertura e interazione con il menu | |
-| Isolamento: nessuna proposta di migrazione al/dal canale stabile | |
+| Isolamento: installazioni sperimentali conservate e non adottate | |
 | Preferenze salvate in Configura e valori effettivi nel riepilogo dell'analisi | |
 | Modalità checksum degli input e limiti CPU, memoria e processi | |
 
 Nel pacchetto Windows verificare l'avvio con doppio clic di `NIPAT-Setup.exe`,
-il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Experimental08**.
+il completamento con `NIPAT: ready` e l'apertura dell'icona **NIPAT Desktop**.
 Annotare eventuali passaggi manuali non previsti. Conservare `setup.log` e
 `state.json` nella sottocartella `.runtime\installer` dell'applicazione
 selezionata nel setup.
@@ -49,7 +48,7 @@ costituiscono prove distinte dall'installazione su WSL già funzionante.
 Sul Mac verificare l'apertura del `.pkg` della propria architettura, l'avvio
 da Applicazioni, la preparazione Lima e l'apertura del menu nel Terminale.
 Conservare `runtime.json` e `setup.log` in
-`~/Library/Application Support/NIPAT-Experimental08/.runtime/macos`.
+`~/Library/Application Support/NIPAT-Desktop/.runtime/macos`.
 Annotare richieste di autorizzazione e limitazioni di Gatekeeper o dei percorsi.
 Su Apple Silicon registrare esplicitamente il funzionamento AMD64 tramite
 Rosetta: la sola riuscita su Intel non copre questa configurazione.
@@ -179,17 +178,23 @@ Gli stati e i limiti dei record sono descritti in [ESECUZIONI.md](ESECUZIONI.md)
 
 ## Verifica dell'isolamento e degli aggiornamenti
 
-Nel profilo sperimentale, **Verifica aggiornamenti** non deve proporre né
-scaricare il pacchetto stabile. L'installazione 0.7.2, se presente, mantiene
-configurazione, runtime, dati e risultati. Verificare la separazione dei
-percorsi e il nome dell'applicazione prima di avviare le analisi.
+Verificare che **Verifica aggiornamenti** proponga soltanto pacchetti compatibili.
+Registrare versioni iniziale e finale, checksum e log. Dopo l'aggiornamento,
+controllare preferenze, percorsi e conservazione dei risultati, poi eseguire
+un caso noto. Una reinstallazione della stessa build non prova l'aggiornamento
+fra versioni differenti. Le installazioni sperimentali, se presenti, devono
+restare separate.
 
-Per provare una nuova build sperimentale, registrare versioni iniziale e
-finale, checksum degli installatori e log. Chiudere le analisi prima di
-installare. Controllare preferenze, percorsi e conservazione dei risultati,
-quindi eseguire un caso noto. I record dei run devono identificare le versioni
-con cui sono stati prodotti. Una reinstallazione della stessa build non
-costituisce una prova di aggiornamento fra versioni differenti.
+Per le risorse, registrare RAM fisica, configurazione VM, valori effettivi e
+limite del container. Provare annullamento dell'anteprima, salvataggio con
+riavvio rimandato e applicazione dopo conferma. Verificare che i backup esistano
+e che impostazioni estranee siano conservate. Le prove WSL non devono interrompere
+lavori non concordati sulle altre distribuzioni.
+
+Per i campioni, usare anche nomi con spazi e due BAM omonimi in cartelle diverse.
+Controllare la mappa, le etichette nelle tabelle e nei PDF e la corrispondenza
+numerica con gli artefatti scientifici. Per un errore, distinguere diagnosi
+acquisita, non disponibile e semplice ipotesi sul codice di uscita.
 
 ## Conservazione e segnalazioni
 

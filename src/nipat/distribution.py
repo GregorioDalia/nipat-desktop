@@ -1,10 +1,10 @@
-"""Installation identity for the isolated portability experiment."""
+"""Installation identity for the official desktop distribution."""
 
 import re
 
-CHANNEL = "experimental08"
-WINDOWS_DIRECTORY = "NIPAT-Experimental08"
-UNIX_DIRECTORY = "nipat-experimental08"
+CHANNEL = "desktop"
+WINDOWS_DIRECTORY = "NIPAT-Desktop"
+UNIX_DIRECTORY = "nipat-desktop"
 EXPERIMENT_URL = "https://github.com/GregorioDalia/nipat-desktop/releases"
 
 

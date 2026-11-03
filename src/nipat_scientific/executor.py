@@ -33,6 +33,9 @@ from nipat_scientific.panels import read_dnp_list, read_position_panel, read_snp
 from nipat_scientific.outputs import _artifact, _collect_outputs, _cpi_bindings
 from nipat_scientific.plan import validate_plan
 from nipat_scientific.snp import prepare_snp
+from nipat_scientific.presentation import (
+    step_presentation, prepare_presentation, finish_presentation, finish_plan_presentation,
+)
 
 
 SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi"})
@@ -287,12 +290,19 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             work, output = directory / "work", directory / "output"
             request = {"schema_version": 1, "workflow": step["workflow"],
                        "work_dir": str(work), "out_dir": str(output)}
+
+            def record_request(bindings=()):
+                presentation = step_presentation(plan, step, request, bindings)
+                if presentation is not None:
+                    request["presentation"] = presentation
+                _atomic_json(directory / "request.json", request)
+
             if step["workflow"] == "dnp-call":
                 request.update({"panel": step["inputs"]["panel"],
                                 "samples": [{"path": samples[identifier]["path"], "sample_id": f"sample_{number:04d}"}
                                             for number, identifier in enumerate(step["inputs"]["samples"], 1)],
                                 "reference": step["inputs"]["reference"], "parallel": step["parameters"]["parallel"]})
-                _atomic_json(directory / "request.json", request)
+                record_request()
                 prepared = prepare_dnp(request)
                 native, cwd = prepared.native_arguments, prepared.working_dir
             elif step["workflow"] == "snp-call":
@@ -303,7 +313,7 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                                 "bam": path if mode == "bam" else None,
                                 "pileup": path if mode == "pileup" else None,
                                 "reference": step["inputs"]["reference"]})
-                _atomic_json(directory / "request.json", request)
+                record_request()
                 _atomic_json(root / "workflow-state.json", state)
                 prepared = prepare_snp(request)
                 native, cwd = prepared.native_arguments, work
@@ -343,7 +353,7 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                     selected.append({"path": str(path), "name": f"table_{number:04d}.txt"})
                 request["panel"] = step["inputs"]["panel"]
                 request["samples"] = selected
-                _atomic_json(directory / "request.json", request)
+                record_request()
                 native, cwd = prepare_contamination(request), work
             else:
                 selections, pairs = _cpi_bindings(step)
@@ -361,7 +371,7 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                     "popfreq": step["inputs"]["popfreq"], "cutoffs": step["inputs"]["cutoffs"],
                     "cutoff_mode": step["parameters"]["cutoff_mode"], "err_const": step["parameters"]["err_const"],
                 })
-                _atomic_json(directory / "request.json", request)
+                record_request(pairs)
                 _atomic_json(root / "workflow-state.json", state)
                 native, cwd = prepare_cpi(request), work
             if cancellation.signum is not None:
@@ -369,7 +379,7 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             validation_report = work / "input-validation.json"
             record["input_validation"] = _artifact(validation_report, root, work)
             record["input_warnings"] = json.loads(validation_report.read_text(encoding="utf-8"))["warnings"]
-            command = ["Rscript", str(scripts[step["workflow"]]), *native]
+            command = prepare_presentation(request, scripts[step["workflow"]], native)
             record["command"] = command
             _atomic_json(root / "workflow-state.json", state)
             print(f"Workflow step {step['id']}: {step['workflow']} (log: {record['log']})", file=sys.stderr, flush=True)
@@ -383,6 +393,9 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             if code:
                 raise PlanExecutionError("execution.process", f"{step['id']} exited with code {code}; see {record['log']}.")
             artifacts = _collect_outputs(step, request, root, output)
+            presentation = finish_presentation(request, root)
+            if presentation is not None:
+                artifacts["presentation"] = presentation
             for warning in artifacts.get("quality_warnings", []):
                 print(f"NIPAT output warning [{warning['code']}]: {warning}", file=sys.stderr, flush=True)
             if cancellation.signum is not None:
@@ -423,5 +436,13 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                     record.update(status="blocked", finished_utc=_utc(),
                                   error={"code": "execution.stopped", "message": "The plan stops after a failed or cancelled step."})
         state["finished_utc"] = _utc()
+        if "presentation" in plan:
+            try:
+                state["presentation"] = finish_plan_presentation(plan, state, root)
+            except (OSError, ValueError, ValidationError) as exc:
+                state["presentation_error"] = str(exc)
+                if state["status"] == "succeeded":
+                    state.update(status="failed", exit_code=2,
+                                 error={"code": "presentation.output", "message": str(exc)})
         _atomic_json(root / "workflow-state.json", state)
     return state

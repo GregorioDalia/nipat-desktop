@@ -279,7 +279,7 @@ tests/test_scientific_preflight.py
 tests/test_installation_client.py
 .github/scripts/test_component_inventory.py
 
-# Experimental 0.8 portability.
+# Platform-specific components.
 .github/scripts/check_macos.py
 .github/scripts/experimental_downloads.py
 .github/scripts/test_experimental_ci.py
@@ -323,3 +323,24 @@ installer/macos/licenses/python-build-standalone/LICENSE.zlib-ng.txt
 installer/macos/licenses/python-build-standalone/LICENSE.zlib.txt
 installer/macos/licenses/python-build-standalone/LICENSE.zstd.txt
 installer/macos/licenses/python-build-standalone/provenance.json
+
+# Readable results, resource management and official multi-platform delivery.
+.github/scripts/installer_downloads.py
+.github/scripts/macos_release.py
+.github/scripts/test_macos_release.py
+.github/scripts/test_official_delivery.py
+.github/scripts/verify_release_source.py
+docs/RELEASE_0.8.2.md
+docs/RISORSE.md
+scripts/verify_presentation.py
+src/nipat/execution/diagnostics.py
+src/nipat/resource_ui.py
+src/nipat/resources.py
+src/nipat/run_report.py
+src/nipat_scientific/presentation.R
+src/nipat_scientific/presentation.py
+tests/test_execution_diagnostics.py
+tests/test_resource_ui.py
+tests/test_resources.py
+tests/test_run_report.py
+tests/test_scientific_presentation.py

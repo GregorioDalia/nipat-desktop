@@ -12,6 +12,7 @@ import shutil
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_contamination_input, require_file, write_input_report
 from nipat_scientific.panels import read_position_panel, write_position_panel
 
@@ -45,8 +46,9 @@ def prepare_contamination(request: object) -> list[str]:
     output must be empty. Failed staging is left available for diagnosis;
     a subsequent invocation cannot overwrite it.
     """
-    if not isinstance(request, dict) or set(request) != REQUEST_FIELDS:
+    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
         raise ValidationError("Richiesta Contamination non valida: campi mancanti o inattesi.")
+    validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta Contamination non supportata.")
     if request["workflow"] != "contamination":

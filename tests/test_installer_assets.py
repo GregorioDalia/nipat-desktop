@@ -37,7 +37,7 @@ ROOTFS = "sha256:" + "c" * 64
 
 
 class InstallerAssetTests(unittest.TestCase):
-    def test_experimental_profile_is_disjoint_from_supported_desktop(self):
+    def test_official_profile_preserves_desktop_and_rejects_experiment(self):
         profile = assets.EXPECTED_INSTALLATION_PROFILE
         stable = {
             "schema_version": 1, "channel": "desktop", "display_name": "NIPAT Desktop",
@@ -46,10 +46,12 @@ class InstallerAssetTests(unittest.TestCase):
             "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
             "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45",
         }
-        for key in stable.keys() - {"schema_version"}:
-            self.assertNotEqual(profile[key], stable[key], key)
+        self.assertEqual(profile, stable)
+        assets.validate_installation_profile(stable)
+        experimental = dict(stable, channel="experimental08", app_dir_name="NIPAT-Experimental08",
+                            app_id="A83D7E42-162C-438A-9B56-17F86C9F0800")
         with self.assertRaises(ValueError):
-            assets.validate_installation_profile(stable)
+            assets.validate_installation_profile(experimental)
 
     def test_windows_entry_points_keep_the_same_supported_client_builds(self):
         root = Path(__file__).resolve().parents[1] / "installer/windows"
@@ -64,6 +66,16 @@ class InstallerAssetTests(unittest.TestCase):
         helper = (root / "EnableWsl.cs").read_text()
         self.assertIn("$Build -ne 19045 -and $Build -lt 22000", bootstrap)
         self.assertIn("build == 19045 || build >= 22000", helper)
+
+    def test_official_upgrade_preserves_runtime_namespace_and_protects_experimental_locations(self):
+        root = Path(__file__).resolve().parents[1] / "installer/windows"
+        layout = (root / "install-layout.ps1").read_text()
+        self.assertIn("$RootfsSha256.Substring(0, 32)", layout)
+        self.assertIn("@{ Channel = 'experimental08'; Directory = 'NIPAT-Experimental08' }", layout)
+        self.assertNotIn("@{ Channel = 'desktop'; Directory = 'NIPAT-Desktop' }", layout)
+        inno = (root / "NIPAT.iss").read_text()
+        self.assertIn("Programs\\NIPAT-Experimental08", inno)
+        self.assertNotIn("NipatPathsOverlap(Path, ExpandConstant('{localappdata}\\Programs\\NIPAT-Desktop'))", inno)
 
     def test_repository_release_versions_agree(self):
         # Packaging spans Python, PowerShell and Inno Setup. Catch a version
@@ -233,11 +245,11 @@ class InstallerAssetTests(unittest.TestCase):
         definitions = dict(re.findall(r'^#define (\w+) "([^\"]+)"$', include, re.MULTILINE))
         self.assertEqual(definitions, {
             "NipatVersion": "0.6.0",
-            "NipatAppId": "{{A83D7E42-162C-438A-9B56-17F86C9F0800}",
-            "NipatDisplayName": "NIPAT Experimental08",
-            "NipatAppDirectory": "NIPAT-Experimental08",
-            "NipatDataDirectory": "NIPAT-Experimental08",
-            "NipatResumeKey": "NIPAT-Experimental08-ResumeSetup",
+            "NipatAppId": "{{6B1702B6-F75C-4F8C-956F-86626C60AF45}",
+            "NipatDisplayName": "NIPAT Desktop",
+            "NipatAppDirectory": "NIPAT-Desktop",
+            "NipatDataDirectory": "NIPAT-Desktop",
+            "NipatResumeKey": "NIPAT-Desktop-ResumeSetup",
         })
         bad = copy.deepcopy(self.manifest)
         bad["installation_profile"]["display_name"] += '\"\n#define Injected "1'
@@ -367,7 +379,7 @@ class InstallerAssetTests(unittest.TestCase):
             self.assertEqual(assets.verify_application_payload(stage), inventory)
         record = json.loads(inventory.read_text())
         self.assertEqual(record["source_commit"], COMMIT)
-        self.assertEqual(record["installation_channel"], "experimental08")
+        self.assertEqual(record["installation_channel"], "desktop")
         entries = {entry["path"]: entry["sha256"] for entry in record["files"]}
         self.assertEqual(set(entries), {p.relative_to(app).as_posix() for p in app.rglob("*")
                                        if p.is_file() and p != inventory})
@@ -490,7 +502,7 @@ class InstallerAssetTests(unittest.TestCase):
             assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
         include = stage / assets.PROFILE_INCLUDE_NAME
         original = include.read_text(encoding="utf-8")
-        include.write_text(original.replace("NIPAT-Experimental08", "NIPAT"), encoding="utf-8")
+        include.write_text(original.replace("NIPAT-Desktop", "NIPAT"), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "profilo Inno"):
             assets.verify_embedded_inputs(self.manifest_path, stage, self.root)
         include.write_text(original, encoding="utf-8")

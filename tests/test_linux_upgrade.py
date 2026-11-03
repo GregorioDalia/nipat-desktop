@@ -9,6 +9,13 @@ SPEC.loader.exec_module(upgrade)
 
 
 class LinuxUpgradePreservationTests(unittest.TestCase):
+    def test_current_candidate_upgrades_the_last_published_official_baseline(self):
+        self.assertEqual(upgrade.baseline_for("0.8.2"), upgrade.CURRENT_BASELINE)
+        self.assertEqual(upgrade.CURRENT_BASELINE["version"], "0.7.2")
+        self.assertEqual(upgrade.CURRENT_BASELINE["sha256"],
+                         "e623897ffa46698250b1ee32216b1ab392607b6f7e3082a1932a164ef4992675")
+        self.assertEqual(upgrade.baseline_for("0.7.2"), upgrade.BASELINE)
+
     def test_upgrade_allows_new_runs_but_never_changes_previous_results(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

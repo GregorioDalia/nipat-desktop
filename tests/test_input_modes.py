@@ -69,6 +69,7 @@ class InputModeTests(unittest.TestCase):
         request = json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
         self.assertEqual(request, {
             "schema_version": 1, "workflow": "snp-call", "mode": "pileup",
+            "presentation": {"samples": {"sample_0001": pileup.name}, "pairs": {}},
             "panel": "/workspace/inputs/snp-list.tsv",
             "pileup": "/workspace/inputs/snp-pileup.txt", "bam": None, "reference": None,
             "work_dir": str(self.layout.container_path(run / "work")),
@@ -183,6 +184,7 @@ class InputModeTests(unittest.TestCase):
             str(self.layout.container_path(run / "work/engine-request.json")),
         ])
         self.assertEqual(self.cpi_request(run), {
+            "presentation": {"samples": {name.stem: name.name for name in args["input_dir"].iterdir()}, "pairs": {}},
             "schema_version": 1, "workflow": "cpi", "samples": [
                 {"path": f"/workspace/inputs/cpi/sample_{number:04d}.txt", "name": name}
                 for number, name in enumerate(("MotherInformative.txt", "FatherInformative.txt",

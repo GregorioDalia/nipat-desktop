@@ -52,6 +52,7 @@ class LinuxInstallationEvidenceTests(unittest.TestCase):
         current = set(check.checks_for_version("0.7.0a1"))
         self.assertEqual(current - previous, {"automatic_workflow_plan", "preferences_preserved"})
         self.assertEqual(set(check.checks_for_version("0.7.0")), current)
+        self.assertEqual(set(check.checks_for_version("0.8.2")), current)
         for version in ("0.5.0a1", "0.8.0", "0.7.0dev1"):
             with self.subTest(version=version), self.assertRaises(RuntimeError):
                 check.checks_for_version(version)

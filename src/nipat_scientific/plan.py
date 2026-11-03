@@ -15,6 +15,7 @@ import re
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.presentation import normalize_presentation
 
 
 SCHEMA_VERSION = 1
@@ -157,7 +158,8 @@ def validate_plan(document: object) -> dict:
     can be validated again unchanged; the report itself is not a request.
     Every scientific parameter supported by this contract must be explicit.
     """
-    _object(document, {"schema_version", "samples", "steps"}, "Plan")
+    fields = {"schema_version", "samples", "steps"}
+    _object(document, fields | ({"presentation"} if isinstance(document, dict) and "presentation" in document else set()), "Plan")
     if type(document["schema_version"]) is not int or document["schema_version"] != SCHEMA_VERSION:
         _fail("plan.schema", "Unsupported plan schema_version.")
     samples = {}
@@ -275,10 +277,19 @@ def validate_plan(document: object) -> dict:
             _fail("plan.output_kind", f"{consumer}: {producer} does not produce dnp-tables.")
         if sample not in source["inputs"]["samples"]:
             _fail("plan.output_sample", f"{consumer}: {producer} does not produce sample {sample}.")
+    presentation = None
+    if "presentation" in document:
+        pair_ids = {pair["id"] for step in normalized.values() if step["workflow"] == "cpi"
+                    for pair in step["inputs"]["pairs"]}
+        try:
+            presentation = normalize_presentation(document["presentation"], set(samples), pair_ids)
+        except ValidationError as exc:
+            _fail("plan.presentation", str(exc))
     return {
         "schema_version": SCHEMA_VERSION,
         "plan": {"schema_version": SCHEMA_VERSION,
                  "samples": [samples[name] for name in sorted(samples)],
-                 "steps": [normalized[name] for name in order]},
+                 "steps": [normalized[name] for name in order],
+                 **({"presentation": presentation} if presentation is not None else {})},
         "execution_order": order,
     }

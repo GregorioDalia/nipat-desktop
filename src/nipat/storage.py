@@ -62,7 +62,8 @@ def validate_managed_directories(layout: ProjectLayout) -> None:
     record is present, malformed metadata cannot silently waive the policy.
     """
     if os.environ.get("NIPAT_BACKEND") == "lima":
-        protected_roots = (Path.home() / ".nipat08", layout.workspace_dir / ".runtime",
+        protected_roots = (Path.home() / ".nipat", Path.home() / ".nipat08",
+                           layout.workspace_dir / ".runtime",
                            layout.project_dir)
         for role in ("data_dir", "runs_dir"):
             selected = getattr(layout, role).resolve()

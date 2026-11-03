@@ -1,126 +1,105 @@
 # Integrazione continua e distribuzione
 
-NIPAT separa test sui sorgenti, costruzione dei pacchetti, prove degli ambienti
-reali e pubblicazione. **NIPAT Experimental08 0.8.0a1** usa il branch
-`experiment/0.8-portability`, installatori Windows/macOS e un'identità distinta
-dal canale stabile. La distribuzione stabile Windows/Ubuntu 0.7.2 e il suo
-publisher non vengono promossi o sostituiti dalla riuscita dell'esperimento.
+NIPAT verifica separatamente il client, il motore scientifico, gli installatori
+e il funzionamento sui dispositivi reali. La versione 0.8.2 distribuisce
+Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
+Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
 ## Workflow GitHub Actions
 
 | Workflow | Attivazione | Risultato |
 | --- | --- | --- |
-| [CI](../.github/workflows/ci.yml) | Push, aggiornamenti delle pull request e avvio manuale. | Test del client e dei contratti, documentazione, componenti di piattaforma e regressioni scientifiche applicabili. |
-| [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale sul commit sperimentale scelto. | Installer Windows e due pacchetti macOS, con manifest, checksum e rapporti. Non pubblica una release. |
-| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale secondo il protocollo del canale stabile. | Publisher della distribuzione desktop Windows/Ubuntu; non costituisce il publisher della 0.8 sperimentale. |
-| [Published runtime security report](../.github/workflows/security-monitoring.yml) | Pianificazione e avvio manuale. | Inventari e segnalazioni candidate sulle immagini pubblicate, da esaminare separatamente. |
+| [CI](../.github/workflows/ci.yml) | Push, pull request, avvio manuale. | Test del client e dei contratti, controlli dei sorgenti e della documentazione, componenti di piattaforma e regressioni scientifiche applicabili. |
+| [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale su un commit revisionato. | Quattro installatori con manifest, checksum e rapporti; nessuna pubblicazione automatica. |
+| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Preparazione di una bozza o pubblicazione separata dei pacchetti accettati, senza ricompilarli. |
+| [Published runtime security report](../.github/workflows/security-monitoring.yml) | Pianificazione e avvio manuale. | Inventari e segnalazioni sulle immagini pubblicate, da esaminare separatamente. |
 
 La CI seleziona i controlli in base ai file modificati. Contratti, runtime,
-installer e file della pipeline attivano i livelli corrispondenti; se il
-confronto Git non è disponibile, la selezione non considera automaticamente
-la modifica come sola documentazione. Il controllo aggregato `required`
-verifica l'esito dei job richiesti. I test automatici non costruiscono tutti
-gli installatori a ogni aggiornamento.
+installer e pipeline attivano i livelli corrispondenti; un confronto Git non
+disponibile non viene interpretato come una modifica della sola documentazione.
+Il controllo aggregato `required` verifica l'esito dei job richiesti.
+I controlli della pull request rimangono attivi quando il push viene deduplicato.
+Gli installatori completi vengono costruiti su richiesta, non a ogni push.
 
-I controlli di una pull request restano attivi anche quando il corrispondente
-push viene deduplicato. Gli avvii manuali e i pacchetti conservano il commit
-esatto: il nome di un branch e il numero di versione non bastano a identificare
-una build.
+## Copertura e limiti
 
-## Copertura della sperimentazione
+| Livello | Verifiche | Limite dell'evidenza |
+| --- | --- | --- |
+| Python e contratti | CLI/menu, input, workflow, registri, risultati, aggiornamenti e annullamento sui sistemi previsti dalla matrice. | Non sostituisce l'installazione sul computer del ricercatore. |
+| Risorse | Configurazione WSL/Lima, anteprima, backup, conferme, lock fra processi, conservazione delle impostazioni estranee. | Le simulazioni WSL non dimostrano un riavvio reale di Windows 10. |
+| Diagnostica | Identità del container, raccolta dello stato prima della pulizia, OOM confermato o causa non accertata. | Il solo codice 137 non dimostra memoria esaurita. |
+| Presentazione | Mappa dei campioni, nomi originali, HTML/TSV, esportazione scientifica e testo nei PDF. | La leggibilità su ogni visualizzatore rimane una prova d'uso. |
+| Windows | Prerequisiti, bootstrap, layout, riparazione/rimozione, compilazione e verifica del Python incorporato. | Il payload preparato non equivale a installazione Inno Setup e avvio WSL su un desktop pulito. |
+| Ubuntu | Installazione APT, dipendenze, analisi da utente non root, reinstallazione/rimozione e aggiornamento dalla 0.7.2. | Il runner configurato non rappresenta ogni Ubuntu Desktop. |
+| macOS | Pacchetti ARM64/Intel, launcher e componenti nativi, trasporto e configurazione Lima. | La costruzione del `.pkg` non prova l'avvio della VM o l'accettazione Gatekeeper. |
+| Motore scientifico | Quattro analisi, piani composti, BAM sintetici, confronti numerici, input errati e originali invariati. | Non costituisce validazione di dominio su tutti i campioni reali. |
+| Documentazione | File, immagini, link relativi e sezioni Markdown. | Non verifica disponibilità dei siti esterni o contenuto scientifico della prosa. |
 
-| Livello | Ambiente | Cosa verifica | Cosa non dimostra |
-| --- | --- | --- | --- |
-| Python e contratti | Linux, Windows, macOS ARM e Intel | CLI/menu, configurazione, input, piani, registri, errori e interruzioni. | Installazione su un desktop nuovo o correttezza scientifica su ogni campione. |
-| Windows e WSL | Runner Windows e simulazioni controllate | Build ed edizione Windows, architettura, stato WSL, decisioni del bootstrap, percorsi, riparazione, rimozione e isolamento dei profili. | Installazione reale su Windows 10, attivazione della virtualizzazione o ripresa dopo riavvio. |
-| macOS e Lima | Runner macOS ospitati | Contratto del trasporto, percorsi, comandi, manifest, launcher e confezionamento per le due architetture. | Avvio di una VM Lima reale se il runner non espone la virtualizzazione. |
-| Motore scientifico | Container Linux AMD64 | Quattro analisi, workflow composti, BAM sintetici, confronti numerici, input non validi e conservazione degli originali. | Prestazioni o correttezza del trasporto Rosetta su un Mac reale. |
-| Runtime Mac reale | Runner dedicati abilitati esplicitamente | Preparazione e uso della VM Lima, diagnostica, autotest e comportamento del motore sul relativo host. | Interazione Finder, policy Gatekeeper o tutte le configurazioni desktop. |
-| Documentazione | Controllo offline | File, immagini, link relativi e sezioni Markdown. | Disponibilità dei siti esterni o validità scientifica della prosa. |
+Ogni difetto riproducibile deve essere coperto dal test del livello pertinente.
+Il numero di test non sostituisce l'esame dei casi coperti. Gli esiti distinguono
+prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
+è una prova superata.
 
-I runner Windows ospitati non sono Windows 10. Le simulazioni dei prerequisiti
-rendono riproducibili le decisioni del codice, ma l'avvio WSL su Windows 10
-resta una prova da registrare su quel sistema. Analogamente, costruire un
-`.pkg` su macOS non prova che il pacchetto possa avviare una VM, né che le
-protezioni di tutti i Mac ne autorizzino l'esecuzione.
+## Regressioni scientifiche
 
-Gli esiti devono specificare **eseguito**, **fallito**, **saltato** o **non
-eseguito** con il relativo motivo. Un job di runtime facoltativo saltato
-non va presentato come una prova Lima superata.
+Il container contiene R, samtools, gli script scientifici, gli adattatori e
+l'orchestrazione. Il client verifica i contratti e non monta gli script R
+dalla cartella dell'applicazione. I workflow composti vengono confrontati
+con le analisi singole equivalenti, usando risultati attesi.
 
-## Test scientifici e regressioni
+La verifica della presentazione confronta le tabelle numeriche con e senza
+etichette leggibili e controlla il testo estratto dai PDF. Gli output canonici
+rimangono disponibili; gli export leggibili non sostituiscono gli input delle
+fasi successive. Il catalogo scientifico identifica tramite hash gli script
+R e i componenti di preparazione effettivamente distribuiti.
 
-L'immagine contiene R, samtools, i sorgenti scientifici e l'orchestrazione.
-Il client non monta gli script R dalla cartella applicativa. I controlli
-verificano i contratti del motore prima delle analisi e usano input sintetici
-con risultati attesi.
-
-Le regressioni coprono DNPcall, SNPcall, Contamination e CPI; i workflow
-composti sono confrontati con le analisi singole equivalenti. I test del
-client e della libreria condivisa verificano alleli e pannelli, conteggi,
-frequenze, avvisi, associazioni fra campioni e coppie, dipendenze, arresto al
-fallimento e mancata sovrascrittura dei run. Il catalogo scientifico rimane
-legato ai sorgenti R identificati da hash.
-
-L'esperimento usa una sola immagine **Linux AMD64** anche su Apple Silicon.
-Lima esegue un guest nativo ARM64 e Rosetta abilita i processi AMD64 del
-container. Per questa combinazione servono evidenze ottenute sul runtime
-reale: la riuscita delle stesse analisi su Ubuntu AMD64 non le sostituisce.
-I risultati scientifici attesi non cambiano con la piattaforma host.
+Su Apple Silicon Lima usa un guest ARM64 e Rosetta per il container AMD64.
+Il successo del calcolo su Ubuntu AMD64 non sostituisce una prova di questo
+trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 ## Build degli installatori
 
-Avviare **Installers (review build)** sul commit sperimentale da verificare.
-La build costruisce e verifica il motore scientifico, produce gli archivi e
-confeziona i client. I due pacchetti Mac incorporano Python e Lima nativi per
-l'host; l'archivio scientifico AMD64 è comune a Windows e macOS.
+Avviare **Installers (review build)** sul commit da distribuire, su `main`,
+`release/0.8.2` o `release/0.8.2-...`. Il controllo
+`installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
+comune ai quattro pacchetti. La build produce:
 
-| Artefatto Actions | Contenuto principale |
+| Artefatto Actions | Pacchetto |
 | --- | --- |
-| `nipat-windows-setup` | `NIPAT-Setup.exe` e prove del pacchetto Windows sperimentale. |
-| `nipat-macos-setup-arm64` | `NIPAT-Experimental-0.8.0a1-macos-arm64.pkg` e rapporto del pacchetto Apple Silicon. |
-| `nipat-macos-setup-x86_64` | `NIPAT-Experimental-0.8.0a1-macos-x86_64.pkg` e rapporto del pacchetto Intel. |
-| `nipat-experimental-installer-evidence` | Identità dei pacchetti e dell'archivio scientifico comune, con verifiche aggregate. |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.2_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.2-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.2-macos-x86_64.pkg`. |
+| `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
-Il download di un artefatto Actions può presentarsi come archivio contenitore;
-il file da installare al suo interno è l'EXE o il `.pkg`. Un'eventuale
-pre-release espone questi file direttamente. I pacchetti **Source code**
-non contengono un ambiente pronto all'uso.
-
-La build sperimentale non produce un `.deb` 0.8 con l'identità stabile e non
-aggiorna `Latest`, tag o asset della 0.7.2. Una pubblicazione sperimentale è
-un'operazione distinta e deve rendere espliciti commit, checksum e stato
-sperimentale; non genera il manifest di aggiornamento del canale desktop.
+La release espone direttamente il file da installare per ciascuna piattaforma.
+I pacchetti **Source code** non contengono l'ambiente pronto all'uso. Gli archivi
+del runtime e i rapporti servono a verifica e recupero, non richiedono operazioni
+manuali durante l'installazione ordinaria.
 
 ## Verifiche Lima su runner dedicati
 
-Il parametro manuale `qualify_macos_runtime` abilita le prove di VM reali.
-Servono runner dedicati con etichette `self-hosted`, `macOS`, `nipat-runtime`
-e architettura `ARM64` oppure `X64`, secondo il job. Devono esporre la
-virtualizzazione e le condizioni richieste dal pacchetto sperimentale.
-Non eseguire codice di pull request non fidate su questi runner.
+Il parametro `qualify_macos_runtime` abilita le prove reali su runner dedicati
+con etichette `self-hosted`, `macOS`, `nipat-runtime` e `ARM64` oppure `X64`.
+Devono esporre virtualizzazione e requisiti del pacchetto. Non eseguire codice
+di pull request non fidate su questi runner.
 
-La prova deve identificare hardware, versione macOS, architettura, versione
-Lima e modalità Rosetta, insieme a commit e checksum del pacchetto. I log
-conservano diagnostica e risultati delle analisi; eventuali scenari non
-provati rimangono elencati. Il completamento di un solo job non qualifica
-l'altra architettura.
+Registrare hardware, macOS, architettura, Lima/Rosetta, commit e checksum del
+pacchetto. Una prova su un'architettura non qualifica l'altra. Le prove di VM
+non sostituiscono quelle di interazione Finder o delle policy del dispositivo.
 
-## Distribuzione e controllo delle evidenze
+## Pubblicazione
 
-I pacchetti sperimentali usano il profilo `experimental08`, distinto da
-`desktop`. Gli aggiornamenti automatici del canale stabile non propongono
-l'esperimento; il client sperimentale non migra al canale stabile.
-Le prove non modificano installazioni o risultati delle ricercatrici.
+Sorgenti e record di accettazione vengono integrati in `main` conservando il
+commit compilato. Il publisher crea una bozza con gli stessi byte verificati;
+un secondo avvio pubblica quella bozza dopo averne ricontrollato i contenuti.
+`stable` identifica la release ufficiale e `Latest`; `testing` una pre-release.
+La scelta non dichiara una validazione scientifica generale.
 
-Per distribuire un esperimento non occorre dichiarare completato ogni
-scenario desktop. Occorre descrivere fedelmente quali verifiche sono state
-eseguite e quali rimangono aperte. La [scheda di validazione](VALIDAZIONE.md)
-registra le osservazioni su Windows 10/11 e Mac Intel/Apple Silicon; il
-[protocollo dei pacchetti](../.github/RELEASE.md) distingue distribuzione
-sperimentale e pubblicazione stabile.
-
-Ogni difetto riproducibile dovrebbe diventare una regressione del livello
-appropriato. Il numero di test non rappresenta da solo la copertura:
-restano distinti comportamento del codice, calcolo scientifico, installazione
-del pacchetto e valutazione di dominio.
+Windows/Linux usano `update-manifest.json`; macOS usa
+`update-manifest-macos.json`. I client verificano piattaforma, versione,
+dimensione e checksum. Le build Actions e le bozze non sono aggiornamenti.
+Per ricerca pre-1.0 sono ammessi scenari desktop non ancora eseguiti, dichiarati
+nel record; la [procedura di pubblicazione](../.github/RELEASE.md) specifica
+le evidenze richieste e la [scheda di validazione](VALIDAZIONE.md) raccoglie
+le osservazioni dei ricercatori.

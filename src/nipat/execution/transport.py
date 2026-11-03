@@ -13,7 +13,7 @@ import subprocess
 import sys
 import unicodedata
 from pathlib import Path, PureWindowsPath
-from typing import Mapping
+from typing import Any, Mapping
 
 from nipat.errors import RuntimeExecutionError, ValidationError
 
@@ -24,6 +24,13 @@ _HOST_PATH_VARIABLES = (
     "NIPAT_WORKSPACE_DIR", "NIPAT_PROJECT_DIR", "NIPAT_DATA_DIR", "NIPAT_RUNS_DIR",
 )
 _LINUX_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+
+def cleanup_process_options() -> dict[str, Any]:
+    """Bounded observation/cleanup subprocesses survive repeated console Ctrl+C."""
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
 
 
 def _resolve_relative_windows_path(value: str) -> str:

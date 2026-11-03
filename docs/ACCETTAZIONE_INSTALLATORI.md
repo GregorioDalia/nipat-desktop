@@ -1,162 +1,62 @@
 # Accettazione degli installatori
 
-## Esperimento 0.8
-
-NIPAT Experimental08 0.8.0a1 esplora Windows 10 22H2 x64 e macOS 14 o
-successivo, Intel e Apple Silicon, mantenendo Windows 11 x64. È separato
-dalla distribuzione stabile: non usa il relativo manifest di aggiornamento
-e non costituisce una promozione a `Latest`.
-
-Le prove della candidata devono identificare versione, commit, checksum e
-architettura. Registrare distintamente:
-
-- test automatici del client e dei contratti;
-- decisioni Windows simulate e build effettiva degli installer;
-- regressioni scientifiche Linux AMD64;
-- confezionamento Mac su runner ospitati;
-- eventuale esecuzione Lima reale per ciascuna architettura;
-- installazioni e analisi effettivamente osservate sui dispositivi.
-
-Una distribuzione sperimentale può avvenire prima del completamento del
-collaudo desktop esteso. Le note riportano i casi non eseguiti; test simulati
-e osservazioni su un'altra piattaforma non vengono attribuiti al dispositivo
-ancora da provare. La [scheda di validazione](VALIDAZIONE.md) raccoglie i
-risultati. Questa sperimentazione non modifica i criteri o le evidenze della
-0.7.2 già distribuita.
-
-## Protocollo del canale stabile
-
-
-Questo documento definisce i criteri di distribuzione e il piano di collaudo
-progressivo di **NIPAT Desktop** su Windows 11 x64 con WSL2 e Ubuntu 24.04 LTS
-x86_64. Ogni decisione identifica gli installatori tramite commit, build
-GitHub Actions e checksum e distingue prove osservate, controlli automatici
-e scenari ancora da verificare.
-
-La serie **0.7** prevede una distribuzione per ricerca pre-1.0, basata su
-prove manuali documentate, una build completa riuscita e una decisione
-esplicita del manutentore. La **0.7.2** è destinata alla campagna di valutazione
-con le esperte di dominio. La qualificazione desktop completa rimane un
-percorso distinto: il suo catalogo di casi non blocca automaticamente ogni
-release pre-1.0.
-
-L’accettazione tecnica riguarda installazione, avvio, conservazione dei dati
-e funzionamento dei workflow. La validazione scientifica sui dati e sugli
-scenari d’uso è documentata separatamente in [VALIDAZIONE.md](VALIDAZIONE.md).
-La pubblicazione nel canale `stable` identifica una versione ufficiale
-per gli aggiornamenti; non attesta una validazione scientifica generale.
+NIPAT Desktop 0.8.2 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
+identifica commit, build e checksum; distingue prove automatiche,
+osservazioni sui dispositivi e validazione scientifica di dominio.
 
 ## Criteri di distribuzione pre-1.0
 
-L'accettazione per ricerca richiede:
+La distribuzione per ricerca richiede CI e build applicabili riuscite,
+identità dei quattro pacchetti e dell'archivio scientifico comune verificata,
+revisione delle modifiche e descrizione fedele delle prove svolte. I collaudi
+desktop estesi possono essere rinviati. Una prova storica non diventa una
+prova dell'installatore candidato; un test simulato non diventa una prova
+sul computer del ricercatore. Il canale `stable` indica la versione ufficiale,
+non una validazione scientifica generale.
 
-1. CI applicabile e build completa degli installatori riuscite, incluse le
-   regressioni dei quattro workflow e le prove automatiche dei pacchetti.
-2. Identità verificata di commit, manifest, archivio scientifico comune e
-   installatori Windows/Ubuntu. Pacchetti diversi richiedono una nuova decisione.
-3. Evidenza manuale di installazione pronta e di almeno una esecuzione
-   scientifica riuscita, tramite autotest o analisi DNPcall, con il commit
-   realmente osservato. Registrare anche la diagnostica quando disponibile.
-4. Revisione esplicita della distribuzione per ricerca, con responsabile,
-   data, riferimenti alle evidenze e indicazione degli scenari rinviati.
+Il record schema 5 comprende:
 
-Una prova su una build precedente può essere conservata con uno dei seguenti
-ambiti verificati automaticamente:
+| Campo | Contenuto |
+| --- | --- |
+| `version`, `source_commit`, `build_run_id` | Identità completa della build candidata. |
+| `installer_manifest_sha256`, `scientific_archive_sha256` | Identità del manifest e dell'archivio comune. |
+| `windows_installer_sha256`, `linux_installer_sha256` | Identità dei pacchetti Windows e Ubuntu. |
+| `macos_arm64_installer_sha256`, `macos_x86_64_installer_sha256` | Identità dei due pacchetti Mac. |
+| `decision`, `scope` | `accepted-for-research`, `pre-1.0-research`, dopo revisione. |
+| `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
+| `observed_baseline` | Commit effettivamente osservato, prove ricevute, ruolo `historical-platform-evidence`. |
+| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-unchanged-vendored-r-v1`. |
+| `reviewed_source_changes` | Elenco ordinato di percorso e hash prima/dopo; `null` per aggiunte o rimozioni. |
+| `qualification_evidence_sha256`, `linux_upgrade_check_sha256` | Rapporti permanenti della candidata e aggiornamento reale Ubuntu dalla 0.7.2. |
+| `macos_validation` | Stato separato `arm64`/`x86_64`: `passed` con evidenze HTTPS oppure `not-performed` con elenco vuoto. |
+| `deferred_desktop_scenarios` | Scenari desktop estesi ancora da svolgere. |
+| `domain_validation` | `pending-domain-researchers`. |
 
-- **Schema 2, serie 0.6:** equivalenza dei sorgenti operativi distribuiti,
-  con le sole esclusioni esplicitamente definite dal validatore.
-- **Schema 3, fino alla 0.7.1:** equivalenza dei sorgenti scientifici e del runtime;
-  revisione esplicita di ogni differenza nei sorgenti distribuiti del client,
-  degli installatori e dei loro test, con hash precedenti e nuovi.
-- **Schema 4, dalla 0.7.2:** evidenza storica di installazione e funzionamento
-  sulla piattaforma osservata. Le differenze operative, inclusi adattatori e
-  runtime, sono revisionate con hash precedenti e nuovi; i sorgenti R e il
-  loro manifest devono restare invariati. Il confronto non dichiara equivalenza
-  operativa con la build precedente. Sono richiesti anche la prova reale di
-  aggiornamento Ubuntu e il rapporto permanente delle verifiche della candidata.
-
-Il confronto considera l'inventario versionato dei file distribuiti. Per lo
-schema 3, modifiche ai percorsi `scientific/`, `engine/`,
-`src/nipat_scientific/`, `docker/`, `installer/runtime/` o al file `compose.yaml` impediscono il
-riutilizzo di questo riferimento: non possono essere autorizzate come semplici
-correzioni del client. Le differenze ammesse devono coincidere esattamente
-con quelle dichiarate e revisionate. Documentazione e strumenti `.github`
-di CI/pubblicazione non sono sorgenti operativi dell'applicazione; restano
-soggetti alla revisione e ai controlli della pipeline.
-
-L'equivalenza riguarda i sorgenti, non i byte degli installatori o l'ambiente
-completo. Le evidenze non attribuiscono una prova manuale al nuovo EXE se non
-è stato installato. L'accettazione per ricerca non trasforma i sei scenari
-desktop rinviati in prove superate e non abilita automaticamente la
-qualificazione della versione 1.0.
-
-Nello schema 4 la prova precedente mantiene soltanto il ruolo
-`historical-platform-evidence`. La candidata viene valutata sulle proprie
-regressioni scientifiche, sul client Windows preparato, sul pacchetto Ubuntu
-installato e sul suo aggiornamento effettivo dalla 0.7.1. Nessuna di queste
-evidenze viene presentata come una nuova installazione manuale Windows.
-
-I test automatici vengono estesi quando un difetto, un nuovo comportamento
-o una condizione di confine possono essere riprodotti. Rimangono separati
-la copertura automatica, l'esperienza su dispositivi reali e il giudizio
-scientifico delle esperte di dominio.
+La revisione può includere adattatori e presentazione, preservando gli script
+R vendorizzati. Il publisher confronta file e hash effettivi dei commit;
+una differenza non dichiarata o un rapporto riferito ad altri pacchetti
+interrompe la procedura. Le prove Mac non eseguite non impediscono di per sé
+una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
 
 ## Pacchetti da provare
 
-Usare una build **Installers (review build)** completata con successo sul
-commit revisionato destinato alla distribuzione. La build deve provenire
-da questo repository, essere avviata manualmente e avere superato il
-controllo `installer-required`. Può essere eseguita sul branch di sviluppo
-prima dell’integrazione: ciò consente di provare e accettare gli installatori
-senza modificare `main`. I controlli automatici delle pull request non
-producono un'autorizzazione alla distribuzione.
+Usare una build manuale **Installers (review build)** completata sul commit
+revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
+i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
+di build diverse. Le [note 0.8.2](RELEASE_0.8.2.md) descrivono le funzionalità;
+i risultati di qualificazione devono riferirsi ai pacchetti esatti.
 
-Le [note della versione 0.7.2](RELEASE_0.7.2.md) descrivono le funzionalità
-e il riferimento manuale utilizzato per la valutazione. Costruire e provare
-una candidata non richiede di dichiarare superati scenari non eseguiti o di
-pubblicare una release. Ogni distribuzione richiede una propria decisione
-associata ai pacchetti esatti.
-
-La sequenza prevista è:
-
-1. Avviare manualmente la build sul commit revisionato del branch di sviluppo.
-2. Raccogliere le prove richieste dalla modalità scelta e compilare il record
-   di accettazione, indicando esplicitamente i casi rinviati.
-3. Dopo approvazione, integrare sorgenti e record in `main`, conservando
-   il commit compilato nella sua storia.
-4. Avviare **Prepare or publish verified release** da `main` con operazione
-   `prepare` per creare una bozza completa degli stessi pacchetti.
-5. Esaminare la bozza e avviare separatamente `publish`, indicando ID della
-   bozza e commit di preparazione. Questa operazione ricontrolla le evidenze
-   senza ricompilare o sostituire i file.
-
-Una riscrittura dei commit durante l’integrazione può rendere il commit
-compilato estraneo alla storia di `main`: in quel caso la pubblicazione
-viene rifiutata. L’integrazione non equivale a pubblicazione automatica.
-
-Conservare questi elementi della medesima build:
-
-- `NIPAT-Setup.exe` da `nipat-windows-setup`;
-- il `.deb` da `nipat-linux-setup`;
-- `installer-manifest.json` e i checksum;
-- `installer-set-check.json` da `nipat-installer-set-evidence`;
-- `linux-upgrade-check.json` e il rapporto permanente di qualificazione
-  richiesti dallo schema 4;
-- ID e URL della build, commit completo e registri delle prove.
-
-Verificare gli SHA-256 prima di installare. Non sostituire gli archivi
-incorporati, ricompilare gli eseguibili o combinare artefatti di build diverse.
-Se i pacchetti cambiano, l’accettazione precedente non si applica.
-Gli artefatti Actions hanno scadenza: completare la revisione entro la loro
-conservazione, oppure ripetere build e accettazione sui nuovi artefatti.
-L’eventuale uso di una prova manuale precedente segue l'ambito dichiarato
-dallo schema scelto, senza estenderne le osservazioni alla nuova candidata.
+La sequenza è: costruire, raccogliere evidenze, revisionare il record,
+integrare sorgenti e record in `main` conservando il commit compilato,
+preparare la bozza, quindi pubblicarla con un secondo avvio esplicito.
+La [procedura di pubblicazione](../.github/RELEASE.md) specifica i parametri.
 
 ## Registrazione di ciascuna prova
 
 La tabella seguente costituisce il catalogo della qualificazione desktop
 completa. Nello schema 1 tutti i sei scenari devono essere superati;
-negli schemi 2 e 3 per ricerca sono dichiarati esplicitamente come rinviati.
+nello schema 5 per ricerca sono dichiarati esplicitamente come rinviati.
 Le singole evidenze automatiche o manuali restano utilizzabili con il loro
 ambito effettivo, senza attribuire loro la copertura dell’intero scenario.
 
@@ -243,7 +143,7 @@ completata dopo un aggiramento non soddisfa questo controllo. Il pacchetto
 non è firmato digitalmente da NIPAT: l'esito sul dispositivo deve essere
 registrato senza attribuire al checksum il valore di una firma del distributore.
 
-Per entrambi i sistemi includere input fuori dalla cartella dell’applicazione,
+Su tutte le piattaforme includere input fuori dalla cartella dell’applicazione,
 percorsi con spazi e caratteri non ASCII e una destinazione dei risultati
 scelta dall’utente. Su Ubuntu includere input privati leggibili dal solo account.
 Su Windows usare dischi locali fissi, coerentemente con i requisiti dichiarati.
@@ -281,7 +181,7 @@ prodotto e le rispettive evidenze di pubblicazione.
 | Avviso all'avvio | Disattivato inizialmente; se attivato mostra soltanto un avviso e non avvia download, installazioni o interruzioni. |
 | Assenza di rete | La ricerca segnala il problema e l'installazione già pronta continua a funzionare con il runtime locale. |
 | Download | Nome, versione, piattaforma, dimensione e SHA-256 corrispondono alla release approvata; un file incompleto o alterato non può essere avviato come installatore. |
-| Conferme e rinvio | Invio mantiene la scelta di rimandare. Download e installazione richiedono conferme distinte; annullamento o rinvio non modificano i componenti installati. |
+| Conferme e rinvio | Invio mantiene la scelta di rimandare. Su Windows/Linux download e installazione richiedono conferme distinte; su Mac si conferma il download, si chiude NIPAT e si apre manualmente il PKG; annullamento o rinvio non modificano i componenti installati. |
 | Installazione | La sessione corrente si chiude prima della sostituzione; un'analisi in altra sessione non viene terminata per consentire l'aggiornamento. Su Ubuntu verificare autorizzazione APT e comportamento senza terminale o Polkit. |
 | Conservazione e riapertura | Percorsi, preferenze, dati e run esistenti restano disponibili. Il nuovo client avvia analisi soltanto dopo la preparazione verificata; un errore non viene presentato come aggiornamento completato. |
 | Tracciabilità | Il run precedente conserva versione e runtime originari; il run successivo identifica la versione installata e il motore effettivamente utilizzati. |
@@ -291,10 +191,28 @@ installati. Non attribuire a una reinstallazione della stessa build la verifica
 di un aggiornamento fra versioni, né trasformare una candidata di revisione
 in una release approvata per completare una prova.
 
+## Prove macOS e risorse
+
+Su Intel e Apple Silicon registrare separatamente versione macOS, hardware,
+RAM, Lima, Rosetta quando applicabile e identità del PKG. Provare installazione,
+avvio da Finder, preparazione, analisi, riapertura, reinstallazione e rimozione.
+Segnalare gli avvisi Gatekeeper e le eventuali autorizzazioni richieste.
+Una build nativa del pacchetto non sostituisce queste osservazioni.
+
+Su tutte le piattaforme controllare nomi originali nelle tabelle e nei PDF,
+`sample-map.tsv`, `run-report.html`, conservazione degli output canonici e
+numeri invariati. Includere spazi, caratteri non ASCII e nomi uguali in cartelle
+diverse, oltre a campioni e coppie dei workflow automatici.
+
+Per WSL/Lima provare anteprima, annullamento, backup, conservazione delle
+impostazioni estranee, modifiche concorrenti e rifiuto durante un'analisi.
+Il riavvio globale WSL richiede una conferma separata. Su Ubuntu verificare
+che NIPAT applichi soltanto limiti ai propri container. Distinguere un OOM
+confermato da una terminazione con causa non accertata.
+
 ## Record di accettazione
 
-Dalla radice del repository, generare una scheda associata alle evidenze
-della build:
+Generare il modello dalla stessa build:
 
 ```bash
 python .github/scripts/release_acceptance.py \
@@ -303,122 +221,11 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Il comando genera il modello dello **schema 1**: riporta commit, versione
-e checksum e inizializza la decisione e le prove come `pending`. Non esegue
-le prove e non autorizza la pubblicazione. Compilare il record soltanto con
-risultati realmente osservati.
+Per la 0.8.2 il comando genera lo schema 5 in stato `pending`; non esegue
+prove né autorizza pubblicazioni. Compilare soltanto con evidenze disponibili
+e revisionare `.github/release-acceptance/v0.8.2.json`. Il record è separato
+dal commit e dai byte dell'installatore, e viene letto da `main` dal publisher.
 
-### Schema 1: qualificazione desktop completa
-
-Il record schema 1 contiene:
-
-| Campo | Contenuto |
-| --- | --- |
-| `version`, `source_commit`, `build_run_id` | Versione, commit completo e ID numerico della build provata. |
-| `installer_manifest_sha256` | SHA-256 del manifest comune. |
-| `scientific_archive_sha256` | SHA-256 dell’archivio scientifico condiviso. |
-| `windows_installer_sha256`, `linux_installer_sha256` | SHA-256 degli installatori effettivamente provati. |
-| `decision` | `accepted` soltanto dopo il completamento di tutte le prove. |
-| `tests` | Le sei chiavi della tabella; ciascuna con `result`, `tester`, `tested_at` ed `evidence`. |
-
-Ogni prova accettata richiede `result: "passed"`, un responsabile identificato,
-data UTC nel formato `YYYY-MM-DDTHH:MM:SSZ` e almeno un collegamento HTTPS alle
-evidenze consultabili dai revisori. I riferimenti possono rimandare a rapporti
-e registri appropriati al contenuto dei dati; non pubblicare dati sensibili
-nei log o negli allegati del repository. Il controllo automatico verifica
-struttura, completezza e coerenza del record; la valutazione dei rapporti
-e degli esiti dichiarati resta responsabilità della revisione.
-
-### Schema 2: accettazione per ricerca della serie 0.6
-
-Lo schema 2 conserva i campi di identità e i quattro digest dello schema 1,
-ma sostituisce la dichiarazione di qualificazione completa con una decisione
-circoscritta:
-
-| Campo | Contenuto |
-| --- | --- |
-| `schema_version` | `2`. |
-| `decision`, `scope` | `accepted-for-research` e `pre-1.0-research`. |
-| `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
-| `observed_baseline` | Commit effettivamente osservato, riferimenti alle evidenze e osservazioni ricevute. Sono obbligatori `installation_ready` e almeno uno fra `scientific_self_tests` e `dnp_sample_analysis`; `runtime_diagnostics` può completare la registrazione. |
-| `observed_baseline.source_equivalence_scope` | `distributed-operative-sources-v1`; la procedura esegue il confronto dei sorgenti, non si limita alla dichiarazione nel record. |
-| `deferred_desktop_scenarios` | Tutte le sei chiavi del catalogo desktop, esplicitamente rinviate. |
-| `domain_validation` | `planned-for-0.7`. |
-
-Non inserire `passed` per le prove rinviate o un checksum dell'installatore
-precedente non disponibile. L'identità della candidata da pubblicare resta
-completa e distinta da quella del riferimento manuale. Il confronto dei
-sorgenti viene ripetuto prima della preparazione e della pubblicazione;
-una differenza fuori dall'ambito ammesso interrompe la procedura.
-
-### Schema 3: distribuzione per ricerca fino alla 0.7.1
-
-Lo schema 3 conserva l'identità della build e i digest dei pacchetti e distingue
-la prova manuale di riferimento dalle verifiche della nuova distribuzione:
-
-| Campo | Contenuto |
-| --- | --- |
-| `schema_version` | `3`. |
-| `decision`, `scope` | `accepted-for-research` e `pre-1.0-research`. |
-| `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
-| `observed_baseline` | Commit effettivamente provato, riferimenti alle evidenze e osservazioni ricevute; descrive soltanto le prove realmente eseguite. |
-| `observed_baseline.source_equivalence_scope` | `scientific-runtime-equivalence-with-reviewed-client-changes-v1`. |
-| `reviewed_source_changes` | Elenco ordinato delle differenze operative ammesse: `path`, `before_sha256`, `after_sha256`; aggiunte e rimozioni hanno un lato `null`. |
-| `deferred_desktop_scenarios` | Tutte le sei chiavi del catalogo desktop, esplicitamente rinviate. |
-| `domain_validation` | `pending-domain-researchers`. |
-
-La procedura confronta i file con Git: non si limita ad accettare gli hash
-scritti nel record. Una differenza non dichiarata, un digest errato o una
-modifica scientifica o del runtime interrompono la pubblicazione. I nuovi
-pacchetti devono comunque superare la build completa e le prove automatiche
-applicabili: client Windows preparato e pacchetto Ubuntu installato.
-
-La prova Windows di riferimento della 0.7.1 riguarda il commit
-`1b601081a4aff9efe1806c921fd7ac963feea7b7` e il workflow DNPcall → Contamination.
-Il confronto numerico osservato comprende 11 siti DNP e 10 siti mantenuti da
-Contamination, concordanti con le esecuzioni separate. Non equivale a un
-collaudo manuale del nuovo EXE, dei casi CPI o di tutti i desktop destinatari.
-
-### Schema 4: distribuzione per ricerca dalla 0.7.2
-
-Lo schema 4 conserva identità della build, checksum dei pacchetti, decisione
-`accepted-for-research`, revisione e scenari rinviati. Richiede inoltre:
-
-| Campo | Contenuto |
-| --- | --- |
-| `schema_version` | `4`. |
-| `qualification_evidence_sha256` | SHA-256 del rapporto permanente di qualificazione della candidata. |
-| `linux_upgrade_check_sha256` | SHA-256 della prova di aggiornamento del pacchetto Ubuntu. |
-| `observed_baseline.role` | `historical-platform-evidence`: descrive soltanto l'esperienza effettivamente osservata sulla piattaforma. |
-| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-unchanged-r-v1`. |
-| `reviewed_source_changes` | Differenze operative complete, con percorso e hash prima/dopo; include gli adattatori Python e il runtime quando cambiano. |
-| `domain_validation` | `pending-domain-researchers`. |
-
-La procedura confronta i byte effettivi dei sorgenti e rifiuta modifiche R,
-differenze non dichiarate o hash non corrispondenti. Il resoconto del confronto
-dichiara che non attesta equivalenza operativa né installazione manuale del
-candidato Windows. Le verifiche richieste sono associate alla build esatta:
-regressioni scientifiche, client Windows preparato, pacchetto Ubuntu installato,
-aggiornamento reale dalla 0.7.1 e rapporto permanente delle evidenze.
-
-Il rapporto dell'aggiornamento distingue il pacchetto precedente dalla candidata
-e verifica la conservazione di dati e preferenze. Una reinstallazione dello
-stesso pacchetto non soddisfa questo requisito. Gli hash dei rapporti sono
-controllati insieme a quelli degli installatori prima della pubblicazione.
-
-### Revisione e pubblicazione
-
-Sottoporre il record a revisione in
-`.github/release-acceptance/v0.7.2.json`, separatamente dal commit della
-build da distribuire. Il record può essere preparato sul branch di sviluppo;
-prima della pubblicazione, integrare in `main` sia il commit compilato sia
-il record approvato. Quest’ultimo non è incorporato negli installatori.
-Il publisher legge il file dal commit della procedura su `main`,
-verifica i requisiti dello schema selezionato e confronta i checksum con gli
-artefatti della build richiesta. Un record mancante, incompleto o riferito ad
-altri file interrompe la pubblicazione prima della modifica di una release.
-
-La [procedura di pubblicazione](../.github/RELEASE.md) descrive controlli,
-caricamento degli asset e gestione delle bozze. L’accettazione tecnica non
-abilita una pubblicazione automatica: il workflow di pubblicazione rimane
-un’operazione manuale su `main`.
+Gli schemi precedenti rimangono disponibili per le relative release storiche.
+La [scheda di validazione](VALIDAZIONE.md) raccoglie i casi di dominio;
+l'accettazione tecnica non sostituisce il giudizio delle ricercatrici.

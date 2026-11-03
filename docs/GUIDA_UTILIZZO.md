@@ -1,12 +1,9 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Experimental08 0.8.0a1**, con menu testuale
-guidato e CLI diretta. Gli installatori sperimentali coprono Windows 10/11 e
-macOS; i calcoli mantengono lo stesso core R e gli stessi workflow.
-Si tratta di una sperimentazione distinta dalla distribuzione stabile 0.7.2:
-le prove desktop su Windows 10 e Mac devono ancora qualificarne l'utilizzo.
-Scaricare soltanto un pacchetto della build o pre-release sperimentale
-identificata nelle [note della versione](RELEASE_0.8.0a1.md).
+Questa guida descrive **NIPAT Desktop 0.8.2**, con menu testuale guidato e CLI
+diretta su Windows, macOS e Ubuntu. I pacchetti sono nella pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases);
+le [note della versione](RELEASE_0.8.2.md) identificano il perimetro verificato.
 
 La versione offre
 **W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
@@ -34,7 +31,7 @@ e riavvio, secondo la configurazione del computer. Le policy dell'istituzione
 possono richiedere l'intervento del servizio informatico. Non sono necessarie
 installazioni separate di Python, R, samtools o Docker Desktop.
 
-Dalla build sperimentale o dalla relativa pre-release, scaricare
+Dalla pagina Releases, scaricare
 **NIPAT-Setup.exe**.
 Si utilizza un solo file eseguibile, senza archivi da estrarre. I file
 **Source code** sono destinati allo sviluppo e non sono installatori.
@@ -46,11 +43,11 @@ Installare e avviare NIPAT:
 2. Scegliere la cartella dell'applicazione e le quattro cartelle per ambiente
    WSL, cache, dati e risultati, oppure mantenere i valori proposti. Il setup
    indica **Installazione** oppure **Aggiornamento e riparazione** quando
-   riconosce un’installazione NIPAT Experimental08 esistente. Se richiesta, autorizzare l'attivazione
+   riconosce un’installazione NIPAT Desktop esistente. Se richiesta, autorizzare l'attivazione
    di WSL e completare il riavvio.
 3. Attendere il completamento della preparazione e degli autotest, indicato
    da **`NIPAT: ready`**.
-4. Selezionare **Avvia NIPAT Experimental08** nella schermata finale del setup,
+4. Selezionare **Avvia NIPAT Desktop** nella schermata finale del setup,
    oppure aprire il collegamento dal menu Start o dal desktop. L'opzione
    di avvio immediato è disponibile quando la preparazione è completata
    e non è richiesto un riavvio.
@@ -61,7 +58,7 @@ spostare componenti o aprire PowerShell. L'ambiente WSL dedicato
 viene avviato automaticamente quando serve.
 
 Se la preparazione si interrompe, conservare il messaggio e il log, risolvere
-la causa indicata e aprire **NIPAT Experimental08 - completa preparazione** dal
+la causa indicata e aprire **NIPAT Desktop - completa preparazione** dal
 menu Start. L'applicazione non avvia analisi finché il setup non è completato.
 I dettagli dell'installazione e dei suoi limiti sono in
 [DISTRIBUZIONE.md](DISTRIBUZIONE.md).
@@ -74,26 +71,26 @@ per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-
 ## Requisiti e avvio su macOS
 
 Usare macOS 14 o successivo e il pacchetto della propria architettura:
-`NIPAT-Experimental-0.8.0a1-macos-arm64.pkg` per Apple Silicon,
-`NIPAT-Experimental-0.8.0a1-macos-x86_64.pkg` per Intel.
-Aprire il `.pkg`, completare l'installazione e avviare **NIPAT Experimental08**
+`NIPAT-0.8.2-macos-arm64.pkg` per Apple Silicon,
+`NIPAT-0.8.2-macos-x86_64.pkg` per Intel.
+Aprire il `.pkg`, completare l'installazione e avviare **NIPAT Desktop**
 da Applicazioni. Il menu si apre nel Terminale. Il primo avvio prepara Lima
 e richiede Internet; Python e Lima sono inclusi, senza installazione manuale
 di Homebrew o Docker Desktop.
 
 Il calcolo usa un container Linux AMD64. Su Apple Silicon l'esecuzione avviene
 tramite Rosetta nella VM Lima ARM64. Cartelle e runtime appartengono al profilo
-sperimentale. Installatore e applicazione non sono notarizzati: le protezioni
+desktop. Installatore e applicazione non sono notarizzati: le protezioni
 del sistema possono impedirne l'avvio. Requisiti, percorsi e diagnostica sono
 nella [guida macOS](INSTALLATORE_MACOS.md).
 
 ## Utilizzo su Ubuntu
 
-La 0.8 non produce un pacchetto Ubuntu sperimentale. Il checkout può essere
-usato con Python 3.12 e Docker Engine locale secondo la
-[procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti).
-La [guida del pacchetto Ubuntu](INSTALLATORE_LINUX.md) riguarda esclusivamente
-la distribuzione stabile 0.7.2, con identità e comandi propri.
+Installare `nipat-desktop_0.8.2_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
+[guida Ubuntu](INSTALLATORE_LINUX.md). Il pacchetto include l'immagine scientifica;
+APT risolve le dipendenze mancanti. Il motore Docker locale deve essere accessibile
+all'utente. La [procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti)
+è destinata allo sviluppo.
 
 ## Menu guidato
 
@@ -118,7 +115,7 @@ rendere di nuovo utilizzabili le frecce nel menu successivo.
 | 6 | Risultati e log dell'ultima esecuzione della sessione. |
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
-| 9 | Verifica aggiornamenti: nel profilo sperimentale spiega la modalità di download manuale; non propone migrazioni di canale. |
+| 9 | Verifica aggiornamenti: consulta le release compatibili e verifica il download del pacchetto. |
 | W | Workflow automatici: composizioni DNPcall con Contamination/CPI e SNPcall facoltativo; SNPcall su più campioni. |
 | 0 | Uscita dal programma. |
 
@@ -197,8 +194,8 @@ precedenti a un salvataggio.
 | CPI | Prefissi materno/paterno, frequenze di popolazione, modalità di selezione dei siti e relativi pannelli o mappe, costante d'errore. |
 | Riepilogo impostazioni | Consultazione dei valori salvati. |
 | Ripristina impostazioni | Ritorno ai valori iniziali del menu dopo conferma esplicita; non elimina campioni o risultati. |
-| Aggiornamenti | Il profilo sperimentale non usa il canale di aggiornamento stabile. |
-| Esecuzione e provenienza | Checksum degli input e limiti CPU, memoria e processi del container. |
+| Aggiornamenti | Canale e verifica della disponibilità di release compatibili. |
+| Risorse e provenienza | Checksum e limiti dell’analisi; consultazione e configurazione RAM/CPU dell’ambiente con anteprima, backup e conferma. |
 
 I valori salvati vengono riproposti anche dopo aver chiuso NIPAT. Si possono
 modificare durante la compilazione di una singola analisi senza cambiare le
@@ -210,8 +207,9 @@ Le preferenze del menu sono conservate in:
 
 | Sistema | File |
 | --- | --- |
-| Windows | `%LOCALAPPDATA%\NIPAT-Experimental08\preferences.json` |
-| macOS | `~/Library/Application Support/NIPAT-Experimental08/preferences.json` |
+| Windows | `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json` |
+| macOS | `~/Library/Application Support/NIPAT-Desktop/preferences.json` |
+| Ubuntu | `~/.config/nipat-desktop/preferences.json`, oppure sotto `XDG_CONFIG_HOME`. |
 
 Questa configurazione riguarda esclusivamente il menu guidato. I comandi CLI
 diretti usano le proprie opzioni esplicite e i normali valori predefiniti,
@@ -229,7 +227,7 @@ Per cambiare la posizione dell'applicazione, dell'ambiente WSL o della cache,
 usare l'installatore. **Configura** non trasferisce questi componenti e non
 sposta i dati già presenti. La gestione delle cartelle è descritta di seguito.
 
-**Esecuzione e provenienza** propone `auto` per i checksum: i file fino a
+**Risorse e provenienza** propone `auto` per i checksum: i file fino a
 16 MiB vengono verificati con SHA-256, quelli maggiori sono identificati dai
 metadati. La scelta `full` calcola e verifica anche gli hash dei file grandi,
 con letture aggiuntive prima e dopo il calcolo. I limiti CPU, memoria e processi
@@ -239,12 +237,11 @@ Le modalità sono descritte in [Esecuzioni e risultati](ESECUZIONI.md).
 
 ## Aggiornamenti
 
-Il profilo `experimental08` non usa l'aggiornamento del canale stabile.
-**9 — Verifica aggiornamenti** informa di questa separazione; non scarica
-un pacchetto NIPAT Desktop e non migra configurazione o risultati.
-Per una nuova prova scaricare esplicitamente il nuovo installatore sperimentale,
-controllandone versione, commit e note. Una build Actions non rappresenta
-automaticamente una release approvata o una qualificazione desktop.
+**9 — Verifica aggiornamenti** consulta le release compatibili, mostra
+versione e note e verifica il pacchetto scaricato. Su Windows e Ubuntu il
+passaggio all'installatore segue la procedura guidata. Su Mac, al termine del
+download, chiudere NIPAT e aprire il `.pkg` verificato. L'installazione non
+può sostituire il programma mentre è in uso.
 
 I run già prodotti conservano versione e identità del motore utilizzato.
 Non vengono ricalcolati dall'installazione di un nuovo pacchetto. Su Windows
@@ -263,7 +260,7 @@ file estranei e distribuzioni WSL di altre applicazioni non vengono eliminati.
 **Ripara/riprendi preparazione** verifica i componenti dell'installazione
 corrente e ripete la preparazione del runtime e gli autotest. Non reinstalla
 una versione precedente e non ripristina automaticamente un backup completo.
-Se NIPAT non può essere avviato, usare il collegamento **NIPAT Experimental08 - completa
+Se NIPAT non può essere avviato, usare il collegamento **NIPAT Desktop - completa
 preparazione** dopo aver risolto la causa segnalata dal setup.
 
 Pulizia e riparazione richiedono conferma. NIPAT si chiude solo dopo che il
@@ -296,26 +293,26 @@ Il setup Windows permette di scegliere separatamente queste destinazioni:
 
 | Contenuto | Percorso predefinito Windows |
 | --- | --- |
-| Applicazione e documentazione | `%LOCALAPPDATA%\Programs\NIPAT-Experimental08` |
-| Ambiente WSL e strumenti scientifici | `%LOCALAPPDATA%\NIPAT-Experimental08\wsl` |
-| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-Experimental08\cache` |
-| Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-Experimental08\data` |
-| Risultati | `%LOCALAPPDATA%\NIPAT-Experimental08\runs` |
+| Applicazione e documentazione | `%LOCALAPPDATA%\Programs\NIPAT-Desktop` |
+| Ambiente WSL e strumenti scientifici | `%LOCALAPPDATA%\NIPAT-Desktop\wsl` |
+| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-Desktop\cache` |
+| Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-Desktop\data` |
+| Risultati | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
 
 Si possono usare dischi locali fissi diversi. Le cinque cartelle devono essere
 scrivibili, distinte e non contenersi tra loro; il setup controlla le
 destinazioni prima di installare. Non sono accettate cartelle di sistema,
 cartelle delle altre installazioni NIPAT o percorsi che attraversano collegamenti.
-Per l'applicazione scegliere una cartella vuota o della stessa installazione NIPAT Experimental08.
+Per l'applicazione scegliere una cartella vuota o della stessa installazione NIPAT Desktop.
 Se una cartella non vuota non viene riconosciuta, il setup può proporre una
 sottocartella vuota: accettarla cambia la destinazione senza spostare o
 cancellare il contenuto della cartella iniziale. In alternativa, scegliere
 un'altra cartella vuota. Le cartelle dati e risultati possono già contenere
 file, che vengono conservati.
-Il collegamento **Cartella NIPAT Experimental08** nel menu Start apre la cartella applicativa.
+Il collegamento **Cartella NIPAT Desktop** nel menu Start apre la cartella applicativa.
 
 Le scelte vengono riproposte alla reinstallazione. Per aggiornare o riparare
-un’installazione NIPAT Experimental08 riconosciuta, usare la stessa cartella applicativa, anche se
+un’installazione NIPAT Desktop riconosciuta, usare la stessa cartella applicativa, anche se
 contiene residui di una disinstallazione. Il setup sostituisce i propri
 componenti e conserva i file estranei; prima di sovrascrivere file differenti,
 ne salva una copia. Il backup è selettivo e non ripristina automaticamente
@@ -327,10 +324,10 @@ precedenti rimangono nella vecchia destinazione e si consultano con Esplora file
 dell'ambiente WSL prepara un ambiente dedicato nella nuova posizione e
 conserva quello precedente.
 
-Su macOS l’applicazione è `/Applications/NIPAT Experimental08.app`; dati e
+Su macOS l’applicazione è `/Applications/NIPAT Desktop.app`; dati e
 risultati predefiniti sono nelle sottocartelle `data` e `runs` di
-`~/Library/Application Support/NIPAT-Experimental08`. La VM Lima vive in
-`~/.nipat08/lima`. I mount e le autorizzazioni macOS limitano i percorsi
+`~/Library/Application Support/NIPAT-Desktop`. La VM Lima vive in
+`~/.nipat/lima`. I mount e le autorizzazioni macOS limitano i percorsi
 accessibili, come descritto nella [guida macOS](INSTALLATORE_MACOS.md).
 
 Per il checkout da sorgenti, `data` e `runs` si trovano accanto alla cartella
@@ -352,10 +349,10 @@ in un comando diretto usare le opzioni CLI.
 
 ## Disinstallazione su Windows
 
-Da **Impostazioni → App → App installate**, disinstallare **NIPAT Experimental08**.
+Da **Impostazioni → App → App installate**, disinstallare **NIPAT Desktop**.
 Dati e risultati vengono sempre conservati. La rimozione dell'ambiente WSL e
 della cache NIPAT è facoltativa e non è selezionata per impostazione predefinita.
-Se richiesta, riguarda soltanto le risorse verificate di NIPAT Experimental08 nelle
+Se richiesta, riguarda soltanto le risorse verificate di NIPAT Desktop nelle
 cartelle registrate; non elimina Docker Desktop, altre distribuzioni WSL o
 altre installazioni NIPAT.
 
@@ -490,7 +487,7 @@ Su Windows, aprire PowerShell nella cartella applicativa:
 
 ```powershell
 # Esempio per la cartella predefinita; usare quella scelta nel setup.
-Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-Experimental08")
+Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-Desktop")
 .\nipat.cmd --help
 .\nipat.cmd dnp-call --help
 .\nipat.cmd wizard
@@ -501,9 +498,9 @@ dei comandi. Per l'uso ordinario è sufficiente l'icona NIPAT.
 Su macOS il launcher del pacchetto accetta gli stessi argomenti:
 
 ```bash
-"/Applications/NIPAT Experimental08.app/Contents/Resources/NIPAT.command" --help
-"/Applications/NIPAT Experimental08.app/Contents/Resources/NIPAT.command" doctor --runtime
-"/Applications/NIPAT Experimental08.app/Contents/Resources/NIPAT.command" self-test
+"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" --help
+"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" doctor --runtime
+"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" self-test
 ```
 
 Il launcher Mac prepara il runtime prima di avviare il client. La preparazione
@@ -863,7 +860,7 @@ Una cartella di output parziale non dimostra il completamento del workflow.
 
 | Problema | Verifica da effettuare |
 | --- | --- |
-| Setup Windows incompleto | Aprire **Cartella NIPAT Experimental08** dal menu Start e conservare `setup.log` e `state.json` nella sottocartella `.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
+| Setup Windows incompleto | Aprire **Cartella NIPAT Desktop** dal menu Start e conservare `setup.log` e `state.json` nella sottocartella `.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
 | Preparazione Ubuntu incompleta | Conservare `setup.log` e `state.json` nella cartella di stato XDG; verificare servizio e accesso a Docker, quindi ripetere `nipat --setup`. Consultare [Installatore Linux](INSTALLATORE_LINUX.md). |
 | File non accessibile | Controllare percorso, permessi e disponibilità del disco; su Windows usare un disco locale fisso. |
 | Indice FASTA assente | Fornire il `.fai` del riferimento selezionato e, per BGZF, il `.gzi`. |
@@ -881,3 +878,17 @@ esiti positivi. Una nuova prova deve usare una nuova cartella.
 Nomi e percorsi dei campioni sono presenti nei metadati e non vengono
 anonimizzati automaticamente. Prima di allegare log o file a una segnalazione,
 verificarne il contenuto e scegliere un canale adatto ai dati condivisi.
+
+## Nomi dei campioni e risorse
+
+I risultati per la consultazione mostrano il nome originale del campione.
+Gli identificativi come `sample_0001` collegano input e passaggi internamente:
+non indicano che il file originale sia stato rinominato. La mappa dei campioni
+permette di risalire al percorso completo e distingue file omonimi.
+Le esportazioni leggibili affiancano gli artefatti scientifici verificati;
+non cambiano i valori calcolati da R.
+
+La gestione delle [risorse](RISORSE.md) mostra separatamente RAM fisica,
+RAM della VM e limite dell'analisi. Aumentare il limite dell'analisi non
+modifica automaticamente Lima o WSL. Per un run fallito conservare il
+resoconto, `run.json` ed `execution.log` prima di riprovare con nuovi valori.

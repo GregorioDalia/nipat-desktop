@@ -20,6 +20,7 @@ PROJECT = Path(__file__).resolve().parents[2]
 REPO = "GregorioDalia/nipat-desktop"
 MANIFEST = "installer-manifest.json"
 UPDATE_MANIFEST = "update-manifest.json"
+MACOS_UPDATE_MANIFEST = "update-manifest-macos.json"
 MAX_ASSET_BYTES = 2 * 1024**3
 PYTHON_NAME = "python-3.12.10-embed-amd64.zip"
 PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3"
@@ -54,6 +55,11 @@ DESKTOP_INSTALLATION_PROFILE = {
 def require(condition, message):
     if not condition:
         raise ValueError(message)
+
+
+def requires_macos(version):
+    helper = load_module("nipat_macos_release", PROJECT / ".github/scripts/macos_release.py")
+    return helper.requires_macos(version)
 
 
 def sha256(path):
@@ -93,6 +99,15 @@ def validate_run(run, commit, run_id):
     require(run.get("repository", {}).get("full_name") == REPO
             and run.get("head_repository", {}).get("full_name") == REPO,
             "Build must originate in this repository")
+
+
+def required_build_jobs(version):
+    """Exact job display names returned by the Actions jobs API."""
+    jobs = ("windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required") \
+        if requires_installation_profile(version) else ("linux-runtime", "windows-installer")
+    if requires_macos(version):
+        jobs += ("macos-installer (arm64)", "macos-installer (x86_64)")
+    return jobs
 
 
 def checksums(path):
@@ -178,7 +193,7 @@ def require_publication_supported(version, acceptance=None, commit=None, run_id=
 
 def verify_research_baseline(record, validator):
     """Fetch an observed PR checkout if necessary, then compare actual source bytes."""
-    if record.get("schema_version") not in (2, 3, 4):
+    if record.get("schema_version") not in (2, 3, 4, 5):
         return None
     baseline = record["observed_baseline"]["source_commit"]
     require(re.fullmatch(r"[0-9a-f]{40}", baseline), "Invalid baseline source commit")
@@ -193,7 +208,7 @@ def verify_research_baseline(record, validator):
 def release_notes(commit, publication_commit, version, acceptance):
     # Research acceptance can be reviewed after the immutable installers were built.
     # Pin its explanatory documentation to the same preparation commit in both phases.
-    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3, 4) else commit
+    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3, 4, 5) else commit
     notes = source_bytes(notes_commit, f"docs/RELEASE_{version}.md").decode("utf-8").strip()
     return re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
         f"https://github.com/{REPO}/blob/{notes_commit}/docs/", m[1]) + ")", notes)
@@ -211,13 +226,19 @@ def extract_build_source(commit, destination):
 
 def prepare_installer_set(setup, runtime, linux, evidence, output, commit, acceptance,
                           acceptance_bytes, run_id, publication_commit, source_project,
-                          channel="testing"):
-    """Re-verify both packages before staging an accepted, immutable pair."""
+                          channel="testing", macos=None):
+    """Re-verify every package before staging one accepted, immutable installer set."""
     validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
     reviewer = load_module("nipat_release_pair", PROJECT / ".github/scripts/verify_installer_set.py")
     with tempfile.TemporaryDirectory(prefix="nipat-pair-") as temporary:
         actual = reviewer.verify_set(setup, linux, runtime, Path(temporary) / "evidence", commit,
                                      project=source_project)
+    if requires_macos(actual["version"]):
+        helper = load_module("nipat_macos_release", PROJECT / ".github/scripts/macos_release.py")
+        common = json.loads((runtime / MANIFEST).read_text(encoding="utf-8"))
+        actual = helper.extend_installer_set(actual, macos, common)
+    else:
+        require(not macos, "Historical installer sets cannot advertise unverified macOS packages")
     recorded_path = evidence / "installer-set-check.json"
     require(recorded_path.is_file() and not recorded_path.is_symlink(), "Missing installer-set build evidence")
     require(json.loads(recorded_path.read_text(encoding="utf-8")) == actual,
@@ -225,12 +246,12 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
     validator.validate(acceptance, actual["version"], commit, run_id, installer_set=actual)
     require(json.loads(acceptance_bytes) == acceptance, "Acceptance bytes differ from the validated record")
     baseline_check = validator.verify_baseline(acceptance, source_bytes) \
-        if acceptance.get("schema_version") in (2, 3, 4) else None
+        if acceptance.get("schema_version") in (2, 3, 4, 5) else None
     reliability = validator.reliability_contract(actual["version"])
     if reliability:
         qualification = load_module("nipat_qualification_evidence", PROJECT / ".github/scripts/qualification_evidence.py")
         qualification.verify(evidence, actual)
-        if acceptance.get("schema_version") == 4:
+        if acceptance.get("schema_version") in (4, 5):
             require(sha256(evidence / "qualification-evidence.zip") == acceptance["qualification_evidence_sha256"],
                     "Qualification evidence differs from the accepted build")
     manifest = prepare_assets(setup, runtime, output, commit)
@@ -242,9 +263,16 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
         "linux-dependency-check.json": linux / "linux-dependency-check.json",
         "installer-set-check.json": recorded_path,
     }
-    if manifest["version"].startswith("0.7."):
+    if manifest["version"].startswith("0.7.") or requires_macos(manifest["version"]):
         additions.update({"windows-client-check.json": setup / "windows-client-check.json",
                           "application-files.json": setup / "application-files.json"})
+    if requires_macos(manifest["version"]):
+        for architecture in ("arm64", "x86_64"):
+            record = actual[f"macos_{architecture}"]
+            directory = macos[architecture]
+            additions[record["file"]] = directory / record["file"]
+            additions[f"macos-{architecture}-package-verification.json"] = directory / "macos-package-verification.json"
+            additions[f"macos-{architecture}-installer-build.json"] = directory / "macos-installer-build.json"
     if reliability:
         additions.update({
             "linux-upgrade-check.json": linux / "linux-upgrade-check.json",
@@ -296,8 +324,12 @@ def write_update_manifest(output, manifest, verified_pair, channel):
     deb_version = re.sub(r"(a|b|rc)([0-9]+)$", r"~\1\2", version)
     expected = {"windows": ("windows-x86_64", "NIPAT-Setup.exe"),
                 "linux": ("linux-x86_64", f"nipat-desktop_{deb_version}_amd64.deb")}
+    if requires_macos(version):
+        expected.update({f"macos_{arch}": (f"darwin-{arch}", f"NIPAT-{version}-macos-{arch}.pkg")
+                         for arch in ("arm64", "x86_64")})
     entries = []
     for system, (platform, filename) in expected.items():
+        require(isinstance(verified_pair.get(system), dict), f"Missing verified installer: {system}")
         record = verified_pair[system]
         require(record["file"] == filename, "Unexpected update installer filename")
         path = output / filename
@@ -310,9 +342,15 @@ def write_update_manifest(output, manifest, verified_pair, channel):
                         "url": f"https://github.com/{REPO}/releases/download/{tag}/{filename}"})
     update = {"schema_version": 1, "product": "nipat-desktop", "version": version,
               "release_tag": tag, "channel": channel, "source_commit": manifest["source_commit"],
-              "minimum_updater_version": 1, "assets": entries,
+              "minimum_updater_version": 1,
+              "assets": [entry for entry in entries if not entry["platform"].startswith("darwin-")],
               "release_notes_url": f"https://github.com/{REPO}/releases/tag/{tag}"}
     (output / UPDATE_MANIFEST).write_text(json.dumps(update, indent=2) + "\n", encoding="utf-8")
+    # The 0.7 updater rejects unknown platforms. Keep its two-platform feed
+    # unchanged; macOS uses a separate manifest with the same release identity.
+    if requires_macos(version):
+        mac_update = dict(update, assets=[entry for entry in entries if entry["platform"].startswith("darwin-")])
+        (output / MACOS_UPDATE_MANIFEST).write_text(json.dumps(mac_update, indent=2) + "\n", encoding="utf-8")
     return update
 
 
@@ -555,7 +593,8 @@ def create_draft(tag, version, commit, notes, payload_path, channel="testing"):
     payload_path.write_text(json.dumps({
         "tag_name": tag, "target_commitish": commit,
         "name": f"NIPAT CLI {version} — Windows con " +
-                ("WSL2 e Docker Desktop" if requires_desktop_bundle(version) else
+                ("WSL2, Ubuntu e macOS con Lima" if requires_macos(version) else
+                 "WSL2 e Docker Desktop" if requires_desktop_bundle(version) else
                  "WSL2 e Ubuntu" if requires_installation_profile(version) else "WSL2"), "body": notes,
         "draft": True, "prerelease": channel == "testing", "make_latest": "false",
     }), encoding="utf-8")
@@ -653,9 +692,7 @@ def main():
     if requires_installation_profile(version):
         require(run.get("event") == "workflow_dispatch", "Joint publication requires a manually dispatched installer build")
     jobs = api(f"actions/runs/{args.run_id}/jobs?per_page=100")["jobs"]
-    required_jobs = ("windows-checks", "linux-runtime", "windows-installer", "linux-installer", "installer-required") \
-        if requires_installation_profile(version) else ("linux-runtime", "windows-installer")
-    for name in required_jobs:
+    for name in required_build_jobs(version):
         matches = [job for job in jobs if job["name"] == name]
         require(len(matches) == 1 and matches[0]["conclusion"] == "success", f"Missing successful job: {name}")
     with tempfile.TemporaryDirectory(prefix="nipat-release-") as temporary:
@@ -673,13 +710,19 @@ def main():
         if requires_installation_profile(version):
             command("gh", "run", "download", args.run_id, "--repo", REPO,
                     "--name", "nipat-linux-setup", "--name", "nipat-installer-set-evidence", "--dir", str(root / "artifacts"))
+            macos = None
+            if requires_macos(version):
+                command("gh", "run", "download", args.run_id, "--repo", REPO,
+                        "--name", "nipat-macos-setup-arm64", "--name", "nipat-macos-setup-x86_64",
+                        "--dir", str(root / "artifacts"))
+                macos = {arch: root / f"artifacts/nipat-macos-setup-{arch}" for arch in ("arm64", "x86_64")}
             source_project = root / "build-source"
             extract_build_source(commit, source_project)
             manifest = prepare_installer_set(
                 root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
                 root / "artifacts/nipat-linux-setup", root / "artifacts/nipat-installer-set-evidence",
                 output, commit, acceptance, acceptance_bytes, int(args.run_id), publication_commit, source_project,
-                channel=args.channel)
+                channel=args.channel, macos=macos)
         else:
             manifest = prepare_assets(root / "artifacts/nipat-windows-setup", root / "artifacts/nipat-runtime-assets",
                                       output, commit, desktop=desktop)
@@ -707,6 +750,14 @@ def main():
                       "Entrambi contengono lo stesso archivio scientifico verificato. "
                       "I risultati dell'accettazione dei pacchetti sono in `desktop-acceptance.json`; "
                       "non costituiscono una validazione clinica o di dominio.\n")
+        if requires_macos(manifest["version"]):
+            notes += (f"\nPer macOS scaricare **NIPAT-{version}-macos-arm64.pkg** (Apple Silicon) "
+                      f"oppure **NIPAT-{version}-macos-x86_64.pkg** (Intel). I quattro installer "
+                      "contengono lo stesso archivio scientifico e provengono dallo stesso commit. "
+                      "I controlli nativi dei pacchetti macOS sono registrati nei report per architettura; "
+                      "non attestano l'esecuzione della macchina virtuale su un Mac fisico. "
+                      "Le prove effettivamente effettuate e quelle ancora da svolgere sono distinte "
+                      "nel record di accettazione.\n")
         notes = notes.strip()
         files = {path.name: path for path in output.iterdir()}
         release = process_release(args.operation, files, commit, tag, manifest["version"], notes, root,

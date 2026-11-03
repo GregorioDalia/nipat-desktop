@@ -45,12 +45,21 @@ def engine_metadata():
                 "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
                 "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
                 "lib/nipat_scientific/cpi.py", "lib/nipat_scientific/outputs.py",
+                "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
             )},
         },
     }
 
 
 class BundledRunnerTests(unittest.TestCase):
+    def test_image_missing_original_name_presentation_is_rejected(self):
+        for source in ("presentation.py", "presentation.R"):
+            with self.subTest(source=source):
+                description = engine_metadata()
+                del description["preparation"]["file_sha256"]["lib/nipat_scientific/" + source]
+                with self.assertRaisesRegex(RuntimeExecutionError, "nomi originali"):
+                    DockerComposeRunner._validate_engine_description(description)
+
     def test_old_or_partial_validation_capability_is_rejected(self):
         for changed in ("missing", "inputs", "outputs", "normalization"):
             with self.subTest(changed=changed):
@@ -85,6 +94,11 @@ class BundledRunnerTests(unittest.TestCase):
         self.mounts = InputMounts(self.layout)
         self.mounts.bind_file(self.source, target="/workspace/inputs/sample_001.tsv")
         self.runner = DockerComposeRunner(self.layout, transport=DockerTransport())
+        self.enterContext(patch.object(self.runner, "_record_resource_snapshot"))
+        self.inspection = self.enterContext(patch(
+            "nipat.execution.runner.inspect_container",
+            side_effect=lambda *_: {"availability": "absent", "owned": False},
+        ))
         self.stdout = io.StringIO()
 
     def captured(self, description=None):
@@ -514,6 +528,8 @@ class BundledRunnerTests(unittest.TestCase):
         self.assertEqual(record["runtime"]["image_id"], IMAGE_ID)
 
     def test_failed_workflow_exit_code_is_propagated(self):
+        self.inspection.side_effect = lambda *_: {"availability": "available", "owned": True,
+                                                 "container_id": "a" * 64}
         run, context = self.begin("failure")
         with redirect_stdout(self.stdout), patch.object(
             self.runner, "_capture", side_effect=self.captured(),
@@ -526,9 +542,11 @@ class BundledRunnerTests(unittest.TestCase):
         record = json.loads((run / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(record["status"], "failed")
         self.assertEqual(record["commands"][0]["returncode"], 7)
-        stop.assert_called_once_with(record["commands"][0]["container_name"])
+        stop.assert_called_once_with("a" * 64)
 
     def test_interrupt_keeps_existing_named_container_cleanup(self):
+        self.inspection.side_effect = lambda *_: {"availability": "available", "owned": True,
+                                                 "container_id": "a" * 64}
         process = MagicMock()
         process.stdout.__iter__.side_effect = KeyboardInterrupt()
         process.poll.return_value = 130

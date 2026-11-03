@@ -1,4 +1,4 @@
-"""Verify an experimental macOS installer without installing it or starting a VM."""
+"""Verify an official macOS installer without installing it or starting a VM."""
 from __future__ import annotations
 
 import argparse
@@ -45,11 +45,11 @@ def verify_payload(payload: Path, common: dict, record: dict) -> dict:
     for field in ("version", "source_commit", "runtime_image"):
         if manifest.get(field) != common.get(field) or record.get(field) != common.get(field):
             raise ValueError(f"Package scientific/source identity mismatch: {field}")
-    if (manifest.get("channel") != "experimental08" or manifest.get("provider") != "lima"
+    if (manifest.get("channel") != "desktop" or manifest.get("provider") != "lima"
             or manifest.get("architecture") != record.get("architecture")
             or manifest.get("runtime_vm_qualified") is not False
             or record.get("runtime_vm_qualified") is not False):
-        raise ValueError("Invalid experimental package qualification or architecture.")
+        raise ValueError("Invalid package qualification or architecture.")
     entry = common["assets"]["scientific_image"]
     if (manifest.get("scientific_asset") != {
             "name": entry["file"], "sha256": entry["sha256"], "size": entry["size"]}
@@ -136,7 +136,7 @@ sys.path.insert(0, sys.argv.pop(1))
 from nipat.macos_runtime import LimaRuntime
 project, executable, destination = map(pathlib.Path, sys.argv[1:])
 home = pathlib.Path.home()
-runtime = LimaRuntime(project, home / "Library/Application Support/NIPAT-Experimental08",
+runtime = LimaRuntime(project, home / "Library/Application Support/NIPAT-Desktop",
                       executable, home=home)
 manifest = json.loads((project / ".distribution/macos-manifest.json").read_text())
 owner = {"token": "d" * 32, "mounts": runtime.default_mounts()}

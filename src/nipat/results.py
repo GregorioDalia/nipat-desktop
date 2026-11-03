@@ -39,10 +39,10 @@ _STATUS_LABELS = {
 
 
 def open_local_path(path: Path) -> None:
-    """Ask the desktop to display a directory or execution log, never run a command file."""
+    """Ask the desktop to display a directory, execution log or fixed run report."""
     path = path.expanduser().resolve()
-    if not path.is_dir() and not (path.is_file() and path.name == "execution.log"):
-        raise OSError(f"Aprire una cartella esistente o il file execution.log: {path}")
+    if not path.is_dir() and not (path.is_file() and path.name in {"execution.log", "run-report.html"}):
+        raise OSError(f"Aprire una cartella esistente, execution.log o run-report.html: {path}")
     if sys.platform == "win32":
         os.startfile(str(path), "open")
     else:
@@ -336,6 +336,7 @@ def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
         source = metadata.get("source")
         if isinstance(source, dict) and source.get("nipat_version"):
             ui.message(f"Versione NIPAT: {_short_value(source['nipat_version'])}")
+        _show_samples(ui, metadata)
         workflow = metadata.get("workflow")
         if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS:
             if not dry_run:
@@ -364,6 +365,33 @@ def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
         ui.message(f"Impossibile leggere l'elenco dei risultati: {exc}", kind="warning")
 
 
+def _show_samples(ui: Terminal, metadata: dict) -> None:
+    from nipat.run_report import sample_rows
+
+    samples = sample_rows(metadata)
+    if not samples:
+        return
+    ui.message(f"Campioni registrati: {len(samples)}")
+    for sample in samples[:12]:
+        ui.message(f"  {_short_value(sample['original_name'])}  [{_short_value(sample['sample_id'])}]")
+    if len(samples) > 12:
+        ui.message(f"Altri {len(samples) - 12} campioni sono elencati nel resoconto e in run.json.")
+    ui.message("I nomi originali identificano i campioni; gli ID tra parentesi collegano le fasi. I file di input non vengono rinominati.", kind="muted")
+
+
+def _presentation_directory(run_dir: Path) -> Path | None:
+    """Prefer human-facing exports without accepting paths from arbitrary metadata."""
+    for relative in ("output/workflow/presentation", "output/presentation"):
+        try:
+            directory = _local_descendant(run_dir, relative)
+            index = _local_descendant(run_dir, relative + "/index.html")
+            if directory.is_dir() and index.is_file():
+                return directory
+        except (OSError, ValueError):
+            continue
+    return None
+
+
 def show_results(
     ui: Terminal,
     run_dir: Path,
@@ -386,7 +414,14 @@ def show_results(
     if dry_run:
         ui.message("Dry-run: i comandi sono stati preparati; l'analisi non e' stata eseguita.")
     else:
-        ui.message(f"Risultati: {run_dir / 'output'}")
+        presentation = _presentation_directory(run_dir)
+        ui.message(f"Risultati: {presentation or run_dir / 'output'}")
+        if presentation:
+            ui.message("Aprire index.html per tabelle e grafici con i nomi originali. Gli output nativi restano nella cartella del run.", kind="muted")
+        try:
+            _show_samples(ui, _read_metadata(run_dir, "run.json"))
+        except (OSError, ValueError):
+            pass  # Legacy or incomplete records remain accessible through the summary.
         _show_quality_warnings(ui, run_dir)
 
     while True:
@@ -395,8 +430,9 @@ def show_results(
         output = run_dir / "output"
         log = run_dir / "execution.log"
         if not dry_run and output.is_dir():
-            choices.append(("1", "Apri cartella risultati", "File prodotti dall'analisi"))
-            targets["1"] = output
+            presentation = _presentation_directory(run_dir)
+            choices.append(("1", "Apri cartella risultati", "Tabelle e grafici con i nomi originali" if presentation else "File prodotti dall'analisi"))
+            targets["1"] = presentation or output
         choices.append(("2", "Riepilogo dell'esecuzione", "Metadati e file disponibili"))
         if log.is_file():
             choices.append(("3", "Apri log", "Dettagli tecnici dell'esecuzione"))
@@ -404,6 +440,13 @@ def show_results(
         if run_dir.is_dir():
             choices.append(("4", "Apri cartella del run", "Input preparati, metadati e output"))
             targets["4"] = run_dir
+        try:
+            report = _local_descendant(run_dir, "run-report.html")
+            if report.is_file():
+                choices.append(("5", "Apri resoconto", "Campioni, fasi, impostazioni e risorse registrate"))
+                targets["5"] = report
+        except (OSError, ValueError):
+            pass
         choices.append(("0", "Torna al menu", ""))
         choice = ui.menu("Prossima azione", choices, default="0").strip().casefold()
         if choice in {"0", ":indietro", ":annulla", "\x1b"}:

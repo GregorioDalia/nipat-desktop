@@ -9,19 +9,20 @@ import subprocess
 import sys
 import threading
 import uuid
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Iterator, TextIO
 
 from nipat import __version__
 from nipat.errors import RuntimeExecutionError, ValidationError
+from nipat.execution.diagnostics import diagnose, inspect_container
 from nipat.execution.mounts import InputMounts
 from nipat.execution.options import ExecutionOptions
 from nipat.execution.recovery import incomplete_runs, ownership_labels, reconcile_run
 from nipat.execution.tracking import (
     RunRecord, file_evidence, project_evidence, utc_now, verify_input_evidence,
 )
-from nipat.execution.transport import DockerTransport
+from nipat.execution.transport import DockerTransport, cleanup_process_options
 from nipat.paths import ProjectLayout
 from nipat.validation.integrity import verify_sha256_manifest
 
@@ -62,14 +63,6 @@ def _finish_cleanup() -> Iterator[None]:
         signal.signal(signal.SIGINT, previous)
 
 
-def _cleanup_process_options() -> dict[str, Any]:
-    # Cleanup commands must survive a repeated console Ctrl+C too. They have
-    # explicit timeouts and never read the user's input.
-    if os.name == "nt":
-        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-    return {"start_new_session": True}
-
-
 class DockerComposeRunner:
     def __init__(
         self, layout: ProjectLayout, dry_run: bool = False, *,
@@ -91,6 +84,66 @@ class DockerComposeRunner:
         self._backend_ready = False
         self.last_run_dir: Path | None = None
         self._hash_progress_key: tuple[Path, int] | None = None
+
+    @contextmanager
+    def _analysis_session(self) -> Iterator[None]:
+        if self.dry_run:
+            yield
+            return
+        from nipat.resources import analysis_session
+        # The resource manager shares this lock with VM reconfiguration.  The
+        # lock is reentrant when record_run calls run in the same process.
+        with analysis_session(self.layout):
+            yield
+
+    def _record_resource_snapshot(self) -> None:
+        if self.dry_run or self._record is None:
+            return
+        try:
+            from nipat.resources import ResourceManager
+            self._record.data["resource_snapshot"] = ResourceManager(
+                self._transport,
+            ).snapshot(container_options=self.options)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError,
+                RuntimeExecutionError, ValidationError) as exc:
+            self._record.data["resource_snapshot"] = {
+                "available": False, "reason": type(exc).__name__,
+            }
+            self._write("Risorse effettive non rilevate; l'analisi conserva i limiti configurati.\n")
+        self._record.save()
+
+    def _write_run_report(self, record: RunRecord) -> None:
+        try:
+            from nipat.run_report import write_run_report
+            record.data["report"] = write_run_report(record.run_dir)
+            self._write(f"Resoconto: {record.run_dir / record.data['report']['summary']}\n")
+        except Exception as exc:
+            # A report failure must be visible, but must not change the outcome
+            # of a completed scientific computation or replace its exception.
+            record.data["report_error"] = {"type": type(exc).__name__, "message": str(exc)}
+            self._write("Resoconto leggibile non creato; risultati, execution.log e run.json "
+                        "restano disponibili.\n")
+        try:
+            record.save()
+        except (OSError, ValueError, TypeError) as exc:
+            # The final scientific status was saved before this optional report
+            # hook. A second metadata write must not replace that outcome.
+            self._write(f"Metadati del resoconto non salvati ({type(exc).__name__}); "
+                        "consultare il run.json gia' presente.\n")
+
+    def _write_sample_mapping(self, parameters: dict[str, Any]) -> None:
+        from nipat.run_report import sample_rows
+        rows = sample_rows({"parameters": parameters})
+        if not rows:
+            return
+        self._write("Campioni: nomi originali e identificativi interni usati nei log tecnici.\n")
+        for row in rows[:12]:
+            # JSON quoting renders control characters harmlessly on terminals.
+            original = json.dumps(row["original_name"], ensure_ascii=False)
+            identifier = json.dumps(row["sample_id"], ensure_ascii=False)
+            self._write(f"  {original}  [ID interno: {identifier}]\n")
+        if len(rows) > 12:
+            self._write(f"  Altri {len(rows) - 12} campioni: elenco completo nel resoconto del run.\n")
 
     def _base_command(self) -> list[str]:
         if self._engine_compose_file is not None:
@@ -189,6 +242,7 @@ class DockerComposeRunner:
             "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
             "lib/nipat_scientific/cpi.py",
             "lib/nipat_scientific/outputs.py",
+            "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
         }
 
         def has_digest(value: Any) -> bool:
@@ -273,6 +327,7 @@ class DockerComposeRunner:
                 f"incorporato richiesto ({contracts}), con metadati scientifici completi. "
                 "Usare un runtime costruito per questa versione di NIPAT."
                 " Sono richiesti i controlli scientific-validation-v1 sugli input e sugli output."
+                " Il runtime deve includere il supporto ai nomi originali nei risultati."
             )
         return description
 
@@ -454,11 +509,14 @@ class DockerComposeRunner:
         # A wizard can reuse this runner after WSL has stopped between analyses.
         self._backend_ready = False
         record.data["transport"] = self._transport.metadata
+        lifetime = ExitStack()
         try:
             with record.log_path.open("x", encoding="utf-8", newline="\n") as log:
                 self._log = log
                 try:
+                    lifetime.enter_context(self._analysis_session())
                     self._write(f"NIPAT {workflow}: {run_dir}\n")
+                    self._write_sample_mapping(parameters)
                     self.layout.ensure_storage_dirs()
                     record.data["execution_options"] = self.options.as_dict()
                     self._hash_progress_key = None
@@ -493,6 +551,7 @@ class DockerComposeRunner:
                         verify_sha256_manifest(self.layout.project_dir / "scientific" / "SHA256SUMS")
                     if not self.dry_run:
                         self._prepare_runtime()
+                        self._record_resource_snapshot()
                     if bundled_workflow is not None:
                         if self.dry_run:
                             record.data["engine_verification"] = "not_run_dry_run"
@@ -523,16 +582,27 @@ class DockerComposeRunner:
                     with _finish_cleanup():
                         record.data["finished_at"] = utc_now()
                         record.save()
+                        self._write_run_report(record)
         finally:
-            self._log = None
-            self._record = None
-            self._image_id = None
-            self._input_mounts_file = None
-            self._engine_compose_file = None
-            self._bundled_workflow = None
-            self._backend_ready = False
+            try:
+                with _finish_cleanup():
+                    lifetime.close()
+            finally:
+                self._log = None
+                self._record = None
+                self._image_id = None
+                self._input_mounts_file = None
+                self._engine_compose_file = None
+                self._bundled_workflow = None
+                self._backend_ready = False
 
     def run(
+        self, command: Iterable[str | PurePosixPath], *, working_dir: PurePosixPath | None = None
+    ) -> None:
+        with self._analysis_session():
+            self._run_command(command, working_dir=working_dir)
+
+    def _run_command(
         self, command: Iterable[str | PurePosixPath], *, working_dir: PurePosixPath | None = None
     ) -> None:
         if self._record is None:
@@ -542,13 +612,17 @@ class DockerComposeRunner:
         self._verify_inputs("before_execution")
         container_name = "nipat-run-" + uuid.uuid4().hex
         docker_command = self._base_command() + [
-            "run", "--rm", "-T", "--pull", "never", "--name", container_name,
+            # Retain the stopped container until state/limits have been recorded;
+            # finally removes only its verified immutable ID on every outcome.
+            "run", "-T", "--pull", "never", "--name", container_name,
         ]
+        expected_labels = {"org.nipat.execution-token": uuid.uuid4().hex}
         if self._record is not None:
-            for key, value in ownership_labels(
+            expected_labels.update(ownership_labels(
                 self._record.run_dir, self._record.data["run_id"],
-            ).items():
-                docker_command.extend(["--label", f"{key}={value}"])
+            ))
+        for key, value in expected_labels.items():
+            docker_command.extend(["--label", f"{key}={value}"])
         if working_dir is not None:
             docker_command.extend(["--workdir", str(working_dir)])
         docker_command.append("scientific")
@@ -570,6 +644,7 @@ class DockerComposeRunner:
                 self._record.save()
             return
         process = None
+        interrupted = False
         try:
             process = subprocess.Popen(
                 docker_command, cwd=self.layout.project_dir, env=self._environment(),
@@ -581,10 +656,16 @@ class DockerComposeRunner:
                 for line in process.stdout:
                     self._write(line)
             stage["returncode"] = process.wait()
+            with _finish_cleanup():
+                stage["container_diagnostics"] = inspect_container(self, container_name, expected_labels)
+                stage["container_diagnostics"]["diagnosis"] = diagnose(
+                    stage["container_diagnostics"], stage["returncode"], interrupted=False,
+                )
             if stage["returncode"]:
                 stage["status"] = "failed"
+                explanation = stage["container_diagnostics"]["diagnosis"]["message"]
                 raise RuntimeExecutionError(
-                    f"Il runtime scientifico è terminato con codice {stage['returncode']}."
+                    f"Il runtime scientifico è terminato con codice {stage['returncode']}. {explanation}"
                 )
             stage["status"] = "succeeded"
         except FileNotFoundError as exc:
@@ -595,20 +676,6 @@ class DockerComposeRunner:
             with _finish_cleanup():
                 if interrupted:
                     self._write("Annullamento richiesto. Attendere l'arresto del calcolo e il salvataggio dei log.\n")
-                if interrupted or process is not None:
-                    # Stopping the client alone can leave its container running in the engine.
-                    stage["container_cleanup"] = self._stop_container(container_name)
-                if process is not None and process.poll() is None:
-                    try:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=10)
-                        except subprocess.TimeoutExpired:
-                            process.kill()
-                            process.wait(timeout=5)
-                    except (OSError, subprocess.SubprocessError) as cleanup_error:
-                        stage["client_cleanup_error"] = str(cleanup_error)
-                        self._write("Arresto del processo di collegamento al runtime non confermato; consultare execution.log.\n")
                 stage["status"] = (
                     "interrupted" if interrupted else "failed"
                 )
@@ -617,6 +684,34 @@ class DockerComposeRunner:
             raise
         finally:
             with _finish_cleanup():
+                if process is not None:
+                    if "container_diagnostics" not in stage:
+                        stage["container_diagnostics"] = inspect_container(self, container_name, expected_labels)
+                    observed = stage["container_diagnostics"]
+                    observed["diagnosis"] = diagnose(observed, stage["returncode"], interrupted=interrupted)
+                    if observed.get("owned") is True:
+                        # Never pass a reusable name after an inspection. A
+                        # concurrent replacement cannot redirect our cleanup.
+                        stage["container_cleanup"] = self._stop_container(observed["container_id"])
+                    else:
+                        stage["container_cleanup"] = {
+                            "status": "absent" if observed.get("availability") == "absent" else "not_confirmed",
+                            "reason": observed.get("reason", "ownership_not_verified"),
+                        }
+                        if stage["container_cleanup"]["status"] == "not_confirmed":
+                            self._write("Identita del container non verificabile: arresto automatico non eseguito. "
+                                        "Consultare la verifica delle esecuzioni prima di modificare le risorse.\n")
+                    if process.poll() is None:
+                        try:
+                            process.terminate()
+                            try:
+                                process.wait(timeout=10)
+                            except subprocess.TimeoutExpired:
+                                process.kill()
+                                process.wait(timeout=5)
+                        except (OSError, subprocess.SubprocessError) as cleanup_error:
+                            stage["client_cleanup_error"] = str(cleanup_error)
+                            self._write("Arresto del processo di collegamento al runtime non confermato; consultare execution.log.\n")
                 stage["finished_at"] = utc_now()
                 if self._record:
                     self._record.save()
@@ -639,7 +734,7 @@ class DockerComposeRunner:
                 stopped = subprocess.run(
                     stop_command, env=self._environment(), capture_output=True,
                     text=True, encoding="utf-8", errors="replace", timeout=20, check=False,
-                    stdin=subprocess.DEVNULL, **_cleanup_process_options(),
+                    stdin=subprocess.DEVNULL, **cleanup_process_options(),
                 )
                 graceful = {"returncode": stopped.returncode, "message": stopped.stderr.strip()}
             except (OSError, subprocess.SubprocessError, RuntimeExecutionError, ValidationError) as exc:
@@ -652,7 +747,7 @@ class DockerComposeRunner:
                 command, env=self._environment(),
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 timeout=15, check=False,
-                stdin=subprocess.DEVNULL, **_cleanup_process_options(),
+                stdin=subprocess.DEVNULL, **cleanup_process_options(),
             )
             cleanup = {
                 "status": ("removed" if result.returncode == 0 else

@@ -63,7 +63,7 @@ class ExperimentalIdentityTests(unittest.TestCase):
         self.assertCountEqual(clauses, [
             "github.event_name == 'workflow_dispatch'", "inputs.qualify_macos_runtime == true",
             "github.repository == 'GregorioDalia/nipat-desktop'",
-            "github.ref == 'refs/heads/experiment/0.8-portability'",
+            "(github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/0.8.2'))",
         ])
 
     def test_mac_package_is_bound_to_architecture_source_archive_and_bytes(self):

@@ -30,7 +30,8 @@ la validità scientifica di un risultato tecnicamente completato.
 
 ## Struttura della richiesta
 
-La richiesta contiene esattamente `schema_version`, `samples` e `steps`.
+La richiesta contiene `schema_version`, `samples` e `steps` e può aggiungere
+il campo opzionale `presentation`.
 Campi sconosciuti o mancanti sono errori; non vengono ignorati. Le opzioni
 che possono influire sul comportamento devono essere scritte esplicitamente,
 anche quando coincidono con il valore predefinito del singolo script.
@@ -408,3 +409,17 @@ tabelle malformate, un riferimento genomico inappropriato o campioni non
 idonei. Queste verifiche appartengono rispettivamente alla preparazione
 effettiva degli input e alla valutazione scientifica. La validazione del
 contratto non sostituisce le regressioni numeriche né le prove di dominio.
+
+## Presentazione dei campioni
+
+`presentation` contiene esattamente `samples` e `pairs`. La prima mappa
+associa ogni ID campione a un nome originale senza componenti di percorso;
+la seconda associa zero o più ID di coppia presenti nel piano a etichette
+leggibili. Sono rifiutati nomi vuoti, caratteri di controllo, ID estranei e
+mappature incomplete dei campioni. Le etichette non cambiano gli ID del piano.
+
+I passaggi producono i propri export in `output/presentation`; l'indice
+complessivo è in `presentation` sotto la radice del workflow. Gli output
+canonici, le dipendenze e i checksum rimangono distinti. Il
+[contratto del motore](../engine/README.md#etichette-leggibili) descrive
+la separazione tra calcolo ed esportazione.

@@ -1,4 +1,4 @@
-"""Launch the isolated experimental macOS installation with bundled dependencies."""
+"""Launch the official macOS installation with bundled dependencies."""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -11,7 +11,7 @@ import re
 import subprocess
 import sys
 
-STATE = Path("/Library/Application Support/NIPAT-Experimental08 Installer")
+STATE = Path("/Library/Application Support/NIPAT-Desktop Installer")
 SHA256 = re.compile(r"[a-f0-9]{64}\Z")
 CLI_CODE = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
             "from nipat.cli import main; raise SystemExit(main())")
@@ -22,11 +22,11 @@ RUNTIME_CODE = ("import sys; sys.path.insert(0, sys.argv.pop(1)); "
 def load_manifest(app: Path) -> dict:
     app = app.resolve()
     manifest = json.loads((app / ".distribution/macos-manifest.json").read_text())
-    if (manifest.get("schema_version") != 1 or manifest.get("channel") != "experimental08"
+    if (manifest.get("schema_version") != 1 or manifest.get("channel") != "desktop"
             or manifest.get("architecture") not in {"arm64", "x86_64"}
-            or not re.fullmatch(r"0\.8\.\d+(?:a|b|rc)\d+", manifest.get("version", ""))
+            or not re.fullmatch(r"0\.8\.\d+", manifest.get("version", ""))
             or not re.fullmatch(r"[a-f0-9]{40}", manifest.get("source_commit", ""))):
-        raise ValueError("Manifest macOS sperimentale non valido; reinstallare NIPAT.")
+        raise ValueError("Manifest macOS non valido; reinstallare NIPAT.")
     source_hashes = manifest.get("source_sha256")
     if not isinstance(source_hashes, dict) or not source_hashes:
         raise ValueError("Inventario sorgenti mancante.")
@@ -46,7 +46,7 @@ def load_manifest(app: Path) -> dict:
 
 
 def environment(app: Path, resources: Path, inherited: dict[str, str]) -> dict[str, str]:
-    workspace = Path.home() / "Library/Application Support/NIPAT-Experimental08"
+    workspace = Path.home() / "Library/Application Support/NIPAT-Desktop"
     clean = {key: value for key, value in inherited.items()
              if not key.startswith(("NIPAT_", "PYTHON", "DOCKER", "COMPOSE", "LIMA_"))}
     clean.update({
@@ -56,7 +56,7 @@ def environment(app: Path, resources: Path, inherited: dict[str, str]) -> dict[s
         "NIPAT_DATA_DIR": str(workspace / "data"),
         "NIPAT_RUNS_DIR": str(workspace / "runs"),
         "NIPAT_LIMA_EXECUTABLE": str(resources / "lima/bin/limactl"),
-        "LIMA_HOME": str(Path.home() / ".nipat08/lima"),
+        "LIMA_HOME": str(Path.home() / ".nipat/lima"),
         "NIPAT_LAUNCHER_PID": str(os.getpid()),
     })
     return clean
@@ -84,7 +84,7 @@ def launch(arguments: list[str], app: Path) -> int:
     if sys.platform != "darwin" or os.geteuid() == 0:
         raise ValueError("Avviare NIPAT su macOS con il proprio utente, senza sudo.")
     if int(platform.mac_ver()[0].split(".")[0]) < 14:
-        raise ValueError("NIPAT Experimental08 richiede macOS 14 o successivo.")
+        raise ValueError("NIPAT Desktop richiede macOS 14 o successivo.")
     manifest = load_manifest(app)
     if platform.machine() != manifest["architecture"]:
         raise ValueError("Installare il pacchetto NIPAT per l'architettura di questo Mac.")

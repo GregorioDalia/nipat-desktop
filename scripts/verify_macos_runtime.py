@@ -39,17 +39,17 @@ def verify(app: Path, output: Path) -> dict:
     launcher = app / "Contents/Resources/NIPAT.command"
     manifest_path = app / "Contents/Resources/app/.distribution/macos-manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if not launcher.is_file() or manifest.get("channel") != "experimental08":
-        raise ValueError("An installed experimental08 package is required.")
+    if not launcher.is_file() or manifest.get("channel") != "desktop":
+        raise ValueError("An installed desktop package is required.")
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     log_root = output.parent / (output.stem + "-logs")
     log_root.mkdir(exist_ok=True)
-    workspace = Path.home() / "Library/Application Support/NIPAT-Experimental08"
+    workspace = Path.home() / "Library/Application Support/NIPAT-Desktop"
     run_root = workspace / "runs" / ("acceptance-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S") + f"-{time.time_ns()}")
     records = []
     report = {
-        "schema_version": 1, "evidence": "real-macos-runtime", "channel": "experimental08",
+        "schema_version": 1, "evidence": "real-macos-runtime", "channel": "desktop",
         "version": manifest.get("version"), "source_commit": manifest.get("source_commit"),
         "host_architecture": platform.machine(), "macos_version": platform.mac_ver()[0],
         "package_architecture": manifest.get("architecture"), "runtime_image": None,

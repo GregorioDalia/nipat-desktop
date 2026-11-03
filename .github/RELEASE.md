@@ -1,370 +1,186 @@
 # Verifica e pubblicazione dei pacchetti
 
-## Distribuzione sperimentale 0.8
+NIPAT distribuisce installatori costruiti e verificati da GitHub Actions.
+La pubblicazione riutilizza gli stessi file, senza ricompilare applicazione
+o runtime. La versione 0.8.2 comprende Windows 10/11 x64, Ubuntu 24.04 x86_64
+e macOS Intel/Apple Silicon, con un archivio scientifico comune.
 
-La serie `0.8.0a1` del branch `experiment/0.8-portability` è separata dal
-canale stabile `desktop`. Usa il profilo `experimental08`, installatori
-Windows e macOS Intel/Apple Silicon e lo stesso archivio scientifico AMD64.
-Non produce un nuovo pacchetto Ubuntu, non sostituisce gli asset 0.7.2 e non
-viene pubblicata attraverso il manifest di aggiornamento stabile.
-
-Avviare manualmente **Installers (review build)** sul commit sperimentale.
-Conservare gli artefatti `nipat-windows-setup`, `nipat-macos-setup-arm64`,
-`nipat-macos-setup-x86_64` e `nipat-experimental-installer-evidence`, insieme
-ai rapporti scientifici. Il parametro `qualify_macos_runtime` consente prove
-Lima reali sui runner dedicati; se non vengono eseguite, tale limite deve
-rimanere esplicito nelle note. Le build su runner ospitati non qualificano
-automaticamente Windows 10 o un desktop Mac.
-
-La riuscita della build non crea una release. Un'eventuale distribuzione
-tramite GitHub Releases usa una **pre-release sperimentale**, senza `Latest`,
-con commit, checksum e perimetro delle prove realmente eseguite. Non richiede
-di dichiarare superati i casi desktop ancora da verificare. I file offerti
-sono gli stessi artefatti verificati; una ricostruzione richiede una nuova
-identificazione. La [documentazione CI/CD](../docs/CI_CD.md) descrive i job
-sperimentali e i loro limiti.
-
-## Canale stabile desktop
-
-Le sezioni seguenti descrivono il protocollo del canale stabile Windows/Ubuntu.
-Il relativo publisher rimane distinto dall'esperimento 0.8: questo documento
-non estende automaticamente i suoi schemi di accettazione o i suoi asset
-ai pacchetti macOS.
-
-
-NIPAT distribuisce artefatti costruiti e verificati da GitHub Actions. La
-pubblicazione non ricompila applicazione o runtime e non richiede al manutentore
-di trasferire manualmente gli archivi dal proprio computer.
-
-La distribuzione desktop richiede installatori Windows e Ubuntu dello stesso commit
-e con lo stesso archivio scientifico. La procedura verifica entrambi i
-pacchetti e richiede una decisione di distribuzione riferita ai file esatti.
-È ammessa l'accettazione per ricerca pre-1.0: integra una prova
-manuale documentata di installazione e funzionamento con i controlli automatici,
-rendendo espliciti i collaudi estesi ancora da svolgere. Le versioni
-pubblicate e le relative evidenze sono disponibili nella pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-Un record assente o incompleto interrompe la pubblicazione prima della
-creazione o modifica di una release.
-
-Questo documento descrive le evidenze di build e le protezioni della procedura.
-La riuscita dei controlli automatici non autorizza da sola una distribuzione:
-le prove del pacchetto reale e la validazione di dominio sono registrate
-separatamente nella [scheda di validazione](../docs/VALIDAZIONE.md).
+La distribuzione per ricerca pre-1.0 distingue controlli automatici, prove
+osservate sui dispositivi e valutazione di dominio. Le prove desktop estese
+possono essere rinviate esplicitamente. La scelta del canale `stable` identifica
+la versione ufficiale, non una validazione scientifica generale.
 
 ## Build identificata
 
-Il workflow **Installers (review build)** compila `NIPAT.exe`, ne esegue
-le prove e conserva quello stesso file per il confezionamento. Costruisce
-l'immagine scientifica, verifica i quattro workflow, esporta l'archivio e
-costruisce il filesystem WSL. Verifica inoltre il caricamento, l'esecuzione
-e il ricaricamento dell'archivio nel motore interno distribuito.
-Si avvia manualmente dal branch e dal commit scelti per la distribuzione.
-La CI automatica continua a verificare ogni aggiornamento dei sorgenti, ma
-non produce installatori completi a ogni push.
+Avviare manualmente **Installers (review build)** su un commit revisionato
+di `main`, `release/0.8.2` o `release/0.8.2-...`.
+Il branch di sviluppo permette di costruire e verificare la candidata prima
+dell'integrazione in `main`. Conservare il commit completo, non soltanto il
+nome del branch o il numero di versione.
 
-Il builder prepara soltanto i file ammessi da `distribution-files.txt`, Python
-portabile verificato e i componenti previsti. La compilazione Inno Setup usa
-il manifest fidato, il profilo del canale e i due archivi verificati.
-Il risultato Windows è un unico **`NIPAT-Setup.exe`**, contenente tutti i
-componenti NIPAT necessari. Il solo `NIPAT.exe` non è un pacchetto autonomo.
+La build verifica il client, costruisce l'immagine scientifica, esegue le
+regressioni, esporta l'archivio comune e confeziona i quattro installatori.
+Il builder include soltanto i file ammessi da `distribution-files.txt` e i
+componenti identificati dai manifest. Il controllo `installer-required`
+confronta i pacchetti e le loro evidenze. Una build di pull request non è una
+build di pubblicazione.
 
-Il pacchetto Ubuntu è un unico `.deb`: contiene i sorgenti ammessi e lo stesso
-archivio scientifico, senza il filesystem WSL. La build verifica il contenuto,
-esegue installazione e preparazione su un runner Ubuntu 24.04 e conserva
-evidenze separate da quelle Windows.
-
-Gli artefatti da conservare per la verifica dei pacchetti sono:
-
-| Artefatto | Evidenze |
+| Artefatto | Contenuto principale |
 | --- | --- |
-| `nipat-windows-setup` | `NIPAT-Setup.exe`, `installer-manifest.json`, `SHA256SUMS`, `installer-build.json`, `windows-client-check.json` e launcher verificato. |
-| `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e relativi checksum. |
-| `nipat-linux-setup` | `.deb`, manifest comune, checksum, `linux-installer-build.json`, `linux-installation-check.json` e `linux-dependency-check.json`. |
-| `nipat-scientific-check-logs` | Metadati e registri delle regressioni conservati dalla build. |
-| `nipat-installer-set-evidence` | `installer-set-check.json`, verifica congiunta di sorgenti e archivio scientifico Windows/Ubuntu. |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`, manifest, checksum, `installer-build.json`, `windows-client-check.json`. |
+| `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e checksum. |
+| `nipat-linux-setup` | DEB, manifest, rapporti di confezionamento, installazione, dipendenze e aggiornamento. |
+| `nipat-macos-setup-arm64` | PKG Apple Silicon e rapporto del pacchetto nativo. |
+| `nipat-macos-setup-x86_64` | PKG Intel e rapporto del pacchetto nativo. |
+| `nipat-scientific-check-logs` | Metadati e registri delle regressioni scientifiche. |
+| `nipat-installer-set-evidence` | `installer-set-check.json`, identità congiunta dei quattro pacchetti. |
 
-Il manifest identifica versione, tag previsto, commit, piattaforma, archivio
-scientifico, filesystem WSL e profilo di installazione. Il profilo deve
-corrispondere al sorgente del commit e al canale `desktop`.
-La versione del manifest deve coincidere con quella del `pyproject.toml`
-committato: un manifest non può scegliere un protocollo di distribuzione diverso.
-Usare il commit completo indicato dal manifest e dal riepilogo della build.
-Un eventuale artefatto storico di pull request può provenire da un merge
-temporaneo, diverso dalla testa del branch: quell'evento non è ammesso alla
-pubblicazione. Il confronto della sola versione non identifica gli stessi byte.
+Il manifest collega versione, commit, architettura, archivio scientifico e
+profilo `desktop`. La versione deve coincidere con il `pyproject.toml` del
+commit compilato. Un archivio ricostruito, anche dallo stesso commit, richiede
+verifica dei nuovi byte e un'accettazione corrispondente.
 
-## Verifica dell'installatore Windows
+## Verifiche dei pacchetti
 
-`installer-build.json` usa schema 1 e distribuzione `self-contained-wsl`.
-Collega versione e commit ai seguenti elementi:
+### Windows
 
-- nome, dimensione e SHA-256 dell'EXE;
-- SHA-256 del manifest e del launcher;
-- nome, dimensione e SHA-256 dei due archivi incorporati;
-- profilo di installazione previsto dal canale.
+`installer-build.json` collega EXE, manifest, launcher e archivi incorporati
+tramite dimensioni e SHA-256. Il pacchetto è un unico `NIPAT-Setup.exe`, senza
+file `.bin` separati; il solo launcher non costituisce un'installazione.
 
-La verifica confronta le evidenze con i file effettivi e i sorgenti del commit.
-Prima della compilazione, il builder verifica il profilo e gli include Inno
-Setup generati; le voci degli archivi specificano l'hash che il compilatore
-controlla durante l'inclusione. L'installatore deve essere inferiore a 2 GiB
-e non richiedere archivi `.bin` separati.
+`windows-client-check.json` verifica il payload con il Python incorporato in
+una destinazione isolata, incluse pianificazione e richieste con percorsi
+complessi. Lo scenario `staged-embedded-python-client` non esegue il setup
+Inno, la preparazione WSL o una prova su Windows 10 reale. Tali osservazioni
+vanno registrate separatamente.
 
-La funzione `prepare_assets` del publisher verifica i pacchetti Windows
-anche durante la build, indipendentemente dall’accettazione richiesta per
-pubblicarli. Rifiuta evidenze mancanti, file provenienti da build diverse,
-un profilo incoerente e
-artefatti Docker Desktop. Questi controlli legano l'EXE alla build e ai suoi
-input; non costituiscono una verifica ottenuta installando o estraendo
-indipendentemente l'eseguibile finale.
+### Ubuntu
 
-Per la serie 0.7, `windows-client-check.json` registra anche una prova
-del payload applicativo preparato per il setup, copiato in una destinazione
-isolata con spazi e caratteri non ASCII. Usa il Python portabile incluso
-per verificare import, catalogo, menu e pianificazione `--dry-run` dei
-workflow automatici, con mount in sola lettura e input invariati.
-Il report collega versione e commit agli hash di installatore, manifest,
-launcher e inventario, ma dichiara lo scenario
-`staged-embedded-python-client`: non esegue l'installazione Inno Setup,
-la preparazione WSL o i calcoli R. Questi ultimi restano coperti dalle
-prove scientifiche separate e dal collaudo del pacchetto sul dispositivo.
+Il DEB incorpora lo stesso archivio scientifico. Le verifiche eseguono APT,
+preparazione, diagnostica e analisi da utente non root, reinstallazione e
+rimozione conservando dati e preferenze. Una prova separata verifica le
+dipendenze in un ambiente inizialmente privo dei pacchetti richiesti, senza
+concedere automaticamente accesso Docker.
 
-Gli archivi runtime separati servono a recupero e verifica. La normale
-installazione Windows usa soltanto l'EXE; non richiede che l'utente disponga
-gli archivi accanto all'installatore.
+`linux-upgrade-check.json` identifica il precedente pacchetto 0.7.2 e la
+candidata, verifica l'aggiornamento effettivo e la conservazione dei dati.
+Reinstallare la stessa versione non soddisfa questo controllo. Il runner
+configurato non viene presentato come un Ubuntu Desktop pulito.
 
-## Verifica del pacchetto Ubuntu
+### macOS
 
-`linux-installer-build.json` usa schema 1 e distribuzione `native-linux-deb`.
-Collega pacchetto, versione, commit, dimensione e SHA-256 del `.deb` al
-manifest comune e all’archivio scientifico incorporato. Il builder richiede
-sorgenti coerenti con il commit e verifica i byte prima del confezionamento;
-l’archivio non viene esportato o compresso nuovamente.
+Ogni PKG incorpora Python e Lima nativi per l'architettura host e l'archivio
+scientifico AMD64 comune. I rapporti verificano identità, contenuti e launcher
+su runner Mac. Le prove Lima reali sono attivabili con
+`qualify_macos_runtime` su runner dedicati; se non eseguite, il record indica
+`not-performed` per l'architettura interessata.
 
-`linux-installation-check.json` documenta le prove del pacchetto effettivo
-su un runner Ubuntu 24.04 con Docker configurato. L’installazione e la
-rimozione usano APT; preparazione, diagnostica e analisi sono eseguite da
-un utente non root. I controlli comprendono i casi distribuiti di SNPcall, CPI
-e Contamination e un caso DNPcall sintetico, proprietà dei risultati e
-conservazione dei dati dopo reinstallazione dello stesso pacchetto e
-rimozione. Non attestano un aggiornamento fra versioni differenti.
-
-La verifica 0.7 aggiunge un piano automatico completo DNPcall →
-Contamination e CPI, con SNPcall indipendente sugli stessi BAM sintetici.
-Il piano viene avviato dal client installato come utente non root e verifica
-risultati numerici, associazioni dei campioni, identità dell'immagine,
-intermedi e hash degli output. I campi `automatic_workflow_plan` e
-`preferences_preserved` registrano rispettivamente l'esito del piano e la
-conservazione delle preferenze durante analisi, reinstallazione e rimozione.
-Si tratta di una prova sul runner Ubuntu configurato, non di un'installazione
-su Ubuntu Desktop pulito.
-
-Una prova distinta installa il `.deb` in un container Ubuntu 24.04
-inizialmente privo delle dipendenze. `linux-dependency-check.json` identifica
-il pacchetto e registra l’installazione APT di Python, Docker Engine e
-Compose v2 dai repository configurati. Controlla inoltre i comandi
-informativi da un utente non root, senza avviare un daemon o concedere
-automaticamente accesso Docker. Non è una prova su Ubuntu Desktop.
-
-Il controllo `installer-required` confronta commit, manifest comune e
-checksum scientifico dei due pacchetti, verifica entrambe le evidenze
-Linux e conserva `installer-set-check.json`.
-Questa corrispondenza lega gli installatori alla stessa esportazione.
-Le evidenze di build non sostituiscono le prove su Windows e Ubuntu Desktop puliti. I dettagli
-operativi del pacchetto sono nell’[installatore Linux](../docs/INSTALLATORE_LINUX.md).
+La costruzione riuscita di un PKG non prova l'avvio della VM o l'accettazione
+Gatekeeper sul computer destinatario. I checksum identificano gli artefatti,
+non sostituiscono una firma del distributore o la notarizzazione Apple.
 
 ## Accettazione dei pacchetti
 
-Il pacchetto Windows non è firmato digitalmente da NIPAT. La verifica dei
-checksum identifica i file approvati ma non autentica un distributore per
-Windows. Registrare l'esito con le protezioni dei dispositivi destinatari
-attive, inclusi eventuali blocchi del browser, di Smart App Control o antivirus.
+Il record della candidata è `.github/release-acceptance/v0.8.2.json`.
+Viene revisionato dopo la build e integrato in `main` insieme ai sorgenti,
+conservando il commit compilato nella storia. Non fa parte del pacchetto.
+La generazione del modello non equivale ad accettazione:
 
-Il [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) definisce
-le prove sui sistemi destinatari. Una scheda generata con
-`release_acceptance.py` parte da `pending` e non costituisce un’autorizzazione.
-Il record distingue quattro modalità:
+```bash
+python .github/scripts/release_acceptance.py \
+  --installer-set /percorso/installer-set-check.json \
+  --run-id ID_BUILD \
+  --output /percorso/accettazione-da-compilare.json
+```
 
-- **Schema 1, qualificazione completa:** richiede tutti i sei scenari desktop
-  superati sugli installatori esatti della build.
-- **Schema 2, ricerca pre-1.0 per la serie 0.6:** richiede una decisione
-  esplicita del manutentore, una prova manuale osservata di installazione e
-  funzionamento, le evidenze automatiche e l'elenco delle prove rinviate.
-  Il riuso di una prova su una build precedente richiede l'equivalenza
-  dei sorgenti operativi distribuiti.
-- **Schema 3, ricerca pre-1.0 per la serie 0.7:** conserva la prova manuale
-  osservata sulla build identificata e permette differenze revisionate nel
-  client, negli installatori e nei test. Ogni differenza operativa deve
-  essere dichiarata in `reviewed_source_changes` con percorso e SHA-256
-  prima e dopo la modifica; un lato assente è indicato con `null`.
-  La procedura confronta l'elenco con i byte effettivi dei due commit.
-  I sorgenti scientifici, l'orchestrazione nell'immagine, le definizioni
-  del runtime e `compose.yaml` devono restare invariati. Il record mantiene
-  `domain_validation: pending-domain-researchers` e rinvia esplicitamente
-  i sei scenari desktop estesi.
-- **Schema 4, ricerca pre-1.0 dalla 0.7.2:** consente modifiche revisionate
-  alla preparazione Python, all'orchestrazione e ai componenti di installazione,
-  conservando invariati i sorgenti R distribuiti. Il confronto registra ogni
-  differenza operativa con gli hash esatti; non dichiara equivalenza operativa.
-  La prova Windows precedente è soltanto evidenza storica della piattaforma:
-  non viene presentata come installazione della candidata. Sono richiesti
-  anche il rapporto di aggiornamento reale Ubuntu dalla 0.7.1 e l'archivio
-  permanente delle verifiche sintetiche, entrambi collegati ai checksum
-  dell'accettazione. La validazione di dominio resta in attesa delle ricercatrici.
+Per la 0.8.2 il modello usa lo **schema 5**, con decisione iniziale `pending`.
+Una distribuzione per ricerca richiede:
 
-Il numero di versione o il canale `stable` non trasformano l'accettazione
-per ricerca in una validazione scientifica. Lo schema 3 richiede comunque
-le verifiche automatiche 0.7 sugli installatori esatti: client Windows con
-Python incorporato, piano automatico Ubuntu e controlli congiunti.
+- versione, commit, build e checksum dei quattro installatori, del manifest
+  e dell'archivio scientifico;
+- decisione `accepted-for-research`, responsabile, data UTC e riferimenti;
+- prova storica identificata come `historical-platform-evidence`, senza
+  attribuirla all'installazione della candidata;
+- elenco completo delle modifiche operative con hash prima/dopo, secondo
+  `reviewed-operative-changes-with-unchanged-vendored-r-v1`;
+- R vendorizzato invariato, regressioni della candidata e rapporto permanente
+  di qualificazione, con prova dell'aggiornamento Ubuntu;
+- `macos_validation` distinto per `arm64` e `x86_64`: `passed` con evidenze
+  HTTPS oppure `not-performed` con elenco vuoto;
+- scenari desktop rinviati e `domain_validation: pending-domain-researchers`.
 
-Quando la prova manuale riguarda una build precedente, il record ne conserva
-il commit effettivo. La procedura confronta i sorgenti operativi di quella
-build con quelli della candidata secondo l'ambito definito nel validatore.
-Un confronto riuscito permette di riutilizzare la prova come riferimento,
-ma non attesta che il nuovo EXE sia stato installato né che i due pacchetti
-siano identici. Il confronto e i limiti sono parte delle evidenze della release.
-
-Il record viene sottoposto a revisione in
-`.github/release-acceptance/v<VERSIONE>.json` e integrato in `main` prima della
-pubblicazione, insieme al sorgente accettato. Può essere preparato e
-revisionato sul branch di sviluppo dopo le prove. È separato dai file
-incorporati negli installatori e dal commit della build provata. Collega versione,
-commit, ID della build, manifest comune, archivio scientifico e checksum
-di entrambi gli installatori alla decisione, alle prove osservate e ai limiti
-dichiarati, con responsabile, data e collegamenti alle evidenze. Il successo
-della build non compila o approva automaticamente questo record.
-
-Il publisher legge l’accettazione dal commit della procedura su `main`.
-Un record mancante o non accettato interrompe l’operazione; dopo il download,
-i checksum devono coincidere con quelli dei pacchetti effettivi. Se gli
-artefatti scadono o vengono ricostruiti, non riutilizzare l’accettazione
-per file con digest differenti. La data di scadenza è quella indicata
-dalla conservazione degli artefatti Actions.
+Gli adattatori di presentazione sono revisionabili; questa regola non
+permette modifiche ai metodi R vendorizzati. Il confronto verifica i byte Git,
+non si limita a leggere gli hash dichiarati. Gli schemi precedenti rimangono
+utilizzati per le rispettive release storiche. Il
+[protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) descrive
+prove e registrazione senza trasformare i casi non svolti in esiti positivi.
 
 ## Protezioni della pubblicazione
 
-Il workflow **Prepare or publish verified release** è esclusivamente manuale e
-opera su `main`. Richiede l'ID della build, il suo commit completo e il canale
-`testing` o `stable`. `testing` è predefinito e pubblica una pre-release;
-`stable` pubblica una release stabile e accetta soltanto versioni numeriche
-`MAJOR.MINOR.PATCH`. La scelta del canale non modifica i requisiti della
-modalità di accettazione selezionata. Gli schemi pre-1.0 sono limitati alle
-serie 0.6 e 0.7; i criteri delle versioni successive richiedono una revisione
-esplicita. Avviare manualmente **Installers (review build)** su un commit
-revisionato di questo repository: può essere il branch di sviluppo, così
-che le prove e l’accettazione precedano l’integrazione in `main`.
-
-Dopo l’approvazione, integrare sorgenti e record di accettazione conservando
-il commit compilato nella storia di `main`. Il publisher verifica esito
-della build, corrispondenza del commit e sua appartenenza alla storia di
-`main` al momento della pubblicazione. Riutilizza gli artefatti accettati
-della build manuale, senza ricostruirli dopo l’integrazione. Le build di
-pull request vengono rifiutate. Il successo del solo workflow CI non
-sostituisce una build completa degli installatori.
-
-La distribuzione richiede due avvii separati dello stesso workflow.
+**Prepare or publish verified release** è manuale e opera su `main`.
+Richiede la build completa riuscita, il commit presente nella storia di
+`main`, il record approvato e i file corrispondenti. `testing` è predefinito;
+`stable` accetta una versione numerica `MAJOR.MINOR.PATCH` e diventa `Latest`.
+Non esiste pubblicazione automatica al push di un branch o tag.
 
 ### 1. Preparare la bozza
 
-Selezionare `operation: prepare`, il `run_id` della build accettata,
-il suo `source_commit` completo e il canale scelto. Lasciare
-`preparation_commit` vuoto. La procedura:
+Avviare il workflow con `operation: prepare`, `run_id`, `source_commit`
+completo e `channel`. Lasciare `preparation_commit` vuoto. La procedura:
 
-1. verifica commit, versione, build e accettazione richiesta;
-2. scarica gli artefatti di quella build e ripete la verifica della coppia
-   Windows/Ubuntu sui file effettivi;
-3. confronta pacchetti, manifest e archivio scientifico con il record di
-   accettazione e prepara un elenco combinato dei checksum;
-4. usa le note `docs/RELEASE_<versione>.md` del commit compilato per lo
-   schema 1; negli schemi 2, 3 e 4 usa quelle del commit di preparazione, che
-   descrivono la decisione di ricerca e i limiti correnti;
-5. crea una bozza sul commit verificato e carica gli asset;
-6. verifica dimensioni e digest restituiti da GitHub;
-7. conserva la release come **bozza**, senza pubblicarla, e riporta l'ID
-   della bozza e il commit di preparazione nel riepilogo Actions.
+1. verifica build, commit, versione e accettazione;
+2. scarica e ricontrolla i quattro pacchetti e l'archivio comune;
+3. confronta checksum, rapporti e revisione dei sorgenti;
+4. usa le note `docs/RELEASE_0.8.2.md` del commit di preparazione;
+5. crea una bozza, carica i file e verifica dimensioni e digest restituiti;
+6. riporta ID della bozza e commit della preparazione nel riepilogo Actions.
 
-Controllare nella bozza note, versione, commit sorgente, canale e nomi degli
-installatori. In questa fase l'aggiornatore NIPAT non propone il pacchetto.
+Esaminare note, canale, commit, nomi e contenuti. La bozza non è proposta
+dall'aggiornatore. Una preparazione interrotta può riprendere sullo stesso
+`draft_release_id` soltanto se i contenuti esistenti coincidono.
 
 ### 2. Pubblicare la bozza verificata
 
-Avviare nuovamente il workflow su `main` con `operation: publish`, gli stessi
-`run_id`, `source_commit` e `channel`, il `draft_release_id` restituito e
-il `preparation_commit` completo del primo avvio. Non utilizzare il commit
-del pacchetto al posto di quello della preparazione: identificano due ruoli
-diversi.
+Avviare `operation: publish` con gli stessi build, commit e canale, più
+`draft_release_id` e `preparation_commit` restituiti dalla preparazione.
+Il commit della preparazione e quello del pacchetto hanno ruoli diversi.
 
-La procedura ripete le verifiche del set, richiede che il record di accettazione
-sia invariato rispetto alla preparazione e controlla che la bozza contenga
-esattamente gli asset approvati. Per gli schemi 2, 3 e 4 mantiene le note del commit
-di preparazione, anche se `main` avanza. Non crea una bozza mancante, non carica asset
-e non corregge contenuti alterati. Un avanzamento di `main` è ammesso soltanto
-se le condizioni verificate rimangono soddisfatte.
+La procedura ricontrolla evidenze e contenuti esatti della bozza, richiede
+accettazione invariata e conserva le note della preparazione. Non crea bozze
+mancanti, non carica file e non corregge asset alterati. Dopo la verifica,
+`stable` diventa una release ufficiale `Latest`; `testing` una pre-release.
 
-Dopo i controlli, `stable` pubblica una release stabile e la imposta come
-**Latest**; `testing` pubblica una pre-release senza impostarla come Latest.
-La pubblicazione della stabile viene verificata anche tramite il riferimento
-GitHub alla release Latest. Non sono previste pubblicazioni automatiche al push
-di un branch o di un tag.
+## Asset pubblicati e aggiornamenti
 
-La verifica comprende il contenuto del `.deb`, l’evidenza di compilazione
-dell’EXE, gli archivi incorporati e le prove Linux. Non ricompila
-applicazione o immagine. La release conserva i due installatori, il manifest
-comune, gli archivi runtime, le evidenze di costruzione e prova,
-`desktop-acceptance.json`, `release-provenance.json`, `update-manifest.json`
-e `SHA256SUMS`. La serie 0.7 conserva inoltre `windows-client-check.json`
-e `application-files.json`. Gli schemi 2, 3 e 4 includono anche
-`baseline-source-check.json`, che registra l'esito e l'ambito del confronto
-con il riferimento manuale; negli schemi 3 e 4 elenca le differenze revisionate
-e dichiara che l'installazione manuale del candidato Windows non è attestata.
-Lo schema 4 conserva inoltre `linux-upgrade-check.json`,
-`qualification-evidence.json` e `qualification-evidence.zip`. L'archivio contiene
-soltanto le prove sintetiche della build e i loro rapporti; il publisher verifica
-identità, inventario e checksum prima di includerlo nella release. Queste
-verifiche non sono sostituibili con una reinstallazione dello stesso pacchetto.
-`release-provenance.json` identifica separatamente il commit del pacchetto,
-quello della procedura e quello delle note tramite `release_notes_commit`.
-I collegamenti delle note puntano alla revisione documentale corrispondente;
-la documentazione aggiornata non comporta una ricompilazione dei pacchetti.
-Per l’installazione ordinaria l’utente scarica soltanto l’EXE o il `.deb`
-della propria piattaforma; gli altri file servono alla verifica e al recupero.
+La release conserva quattro installatori, manifest, archivi del runtime,
+checksum, rapporti di piattaforma, `desktop-acceptance.json`,
+`baseline-source-check.json`, `release-provenance.json`,
+`linux-upgrade-check.json` e `qualification-evidence.json`/`.zip`.
+L'archivio delle evidenze contiene prove sintetiche e rapporti verificati;
+non devono essere inclusi dati privati dei ricercatori.
 
-### Manifest per l'aggiornatore
+`release-provenance.json` distingue commit del pacchetto, della procedura e
+delle note. I due indici di aggiornamento sono:
 
-`update-manifest.json` viene generato soltanto dopo la verifica degli installatori
-e dell'accettazione. Lo schema 1 identifica `product: nipat-desktop`, versione,
-tag, commit sorgente, canale e `minimum_updater_version: 1`. Contiene esattamente
-l'EXE Windows e il `.deb` Linux della coppia approvata, ciascuno con nome atteso,
-piattaforma, dimensione, SHA-256 e URL ufficiale della stessa release.
-Il suo digest viene incluso in `SHA256SUMS`.
+| File | Destinatari |
+| --- | --- |
+| `update-manifest.json` | Windows e Linux; formato compatibile con i client 0.7.2. |
+| `update-manifest-macos.json` | macOS ARM64 e Intel. |
 
-Il client confronta manifest, release e commit del tag prima di proporre il
-download, quindi verifica i byte scaricati. I canali dell'applicazione selezionano
-le sole release pubblicate: `testing` include pre-release e stabili, `stable`
-include soltanto le stabili. Bozze e artefatti Actions non vengono proposti.
-Questa procedura non firma i pacchetti: la fiducia nelle informazioni pubblicate
-si basa su HTTPS e sul repository ufficiale, distinta da Authenticode.
+Ogni indice identifica versione, tag, commit, canale e file della stessa
+release, con piattaforma, dimensione e SHA-256. Il client verifica questi
+campi e i byte scaricati. Su Mac il download verificato è seguito dalla
+chiusura di NIPAT e dall'apertura manuale del PKG. Gli indici non firmano
+i pacchetti: la fiducia nel download dipende da HTTPS e repository ufficiale.
 
-L’esito automatico del set, con
-`publication_authorized: false`, resta distinto dall’accettazione umana;
-il publisher richiede entrambi.
-
-Una preparazione interrotta può essere ripresa con `operation: prepare` e
-`draft_release_id`, soltanto se commit, note e contenuti già presenti
-coincidono con quelli verificati. `publish` richiede invece una bozza completa
-e non la modifica per recuperare errori di preparazione. Release già pubblicate e tag associati
-ad altri commit non vengono modificati. Non ricostruire un runtime per
-sostituire un archivio già verificato o pubblicato.
-
-Per l’organizzazione dei workflow e i confini dei test consultare
-[CI/CD](../docs/CI_CD.md); per i pacchetti consultare
-[Installatore Windows](../docs/INSTALLATORE_WINDOWS.md) e
-[Installatore Linux](../docs/INSTALLATORE_LINUX.md).
+Per installare, il ricercatore scarica soltanto il file della propria
+piattaforma. Gli altri asset servono alla verifica o al recupero.
 
 ## Immutabilità degli artefatti pubblicati
 
-La repository abilita l'immutabilità delle nuove release. Tutti gli asset devono
-essere presenti e verificati nella bozza prima della pubblicazione: dopo questa
-operazione GitHub protegge i file e il tag associato. Una correzione richiede
-una nuova versione. L'impostazione non modifica retroattivamente le release
-precedenti e non sostituisce la verifica dei checksum svolta dal publisher.
+Non sovrascrivere release o tag già pubblicati. Completare e verificare la
+bozza prima della pubblicazione; una correzione richiede una nuova versione.
+Un artefatto Actions scaduto non può essere sostituito da una ricostruzione
+senza rivedere checksum e accettazione. Consultare [CI/CD](../docs/CI_CD.md)
+per i livelli di test e i limiti delle prove automatiche.

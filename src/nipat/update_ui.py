@@ -126,6 +126,10 @@ def run_updates(
             offer, download_directory / offer.version, progress=DownloadProgress(ui),
         )
         ui.message(f"Download verificato: {downloaded}", kind="success")
+        if selected_platform.startswith("darwin-"):
+            ui.message("Per installare: chiudere tutte le sessioni NIPAT, quindi aprire il file .pkg verificato indicato sopra.", kind="info")
+            ui.message("Il programma di installazione aggiorna l'applicazione e conserva dati, risultati e configurazione. macOS puo' richiedere l'autorizzazione all'apertura del pacchetto.", kind="muted")
+            return False
         ui.message("Per installare, NIPAT chiudera' questa sessione e avviera' il programma di aggiornamento.", kind="muted")
         if selected_platform.startswith("linux"):
             ui.message("Il gestore dei pacchetti di Ubuntu puo' richiedere l'autorizzazione di amministrazione.", kind="muted")

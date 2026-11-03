@@ -497,10 +497,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          590,
-          651
+          603,
+          669
         ],
-        "sha256": "de0b5ce26d4b698fede57d7732b14150d6b171fa97bbe666985fec991d7c7d19"
+        "sha256": "7f155eebbbbe0f507991b3e544626cdafbe7fdb7381b3159df5dcd50c44f1fba"
       }
     },
     {
@@ -518,10 +518,10 @@
       "evidence": {
         "path": "src/nipat/execution/workflows.py",
         "source_lines": [
-          590,
-          651
+          603,
+          669
         ],
-        "sha256": "de0b5ce26d4b698fede57d7732b14150d6b171fa97bbe666985fec991d7c7d19"
+        "sha256": "7f155eebbbbe0f507991b3e544626cdafbe7fdb7381b3159df5dcd50c44f1fba"
       }
     },
     {
@@ -594,10 +594,10 @@
       "evidence": {
         "path": "src/nipat_scientific/contamination.py",
         "source_lines": [
-          41,
-          100
+          42,
+          102
         ],
-        "sha256": "3da9cd0bc7208c4aae4aa47085cc85b1ca307a7aedc32ef2cc304b645f323c4a"
+        "sha256": "d1e4f3b685d17b5dcb35d57ac48379c041b088b5a8ec245c6c223c87eef22585"
       }
     },
     {
@@ -615,10 +615,10 @@
       "evidence": {
         "path": "src/nipat_scientific/contamination.py",
         "source_lines": [
-          41,
-          100
+          42,
+          102
         ],
-        "sha256": "3da9cd0bc7208c4aae4aa47085cc85b1ca307a7aedc32ef2cc304b645f323c4a"
+        "sha256": "d1e4f3b685d17b5dcb35d57ac48379c041b088b5a8ec245c6c223c87eef22585"
       }
     },
     {
@@ -705,6 +705,39 @@
           245
         ],
         "sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
+      }
+    },
+    {
+      "id": "readable_presentation",
+      "value": {
+        "optional_request_field": "presentation",
+        "exports": "output/presentation",
+        "canonical_outputs": "unchanged",
+        "sample_column": "added to per-sample readable tables only"
+      },
+      "applies_to": "contamination",
+      "origin": "NIPAT presentation adapter",
+      "description": {
+        "it": "Gli export leggibili conservano i valori numerici e mostrano i nomi originali in tabelle e grafici. Gli ID interni e gli output canonici rimangono invariati; la colonna Sample delle copie individuali e le mappe esplicitano la provenienza. I nomi duplicati sono distinti, quelli dei file adattati ai vincoli dei filesystem. Le etichette dei fogli di calcolo sono protette come testo. La seconda resa dei PDF aggiunge tempo al run.",
+        "en": "Readable exports preserve numeric values and show original names in tables and plots. Internal IDs and canonical outputs remain unchanged; the Sample column in individual copies and the maps make provenance explicit. Duplicate names are disambiguated and filenames adapted to filesystem constraints. Spreadsheet labels are protected as text. Rendering additional PDFs adds time to the run."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/presentation.py",
+        "source_lines": [
+          1,
+          300
+        ],
+        "sha256": "4b45df5ded83bcae660050f1788f03551ca341b5ed92371f08d069b7d92109cd",
+        "dependencies": [
+          {
+            "path": "src/nipat_scientific/presentation.R",
+            "source_lines": [
+              1,
+              143
+            ],
+            "sha256": "cbe2d9238564f20eef9a68573482bc6e04da9cfbea1a4f2d3606434966668bea"
+          }
+        ]
       }
     }
   ],

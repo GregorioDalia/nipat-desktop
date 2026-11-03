@@ -434,6 +434,7 @@ class WorkflowForm:
                 else:
                     rendered = self.format_value(value)
                 self.ui.message(f"{field.label}: {rendered}")
+            self._show_sample_names()
             destination = self.layout.runs_dir / (self.values.get("run_name") or "<nome automatico>")
             self.ui.message(f"Destinazione: {destination}")
             self.ui.message("Controllare gli input. 'Modifica un campo' permette di correggerli conservando gli altri valori.", kind="muted")
@@ -463,6 +464,48 @@ class WorkflowForm:
                 self.ui.message("Campo non valido.", kind="error")
                 continue
             self.collect(field_numbers[selected], single=True)
+
+    def _show_sample_names(self) -> None:
+        """Explain the presentation identity without creating files or running R."""
+        from nipat.execution.workflows import _select_bams
+        from nipat_scientific.cpi import normalize_pairs
+
+        arguments = self.arguments()
+        paths = []
+        pairs = arguments.get("pairs")
+        if isinstance(pairs, list):
+            for _, mother, father in pairs:
+                for path in (mother, father):
+                    path = Path(path).resolve()
+                    if not any(path == other or path.samefile(other) for other in paths):
+                        paths.append(path)
+        elif any(arguments.get(key) is not None for key in ("bam", "bams", "bamlist")):
+            paths, _ = _select_bams(bam=arguments.get("bam"), bams=arguments.get("bams"),
+                                    bamlist=arguments.get("bamlist"))
+        elif arguments.get("pileups"):
+            paths = arguments["pileups"]
+        elif arguments.get("pileup"):
+            paths = [arguments["pileup"]]
+        elif arguments.get("inputs"):
+            paths = arguments["inputs"]
+        elif isinstance(pairs, str) and arguments.get("input_dir"):
+            _, names = normalize_pairs(pairs, arguments["mother_prefix"], arguments["father_prefix"])
+            paths = [Path(arguments["input_dir"]) / name for name in names]
+        elif arguments.get("input_dir"):
+            panel = Path(arguments["panel"]).resolve()
+            paths = sorted((path for path in Path(arguments["input_dir"]).rglob("*")
+                            if path.is_file() and path.suffix.lower() in {".txt", ".tsv"}
+                            and path.resolve() != panel), key=lambda path: str(path).casefold())
+        if not paths:
+            return
+        self.ui.message(f"Campioni nei risultati: {len(paths)}")
+        native_ids = self.choice in {"3", "4"} and not isinstance(pairs, list)
+        for number, path in enumerate(paths[:12], 1):
+            identifier = Path(path).stem if native_ids else f"sample_{number:04d}"
+            self.ui.message(f"  {Path(path).name}  [{identifier}]")
+        if len(paths) > 12:
+            self.ui.message(f"Altri {len(paths) - 12} campioni saranno elencati nel resoconto dell'esecuzione.")
+        self.ui.message("Tabelle e grafici di presentazione conservano i nomi originali. Gli identificativi tecnici collegano le fasi e non rinominano i file di input; gli omonimi sono distinti con il loro identificativo.", kind="muted")
 
     def arguments(self) -> dict[str, Any]:
         v = self.values

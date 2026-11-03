@@ -1,4 +1,4 @@
-"""Owned Lima runtime for the experimental macOS distribution.
+"""Owned Lima runtime for the macOS distribution.
 
 The host never needs Docker, Homebrew, or a system Python. Lima is bundled with
 the application; Docker runs only in the private VM. Scientific code is loaded
@@ -24,10 +24,10 @@ import uuid
 from nipat.errors import NipatError, RuntimeExecutionError, ValidationError
 
 
-CHANNEL = "experimental08"
-INSTANCE = "nipat08"
+CHANNEL = "desktop"
+INSTANCE = "nipat"
 LIMA_VERSION = "2.2.1"
-WORKSPACE_NAME = "NIPAT-Experimental08"
+WORKSPACE_NAME = "NIPAT-Desktop"
 _DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 _IMAGE = re.compile(r"sha256:[0-9a-f]{64}\Z")
 _LINUX_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -108,7 +108,7 @@ def read_manifest(project: Path) -> dict:
         and isinstance(manifest.get("engine_description"), dict)
     )
     if not valid:
-        raise ValidationError("Manifest macOS sperimentale non valido; reinstallare il pacchetto completo.")
+        raise ValidationError("Manifest macOS non valido; reinstallare il pacchetto completo.")
     # Reuse the same contract validation as normal workflow execution.
     from nipat.execution.runner import DockerComposeRunner
     DockerComposeRunner._validate_engine_description(manifest["engine_description"])
@@ -134,10 +134,10 @@ class LimaRuntime:
         self.home = absolute_path(home or Path.home())
         expected = self.home / "Library" / "Application Support" / WORKSPACE_NAME
         if self.workspace != expected:
-            raise ValidationError(f"Il runtime sperimentale macOS richiede la cartella dedicata {expected}.")
+            raise ValidationError(f"Il runtime macOS richiede la cartella dedicata {expected}.")
         # macOS Unix sockets have a 104-byte pathname limit. Application Support
         # is deliberately reserved for state/data, not Lima's SSH socket paths.
-        self.lima_home = self.home / ".nipat08" / "lima"
+        self.lima_home = self.home / ".nipat" / "lima"
         if len(os.fsencode(self.lima_home / INSTANCE / "ssh.sock.1234567890123456")) >= 104:
             raise ValidationError("Il percorso della cartella personale è troppo lungo per i socket Lima su macOS.")
         self.directory = self.workspace / ".runtime" / "macos"
@@ -152,7 +152,7 @@ class LimaRuntime:
             raise ValidationError("Avviare NIPAT dall'applicazione macOS installata: configurazione Lima incompleta.")
         value = cls(Path(os.environ[required[0]]), Path(os.environ[required[1]]), Path(os.environ[required[2]]))
         if absolute_path(os.environ["LIMA_HOME"]) != value.lima_home:
-            raise ValidationError("LIMA_HOME non appartiene a questa installazione sperimentale.")
+            raise ValidationError("LIMA_HOME non appartiene a questa installazione.")
         return value
 
     def host_prefix(self) -> list[str]:
@@ -280,7 +280,7 @@ class LimaRuntime:
     def _host_check(self, manifest: dict) -> None:
         release = platform.mac_ver()[0]
         if sys.platform != "darwin" or not release or int(release.split(".")[0]) < 14:
-            raise ValidationError("Il pacchetto sperimentale richiede macOS 14 o successivo.")
+            raise ValidationError("Il pacchetto richiede macOS 14 o successivo.")
         if platform.machine() != manifest["architecture"]:
             raise ValidationError("Usare il pacchetto NIPAT della propria architettura (Intel o Apple Silicon).")
         if not self.executable.is_file():
@@ -294,11 +294,15 @@ class LimaRuntime:
             raise ValidationError("La versione Lima non corrisponde a quella del pacchetto NIPAT.")
 
     def template(self, manifest: dict, owner: dict) -> dict:
+        from nipat.resources import host_resources, suggested_resources
+        suggested = suggested_resources(host_resources())
+        memory_mib = suggested["memory_mib"] or 4096
         return {
             "minimumLimaVersion": LIMA_VERSION, "vmType": "vz",
             "arch": _BASE_IMAGES[manifest["architecture"]]["arch"],
             "images": [_BASE_IMAGES[manifest["architecture"]]],
-            "cpus": min(4, os.cpu_count() or 2), "memory": "4GiB", "disk": "40GiB",
+            "cpus": suggested["cpus"] or min(4, os.cpu_count() or 2),
+            "memory": f"{memory_mib}MiB", "disk": "40GiB",
             "mountType": "virtiofs", "mounts": owner["mounts"],
             "containerd": {"system": False, "user": False},
             "ssh": {"loadDotSSHPubKeys": False, "forwardAgent": False, "forwardX11": False},
@@ -352,7 +356,7 @@ class LimaRuntime:
         self._host_check(manifest)
         with self.lock():
             if self.instance_dir.exists() and not self.owner_path.exists():
-                raise ValidationError("Esiste già una VM nipat08 non gestita da NIPAT: nessuna modifica eseguita.")
+                raise ValidationError(f"Esiste già una VM {INSTANCE} non gestita da NIPAT: nessuna modifica eseguita.")
             owner = self._owner() if self.owner_path.exists() else {
                 "channel": CHANNEL, "instance": INSTANCE, "lima_home": str(self.lima_home),
                 "token": uuid.uuid4().hex, "mounts": self.default_mounts(),

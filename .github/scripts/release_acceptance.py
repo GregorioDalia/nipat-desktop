@@ -24,9 +24,12 @@ RESEARCH_FIELDS = (FIELDS - {"tests"}) | {
 REVIEWED_RESEARCH_FIELDS = RESEARCH_FIELDS | {"reviewed_source_changes"}
 RELIABILITY_DIGESTS = {"qualification_evidence_sha256", "linux_upgrade_check_sha256"}
 RELIABILITY_RESEARCH_FIELDS = REVIEWED_RESEARCH_FIELDS | RELIABILITY_DIGESTS
+MACOS_DIGESTS = {"macos_arm64_installer_sha256", "macos_x86_64_installer_sha256"}
+MULTIPLATFORM_RESEARCH_FIELDS = RELIABILITY_RESEARCH_FIELDS | MACOS_DIGESTS | {"macos_validation"}
 SOURCE_EQUIVALENCE_SCOPE = "distributed-operative-sources-v1"
 REVIEWED_SOURCE_SCOPE = "scientific-runtime-equivalence-with-reviewed-client-changes-v1"
 RELIABILITY_SOURCE_SCOPE = "reviewed-operative-changes-with-unchanged-r-v1"
+MULTIPLATFORM_SOURCE_SCOPE = "reviewed-operative-changes-with-unchanged-vendored-r-v1"
 BASELINE_OBSERVATIONS = {
     "installation_ready", "runtime_diagnostics", "scientific_self_tests", "dnp_sample_analysis",
 }
@@ -55,27 +58,34 @@ def require(condition, message):
 
 def reliability_contract(version):
     match = re.fullmatch(r"0\.7\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
-    return match is not None and int(match[1]) >= 2
+    return bool(match and int(match[1]) >= 2) or multiplatform_contract(version)
 
 
-def reviewable_path(path, *, reliability=False):
+def multiplatform_contract(version):
+    match = re.fullmatch(r"0\.8\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
+    return bool(match and int(match[1]) >= 2)
+
+
+def reviewable_path(path, *, reliability=False, multiplatform=False):
     if reliability:
         # The Python preparation, orchestration and packaging may evolve, but
         # this research policy never authorizes a change to the R algorithms.
-        return (PurePosixPath(path).suffix.casefold() != ".r"
+        return ((PurePosixPath(path).suffix.casefold() != ".r"
+                 or multiplatform and not path.startswith("scientific/vendor/"))
                 and (path in REVIEWABLE_CLIENT_FILES | {"compose.yaml", ".gitignore"}
                      or path.startswith(REVIEWABLE_OPERATIVE_PREFIXES)))
     return path in REVIEWABLE_CLIENT_FILES or path.startswith(REVIEWABLE_CLIENT_PREFIXES)
 
 
 def acceptance_path(version):
-    require(isinstance(version, str) and re.fullmatch(r"0\.[567]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
-            "Joint publication is supported only for the 0.5, 0.6 and 0.7 desktop contracts")
+    require(isinstance(version, str) and (re.fullmatch(r"0\.[567]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version)
+                                         or multiplatform_contract(version)),
+            "Joint publication supports the 0.5–0.7 and official 0.8.2+ desktop contracts")
     return f".github/release-acceptance/v{version}.json"
 
 
 def identity(installer_set):
-    return {
+    result = {
         "version": installer_set["version"],
         "source_commit": installer_set["source_commit"],
         "installer_manifest_sha256": installer_set["installer_manifest_sha256"],
@@ -83,6 +93,12 @@ def identity(installer_set):
         "windows_installer_sha256": installer_set["windows"]["sha256"],
         "linux_installer_sha256": installer_set["linux"]["sha256"],
     }
+    if multiplatform_contract(installer_set["version"]):
+        for architecture in ("arm64", "x86_64"):
+            require(isinstance(installer_set.get(f"macos_{architecture}"), dict),
+                    "Acceptance requires both native macOS packages")
+            result[f"macos_{architecture}_installer_sha256"] = installer_set[f"macos_{architecture}"]["sha256"]
+    return result
 
 
 def template(installer_set, run_id):
@@ -91,9 +107,22 @@ def template(installer_set, run_id):
     acceptance_path(fields["version"])
     require(isinstance(fields["source_commit"], str)
             and re.fullmatch(r"[0-9a-f]{40}", fields["source_commit"]), "Invalid source commit")
-    for field in DIGESTS:
+    for field in DIGESTS | (MACOS_DIGESTS if multiplatform_contract(fields["version"]) else set()):
         require(isinstance(fields[field], str) and re.fullmatch(r"[0-9a-f]{64}", fields[field]),
                 f"Invalid digest: {field}")
+    if multiplatform_contract(fields["version"]):
+        return {
+            "schema_version": 5, **fields, "build_run_id": run_id, "decision": "pending",
+            "scope": "pre-1.0-research", "review": {"reviewer": "", "reviewed_at": "", "evidence": []},
+            "observed_baseline": {"source_commit": "", "observations": [], "evidence": [],
+                                  "role": "historical-platform-evidence",
+                                  "source_comparison_scope": MULTIPLATFORM_SOURCE_SCOPE},
+            "reviewed_source_changes": [], "deferred_desktop_scenarios": sorted(SCENARIOS),
+            "domain_validation": "pending-domain-researchers", "qualification_evidence_sha256": "",
+            "linux_upgrade_check_sha256": installer_set.get("linux_upgrade_check", {}).get("sha256", ""),
+            "macos_validation": {architecture: {"status": "not-performed", "evidence": []}
+                                 for architecture in ("arm64", "x86_64")},
+        }
     return {
         "schema_version": 1, **fields, "build_run_id": run_id, "decision": "pending",
         "tests": {name: {"result": "pending", "tester": "", "tested_at": "", "evidence": []}
@@ -104,9 +133,10 @@ def template(installer_set, run_id):
 def validate(record, version, commit, run_id, installer_set=None):
     """Require a committed review under the record's explicit acceptance policy."""
     acceptance_path(version)
-    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4):
+    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4, 5):
         validate_research(record, version, commit, run_id, installer_set)
         return
+    require(not multiplatform_contract(version), "Official 0.8.2+ releases require four-platform acceptance schema 5")
     require(isinstance(record, dict) and set(record) == FIELDS, "Acceptance record fields are invalid")
     require(type(record["schema_version"]) is int and record["schema_version"] == 1,
             "Unsupported acceptance schema")
@@ -171,18 +201,20 @@ def review_evidence(value, label):
 
 def validate_research(record, version, commit, run_id, installer_set=None):
     """A limited research decision records deferred qualification, never fictitious passes."""
-    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 4
-    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4)
-    schema = 4 if reliability else (3 if reviewed_delta else 2)
+    multiplatform = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 5
+    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (4, 5)
+    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4, 5)
+    schema = 5 if multiplatform else (4 if reliability else (3 if reviewed_delta else 2))
     minor = "7" if reviewed_delta else "6"
-    require(isinstance(version, str) and re.fullmatch(rf"0\.{minor}\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
-            f"Research acceptance schema {schema} is limited to the pre-1.0 0.{minor} contract")
+    require(multiplatform_contract(version) if multiplatform else
+            isinstance(version, str) and re.fullmatch(rf"0\.{minor}\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+            f"Research acceptance schema {schema} does not support this release version")
     if reliability:
         require(reliability_contract(version), "Reliability acceptance is available from 0.7.2 only")
     elif reviewed_delta:
         require(not reliability_contract(version),
                 "Research releases from 0.7.2 require reliability acceptance schema 4")
-    expected_fields = (RELIABILITY_RESEARCH_FIELDS if reliability else
+    expected_fields = (MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
     require(isinstance(record, dict) and set(record) == expected_fields
             and type(record["schema_version"]) is int and record["schema_version"] == schema,
@@ -192,7 +224,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             and type(record["build_run_id"]) is int and type(run_id) is int
             and run_id > 0 and record["build_run_id"] == run_id,
             "Acceptance belongs to a different version, source or build run")
-    for field in DIGESTS | (RELIABILITY_DIGESTS if reliability else set()):
+    for field in DIGESTS | (RELIABILITY_DIGESTS if reliability else set()) | (MACOS_DIGESTS if multiplatform else set()):
         require(isinstance(record[field], str) and re.fullmatch(r"[0-9a-f]{64}", record[field]),
                 f"Invalid acceptance digest: {field}")
     require(record["decision"] == "accepted-for-research" and record["scope"] == "pre-1.0-research",
@@ -223,7 +255,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             and bool(set(observations) & ({"scientific_self_tests", "dnp_sample_analysis"}
                                          | ({"automatic_workflow_sample_analysis"} if reviewed_delta else set()))),
             "Baseline must identify observed installation and scientific execution")
-    expected_scope = (RELIABILITY_SOURCE_SCOPE if reliability else
+    expected_scope = (MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else
                       REVIEWED_SOURCE_SCOPE if reviewed_delta else SOURCE_EQUIVALENCE_SCOPE)
     require(baseline[scope_field] == expected_scope,
             "Unsupported baseline source equivalence scope")
@@ -234,6 +266,18 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             "Research acceptance must explicitly defer all six desktop scenarios")
     require(record["domain_validation"] == ("pending-domain-researchers" if reviewed_delta else "planned-for-0.7"),
             "Research acceptance cannot claim completed domain validation")
+    if multiplatform:
+        platforms = record["macos_validation"]
+        require(isinstance(platforms, dict) and set(platforms) == {"arm64", "x86_64"},
+                "Both macOS runtime validation statuses must be explicit")
+        for architecture, observation in platforms.items():
+            require(isinstance(observation, dict) and set(observation) == {"status", "evidence"},
+                    f"Invalid macOS {architecture} runtime validation record")
+            if observation["status"] == "passed":
+                review_evidence(observation["evidence"], f"macOS {architecture} runtime evidence")
+            else:
+                require(observation["status"] == "not-performed" and observation["evidence"] == [],
+                        "Unperformed macOS validation cannot imply a successful runtime test")
     if reviewed_delta:
         changes = record["reviewed_source_changes"]
         require(isinstance(changes, list), "Reviewed source changes must be an explicit list")
@@ -246,8 +290,9 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                     and not PurePosixPath(path).is_absolute() and ".." not in PurePosixPath(path).parts
                     and "\\" not in path and not any(character.isspace() for character in path)
                     and PurePosixPath(path).suffix.casefold() != ".md"
-                    and reviewable_path(path, reliability=reliability),
-                    ("Only explicit non-R operative source changes can be reviewed" if reliability
+                    and reviewable_path(path, reliability=reliability, multiplatform=multiplatform),
+                    ("Only operative source changes outside protected vendored R can be reviewed" if multiplatform
+                     else "Only explicit non-R operative source changes can be reviewed" if reliability
                      else "Only explicit client, installer and test source changes can be reviewed"))
             for field in ("before_sha256", "after_sha256"):
                 digest = item[field]
@@ -274,15 +319,17 @@ def verify_baseline(record, read_source):
     helpers. Schema 3 requires an exact hash review for permitted client changes
     and keeps scientific, engine and runtime sources immutable. Schema 4 reviews
     non-R operative changes without claiming operational equivalence to the
-    historical manual observation; all R sources remain immutable.
+    historical manual observation. Schema 5 permits reviewed presentation adapters
+    while preserving the vendored scientific R sources byte for byte.
     """
     require(isinstance(record, dict) and type(record.get("schema_version")) is int
-            and record["schema_version"] in (1, 2, 3, 4), "Unsupported acceptance schema")
+            and record["schema_version"] in (1, 2, 3, 4, 5), "Unsupported acceptance schema")
     if record["schema_version"] == 1:
         return None
-    reliability = record["schema_version"] == 4
-    reviewed_delta = record["schema_version"] in (3, 4)
-    expected_fields = (RELIABILITY_RESEARCH_FIELDS if reliability else
+    multiplatform = record["schema_version"] == 5
+    reliability = record["schema_version"] in (4, 5)
+    reviewed_delta = record["schema_version"] in (3, 4, 5)
+    expected_fields = (MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
     require(set(record) == expected_fields,
             "Research acceptance record fields are invalid")
@@ -327,7 +374,7 @@ def verify_baseline(record, read_source):
             if old == new:
                 unchanged += 1
                 continue
-            require(reviewable_path(path, reliability=reliability),
+            require(reviewable_path(path, reliability=reliability, multiplatform=multiplatform),
                     f"Protected scientific or runtime source differs: {path}")
             changes.append({"path": path,
                             "before_sha256": hashlib.sha256(old).hexdigest() if old is not None else None,
@@ -335,10 +382,11 @@ def verify_baseline(record, read_source):
         require(record["reviewed_source_changes"] == changes,
                 "Reviewed source changes do not match the exact baseline-to-candidate delta")
         return {"baseline_source_commit": baseline, "source_commit": candidate,
-                "scope": RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
+                "scope": MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
                 "unchanged_files_verified": unchanged,
                 "reviewed_source_changes": changes, "candidate_windows_installation_claimed": False,
-                **({"operational_equivalence_claimed": False, "r_sources_unchanged": True}
+                **({"operational_equivalence_claimed": False,
+                    "vendored_r_sources_unchanged" if multiplatform else "r_sources_unchanged": True}
                    if reliability else {})}
     before -= REMOVABLE_SIGNING_HELPERS & (before - after)
     require(before == after, "Baseline operative inventory differs from candidate")

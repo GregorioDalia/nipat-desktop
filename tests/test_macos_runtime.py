@@ -38,7 +38,7 @@ class MacRuntimeTests(unittest.TestCase):
         self.executable = self.home / "lima" / "bin" / "limactl"
         self.executable.parent.mkdir(parents=True)
         self.executable.write_text("fixture")
-        self.workspace = self.home / "Library" / "Application Support" / "NIPAT-Experimental08"
+        self.workspace = self.home / "Library" / "Application Support" / "NIPAT-Desktop"
         self.runtime = LimaRuntime(self.project, self.workspace, self.executable, home=self.home)
         self.archive = self.project / ".distribution" / "assets" / "runtime.tar.gz"
         self.archive.parent.mkdir(parents=True)
@@ -55,7 +55,7 @@ class MacRuntimeTests(unittest.TestCase):
 
     def test_overlong_home_is_still_rejected_before_creating_files(self):
         home = self.home / ("long-name-" * 15)
-        workspace = home / "Library/Application Support/NIPAT-Experimental08"
+        workspace = home / "Library/Application Support/NIPAT-Desktop"
         with self.assertRaisesRegex(ValidationError, "troppo lungo"):
             LimaRuntime(self.project, workspace, self.executable, home=home)
         self.assertFalse(home.exists())
@@ -72,10 +72,10 @@ class MacRuntimeTests(unittest.TestCase):
         _write_json(self.runtime.state_path, state)
         return state
 
-    def test_manifest_rejects_stable_channel_path_traversal_or_partial_contract(self):
+    def test_manifest_rejects_experimental_channel_path_traversal_or_partial_contract(self):
         self.assertEqual(read_manifest(self.project), self.manifest)
         mutations = [
-            lambda m: m.update(channel="desktop"),
+            lambda m: m.update(channel="experimental08"),
             lambda m: m.update(runtime_image="arbitrary:latest"),
             lambda m: m["scientific_asset"].update(name="../runtime.tar.gz"),
             lambda m: m.update(engine_description={}),
@@ -116,6 +116,16 @@ class MacRuntimeTests(unittest.TestCase):
         self.assertEqual(self.runtime._assert_owned(), self.owner)
         _write_json(self.runtime.instance_dir / "lima.yaml", self.runtime.template(self.manifest, self.owner))
         self.assertEqual(self.runtime._assert_owned(), self.owner)
+
+    def test_initial_vm_budget_leaves_host_memory_available(self):
+        with patch("nipat.resources.host_resources", return_value={"memory_mib": 8192, "cpus": 4}):
+            config = self.runtime.template(self.manifest, self.owner)
+        self.assertEqual(config["memory"], "4096MiB")
+        self.assertEqual(config["cpus"], 3)
+        with patch("nipat.resources.host_resources", return_value={"memory_mib": 32768, "cpus": 24}):
+            config = self.runtime.template(self.manifest, self.owner)
+        self.assertEqual(config["memory"], "8192MiB")
+        self.assertEqual(config["cpus"], 4)
 
     def test_does_not_adopt_an_existing_unowned_vm(self):
         self.runtime.instance_dir.mkdir(parents=True)
@@ -171,7 +181,7 @@ class MacRuntimeTests(unittest.TestCase):
 
         def execute(argv, **kwargs):
             if "start" in argv:
-                self.assertIn("--name=nipat08", argv)
+                self.assertIn("--name=nipat", argv)
                 self.runtime.instance_dir.mkdir(parents=True)
                 (self.runtime.instance_dir / "lima.yaml").write_bytes(Path(argv[-1]).read_bytes())
                 return "started"
@@ -239,7 +249,7 @@ class MacRuntimeTests(unittest.TestCase):
         self.assertEqual(command[-1], str(value))
         self.assertNotIn("sh", command)
         self.assertNotIn("-c", command)
-        self.assertIn("LIMA_HOME=" + str(self.home / ".nipat08/lima"), command)
+        self.assertIn("LIMA_HOME=" + str(self.home / ".nipat/lima"), command)
         self.assertIn("SSH=/usr/bin/ssh", command)
         self.assertIn("--workdir=/", command)
         self.assertIn("DOCKER_DEFAULT_PLATFORM=linux/amd64", command)
@@ -279,7 +289,7 @@ class MacRuntimeTests(unittest.TestCase):
         failed = subprocess.CompletedProcess([], 7, "", "VZ not available")
         with patch("nipat.macos_runtime.subprocess.run", return_value=failed) as run:
             with self.assertRaisesRegex(RuntimeExecutionError, "VZ not available"):
-                self.runtime._run(["limactl", "start", "nipat08"])
+                self.runtime._run(["limactl", "start", INSTANCE])
         self.assertEqual(run.call_args.kwargs["stdin"], subprocess.DEVNULL)
         self.assertIn("VZ not available", (self.runtime.directory / "setup.log").read_text())
 

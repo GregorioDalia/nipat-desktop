@@ -7,6 +7,7 @@ from pathlib import Path
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, require_snp_pileup, write_input_report
 from nipat_scientific.panels import read_snp_list, write_snp_bed, write_snp_list
 
@@ -42,8 +43,9 @@ def prepare_snp(request: object) -> SnpPreparation:
     preserved. Indexes are supplied as read-only sidecars, never generated next
     to user inputs. Only BAM mode writes the BED and later produces a pileup.
     """
-    if not isinstance(request, dict) or set(request) != REQUEST_FIELDS:
+    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
         raise ValidationError("Richiesta SNPcall non valida: campi mancanti o inattesi.")
+    validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta SNPcall non supportata.")
     if request["workflow"] != "snp-call":

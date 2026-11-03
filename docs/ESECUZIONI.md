@@ -1,10 +1,10 @@
 # Risultati e registrazione delle esecuzioni
 
-In NIPAT Experimental08 ogni analisi singola o workflow automatico crea un nuovo
+In NIPAT Desktop ogni analisi singola o workflow automatico crea un nuovo
 **run** nella cartella risultati.
 La destinazione predefinita Windows è
-`%LOCALAPPDATA%\NIPAT-Experimental08\runs`; nel pacchetto macOS è
-`~/Library/Application Support/NIPAT-Experimental08/runs`. Nel checkout
+`%LOCALAPPDATA%\NIPAT-Desktop\runs`; nel pacchetto macOS è
+`~/Library/Application Support/NIPAT-Desktop/runs`. Nel checkout
 da sorgenti è `runs` accanto al progetto. Si può impostare una destinazione con `--runs-dir`
 prima del sottocomando oppure, nel menu guidato, salvando la destinazione
 in **5 — Configura → Cartelle dati e risultati**. La preferenza del menu
@@ -15,7 +15,10 @@ Un run esistente non viene sovrascritto.
 
 | File o cartella | Contenuto |
 | --- | --- |
-| `output` | Tabelle e grafici scientifici. |
+| `run-report.html` | Riepilogo locale di campioni, parametri, fasi, risorse ed esito; apribile nel browser. |
+| `sample-map.tsv` | Corrispondenza tra file originali e identificatori interni. |
+| `output/presentation` | Export leggibili con nomi originali nelle tabelle e nei grafici delle analisi singole. |
+| `output` | Tabelle e grafici canonici del motore. |
 | `work` | Richiesta al motore, configurazione dei mount e intermedi conservati. |
 | `run.json` | Stato, input, parametri, software e identità del motore. |
 | `execution.log` | Comandi, messaggi del client e output combinato del motore; nei piani, il dettaglio scientifico è nei log dei passaggi. |
@@ -26,8 +29,8 @@ I percorsi si possono aprire dalla schermata finale del menu oppure dal
 file system. **6 — Ultima esecuzione** richiama il run più recente della
 sessione, anche fallito o interrotto se la sua cartella è stata creata.
 Un errore precedente alla creazione di una nuova cartella non sostituisce
-il riferimento all'ultimo run. I nomi dei file scientifici sono quelli
-prodotti dal workflow.
+il riferimento all'ultimo run. La schermata privilegia gli export leggibili; gli output canonici del motore
+rimangono disponibili nelle rispettive cartelle.
 
 Ogni workflow automatico conserva un unico record `run.json` e i passaggi
 selezionati nella sottocartella `output/workflow`:
@@ -35,6 +38,7 @@ selezionati nella sottocartella `output/workflow`:
 | Percorso nel run automatico | Contenuto |
 | --- | --- |
 | `work/engine-plan.json` | Richiesta con campioni, parametri e dipendenze inviata al motore. |
+| `output/workflow/presentation` | Export leggibili del piano, separati dagli output canonici dei passaggi. |
 | `output/workflow/plan.json` | Piano canonico eseguito dal motore. |
 | `output/workflow/workflow-state.json` | Stato complessivo e dei passaggi, con riferimenti agli output e checksum. |
 | `output/workflow/steps/dnp` | Preparazione, risultati e log DNPcall. |
@@ -192,6 +196,19 @@ monta i propri script R per eseguire le analisi. Il record riporta
 in simulazione vale `not_run_dry_run` e gli intermedi scientifici non
 vengono generati.
 
+Le richieste possono includere una mappa `presentation` per le etichette.
+Gli alias interni permettono di gestire percorsi complessi e omonimi; non
+rinominano il BAM originale. Gli export in `presentation` sostituiscono
+soltanto le etichette e conservano i valori numerici. I workflow usano gli
+output canonici per le fasi successive. I nomi originali e i percorsi nei
+resoconti possono identificare i campioni: verificarli prima di condividerli.
+
+La diagnostica del container viene raccolta prima della pulizia quando
+accessibile. Registra limiti e indicatore `OOMKilled`; un codice 137 senza
+questa evidenza rimane una terminazione con causa non confermata. Le
+[impostazioni delle risorse](RISORSE.md) distinguono computer, WSL/Lima e
+container. Il riepilogo non prevede la RAM necessaria a una futura analisi.
+
 Il log mostra anche i messaggi nel terminale. `run.json` viene aggiornato
 con sostituzione atomica del file; non è un database di cronologia globale.
 
@@ -201,7 +218,7 @@ Le opzioni globali `--cpus`, `--memory-mb` e `--pids-limit` permettono di
 impostare rispettivamente una quota CPU, un limite di memoria in MiB e un
 limite di processi per il container scientifico. Se non indicate, NIPAT non
 aggiunge limiti a quelli già applicati da Docker e, su Windows, da WSL.
-Il menu può conservare queste scelte in **Configura → Esecuzione e provenienza**;
+Il menu può conservare queste scelte in **Configura → Risorse e provenienza**;
 la CLI diretta usa le proprie opzioni.
 Queste opzioni e `--input-hashes` riguardano analisi, workflow e wizard;
 diagnostica, autotest e comandi di manutenzione mantengono i propri protocolli
@@ -227,9 +244,12 @@ python scripts/benchmark_workflows.py \
   --sample-counts 1 10 --repeats 1 --workflow dnp-contamination
 ```
 
-Il resoconto misura durata complessiva e dimensione dei file prodotti;
-riporta il picco RAM dichiarato da R quando disponibile, che non rappresenta
-necessariamente il picco dell'intero container. Sono disponibili anche i
+Il resoconto misura durata complessiva e dimensione dei file prodotti, conserva
+le risorse rilevate e le durate registrate dei passaggi automatici. Il tempo
+del passaggio comprende preparazione, R e controlli degli output; non separa
+le fasi interne di DNPcall. Riporta il massimo delle osservazioni RAM dichiarate
+da R, anche dai log dei passaggi, quando disponibili: non è il picco continuo
+dell’intero container. Evidenze assenti o malformate rimangono esplicite. Sono disponibili anche i
 limiti di risorse, la modalità checksum e `--parallel`. Le misure dipendono
 da hardware, dati e configurazione: questo strumento prepara prove
 riproducibili, non certifica prestazioni su altri computer. Le prove sono

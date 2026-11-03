@@ -61,6 +61,14 @@ def _write_engine_request(destination: Path, request: dict) -> None:
         handle.write("\n")
 
 
+def _presentation(samples: list[dict]) -> dict:
+    """Keep original names separate from controlled engine identities and paths."""
+    return {
+        "samples": {sample["sample_id"]: Path(sample["original_path"]).name for sample in samples},
+        "pairs": {},
+    }
+
+
 def _select_bams(
     *, bam: Path | None, bams: list[Path] | None, bamlist: Path | None,
 ) -> tuple[list[Path], Path | None]:
@@ -213,6 +221,7 @@ class Workflows:
         ):
             request = {
                 "schema_version": 1, "workflow": "dnp-call", "panel": str(panel_path),
+                "presentation": _presentation(samples),
                 "samples": [
                     {"path": sample["container_path"], "sample_id": sample["sample_id"]}
                     for sample in samples
@@ -268,7 +277,7 @@ class Workflows:
             samples.append({"sample_id": sample_id, "original_path": str(path),
                             "container_path": str(target)})
         plan = {
-            "schema_version": 1,
+            "schema_version": 1, "presentation": _presentation(samples),
             "samples": [{"id": sample["sample_id"], "kind": "bam",
                          "path": sample["container_path"]} for sample in samples],
             "steps": [
@@ -418,7 +427,7 @@ class Workflows:
             "parameters": {"err_const": err_const, "cutoff_mode": cutoff_mode},
         })
         plan = {
-            "schema_version": 1,
+            "schema_version": 1, "presentation": _presentation(samples),
             "samples": [{"id": sample["sample_id"], "kind": "bam", "path": sample["container_path"]}
                         for sample in samples],
             "steps": steps,
@@ -503,7 +512,7 @@ class Workflows:
             samples.append({"sample_id": identifier, "original_path": str(path),
                             "container_path": str(target)})
         plan = validate_plan({
-            "schema_version": 1,
+            "schema_version": 1, "presentation": _presentation(samples),
             "samples": [{"id": sample["sample_id"], "kind": "bam" if mode == "bam" else "snp-pileup",
                          "path": sample["container_path"]} for sample in samples],
             "steps": _snp_steps(samples, panel=panel_path, reference=reference_path, mode=mode),
@@ -559,17 +568,21 @@ class Workflows:
             require_snp_pileup(pileup)
             input_files.append(pileup)
             pileup_path = mounts.bind_file(pileup, target=INPUT_ROOT / "snp-pileup.txt")
+        sample_mapping = [{"sample_id": "sample_0001", "original_path": str(bam or pileup),
+                           "container_path": str(bam_path or pileup_path)}]
         run_dir = self.layout.new_run_dir("snp-call", run_name)
         with self.runner.record_run(
             run_dir, workflow="snp-call", inputs=input_files, mounts=mounts,
             bundled_workflow="snp-call",
             parameters={"mode": "bam" if bam is not None else "pileup",
+                        "sample_mapping": sample_mapping,
                         "bam": str(bam) if bam else None,
                         "pileup": str(pileup) if pileup else None,
                         "reference": str(reference) if reference else None, "panel": str(panel)},
         ):
             request = {
                 "schema_version": 1, "workflow": "snp-call",
+                "presentation": _presentation(sample_mapping),
                 "mode": "bam" if bam is not None else "pileup",
                 "panel": str(panel_path),
                 "bam": str(bam_path) if bam_path is not None else None,
@@ -628,15 +641,20 @@ class Workflows:
             }
             for number, source in enumerate(checked_inputs, 1)
         ]
+        sample_mapping = [{"sample_id": Path(item["name"]).stem, "original_path": str(source),
+                           "container_path": item["path"]}
+                          for item, source in zip(samples, checked_inputs)]
         run_dir = self.layout.new_run_dir("contamination", run_name)
         with self.runner.record_run(
             run_dir, workflow="contamination", inputs=[panel, *checked_inputs],
             mounts=mounts, bundled_workflow="contamination",
             parameters={"panel": str(panel), "inputs": [str(path) for path in checked_inputs],
+                        "sample_mapping": sample_mapping,
                         "input_dir": str(input_dir) if input_dir else None},
         ):
             request = {
                 "schema_version": 1, "workflow": "contamination", "panel": str(panel_path),
+                "presentation": _presentation(sample_mapping),
                 "samples": samples,
                 "work_dir": str(self.layout.container_path(run_dir / "work")),
                 "out_dir": str(self.layout.container_path(run_dir / "output")),
@@ -685,11 +703,15 @@ class Workflows:
             ))}
             for number, (label, source) in enumerate(normalized_cutoffs, 1)
         ]
+        sample_mapping = [{"sample_id": Path(item["name"]).stem,
+                           "original_path": str(input_dir / item["name"]),
+                           "container_path": item["path"]} for item in samples]
         run_dir = self.layout.new_run_dir("cpi", run_name)
         with self.runner.record_run(
             run_dir, workflow="cpi", inputs=list(dict.fromkeys(checked_inputs)), mounts=mounts,
             bundled_workflow="cpi",
             parameters={"pairs": pairs, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
+                        "sample_mapping": sample_mapping,
                         "err_const": err_const, "input_dir": str(input_dir), "popfreq": str(popfreq),
                         "panel": str(panel) if panel else None,
                         "cutoff_mode": cutoff_mode,
@@ -698,6 +720,7 @@ class Workflows:
         ):
             request = {
                 "schema_version": 1, "workflow": "cpi", "samples": samples,
+                "presentation": _presentation(sample_mapping),
                 "pairs": pairs, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
                 "popfreq": str(popfreq_path), "cutoff_mode": cutoff_mode,
                 "cutoffs": mapped_cutoffs, "err_const": err_const,

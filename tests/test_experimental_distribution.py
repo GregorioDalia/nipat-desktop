@@ -1,4 +1,4 @@
-"""The portability experiment cannot change the stable installation by accident."""
+"""Official desktop and experimental installations remain separate."""
 
 import json
 import os
@@ -26,7 +26,7 @@ class ExperimentalDistributionTests(unittest.TestCase):
             app = root / "app"
             workspace = root / "workspace"
             with patch.dict(os.environ, {"NIPAT_BACKEND": "lima"}), patch("nipat.storage.Path.home", return_value=root):
-                for selected in (workspace, root / ".nipat08" / "lima", workspace / ".runtime", app / "data"):
+                for selected in (workspace, root / ".nipat" / "lima", workspace / ".runtime", app / "data"):
                     layout = ProjectLayout(app, workspace, selected, root / "results", app / "compose.yaml")
                     with self.subTest(selected=selected), self.assertRaises(ValidationError):
                         validate_managed_directories(layout)
@@ -38,8 +38,8 @@ class ExperimentalDistributionTests(unittest.TestCase):
         profile = json.loads((root / "installer/windows/install-profile.json").read_text())
         self.assertEqual(profile["channel"], CHANNEL)
         self.assertEqual(profile["data_dir_name"], WINDOWS_DIRECTORY)
-        self.assertNotEqual(profile["channel"], "desktop")
-        self.assertTrue(is_experimental_version(__version__))
+        self.assertEqual(profile["channel"], "desktop")
+        self.assertFalse(is_experimental_version(__version__))
 
     def test_experimental_updater_never_contacts_feed_or_handoff(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -61,7 +61,7 @@ class ExperimentalDistributionTests(unittest.TestCase):
     def test_windows_preferences_and_lease_never_touch_stable_directory(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder).resolve()
-            stable = root / "NIPAT-Desktop"
+            stable = root / "NIPAT-Experimental08"
             stable.mkdir()
             sentinel = stable / "preferences.json"
             sentinel.write_text('{"stable":true}')
@@ -77,7 +77,7 @@ class ExperimentalDistributionTests(unittest.TestCase):
             home = Path(folder).resolve()
             with patch.dict(os.environ, {}, clear=True), patch("nipat.preferences.sys.platform", "darwin"), \
                     patch("nipat.preferences.Path.home", return_value=home):
-                expected = home / "Library/Application Support/NIPAT-Experimental08/preferences.json"
+                expected = home / "Library/Application Support/NIPAT-Desktop/preferences.json"
                 self.assertEqual(preferences_path(), expected)
                 inventory = installation_inventory(home)
             self.assertEqual(inventory["platform"], "macos")

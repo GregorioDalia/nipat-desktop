@@ -204,6 +204,18 @@ class WslRunnerTests(unittest.TestCase):
                 output = '{"services":{"scientific":{"image":"runtime:tag"}}}'
             elif docker[:2] == ["image", "inspect"]:
                 output = json.dumps({"id": self.image, "os": "linux", "architecture": "amd64"})
+            elif docker[:2] == ["container", "inspect"]:
+                launch = self.runner._record.data["commands"][-1]["argv"]
+                labels = dict(value.split("=", 1) for index, value in enumerate(launch)
+                              if index and launch[index - 1] == "--label")
+                output = json.dumps({
+                    "id": "b" * 64, "name": "/" + docker[2], "image": self.image,
+                    "labels": labels,
+                    "state": {"status": "exited", "oom_killed": False, "exit_code": 0,
+                              "started_at": "2026-11-03T10:00:00Z", "finished_at": "2026-11-03T10:01:00Z"},
+                    "limits": {"memory_bytes": 0, "memory_swap_bytes": 0, "nano_cpus": 0,
+                               "cpu_period": 0, "cpu_quota": 0, "pids_limit": None},
+                })
             elif docker[0] == "run":
                 output = "R version fixture\nsamtools fixture\n"
             elif docker[:2] == ["rm", "--force"] or docker[-2:] == ["build", "scientific"]:
@@ -277,7 +289,7 @@ class WslRunnerTests(unittest.TestCase):
                     self.runner.run(["Rscript", "second-stage.R"])
         self.assertEqual(len(self.ensure_calls()), 2)
 
-    def test_interruption_removes_only_named_container_using_same_backend(self):
+    def test_interruption_removes_only_verified_container_id_using_same_backend(self):
         process = MagicMock()
         process.stdout.__iter__.side_effect = KeyboardInterrupt()
         process.poll.return_value = 130
@@ -292,7 +304,7 @@ class WslRunnerTests(unittest.TestCase):
         self.assertEqual(record["status"], "interrupted")
         cleanup = stage["container_cleanup"]
         self.assertEqual(cleanup["status"], "removed")
-        self.assertEqual(cleanup["argv"][-4:], ["docker", "rm", "--force", stage["container_name"]])
+        self.assertEqual(cleanup["argv"][-4:], ["docker", "rm", "--force", "b" * 64])
         self.assertEqual(cleanup["argv"][:4], ["wsl.exe", "--distribution", "NIPAT-Test", "--user"])
 
     def test_timed_out_probe_cleans_up_its_exact_container(self):

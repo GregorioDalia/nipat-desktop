@@ -84,7 +84,7 @@ class StorageParityTests(unittest.TestCase):
         self.record = self.project / ".runtime" / "install-layout.json"
         self.record.parent.mkdir()
         self.installation = {
-            "schema_version": 1, "installation_channel": "experimental08",
+            "schema_version": 1, "installation_channel": "desktop",
             "app_dir": str(self.project), "runtime_dir": str(self.root / "runtime"),
             "cache_dir": str(self.root / "cache"),
             "data_dir": str(self.layout.data_dir), "runs_dir": str(self.layout.runs_dir),

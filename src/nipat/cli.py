@@ -65,6 +65,18 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("wizard", help="avvia la CLI guidata per i quattro workflow")
     subparsers.add_parser("self-test", help="esegue le verifiche numeriche distribuite")
 
+    resources = subparsers.add_parser("resources", help="mostra o configura RAM e CPU dell'ambiente di calcolo")
+    resource_commands = resources.add_subparsers(dest="resource_operation", required=True)
+    resource_inspect = resource_commands.add_parser("inspect", help="mostra computer, ambiente e limiti senza avviare il runtime")
+    resource_configure = resource_commands.add_parser("configure", help="mostra l'anteprima; applica soltanto con --apply --yes")
+    resource_configure.add_argument("--memory-mib", type=int, required=True, help="RAM dell'ambiente in MiB (8192 = 8 GiB)")
+    resource_configure.add_argument("--vm-cpus", type=int, required=True, help="CPU dell'ambiente WSL2 o Lima")
+    resource_configure.add_argument("--apply", action="store_true", help="richiede di salvare la configurazione con backup")
+    resource_configure.add_argument("--yes", action="store_true", help="conferma la modifica esplicita")
+    resource_configure.add_argument("--restart", action="store_true", help="conferma separatamente il riavvio: su Windows interessa tutto WSL2")
+    for resource_command in (resource_inspect, resource_configure):
+        resource_command.add_argument("--json", action="store_true", help="risultato strutturato")
+
     runs = subparsers.add_parser("runs", help="controlla le esecuzioni incomplete senza riprenderle")
     run_commands = runs.add_subparsers(dest="run_operation", required=True)
     inspect = run_commands.add_parser("inspect", help="confronta i record con lo stato dei container")
@@ -218,6 +230,11 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("runs interroga il runtime: rimuovere --dry-run; inspect non arresta container")
     if args.dry_run and args.command == "installation":
         parser.error("installation richiede un controllo reale: rimuovere --dry-run; inspect non modifica componenti")
+    if args.command == "resources" and args.resource_operation == "configure":
+        if args.apply and (not args.yes or args.dry_run):
+            parser.error("La modifica delle risorse richiede --apply --yes e non ammette --dry-run")
+        if (args.yes or args.restart) and not args.apply:
+            parser.error("--yes e --restart richiedono --apply; senza --apply viene mostrata solo l'anteprima")
     execution_overrides = {
         name: getattr(args, name) for name in ("input_hashes", "cpus", "memory_mb", "pids_limit")
         if getattr(args, name) is not None
@@ -248,6 +265,30 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         layout = ProjectLayout.discover(data_dir=args.data_dir, runs_dir=args.runs_dir)
         activity.enter_context(activity_session(project_dir=layout.project_dir))
+        if args.command == "resources":
+            from nipat.resources import ResourceManager
+            from nipat.resource_ui import resource_lines
+
+            manager = ResourceManager.from_environment(layout)
+            snapshot = manager.snapshot()
+            report = {"snapshot": snapshot}
+            if args.resource_operation == "configure":
+                change = manager.preview(memory_mib=args.memory_mib, cpus=args.vm_cpus)
+                report["preview"] = change.as_dict()
+                if not args.json:
+                    print(json.dumps(report["preview"], ensure_ascii=True, indent=2))
+                if args.apply:
+                    report["result"] = manager.apply(change, confirmed=True, restart_confirmed=args.restart)
+                else:
+                    report["result"] = {"status": "preview-only"}
+            if args.json:
+                print(json.dumps(report, ensure_ascii=True, indent=2))
+            else:
+                for line in resource_lines(snapshot):
+                    print(line)
+                if "result" in report:
+                    print(json.dumps(report["result"], ensure_ascii=True, indent=2))
+            return 0
         runner = DockerComposeRunner(layout, dry_run=args.dry_run,
                                      options=ExecutionOptions(**execution_overrides))
         workflows = Workflows(layout, runner)

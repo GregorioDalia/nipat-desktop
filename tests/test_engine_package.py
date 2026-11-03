@@ -80,7 +80,7 @@ class EnginePackageTests(unittest.TestCase):
             "snp_alleles": "uppercase-working-copy",
         })
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 17)
+        self.assertEqual(len(hashes), 19)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)

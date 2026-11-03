@@ -11,7 +11,7 @@ from unittest.mock import Mock, patch
 
 from nipat.updates import (
     API, WEB, UpdateAsset, UpdateClient, UpdateError, UpdateOffer,
-    _SafeRedirectHandler, detect_platform, version_key,
+    _SafeRedirectHandler, detect_platform, version_key, manifest_filename,
 )
 
 
@@ -55,6 +55,8 @@ def release_fixture(version="0.7.0", *, prerelease=False, platform="windows-x86_
             deb_version = version.replace(suffix, "~" + suffix)
             break
     name = "NIPAT-Setup.exe" if platform == "windows-x86_64" else f"nipat-desktop_{deb_version}_amd64.deb"
+    if platform.startswith("darwin-"):
+        name = f"NIPAT-{version}-macos-{platform.removeprefix('darwin-')}.pkg"
     asset = {"platform": platform, "name": name, "size": len(payload),
              "sha256": hashlib.sha256(payload).hexdigest(),
              "url": f"{WEB}/releases/download/{tag}/{name}"}
@@ -65,8 +67,8 @@ def release_fixture(version="0.7.0", *, prerelease=False, platform="windows-x86_
     release = {"tag_name": tag, "draft": False, "prerelease": prerelease,
                "published_at": "2026-10-25T10:00:00Z", "html_url": manifest["release_notes_url"],
                "assets": [
-                   {"name": "update-manifest.json", "state": "uploaded", "size": len(json.dumps(manifest).encode()),
-                    "browser_download_url": f"{WEB}/releases/download/{tag}/update-manifest.json"},
+                   {"name": manifest_filename(platform), "state": "uploaded", "size": len(json.dumps(manifest).encode()),
+                    "browser_download_url": f"{WEB}/releases/download/{tag}/{manifest_filename(platform)}"},
                    {"name": name, "state": "uploaded", "size": len(payload), "browser_download_url": asset["url"]},
                ]}
     return release, manifest
@@ -82,13 +84,34 @@ class UpdateDiscoveryTests(unittest.TestCase):
         for release, manifest in fixtures:
             releases.append(release)
             tag = release["tag_name"]
-            self.network.add_json(f"{WEB}/releases/download/{tag}/update-manifest.json", manifest)
+            feed = next((item["name"] for item in release["assets"]
+                         if item["name"].startswith("update-manifest")), "update-manifest.json")
+            self.network.add_json(f"{WEB}/releases/download/{tag}/{feed}", manifest)
             self.network.add_json(f"{API}/git/ref/tags/{tag}",
                                   {"ref": f"refs/tags/{tag}", "object": {"type": "commit", "sha": SOURCE}})
         self.network.add_json(f"{API}/releases?per_page=100&page=1", releases)
 
     def check(self, channel="testing", current="0.6.0", platform="windows-x86_64"):
         return self.client.check(current, channel, platform)
+
+    def test_mac_uses_its_own_feed_and_architecture_specific_package(self):
+        for architecture in ("arm64", "x86_64"):
+            with self.subTest(architecture=architecture):
+                self.setUp()
+                self.install(release_fixture("0.8.2", platform="darwin-" + architecture))
+                result = self.check(platform="darwin-" + architecture, current="0.8.1")
+                self.assertEqual(result.status, "available")
+                self.assertEqual(result.offer.asset.name, f"NIPAT-0.8.2-macos-{architecture}.pkg")
+                self.assertTrue(any(url.endswith("update-manifest-macos.json") for url, _ in self.network.calls))
+                self.assertFalse(any(url.endswith("/update-manifest.json") for url, _ in self.network.calls))
+
+    def test_mac_architecture_detection_and_legacy_feed_selection(self):
+        for architecture in ("arm64", "x86_64"):
+            with patch("nipat.updates.sys.platform", "darwin"), patch(
+                    "nipat.updates.host_platform.machine", return_value=architecture):
+                self.assertEqual(detect_platform(), "darwin-" + architecture)
+        self.assertEqual(manifest_filename("windows-x86_64"), "update-manifest.json")
+        self.assertEqual(manifest_filename("linux-x86_64"), "update-manifest.json")
 
     def test_versions_compare_numerically_and_order_prerelease_phases(self):
         versions = ["0.9.0", "0.10.0a2", "0.10.0a10", "0.10.0b1", "0.10.0rc1", "0.10.0", "1.0.0"]

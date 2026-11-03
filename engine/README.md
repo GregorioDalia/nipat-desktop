@@ -51,7 +51,7 @@ al manifest scientifico incluso. `describe --json` restituisce:
 | `plan_execution.scheduling` | `sequential` |
 | `plan_execution.resume` | `false` |
 | Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
-| `preparation.file_sha256` | Hash dell'ingresso del motore, degli undici moduli Python condivisi e delle quattro schede JSON del catalogo |
+| `preparation.file_sha256` | Hash dell'ingresso del motore, dei moduli Python condivisi, dell'adattatore R di presentazione e delle schede JSON del catalogo |
 
 Moduli mancanti e percorsi esterni al bundle sono rifiutati. Gli hash della
 preparazione identificano i byte nell'immagine; gli hash R vengono inoltre
@@ -59,8 +59,9 @@ confrontati con il manifest. La descrizione non identifica da sola una release:
 commit, archivio distribuito e ID immagine appartengono alle evidenze di build
 e ai metadati del run.
 
-Nei comandi `run` ed `execute`, l'avvio di R sostituisce il processo del motore
-con `Rscript`, preservandone codice di uscita e ricezione dei segnali.
+`run` avvia lo script R nativo. `execute` prepara e verifica gli input, esegue
+R e verifica i risultati prima di restituire l’esito; conserva la gestione
+dei segnali durante il processo scientifico.
 Gli errori di verifica o avvio
 restituiscono 2. Nella preparazione SNPcall da BAM, i segnali sono inoltrati
 anche al processo samtools; un suo errore impedisce l'avvio di R.
@@ -276,3 +277,23 @@ delle coppie, anche limitate alle maiuscole, sono rifiutati prima dello staging.
 Richiesta, tabelle preparate e pannelli rimangono in `work`. In `output`
 viene scritto `Summary_FetalFraction_CPI.csv`; la sottocartella `output/plots`
 contiene un PDF per coppia e `All_CPIplots.pdf`; lo script non salva tabelle di dettaglio per sito o iterazione.
+
+## Etichette leggibili
+
+Le richieste `execute` e i piani possono includere un campo opzionale
+`presentation` con due mappe: `samples` associa gli ID interni ai nomi
+originali, `pairs` associa gli ID di coppia a etichette leggibili. La mappa
+dei campioni deve essere completa; quella delle coppie può essere parziale.
+Le etichette sono dati: non vengono interpretate come codice R o comandi.
+
+Il motore esegue gli script vendorizzati invariati e crea copie leggibili
+in `output/presentation`; nei piani l'indice è in `workflow/presentation`.
+L'adattatore R salva i grafici nativi e rende una copia con le etichette
+originali. L'esportazione delle tabelle modifica solo i campi identificativi.
+I riferimenti tra passaggi e le verifiche numeriche usano gli output canonici.
+Una mancata esportazione richiesta è un errore, non una presentazione riuscita.
+
+Nomi omonimi ricevono un identificatore distintivo. I nomi dei file esportati
+sono adattati ai vincoli dei filesystem e possono essere abbreviati; la mappa
+conserva il nome completo. Le etichette CSV/TSV che potrebbero essere interpretate
+come formule sono protette come testo, senza modificare i valori scientifici.

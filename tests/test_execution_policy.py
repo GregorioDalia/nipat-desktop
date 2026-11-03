@@ -148,13 +148,15 @@ class ExecutionPolicyTests(unittest.TestCase):
                 process.wait.return_value = process.poll.return_value = 7
                 with redirect_stdout(io.StringIO()), patch(
                     "nipat.execution.runner.subprocess.Popen", return_value=process,
-                ), patch.object(self.runner, "_stop_container", return_value={
+                ), patch("nipat.execution.runner.inspect_container", return_value={
+                    "availability": "available", "owned": True, "container_id": "a" * 64,
+                }), patch.object(self.runner, "_stop_container", return_value={
                     "status": cleanup_status,
                 }) as stop:
                     with self.assertRaisesRegex(RuntimeExecutionError, "codice 7"):
                         self.runner.run(["python3", "engine"])
                 stop.assert_called_once()
-                self.assertRegex(stop.call_args.args[0], r"^nipat-run-[0-9a-f]{32}$")
+                self.assertEqual(stop.call_args.args[0], "a" * 64)
 
 
 if __name__ == "__main__":

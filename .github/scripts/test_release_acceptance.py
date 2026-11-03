@@ -130,7 +130,7 @@ class AcceptanceTests(unittest.TestCase):
 
     def test_future_distribution_contracts_are_not_implicitly_authorized(self):
         for version in ("0.4.1", "0.8.0", "1.0.0", "../0.5.0a1"):
-            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "only for the 0.5"):
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "Joint publication supports"):
                 acceptance.acceptance_path(version)
 
     def test_desktop_06_retains_all_acceptance_requirements(self):
@@ -521,6 +521,77 @@ class ReliabilityResearchAcceptanceTests(ReviewedResearchAcceptanceTests):
                    domain_validation="pending-domain-researchers")
         with self.assertRaisesRegex(ValueError, "require reliability acceptance"):
             acceptance.validate(old, "0.7.2", COMMIT, 123)
+
+
+class MultiplatformResearchAcceptanceTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = ReliabilityResearchAcceptanceTests()
+        self.fixture.setUp()
+        self.record = self.fixture.record
+        self.pair = self.fixture.pair
+        self.record.update(schema_version=5, version="0.8.2",
+                           macos_arm64_installer_sha256="7" * 64,
+                           macos_x86_64_installer_sha256="8" * 64,
+                           macos_validation={arch: {"status": "not-performed", "evidence": []}
+                                             for arch in ("arm64", "x86_64")})
+        self.record["observed_baseline"]["source_comparison_scope"] = acceptance.MULTIPLATFORM_SOURCE_SCOPE
+        self.pair.update(version="0.8.2", macos_arm64={"sha256": "7" * 64}, macos_x86_64={"sha256": "8" * 64})
+
+    def validate(self):
+        acceptance.validate(self.record, "0.8.2", COMMIT, 123, self.pair)
+
+    def test_explicit_untested_macs_do_not_fabricate_acceptance(self):
+        self.validate()
+        checked = acceptance.verify_baseline(self.record, self.fixture.read_source)
+        self.assertTrue(checked["vendored_r_sources_unchanged"])
+        self.assertFalse(checked["operational_equivalence_claimed"])
+        self.assertFalse(checked["candidate_windows_installation_claimed"])
+
+    def test_both_macos_hashes_are_bound_to_the_exact_build(self):
+        for architecture in ("arm64", "x86_64"):
+            original = self.record[f"macos_{architecture}_installer_sha256"]
+            self.record[f"macos_{architecture}_installer_sha256"] = "f" * 64
+            with self.subTest(architecture=architecture), self.assertRaisesRegex(ValueError, "hashes do not identify"):
+                self.validate()
+            self.record[f"macos_{architecture}_installer_sha256"] = original
+
+    def test_physical_mac_pass_requires_linked_evidence(self):
+        self.record["macos_validation"]["arm64"]["status"] = "passed"
+        with self.assertRaisesRegex(ValueError, "evidence"):
+            self.validate()
+        self.record["macos_validation"]["arm64"]["evidence"] = ["https://github.com/example/repo/issues/15"]
+        self.validate()
+        self.record["macos_validation"]["x86_64"]["status"] = "assumed-passed"
+        with self.assertRaises(ValueError):
+            self.validate()
+
+    def test_presentation_r_may_be_reviewed_but_vendored_r_remains_protected(self):
+        delta = self.fixture.change("src/nipat_scientific/presentation.R")
+        self.record["reviewed_source_changes"] = [delta]
+        self.validate()
+        checked = acceptance.verify_baseline(self.record, self.fixture.read_source)
+        self.assertEqual(checked["reviewed_source_changes"], [delta])
+        self.record["reviewed_source_changes"].append(self.fixture.change("scientific/vendor/example.R"))
+        self.record["reviewed_source_changes"].sort(key=lambda item: item["path"])
+        with self.assertRaises(ValueError):
+            self.validate()
+        with self.assertRaisesRegex(ValueError, "protected vendored R"):
+            acceptance.verify_baseline(self.record, self.fixture.read_source)
+
+    def test_new_template_is_pending_and_requires_both_native_packages(self):
+        pending = acceptance.template(self.pair, 123)
+        self.assertEqual(pending["schema_version"], 5)
+        self.assertEqual(pending["decision"], "pending")
+        with self.assertRaises(ValueError):
+            acceptance.validate(pending, "0.8.2", COMMIT, 123, self.pair)
+        del self.pair["macos_arm64"]
+        with self.assertRaisesRegex(ValueError, "both native"):
+            acceptance.template(self.pair, 123)
+
+    def test_historical_two_platform_schema_cannot_authorize_four_platform_release(self):
+        self.record["schema_version"] = 4
+        with self.assertRaises(ValueError):
+            self.validate()
 
 
 if __name__ == "__main__":

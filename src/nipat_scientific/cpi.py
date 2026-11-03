@@ -8,6 +8,7 @@ import shutil
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import (
     POPFREQ_COLUMNS, require_dnp_input, require_file, require_population_frequencies,
     write_input_report,
@@ -82,8 +83,9 @@ def normalize_pairs(pairs: object, mother_prefix: object, father_prefix: object)
 
 def prepare_cpi(request: object) -> list[str]:
     """Validate a cpi-v1 request before writing byte-preserving staged inputs."""
-    if not isinstance(request, dict) or set(request) != REQUEST_FIELDS:
+    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
         raise ValidationError("Richiesta CPI non valida: campi mancanti o inattesi.")
+    validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta CPI non supportata.")
     if request["workflow"] != "cpi":

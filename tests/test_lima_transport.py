@@ -22,9 +22,9 @@ class LimaTransportTests(unittest.TestCase):
         self.project.mkdir()
         self.environment = {
             "NIPAT_BACKEND": "lima", "NIPAT_PROJECT_DIR": str(self.project),
-            "NIPAT_WORKSPACE_DIR": str(self.home / "Library/Application Support/NIPAT-Experimental08"),
+            "NIPAT_WORKSPACE_DIR": str(self.home / "Library/Application Support/NIPAT-Desktop"),
             "NIPAT_LIMA_EXECUTABLE": str(self.home / "bundle/lima/bin/limactl"),
-            "LIMA_HOME": str(self.home / ".nipat08/lima"),
+            "LIMA_HOME": str(self.home / ".nipat/lima"),
         }
         self.enterContext(patch.dict(os.environ, self.environment, clear=True))
         self.enterContext(patch("nipat.macos_runtime.Path.home", return_value=self.home))
@@ -33,7 +33,7 @@ class LimaTransportTests(unittest.TestCase):
         transport = DockerTransport.from_environment(dry_run=True)
         self.assertIsInstance(transport, LimaDockerTransport)
         self.assertTrue(transport.dry_run)
-        self.assertEqual(transport.metadata["lima_instance"], "nipat08")
+        self.assertEqual(transport.metadata["lima_instance"], "nipat")
         with patch.dict(os.environ, {"LIMA_HOME": str(self.home / ".lima")}):
             with self.assertRaisesRegex(ValidationError, "LIMA_HOME"):
                 DockerTransport.from_environment()

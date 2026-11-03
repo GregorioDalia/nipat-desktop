@@ -36,6 +36,11 @@ class RunTrackingTests(unittest.TestCase):
         data.mkdir()
         self.layout = ProjectLayout(project, root, data, root / "runs", project / "compose.yaml")
         self.runner = DockerComposeRunner(self.layout, transport=DockerTransport())
+        self.enterContext(patch.object(self.runner, "_record_resource_snapshot"))
+        self.inspection = self.enterContext(patch(
+            "nipat.execution.runner.inspect_container",
+            side_effect=lambda *_: {"availability": "absent", "owned": False},
+        ))
         self.input = data / "input.txt"
         self.input.write_text("original data\n", encoding="utf-8")
         self.output = io.StringIO()
@@ -94,6 +99,8 @@ class RunTrackingTests(unittest.TestCase):
         return bam, reference, panel
 
     def test_snp_engine_failure_marks_whole_workflow_failed(self):
+        self.inspection.side_effect = lambda *_: {"availability": "available", "owned": True,
+                                                 "container_id": "a" * 64}
         bam, reference, panel = self.bam_inputs()
         with redirect_stdout(self.output), patch(
             "nipat.execution.runner.subprocess.Popen",
@@ -111,7 +118,7 @@ class RunTrackingTests(unittest.TestCase):
         self.assertEqual([c["returncode"] for c in record["commands"]], [7])
         self.assertIn("snp-call", record["commands"][0]["argv"])
         self.assertIn("R failed", (self.layout.runs_dir / "failed-snp" / "execution.log").read_text())
-        stop.assert_called_once_with(record["commands"][0]["container_name"])
+        stop.assert_called_once_with("a" * 64)
         self.assertEqual(record["commands"][0]["container_cleanup"]["status"], "absent")
 
     def test_dry_run_is_planned_and_launches_no_process(self):
@@ -139,6 +146,8 @@ class RunTrackingTests(unittest.TestCase):
         self.assertIsNone(self.runner._record)
 
     def test_interrupt_stops_named_container_even_if_client_already_exited(self):
+        self.inspection.side_effect = lambda *_: {"availability": "available", "owned": True,
+                                                 "container_id": "a" * 64}
         run = self.layout.new_run_dir("test", "interrupted-client")
         process = MagicMock()
         process.stdout.__iter__.side_effect = KeyboardInterrupt()
@@ -150,11 +159,13 @@ class RunTrackingTests(unittest.TestCase):
                 with self.runner.record_run(run, workflow="test", inputs=[], parameters={}):
                     self.runner.run(["Rscript", "test.R"])
         stop.assert_called_once()
-        self.assertTrue(stop.call_args.args[0].startswith("nipat-run-"))
+        self.assertEqual(stop.call_args.args[0], "a" * 64)
         self.assertEqual(self.record("interrupted-client")["status"], "interrupted")
         self.assertEqual(self.record("interrupted-client")["commands"][0]["returncode"], 130)
 
     def test_repeated_ctrl_c_cannot_abandon_container_stop_or_run_evidence(self):
+        self.inspection.side_effect = lambda *_: {"availability": "available", "owned": True,
+                                                 "container_id": "a" * 64}
         run = self.layout.new_run_dir("test", "repeated-interrupt")
         partial = run / "output" / "partial.txt"
         partial.write_text("preserve completed output\n")
@@ -191,6 +202,8 @@ class RunTrackingTests(unittest.TestCase):
         self.assertIsNone(self.runner._record)
 
     def test_interrupt_bounds_client_kill_wait_and_keeps_original_interrupt(self):
+        self.inspection.side_effect = lambda *_: {"availability": "available", "owned": True,
+                                                 "container_id": "a" * 64}
         run = self.layout.new_run_dir("test", "unresponsive-client")
         process = MagicMock()
         process.stdout.__iter__.side_effect = KeyboardInterrupt()

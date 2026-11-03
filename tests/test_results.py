@@ -54,6 +54,33 @@ class ResultsTests(unittest.TestCase):
         self.assertIn(f"Log: {self.run / 'execution.log'}", ui.lines)
         self.assertEqual(sum("Richiesta di apertura inviata:" in line for line in ui.lines), 3)
 
+    def test_presentation_results_and_report_are_primary_with_original_names_visible(self):
+        presentation = self.run / "output/workflow/presentation"
+        presentation.mkdir(parents=True)
+        (presentation / "index.html").write_text("owned index")
+        report = self.run / "run-report.html"
+        report.write_text("owned report")
+        self.metadata["parameters"] = {"sample_mapping": [{
+            "sample_id": "sample_0001", "original_path": r"D:\campioni\Campione è.bam",
+        }]}
+        self.save_metadata()
+        ui, opener = FakeTerminal(["1", "5", "4", "0"]), Mock()
+        show_results(ui, self.run, open_path=opener)
+        self.assertEqual([call.args[0] for call in opener.call_args_list], [presentation, report, self.run])
+        self.assertIn("Campione è.bam  [sample_0001]", "\n".join(ui.lines))
+        self.assertIn("non vengono rinominati", "\n".join(ui.lines))
+
+    def test_linked_presentation_or_report_cannot_redirect_result_navigation(self):
+        outside = self.run.parent / "outside"
+        outside.mkdir()
+        (outside / "index.html").write_text("untrusted")
+        (self.run / "output/presentation").symlink_to(outside, target_is_directory=True)
+        (self.run / "run-report.html").symlink_to(outside / "index.html")
+        ui, opener = FakeTerminal(["1", "0"]), Mock()
+        show_results(ui, self.run, open_path=opener)
+        opener.assert_called_once_with(self.run / "output")
+        self.assertTrue(all("5" not in [choice[0] for choice in menu] for menu in ui.menus))
+
     def test_dry_run_never_offers_or_opens_scientific_results(self):
         (self.run / "output" / "unexpected.txt").write_text("existing", encoding="utf-8")
         self.metadata["status"] = "planned"
