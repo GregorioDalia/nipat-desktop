@@ -228,4 +228,4 @@ dal commit e dai byte dell'installatore, e viene letto da `main` dal publisher.
 
 Gli schemi precedenti rimangono disponibili per le relative release storiche.
 La [scheda di validazione](VALIDAZIONE.md) raccoglie i casi di dominio;
-l'accettazione tecnica non sostituisce il giudizio delle ricercatrici.
+l'accettazione tecnica non sostituisce la valutazione scientifica di dominio.

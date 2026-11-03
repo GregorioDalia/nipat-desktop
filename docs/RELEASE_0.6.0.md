@@ -5,8 +5,7 @@ guidato, configurazione persistente e aggiornamenti dall'applicazione.
 La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
 identifica i pacchetti effettivamente pubblicati. Queste note descrivono le
 funzionalità della versione e il suo ambito di distribuzione per ricerca
-pre-1.0. La campagna di accettazione con le esperte di dominio è prevista
-sulla 0.7; la 0.6 non attesta una validazione scientifica generale.
+pre-1.0. La versione non attesta una validazione scientifica generale.
 
 ## Installazione
 

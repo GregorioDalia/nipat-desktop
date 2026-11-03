@@ -154,7 +154,7 @@ su ogni PC o la validità scientifica per qualsiasi campione.
 | Ubuntu, `linux-installation-check.json` | Pacchetto installato, analisi singole e piano completo su BAM sintetici da un account non root; conservazione di input, risultati e preferenze. | Usa un runner già configurato; non prova un desktop pulito né l'aggiornamento da 0.6 a 0.7. |
 
 Per ciascuna build consultare gli esiti e i registri Actions effettivi.
-Le prove sul computer destinatario e la valutazione delle esperte di dominio
+Le prove sul computer destinatario e la valutazione di dominio
 rimangono evidenze distinte, da riferire alla versione e ai dati utilizzati.
 La [procedura di distribuzione](../.github/RELEASE.md) mantiene separate
 costruzione, accettazione e pubblicazione.

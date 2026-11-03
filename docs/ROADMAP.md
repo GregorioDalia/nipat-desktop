@@ -8,7 +8,7 @@ automatici su Windows, macOS e Ubuntu. Il perimetro corrente è descritto nelle
 
 | Area | Obiettivo |
 | --- | --- |
-| Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi scelti dalle ricercatrici. |
+| Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi degli utilizzi scientifici previsti. |
 | Tracciabilità | Collegare senza ambiguità nomi originali, identità interne, fasi e risultati. |
 | Uso delle risorse | Rendere leggibili e configurabili i limiti dell'ambiente e dell'analisi, conservando diagnosi e configurazione effettiva. |
 | Portabilità | Raccogliere prove reali Windows 10/11, Ubuntu e Mac Intel/Apple Silicon oltre ai controlli automatici. |
@@ -29,4 +29,4 @@ pre-1.0 non trasforma i casi non eseguiti in casi superati.
 
 La [scheda di validazione](VALIDAZIONE.md) raccoglie attese, osservazioni,
 versioni e materiale necessario a riprodurre i problemi. Le decisioni sulle
-interpretazioni scientifiche richiedono la valutazione delle esperte di dominio.
+interpretazioni scientifiche richiedono una valutazione di dominio.

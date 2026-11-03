@@ -1,7 +1,7 @@
 # NIPAT Desktop 0.7.1
 
 NIPAT Desktop 0.7.1 è una distribuzione per ricerca destinata alla valutazione
-delle esperte di dominio. Offre le quattro analisi scientifiche, workflow
+di dominio. Offre le quattro analisi scientifiche, workflow
 automatici e un catalogo delle impostazioni tramite menu testuale e CLI diretta.
 Non include una GUI grafica. Gli algoritmi R restano il core scientifico;
 la distribuzione non attesta una validazione clinica o scientifica generale.
@@ -116,6 +116,6 @@ Il riferimento precedente resta distinto dal nuovo installatore 0.7.1.
 Il controllo di pubblicazione confronta i sorgenti scientifici e del runtime
 e richiede la revisione esplicita delle modifiche del client e della
 preparazione dei pacchetti. Non attribuisce al nuovo EXE una prova manuale
-non eseguita. La valutazione sui computer delle ricercatrici, le prove con
-più campioni e le analisi CPI su dati di dominio costituiscono la campagna
-di accettazione di questa versione.
+non eseguita. Le prove sui dispositivi destinatari, con più campioni e con
+analisi CPI su dati rappresentativi rientrano nell'ambito di accettazione
+di questa versione.
