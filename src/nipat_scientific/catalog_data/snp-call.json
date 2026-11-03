@@ -572,7 +572,7 @@
               5,
               6
             ],
-            "sha256": "806f78c64b9ec2b14d0281ece884765b278f06120b8df135c595d4c8ef43244f"
+            "sha256": "91b99fdbfb6acc563f8b2672a8573ec70a987bc781e42c7cda82412c08eb667e"
           }
         ]
       }
@@ -699,17 +699,17 @@
         "path": "src/nipat_scientific/presentation.py",
         "source_lines": [
           1,
-          300
+          303
         ],
-        "sha256": "4b45df5ded83bcae660050f1788f03551ca341b5ed92371f08d069b7d92109cd",
+        "sha256": "c35dc33a72aca2e7a09da3abb66525562d3e225b0cac968c008b84ff8263062e",
         "dependencies": [
           {
             "path": "src/nipat_scientific/presentation.R",
             "source_lines": [
               1,
-              143
+              147
             ],
-            "sha256": "cbe2d9238564f20eef9a68573482bc6e04da9cfbea1a4f2d3606434966668bea"
+            "sha256": "f368a60172d0bc9c632c09c49a1ea5924b835fb7a1db91413dffc8817ab1f193"
           }
         ]
       }

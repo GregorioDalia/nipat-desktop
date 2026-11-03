@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.plan import validate_plan
 from nipat_scientific.presentation import (
     _copy_table, _filename, _unique_labels, finish_presentation,
     normalize_presentation, prepare_presentation, step_presentation,
@@ -28,6 +29,7 @@ class PresentationTests(unittest.TestCase):
     def test_duplicate_names_are_distinct_and_portable(self):
         names = {"one": "é.bam", "two": "e\u0301.bam", "three": "É.bam"}
         labels = _unique_labels(names)
+        self.assertEqual(labels, _unique_labels(dict(reversed(list(names.items())))))
         self.assertEqual(len(set(labels.values())), 3)
         for identity, original in names.items():
             self.assertIn(original, labels[identity])
@@ -115,6 +117,17 @@ class PresentationTests(unittest.TestCase):
         cpi = step_presentation(plan, {"workflow": "cpi"}, {}, bindings)
         self.assertEqual(cpi["samples"], {"Motherm001": "B.bam", "Fatherf001": "A.bam"})
         self.assertEqual(cpi["pairs"]["m001:f001"], "family — Madre: B.bam | Padre: A.bam")
+
+    def test_plan_preserves_complete_presentation_and_rejects_unknown_identity(self):
+        plan = {"schema_version": 1, "samples": [{"id": "sample_a", "kind": "bam", "path": "/inputs/a.bam"}],
+                "steps": [{"id": "dnp", "workflow": "dnp-call", "inputs": {"samples": ["sample_a"],
+                           "reference": "/inputs/ref.fa", "panel": "/inputs/panel.txt"}, "parameters": {"parallel": False}}],
+                "presentation": {"samples": {"sample_a": "Original à.bam"}, "pairs": {}}}
+        canonical = validate_plan(plan)["plan"]
+        self.assertEqual(canonical["presentation"], plan["presentation"])
+        plan["presentation"]["samples"] = {"wrong": "Original à.bam"}
+        with self.assertRaisesRegex(ValidationError, "plan.presentation"):
+            validate_plan(plan)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
 # Original plots are saved normally; additional copies replace text grob labels.
 # No expressions, counts, likelihoods, data columns, or plotting coordinates change.
 
+local({
 config_path <- if (file.exists("presentation-config.json")) {
   "presentation-config.json"
 } else {
@@ -98,8 +99,7 @@ replace_grob <- function(grob, skip_label = FALSE) {
   grob
 }
 
-scientific <- new.env(parent = globalenv())
-scientific$ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
+display_ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
   # Keep the native artifact exactly as requested by the scientific script.
   result <- ggplot2::ggsave(filename = filename, plot = plot, ...)
   native <- normalizePath(filename, mustWork = TRUE)
@@ -140,4 +140,8 @@ scientific$ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
                                  plot = grob, device = grDevices::cairo_pdf), options))
   invisible(result)
 }
-sys.source(config$script, envir = scientific, keep.source = FALSE)
+# Preserve the native global execution environment (DNPcall explicitly updates
+# .GlobalEnv for memory accounting); keep adapter state private in this closure.
+assign("ggsave", display_ggsave, envir = globalenv())
+sys.source(config$script, envir = globalenv(), keep.source = FALSE)
+})

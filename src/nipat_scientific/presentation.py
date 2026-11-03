@@ -65,7 +65,8 @@ def _unique_labels(labels: dict[str, str]) -> dict[str, str]:
         counts[folded] = counts.get(folded, 0) + 1
     output = {}
     used = set()
-    for identity, label in labels.items():
+    for identity in sorted(labels):
+        label = labels[identity]
         key = unicodedata.normalize("NFC", label).casefold()
         resolved = f"{label} [{identity}]" if counts[key] > 1 else label
         while unicodedata.normalize("NFC", resolved).casefold() in used:
@@ -183,6 +184,8 @@ def prepare_presentation(request: dict, script: Path, arguments: list[str]) -> l
     with config_path.open("x", encoding="utf-8") as handle:
         json.dump(config, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
+    for identity, label in samples.items():
+        print(f"NIPAT campione {identity}: {label}", flush=True)
     return ["Rscript", str(Path(__file__).with_suffix(".R")), *arguments]
 
 

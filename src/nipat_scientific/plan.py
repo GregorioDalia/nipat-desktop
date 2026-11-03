@@ -153,7 +153,7 @@ def _order(dependencies: dict[str, set[str]]) -> list[str]:
 def validate_plan(document: object) -> dict:
     """Return a canonical plan and derived order, never an execution result.
 
-    Input fields are exactly schema_version, samples and steps. The return value
+    Input fields are schema_version, samples and steps, with optional presentation. The return value
     is a validation report: {schema_version, plan, execution_order}. Its ``plan``
     can be validated again unchanged; the report itself is not a request.
     Every scientific parameter supported by this contract must be explicit.

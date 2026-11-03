@@ -11,7 +11,6 @@ RUN apt-get update \
         build-essential \
         ca-certificates \
         curl \
-        fonts-dejavu-core \
         libbz2-dev \
         libcairo2-dev \
         libcurl4-openssl-dev \
@@ -65,6 +64,13 @@ COPY docker/scientific-runtime/verify-packages.R /usr/local/lib/nipat/verify-pac
 RUN Rscript /usr/local/lib/nipat/verify-packages.R \
     && samtools --version | head -n 1 \
     && R --version | head -n 1
+
+# Cairo embeds readable Latin/Greek sample labels in presentation PDF copies.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && dpkg-query -W -f='${Package}\t${Version}\n' > /usr/share/nipat/apt-versions.tsv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Bundle only reviewed code and notices. Do not copy arbitrary local files or
 # mount the host project over this path in production.
