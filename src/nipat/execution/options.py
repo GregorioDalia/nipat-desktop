@@ -14,8 +14,11 @@ class ExecutionOptions:
     cpus: float | None = None
     memory_mb: int | None = None
     pids_limit: int | None = None
+    performance_diagnostics: bool = False
 
     def __post_init__(self) -> None:
+        if type(self.performance_diagnostics) is not bool:
+            raise ValidationError("La diagnostica delle prestazioni deve essere attiva o disattiva.")
         if not isinstance(self.input_hashes, str) or self.input_hashes not in {"auto", "full"}:
             raise ValidationError("La provenienza degli input deve essere auto oppure full.")
         if self.cpus is not None and (

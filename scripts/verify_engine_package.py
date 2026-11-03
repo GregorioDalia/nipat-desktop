@@ -131,7 +131,7 @@ def check_metadata(identifier: str) -> dict:
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
     for name in (
         "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
-        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "catalog_data/dnp-call.json",
+        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py", "catalog_data/dnp-call.json",
         "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
     ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name

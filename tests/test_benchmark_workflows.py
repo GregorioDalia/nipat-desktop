@@ -13,6 +13,37 @@ spec.loader.exec_module(benchmark)
 
 
 class BenchmarkReportTests(unittest.TestCase):
+    def test_performance_requested_but_missing_is_not_zero_usage(self):
+        with tempfile.TemporaryDirectory() as folder:
+            value = benchmark._performance_evidence(Path(folder), requested=True)
+            self.assertIsNone(value["host"])
+            self.assertIsNone(value["engine"])
+            self.assertEqual(set(value["errors"]), {"host", "engine"})
+            self.assertEqual(benchmark._performance_evidence(Path(folder), requested=False),
+                             {"requested": False, "host": None, "engine": None, "errors": {}})
+
+    def test_performance_reads_bounded_summaries_and_rejects_links(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            engine = root / "performance" / "engine"
+            engine.mkdir(parents=True)
+            (engine.parent / "summary.json").write_text('{"samples":3}', encoding="utf-8")
+            (engine / "summary.json").write_text('{"status":"partial"}', encoding="utf-8")
+            value = benchmark._performance_evidence(root, requested=True)
+            self.assertEqual(value["host"], {"samples": 3})
+            self.assertEqual(value["engine"], {"status": "partial"})
+            (engine / "summary.json").write_bytes(b" " * (1024 * 1024 + 1))
+            value = benchmark._performance_evidence(root, requested=True)
+            self.assertIsNone(value["engine"])
+            self.assertEqual(value["errors"], {"engine": "ValueError"})
+            (engine / "summary.json").unlink()
+            try:
+                (engine / "summary.json").symlink_to(engine.parent / "summary.json")
+            except OSError:
+                return  # Some Windows accounts cannot create symlinks.
+            self.assertEqual(benchmark._performance_evidence(root, requested=True)["errors"],
+                             {"engine": "ValueError"})
+
     def _workflow(self, run, *, log="steps/dnp/command.log", start="2026-11-03T10:00:00+00:00",
                   finish="2026-11-03T10:00:12.250000+00:00"):
         workflow = run / "output" / "workflow"

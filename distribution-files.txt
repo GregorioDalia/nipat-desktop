@@ -344,3 +344,11 @@ tests/test_resource_ui.py
 tests/test_resources.py
 tests/test_run_report.py
 tests/test_scientific_presentation.py
+docs/PERFORMANCE.md
+scripts/verify_performance.py
+src/nipat/execution/performance.py
+src/nipat_scientific/performance.py
+tests/test_engine_performance.py
+tests/test_performance_observer.py
+tests/test_performance_options.py
+tests/test_performance_verification.py

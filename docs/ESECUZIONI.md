@@ -232,6 +232,13 @@ del pannello, conservando il log in caso di errore.
 
 ### Misure delle prestazioni
 
+Nel riepilogo del menu, **Avvia analisi con diagnostica prestazioni** abilita misure
+periodiche delle risorse e tempi delle fasi per una sola analisi. Dalla CLI
+usare `nipat --performance-diagnostics dnp-call ...` (o un altro comando di
+analisi). Il monitoraggio è normalmente disattivato e aggiunge un costo da
+misurare separatamente. Il [protocollo delle prestazioni](PERFORMANCE.md)
+descrive significato, disponibilità e limiti delle misure e i file del run.
+
 Nel checkout, `scripts/benchmark_workflows.py` esegue una serie esplicita di
 prove DNPcall o DNPcall → Contamination e conserva `benchmark.json`, i log
 dei comandi e run distinti. Richiede BAM reali distinti; non duplica un singolo
@@ -254,6 +261,11 @@ limiti di risorse, la modalità checksum e `--parallel`. Le misure dipendono
 da hardware, dati e configurazione: questo strumento prepara prove
 riproducibili, non certifica prestazioni su altri computer. Le prove sono
 facoltative e distinte dai controlli rapidi della CI.
+
+Anche il supervisore accetta `--performance-diagnostics` e include i riepiloghi
+di raccolta in `benchmark.json`. Per un solo BAM specificare
+`--sample-counts 1 --workflow dnp-call`; la configurazione predefinita del
+supervisore comprende anche una prova con dieci BAM distinti.
 
 ## Esecuzioni incomplete
 

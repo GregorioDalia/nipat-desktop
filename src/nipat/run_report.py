@@ -6,6 +6,7 @@ import csv
 import html
 import io
 import json
+import math
 import os
 from pathlib import Path, PureWindowsPath
 from urllib.parse import quote
@@ -106,6 +107,105 @@ def _write_exclusive(path: Path, content: str) -> None:
         raise
 
 
+def _performance_file(run_dir: Path, relative: str) -> Path:
+    # Only fixed caller-owned paths enter this helper. Reject linked ancestors,
+    # including Windows junctions, before reading or offering a download link.
+    path = run_dir
+    for part in relative.split("/"):
+        path = path / part
+        if path.is_symlink() or getattr(path, "is_junction", lambda: False)():
+            raise ValueError("Linked performance evidence")
+    return path
+
+
+def _mib(value: object) -> str:
+    if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+        return "Non disponibile"
+    return f"{value / (1024 * 1024):.2f} MiB"
+
+
+def _performance_section(run_dir: Path, metadata: dict) -> str:
+    options = metadata.get("execution_options")
+    if not isinstance(options, dict) or options.get("performance_diagnostics") is not True:
+        return ""
+    body = ["<h2>Diagnostica delle prestazioni</h2>",
+            "<p>Raccolta richiesta per questa analisi. Il monitoraggio aggiunge lavoro: "
+            "confrontare separatamente esecuzioni con e senza diagnostica. "
+            "Le misure non identificano automaticamente la causa di un rallentamento.</p>"]
+    summaries = {}
+    for label, relative in (("Container (osservatore esterno)", "performance/summary.json"),
+                            ("Motore scientifico", "performance/engine/summary.json")):
+        try:
+            summaries[label] = _read_json(_performance_file(run_dir, relative))
+        except (OSError, ValueError, RecursionError):
+            body.append(f"<p>{html.escape(label)}: resoconto non disponibile; "
+                        "i campioni parziali possono essere presenti nei file diagnostici.</p>")
+    host = summaries.get("Container (osservatore esterno)", {})
+    engine = summaries.get("Motore scientifico", {})
+    maxima = host.get("sampled_maxima")
+    maxima = maxima if isinstance(maxima, dict) else {}
+    body.append(_table(["Osservazione", "Valore"], [
+        ["Stato raccolta esterna / campioni", [host.get("status"), host.get("sample_count")]],
+        ["Stato raccolta nel motore / campioni", [engine.get("status"), engine.get("samples")]],
+        ["Massimo osservato Docker, cache inattiva sottratta (valore arrotondato)",
+         _mib(maxima.get("memory_cache_adjusted_bytes"))],
+        ["Massimo osservato cgroup, cache inclusa", _mib(engine.get("sampled_memory_max_bytes"))],
+        ["Picco registrato dal kernel e letto dal monitor, se disponibile",
+         _mib(engine.get("observed_kernel_memory_peak_bytes"))],
+    ]))
+    body.append("<p>I tre valori di memoria hanno definizioni diverse. I massimi dei campioni "
+                "possono perdere picchi fra due letture; il picco del kernel copre il periodo "
+                "fino alla sua ultima lettura. Nessuno di questi valori coincide necessariamente "
+                "con la memoria del solo processo R o dell'intera macchina virtuale.</p>")
+    try:
+        path = _performance_file(run_dir, "performance/engine/phases.jsonl")
+        with path.open("rb") as handle:
+            data = handle.read(2 * 1024 * 1024 + 1)
+        if len(data) > 2 * 1024 * 1024:
+            raise ValueError("Phase evidence too large")
+        phases = []
+        for line in data.splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue  # A killed writer can leave an incomplete final line.
+            if not isinstance(event, dict) or event.get("event") != "end":
+                continue
+            duration = event.get("duration_seconds")
+            if type(duration) not in (float, int) or not math.isfinite(duration) or duration < 0:
+                continue
+            phases.append([event.get("step") or event.get("workflow"), event.get("phase"),
+                           round(duration, 3), {"returned": "Controllo restituito al motore",
+                                                "raised": "Interruzione o eccezione"}.get(
+                                                    event.get("outcome"), "Non registrata")])
+        if phases:
+            body.extend(["<h3>Fasi concluse e misurate</h3>",
+                         _table(["Analisi / passaggio", "Fase", "Secondi", "Chiusura della fase"], phases),
+                         "<p>Le fasi possono essere annidate: le durate non vanno sommate. "
+                         "L'esecuzione R comprende le operazioni interne e la produzione dei grafici; "
+                         "non separa esattamente lettura del pileup, calcolo e grafici di DNPcall. "
+                         "La restituzione del controllo non implica un codice di uscita zero: "
+                         "consultare lo stato dell'analisi e i log. "
+                         "Una fase interrotta può avere solo l'evento di avvio.</p>"])
+    except (OSError, ValueError, RecursionError):
+        body.append("<p>Tempi delle fasi non disponibili nel resoconto.</p>")
+    body.append("<ul>")
+    for relative, label in (
+        ("performance/summary.json", "Riepilogo osservatore esterno (JSON)"),
+        ("performance/container-samples.jsonl", "Campioni del container (JSONL)"),
+        ("performance/engine/summary.json", "Riepilogo motore (JSON)"),
+        ("performance/engine/samples.jsonl", "Risorse e processi nel motore (JSONL)"),
+        ("performance/engine/phases.jsonl", "Eventi delle fasi (JSONL)"),
+    ):
+        try:
+            if _performance_file(run_dir, relative).is_file():
+                body.append(f"<li><a href='{relative}'>{html.escape(label)}</a></li>")
+        except (OSError, ValueError):
+            continue
+    body.append("</ul>")
+    return "\n".join(body)
+
+
 def write_run_report(run_dir: Path) -> dict:
     """Write a local HTML report and TSV map after final run metadata is saved.
 
@@ -190,6 +290,8 @@ def write_run_report(run_dir: Path) -> dict:
                 diagnostics.append([number, diagnosis.get("message")])
         if diagnostics:
             body.extend(["<h2>Diagnostica registrata</h2>", _table(["Comando", "Esito del controllo"], diagnostics)])
+
+    body.append(_performance_section(run_dir, metadata))
 
     source = metadata.get("source")
     runtime = metadata.get("runtime")

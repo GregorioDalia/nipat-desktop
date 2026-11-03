@@ -259,6 +259,7 @@ indipendenti e problemi riproducibili.
 
 - [Sintesi del prodotto](SUNTO.md)
 - [Risorse e memoria](docs/RISORSE.md)
+- [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)

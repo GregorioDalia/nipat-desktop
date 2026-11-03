@@ -27,7 +27,7 @@ SCRIPT_PATHS = {
 }
 PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
-    "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R",
+    "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
 )
 CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
@@ -144,6 +144,11 @@ def verify_bundle(bundle_root: Path) -> dict:
             "scheduling": "sequential",
             "resume": False,
         },
+        "performance_diagnostics": {
+            "interface": "performance-diagnostics-v1", "schema_version": 1,
+            "interval_seconds": 1.0, "sources": ["linux-cgroup", "linux-proc"],
+            "scientific_sources_modified": False,
+        },
         "preparation": describe_preparation(bundle_root),
     }
 
@@ -223,18 +228,23 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
     from nipat_scientific.executor import _Cancellation, _run_process, _atomic_json
     from nipat_scientific.outputs import validate_standalone_outputs
     from nipat_scientific.presentation import prepare_presentation, finish_presentation
+    from nipat_scientific.performance import phase
 
     cancellation = _Cancellation()
     previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
     try:
         for signum in previous:
             signal.signal(signum, cancellation.receive)
-        command = prepare_presentation(request, script, native_arguments)
-        code = _run_process(command, Path.cwd(), None, cancellation)
+        with phase("presentation-preparation", workflow=request["workflow"]):
+            command = prepare_presentation(request, script, native_arguments)
+        with phase("r-execution", workflow=request["workflow"]):
+            code = _run_process(command, Path.cwd(), None, cancellation)
         if code or cancellation.signum is not None:
             return cancellation.exit_code if cancellation.signum is not None else code
-        artifacts = validate_standalone_outputs(request)
-        presentation = finish_presentation(request, Path(request["out_dir"]).parent)
+        with phase("output-validation", workflow=request["workflow"]):
+            artifacts = validate_standalone_outputs(request)
+        with phase("presentation-finalization", workflow=request["workflow"]):
+            presentation = finish_presentation(request, Path(request["out_dir"]).parent)
         if presentation is not None:
             artifacts["presentation"] = presentation
         report = Path(request["work_dir"]) / "scientific-validation.json"
@@ -252,8 +262,16 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
 
 def main(argv: list[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
+    observer = None
     try:
         description = verify_bundle(BUNDLE_ROOT)
+        if arguments.command in {"execute", "execute-plan"}:
+            library = preparation_root(BUNDLE_ROOT).resolve()
+            sys.path.insert(0, str(library))
+            from nipat_scientific.performance import PerformanceSession, phase
+            observer = PerformanceSession.from_environment()
+            if observer is not None:
+                observer.start()
         if arguments.command == "describe":
             if arguments.json:
                 print(json.dumps(description, indent=2, sort_keys=True))
@@ -320,28 +338,29 @@ def main(argv: list[str] | None = None) -> int:
             from nipat_scientific.errors import ValidationError
 
             try:
-                request = json.loads(arguments.request.read_text(encoding="utf-8"))
-                if arguments.workflow == "contamination":
-                    from nipat_scientific.contamination import prepare_contamination
-                    native_arguments = prepare_contamination(request)
-                elif arguments.workflow == "cpi":
-                    from nipat_scientific.cpi import prepare_cpi
-                    native_arguments = prepare_cpi(request)
-                elif arguments.workflow == "dnp-call":
-                    from nipat_scientific.dnp import prepare_dnp
-                    prepared = prepare_dnp(request)
-                    native_arguments = prepared.native_arguments
-                    os.chdir(prepared.working_dir)
-                else:
-                    from nipat_scientific.files import require_snp_pileup
-                    from nipat_scientific.snp import prepare_snp
-                    prepared = prepare_snp(request)
-                    if prepared.preparation_command is not None:
-                        returncode = run_preparation(prepared.preparation_command)
-                        if returncode:
-                            return returncode
-                        require_snp_pileup(prepared.generated_pileup)
-                    native_arguments = prepared.native_arguments
+                with phase("preparation", workflow=arguments.workflow):
+                    request = json.loads(arguments.request.read_text(encoding="utf-8"))
+                    if arguments.workflow == "contamination":
+                        from nipat_scientific.contamination import prepare_contamination
+                        native_arguments = prepare_contamination(request)
+                    elif arguments.workflow == "cpi":
+                        from nipat_scientific.cpi import prepare_cpi
+                        native_arguments = prepare_cpi(request)
+                    elif arguments.workflow == "dnp-call":
+                        from nipat_scientific.dnp import prepare_dnp
+                        prepared = prepare_dnp(request)
+                        native_arguments = prepared.native_arguments
+                        os.chdir(prepared.working_dir)
+                    else:
+                        from nipat_scientific.files import require_snp_pileup
+                        from nipat_scientific.snp import prepare_snp
+                        prepared = prepare_snp(request)
+                        if prepared.preparation_command is not None:
+                            returncode = run_preparation(prepared.preparation_command)
+                            if returncode:
+                                return returncode
+                            require_snp_pileup(prepared.generated_pileup)
+                        native_arguments = prepared.native_arguments
             except (ValidationError, ValueError) as exc:
                 raise BundleError(str(exc)) from exc
             script = BUNDLE_ROOT / description["workflows"][arguments.workflow]["script"]
@@ -361,6 +380,9 @@ def main(argv: list[str] | None = None) -> int:
     except (BundleError, OSError) as exc:
         print(f"NIPAT scientific engine: {exc}", file=sys.stderr)
         return 2
+    finally:
+        if observer is not None:
+            observer.stop()
 
 
 if __name__ == "__main__":

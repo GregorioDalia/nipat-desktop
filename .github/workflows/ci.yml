@@ -215,6 +215,13 @@ jobs:
           mkdir -p "$NIPAT_DATA_DIR" "$NIPAT_RUNS_DIR"
           python -m nipat doctor --runtime
           python -m nipat self-test
+      - name: Verify optional performance evidence and unchanged DNP results
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-performance-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Retain scientific diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -225,6 +232,7 @@ jobs:
             ${{ runner.temp }}/nipat-validation/runs/**/execution.log
             ${{ runner.temp }}/nipat-engine-check/
             ${{ runner.temp }}/nipat-presentation-check/
+            ${{ runner.temp }}/nipat-performance-check/
           retention-days: 14
           if-no-files-found: ignore
 

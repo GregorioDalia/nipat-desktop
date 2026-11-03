@@ -11,6 +11,7 @@ automatici su Windows, macOS e Ubuntu. Il perimetro corrente è descritto nelle
 | Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi degli utilizzi scientifici previsti. |
 | Tracciabilità | Collegare senza ambiguità nomi originali, identità interne, fasi e risultati. |
 | Uso delle risorse | Rendere leggibili e configurabili i limiti dell'ambiente e dell'analisi, conservando diagnosi e configurazione effettiva. |
+| Prestazioni | Versione 0.8.5: diagnostica facoltativa e benchmark riproducibili. Versione 0.8.7: ottimizzazioni selezionate in base alle misure, con confronto numerico e temporale. |
 | Portabilità | Raccogliere prove reali Windows 10/11, Ubuntu e Mac Intel/Apple Silicon oltre ai controlli automatici. |
 | Interfaccia | Preparare una GUI sugli stessi contratti della CLI, dopo il consolidamento delle analisi. |
 | Lingue | Estendere italiano e inglese dal catalogo scientifico all'interfaccia e alla documentazione, senza duplicare le regole applicative. |

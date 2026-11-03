@@ -62,6 +62,28 @@ def _step_seconds(step: dict) -> float | None:
         return None
 
 
+def _performance_evidence(run_dir: Path, *, requested: bool) -> dict:
+    """Read only bounded summaries; keep absent/partial telemetry explicit."""
+    result = {"requested": requested, "host": None, "engine": None, "errors": {}}
+    if not requested:
+        return result
+    for source, relative in (("host", "performance/summary.json"),
+                             ("engine", "performance/engine/summary.json")):
+        try:
+            path = _run_file(run_dir, relative)
+            with path.open("rb") as handle:
+                content = handle.read(1024 * 1024 + 1)
+            if len(content) > 1024 * 1024:
+                raise ValueError("Performance summary exceeds 1 MiB")
+            value = json.loads(content)
+            if not isinstance(value, dict):
+                raise ValueError("Performance summary must be an object")
+            result[source] = value
+        except (OSError, ValueError, RecursionError) as exc:
+            result["errors"][source] = type(exc).__name__
+    return result
+
+
 def _workflow_evidence(run_dir: Path, *, required: bool = False) -> tuple[list[dict], str | None]:
     """Read a plan's recorded steps; missing/unsafe evidence remains explicit."""
     try:
@@ -158,6 +180,11 @@ def run_case(command: list[str], run_dir: Path, log_path: Path) -> dict:
         "resource_snapshot": record.get("resource_snapshot"),
         "workflow_steps": steps, "workflow_evidence_error": workflow_error,
         "input_evidence": record.get("inputs", []), "command_log": str(log_path),
+        "performance_diagnostics": _performance_evidence(
+            run_dir, requested=("--performance-diagnostics" in command
+                                or isinstance(record.get("execution_options"), dict)
+                                and record["execution_options"].get("performance_diagnostics") is True),
+        ),
     }
 
 
@@ -176,9 +203,12 @@ def main(argv=None) -> int:
     parser.add_argument("--cpus", type=float)
     parser.add_argument("--memory-mb", type=int)
     parser.add_argument("--pids-limit", type=int)
+    parser.add_argument("--performance-diagnostics", action="store_true",
+                        help="Collect local resource samples and engine phase times (adds overhead)")
     args = parser.parse_args(argv)
     try:
-        options = ExecutionOptions(args.input_hashes, args.cpus, args.memory_mb, args.pids_limit)
+        options = ExecutionOptions(args.input_hashes, args.cpus, args.memory_mb, args.pids_limit,
+                                   performance_diagnostics=args.performance_diagnostics)
         bams, _ = _select_bams(bam=None, bams=None, bamlist=args.bamlist.resolve())
         if (args.repeats < 1 or args.repeats > 100 or not args.sample_counts
                 or any(count < 1 or count > len(bams) for count in args.sample_counts)):
@@ -208,6 +238,8 @@ def main(argv=None) -> int:
                                     ("--pids-limit", args.pids_limit)):
                     if value is not None:
                         command.extend([flag, str(value)])
+                if args.performance_diagnostics:
+                    command.append("--performance-diagnostics")
                 command.extend(["dnp-call"] if args.workflow == "dnp-call" else
                                ["workflow", "dnp-contamination"])
                 command.extend(["--bamlist", str(bamlist), "--reference", str(args.reference.resolve()),
