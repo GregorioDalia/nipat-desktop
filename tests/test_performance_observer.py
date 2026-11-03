@@ -38,7 +38,9 @@ def owned(status="running"):
 
 class ContainerObserverTests(unittest.TestCase):
     def setUp(self):
-        self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        # macOS exposes its temporary directory through /var -> /private/var.
+        # Production run paths are already canonicalized by ProjectLayout.
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory())).resolve()
         self.runner = SimpleNamespace(_transport=DockerTransport(), _environment=lambda: {}, _image_id=IMAGE)
         self.observer = ContainerPerformanceObserver(
             self.runner, NAME, LABELS, self.root / "performance", interval=0.001,
@@ -150,6 +152,20 @@ class ContainerObserverTests(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             self.observer.start()
         self.assertEqual(target.read_text(), "preserve")
+        self.assertIsNone(self.observer._thread)
+
+    def test_linked_destination_is_rejected_before_writing_evidence(self):
+        target = self.root / "elsewhere"
+        target.mkdir()
+        alias = self.root / "linked"
+        try:
+            alias.symlink_to(target, target_is_directory=True)
+        except OSError:
+            self.skipTest("Creating symbolic links is unavailable on this platform")
+        self.observer.directory = alias / "performance"
+        with self.assertRaisesRegex(ValueError, "contains a symlink"):
+            self.observer.start()
+        self.assertEqual(list(target.iterdir()), [])
         self.assertIsNone(self.observer._thread)
 
     def test_stop_interrupts_startup_wait_and_is_bounded(self):
