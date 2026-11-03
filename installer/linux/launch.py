@@ -99,7 +99,9 @@ def load_manifest(app: Path) -> tuple[dict, str]:
         manifest = json.loads(raw)
         valid = (
             type(manifest) is dict and manifest.get("schema_version") == 1
-            and re.fullmatch(r"0\.[67]\.\d+(?:(?:a|b|rc)\d+)?", manifest.get("version", ""))
+            and re.fullmatch(r"(?:0\.[67]\.\d+(?:(?:a|b|rc)\d+)?|0\.8\.\d+)", manifest.get("version", ""))
+            and (not manifest["version"].startswith("0.8.")
+                 or int(manifest["version"].split(".")[2]) >= 2)
             and manifest.get("release_tag") == "v" + manifest["version"]
             and re.fullmatch(r"[0-9a-f]{40}", manifest.get("source_commit", ""))
             and IMAGE_ID.fullmatch(manifest.get("runtime_image", ""))
