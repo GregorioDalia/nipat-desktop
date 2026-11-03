@@ -42,7 +42,7 @@ class WorkflowExecutionTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="nipat-execution-")
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
         self.inputs = self.root / "inputs"
         self.inputs.mkdir()
         for name in ("sample_0001.bam", "sample_0002.bam", "reference.fa", "reference.fa.fai"):

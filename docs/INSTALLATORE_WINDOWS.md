@@ -5,21 +5,32 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive il pacchetto Windows di **NIPAT Desktop 0.7.2**.
-Le [note della versione](RELEASE_0.7.2.md) descrivono funzionalità e ambito
-delle verifiche.
-Consultare la pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
-versioni pubblicate e gli installatori disponibili. I pacchetti degli
-artefatti GitHub Actions servono alla revisione tecnica; la loro costruzione non
-attesta il completamento delle prove di installazione o della validazione di
-dominio. Questo documento descrive struttura, preparazione e verifica del
-pacchetto Windows. L'uso delle analisi è trattato nella
-[guida per l'utilizzo](GUIDA_UTILIZZO.md).
+Questo documento descrive **NIPAT Desktop 0.8.2**. Scaricare `NIPAT-Setup.exe`
+dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+Le [note della versione](RELEASE_0.8.2.md) distinguono controlli automatici,
+prove desktop e valutazione di dominio. Il setup aggiorna le installazioni
+NIPAT Desktop riconosciute e conserva i percorsi scelti dall'utente.
 
 ## Requisiti e installazione
 
-Il target è Windows 11 x64 con virtualizzazione hardware disponibile e WSL2.
+I sistemi supportati sono **Windows 10 22H2 x64, build 19045**, e
+**Windows 11 x64**, con virtualizzazione hardware disponibile e WSL2.
+Windows Server, Windows ARM, Windows a 32 bit e build Windows 10 precedenti
+non sono supportati. Il setup legge edizione, build e architettura prima di
+preparare l'ambiente; il controllo non dipende dalla lingua del sistema.
+
+**Windows 10 Pro 22H2, build 19045.6466**, rientra in questo target.
+Il numero `6466` indica la revisione dell'aggiornamento cumulativo: il setup
+controlla la build `19045`, senza imporre quella specifica revisione o escludere
+gli aggiornamenti successivi della stessa build. L'idoneità del sistema al
+controllo iniziale non attesta che l'installazione o il runtime siano già stati
+collaudati su tale configurazione.
+
+La disponibilità di WSL viene rilevata sul dispositivo. Il setup distingue
+un componente utilizzabile da prerequisiti mancanti o non pronti e avvia
+la preparazione necessaria. La versione del sistema non basta da sola:
+virtualizzazione, componenti Windows, kernel WSL e policy del dispositivo
+possono impedire l'avvio. I test simulati non qualificano un Windows 10 reale.
 Il setup opera nell'account dell'utente e richiede autorizzazione amministrativa
 soltanto per abilitare i prerequisiti Windows mancanti. L'abilitazione o
 l'aggiornamento dei componenti WSL può richiedere Internet e un riavvio.
@@ -123,9 +134,9 @@ non vengono trasferiti o cancellati dal setup.
 
 Manifest, backend, stato, proprietà del runtime e registri di recupero devono
 indicare il canale previsto. Il setup non adotta ambienti o configurazioni
-di altri canali. NIPAT Desktop dispone di identità e cartelle proprie:
-le installazioni NIPAT 0.4 e 0.5 non vengono adottate o aggiornate da questo
-setup. Il componente Windows WSL rimane una risorsa del sistema.
+di altri canali. NIPAT Desktop conserva la propria identità:
+nessuna installazione sperimentale o di un altro canale viene adottata
+o aggiornata da questo setup. Il componente Windows WSL rimane una risorsa del sistema.
 
 Il launcher installato usa la propria configurazione e non eredita le variabili
 NIPAT di percorso/backend di una shell esterna. Nel menu, **Configura** applica
@@ -155,14 +166,10 @@ disabilitato. Il launcher ne controlla il legame con il manifest installato.
 
 ## Aggiornamento e riparazione
 
-Dal menu **9 — Verifica aggiornamenti** è possibile scaricare l'installatore
-completo di una release approvata. Il download verifica dimensione e SHA-256;
-l'avvio del setup richiede una seconda conferma e la chiusura della sessione
-corrente. Un avviso automatico non modifica i file installati e non interrompe
-analisi. Il setup usa gli stessi controlli della prima installazione e
-l'applicazione viene riaperta soltanto dopo la preparazione verificata del runtime.
-Le preferenze del menu, i percorsi configurati, dati e risultati vengono conservati.
-La [guida per l'utilizzo](GUIDA_UTILIZZO.md#aggiornamenti) descrive canali e conferme.
+**9 — Verifica aggiornamenti** consulta il canale selezionato e verifica il
+download del nuovo setup. L'installazione usa lo stesso profilo `desktop`,
+conservando le cartelle riconosciute e i risultati. È possibile scaricare
+manualmente il setup dalla pagina Releases.
 
 Se altre sessioni NIPAT sono aperte, l'aggiornamento viene fermato senza
 terminarle: chiuderle al termine del lavoro e riprovare. Il passaggio al setup
@@ -351,21 +358,33 @@ Inno Setup. `installer-build.json` lega l'eseguibile a commit, versione,
 manifest, launcher, profilo e archivi incorporati. I dettagli e gli artefatti
 sono descritti in [CI/CD](CI_CD.md).
 
-Per una prova tecnica scaricare il file diretto **NIPAT-Setup.exe** dalla
-sezione **Artifacts** di una build riuscita e identificata dal commit.
-Serve l'accesso a GitHub e il download resta disponibile per 14 giorni.
-L'artefatto `nipat-windows-setup` conserva lo stesso installatore e le evidenze;
-il launcher separato al suo interno è un'evidenza di compilazione, non
-un'installazione autonoma.
+Per una prova tecnica usare **NIPAT-Setup.exe** della build riuscita identificata
+dal commit. Il riepilogo Actions riporta i download disponibili e il periodo
+di conservazione; per gli artefatti può essere richiesto l'accesso a GitHub.
+L'artefatto `nipat-windows-setup` conserva installatore ed evidenze. Il launcher
+separato è un'evidenza di compilazione, non un'installazione autonoma.
 
-Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) richiede
-prima installazione, riavvio del runtime, analisi di un caso noto,
-coesistenza con altre installazioni NIPAT, percorsi personalizzati,
-reinstallazione e disinstallazione con entrambe le scelte di conservazione
-dell'ambiente. Include interruzioni e riprese, destinazioni su dischi fissi
-diversi, spazi e caratteri non ASCII, conservazione dei dati e protezione
-delle risorse estranee. I test automatici dei confini Windows/WSL non
-sostituiscono queste prove del pacchetto reale.
-Un aggiornamento fra versioni differenti richiede una prova distinta;
-la reinstallazione della stessa build non la dimostra. La
-[scheda di validazione](VALIDAZIONE.md) registra le analisi di dominio.
+Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) distingue la
+distribuzione per ricerca dalla qualificazione desktop completa. Registrare
+progressivamente prima installazione, riavvio del runtime, analisi di un caso
+noto, coesistenza con le installazioni sperimentali, percorsi personalizzati, reinstallazione
+e disinstallazione. Le prove del codice Windows/WSL non dimostrano attivazione
+e ripresa su un Windows 10 reale; i casi non eseguiti restano espliciti nelle
+note della candidata.
+
+Un aggiornamento fra versioni differenti richiede una prova distinta dalla
+reinstallazione. La [scheda di validazione](VALIDAZIONE.md) raccoglie i risultati
+osservati, separando installazione e valutazione scientifica.
+
+## Configurazione delle risorse
+
+Il menu **Configura** mostra RAM e CPU del computer, risorse effettive di WSL
+e limiti del container. Le impostazioni `.wslconfig` sono globali per l'account:
+una modifica può interessare anche altre distribuzioni WSL2. NIPAT mostra
+l'anteprima, conserva un backup e richiede conferma prima di applicare la
+modifica. Il riavvio è distinto dal salvataggio; finché non avviene, il menu
+indica che i nuovi valori non sono ancora attivi. Non vengono arrestate analisi
+NIPAT in corso per applicare una configurazione.
+
+Il limite memoria del container non aumenta la memoria di WSL.
+La [guida alle risorse](RISORSE.md) descrive impostazioni e diagnosi degli arresti.

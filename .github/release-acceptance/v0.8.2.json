@@ -1,0 +1,838 @@
+{
+  "schema_version": 5,
+  "version": "0.8.2",
+  "source_commit": "9a73428775925abc858af6c51e7f993fb2c94863",
+  "installer_manifest_sha256": "bfb42f8a2e8614db7ace636195480b2816f2ffdc6b19e4ee858b786a6974e5d6",
+  "scientific_archive_sha256": "55098bc515328d9b372f3659ecdcf71dff02934897a7a9789418e7e70eb7f4bc",
+  "windows_installer_sha256": "ee75ecf3bbb068a3da63063568ae532fbafd8cd9dfb011e4c8d5c940228ef326",
+  "linux_installer_sha256": "d98505e471afa029e4548561b78d967ead1d0a40dbdd4e09c8cc9be312d0a2cd",
+  "macos_arm64_installer_sha256": "9ddec3dc68eb60efbe0775d6b6e57fd506fb3badd9094536f985b4aa7a1669e1",
+  "macos_x86_64_installer_sha256": "ff0c43428f83989dbcd262c545555b162986f65f3edfffa3566a2d98b2115fa2",
+  "build_run_id": 41658734868,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "Codex, revisione tecnica su incarico di Gregorio Dalia",
+    "reviewed_at": "2026-11-03T15:17:57Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/pull/15",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41658569517",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41658734868"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "1b601081a4aff9efe1806c921fd7ac963feea7b7",
+    "observations": [
+      "installation_ready",
+      "automatic_workflow_sample_analysis"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/1603d998e036ba73d37f015338c1200c1ea12c65/.github/release-acceptance/v0.7.1-evidence.md"
+    ],
+    "role": "historical-platform-evidence",
+    "source_comparison_scope": "reviewed-operative-changes-with-unchanged-vendored-r-v1"
+  },
+  "reviewed_source_changes": [
+    {
+      "path": ".gitattributes",
+      "before_sha256": "0949987fc573634be168cc871b7da249e7594faa4a2d2477b3434ec5cae2dd6a",
+      "after_sha256": "ff8773624aea67988f16c74bd4a9d924ebc0dee0e4a0f3b4334a585172b57e5e"
+    },
+    {
+      "path": ".gitignore",
+      "before_sha256": "7e0709fc432587fb8691aa0238f38d5e15d136646d2bb47516634ca282f462f7",
+      "after_sha256": "1be4eaf8a4a50a09486f6c6f7c30385172237ff042efe341dfd2b146adbc5ec1"
+    },
+    {
+      "path": "compose.yaml",
+      "before_sha256": "30e097207e22f8d5886a42a318fb51987247fc4075ddfd3c241f20cb6a9a0be8",
+      "after_sha256": "576054c37e243f18374cba70a6eed5b7dee963ac64d52fb6cc3860758511efc0"
+    },
+    {
+      "path": "docker/scientific-runtime/Dockerfile",
+      "before_sha256": "634387bdd5f496131b58cc0752b3e09b4118a0469a943e631d0f3ff67b3386a4",
+      "after_sha256": "91b99fdbfb6acc563f8b2672a8573ec70a987bc781e42c7cda82412c08eb667e"
+    },
+    {
+      "path": "engine/main.py",
+      "before_sha256": "7003881841bcf11c31faa54cd7fa75cc5761930dac7ccb6e0576497a35ed09e5",
+      "after_sha256": "11552eb733a47f624b9073add8fe795a99866ee37735ae6fa3e29d7976e9f9bb"
+    },
+    {
+      "path": "installer/linux/launch.py",
+      "before_sha256": "319d462a313b57facfbf08d610aceb1813d507299c0c56063ca7cab6dda02a0a",
+      "after_sha256": "251ce2f17aaff1f8c97f3bb7514d4f5f4ca9845c46e7767bfdcf322ea5d2d07d"
+    },
+    {
+      "path": "installer/macos/NIPAT.command",
+      "before_sha256": null,
+      "after_sha256": "d39042dcee80eeca4f05f0bd253a426ce069bc6fea3e184fe6918ac569876072"
+    },
+    {
+      "path": "installer/macos/dependencies.json",
+      "before_sha256": null,
+      "after_sha256": "7f58b707dcfe35425835ca42b2dc0f7eabb60ca24efde654f6bf656324742ea7"
+    },
+    {
+      "path": "installer/macos/launch.py",
+      "before_sha256": null,
+      "after_sha256": "8b616274f4c8c68cb03b071e9b8169ecf30977ac542e5bf518059bdf4fbdff89"
+    },
+    {
+      "path": "installer/macos/launcher.c",
+      "before_sha256": null,
+      "after_sha256": "4fb401bd27e93550b445930aa39f2d5a793418c2503ae66e73e0ccb515f79424"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.bdb.txt",
+      "before_sha256": null,
+      "after_sha256": "3bdff06e69991c94664f2ef5c5f8096f60b7dbec071756ea6cc26b445e06ec5b"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.bzip2.txt",
+      "before_sha256": null,
+      "after_sha256": "1f38bbc7caacafd65169276d759c0d88c991b753b643ce35d0e45ea1971dd441"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.cpython.txt",
+      "before_sha256": null,
+      "after_sha256": "86e61415828a8b5b06ec8d024e6f086ce155a8b85fd0c419c0ba4dc004e74fdd"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.expat.txt",
+      "before_sha256": null,
+      "after_sha256": "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.libX11.txt",
+      "before_sha256": null,
+      "after_sha256": "2daec087a88e7c9b8082557cdeebad5bbb8155a4137472f0b22e269cd99d0c1e"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.libXau.txt",
+      "before_sha256": null,
+      "after_sha256": "56abe29bb1d9806a9e04fa9f80fed2c0f18027594df3f098148d814aef6bddfa"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.libedit.txt",
+      "before_sha256": null,
+      "after_sha256": "29cea33c32bbc9785142386377915612a2fa786482c46843383384aded2e09b1"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.libffi.txt",
+      "before_sha256": null,
+      "after_sha256": "deaf3a42effb551a5b140fa9afefed183a27f1341c6d1bf430d106a5e6931fc0"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.liblzma.txt",
+      "before_sha256": null,
+      "after_sha256": "9a4062de0a2c388a98cf35a35d348b62fa97c838a71c3c28ee1a2d7d0a565b02"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.libuuid.txt",
+      "before_sha256": null,
+      "after_sha256": "122ee1f7e258f2c3c0e538a75c037684f420454bf3850ddc74ce750bbf5fe86b"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.libxcb.txt",
+      "before_sha256": null,
+      "after_sha256": "c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.mpdecimal.txt",
+      "before_sha256": null,
+      "after_sha256": "669512af7219f58be03a398766d7c9da11a3b3df9d3f05cb74c5ceca25c8da3b"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.ncurses.txt",
+      "before_sha256": null,
+      "after_sha256": "87a4c4442337b8968ef956031c406b74f9cb7149b7ba87311bdaba534816201c"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.openssl-3.txt",
+      "before_sha256": null,
+      "after_sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.sqlite.txt",
+      "before_sha256": null,
+      "after_sha256": "38bef3d28b24f145ea293bd3b6eb4b20396982abc8303128fb493986ea5bc719"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.tcl.txt",
+      "before_sha256": null,
+      "after_sha256": "c0a69a2bfd757361ec7e6143973b103c90409316b49e9c88db26ad6388e79f16"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.tix.txt",
+      "before_sha256": null,
+      "after_sha256": "3ac5cdd0bef6c43ce34c6a7ced452081d9e5a0bf94082b9f9147d23ec9e214f5"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.zlib-ng.txt",
+      "before_sha256": null,
+      "after_sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.zlib.txt",
+      "before_sha256": null,
+      "after_sha256": "818922b2620f12801a12bf78e399644a30990e66824abd8ca8ec24d451d6f92c"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/LICENSE.zstd.txt",
+      "before_sha256": null,
+      "after_sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    {
+      "path": "installer/macos/licenses/python-build-standalone/provenance.json",
+      "before_sha256": null,
+      "after_sha256": "9e071b4185a047086484684fb50ff7a9893d75c9d9713ac5795185bf7ccfe992"
+    },
+    {
+      "path": "installer/macos/package-guard.c",
+      "before_sha256": null,
+      "after_sha256": "944da94994d8e04f0c89a7b8dc3d545e4ef15f1806b42fb5efc2a6f22dcd9208"
+    },
+    {
+      "path": "installer/runtime/Dockerfile",
+      "before_sha256": "7b67d18de6302f417c20d033df8de1ec8ae6f356a554c2c5f2e0c6534c84f75c",
+      "after_sha256": "dedbf8460acf92a1648555fe6b0dfdc3e0a649ddb0799c61f0352e69bc6783fb"
+    },
+    {
+      "path": "installer/runtime/component.py",
+      "before_sha256": null,
+      "after_sha256": "7b1971920a0b38fba02d43c9ff605009cf2fa11c8577f0fa3ea60f31cca512ad"
+    },
+    {
+      "path": "installer/runtime/nipat-engine",
+      "before_sha256": "4e0f701fdc35cfd57d15cb9fa4a77446fe4b1e9896c5af2b13ee4c31191e7f95",
+      "after_sha256": "180417dbfb790388ebfd37f177374e767ab0f5db7d4adca168cc45e626c77af0"
+    },
+    {
+      "path": "installer/runtime/write-provenance.py",
+      "before_sha256": "e0134a5ca3077e248c3e4639f7673d4070520da3bd5a364266bf392492f10350",
+      "after_sha256": "65d65acc38e198c2cff352df396120b5fb49d326755005b36d3b044339d2f1a0"
+    },
+    {
+      "path": "installer/windows/EnableWsl.cs",
+      "before_sha256": "74f0d5f4fbd11431c256b1aadb74dd1e085419c6e4b5a3245f57c71bf59617a8",
+      "after_sha256": "7b4e3d59754608d3269559b85d709e3c4d1d5c758c2e4a22153d31993727f2ad"
+    },
+    {
+      "path": "installer/windows/NIPAT.iss",
+      "before_sha256": "eb37e84f64d9cddd6723320ec2e2893599ec9a632f2373fb105ce8f7da2feba3",
+      "after_sha256": "b14f6b8b88c5e6f8c823d93ae6de8c592940df26c4a3a2f7ddb1bbdb8b244589"
+    },
+    {
+      "path": "installer/windows/bootstrap-common.ps1",
+      "before_sha256": "836c8f0071e8f229dda6011792a8bbbd362fd78f9a3b4bbb700262b2440055b7",
+      "after_sha256": "6ddbc5ecfc94e28ff059029961331fe0f41074c2d529d021f13d9733c5ccda95"
+    },
+    {
+      "path": "installer/windows/bootstrap.ps1",
+      "before_sha256": "55fc15cc19f948c733f0c0290c35ea0717a187ccb5238b1147180fdefbde6d90",
+      "after_sha256": "d6172417e1a53f913126772d2765072e8e0d030fc7bd0d8a3884960f5ae7033c"
+    },
+    {
+      "path": "installer/windows/install-layout.ps1",
+      "before_sha256": "a7f668dd7d4805e344883381f705de47e8f1b28c7bb9281cc874113eae04a344",
+      "after_sha256": "941e577850e35620aa68abb9dec5e21777ba3ea295d4cc2da492a55b3096cbb2"
+    },
+    {
+      "path": "installer/windows/install-profile.ps1",
+      "before_sha256": "1b7aaa254fcc048b1720f92d685feab97b005695d8575619c52a1863b4905421",
+      "after_sha256": "08b94b29f54a41c08d8780e69ab67d4ee560dfdd4e4793da05bcf317149a6cbb"
+    },
+    {
+      "path": "installer/windows/maintenance.ps1",
+      "before_sha256": null,
+      "after_sha256": "6f45df0eab722feaef13a415efa5f768964633a60398a94e2984c6021971eed4"
+    },
+    {
+      "path": "installer/windows/test-bootstrap.ps1",
+      "before_sha256": "f5a77570672c9ee586a5f66756ed0d94aca3b17e8d09b4a00765aa868d216112",
+      "after_sha256": "5ad666d98ac117eff857a0b286ba681c8e7463e7c31d94fc7e5660651ae3511b"
+    },
+    {
+      "path": "installer/windows/test-install-layout.ps1",
+      "before_sha256": "426e6d457c18931f564eca8d445a663c2669030cdd765ab57e54f4a4664fabad",
+      "after_sha256": "02b6f9318f9387dbd004bc59d90d7c9b4e83fbc2a695fe4ccdddfab23d30e04f"
+    },
+    {
+      "path": "installer/windows/test-maintenance.ps1",
+      "before_sha256": null,
+      "after_sha256": "3d37528c66284ec9b88bc3c5697a99ecfd1456764ae8133712500f71eb8d292c"
+    },
+    {
+      "path": "installer/windows/test-uninstall.ps1",
+      "before_sha256": "2780a067896b200197ffd106f55e24c0c579bff5f51330915e31a6d0c2085bd1",
+      "after_sha256": "997632f77e1b1a434a738b61ed670c372329dfe1d3550bd9955dc034933c6f7d"
+    },
+    {
+      "path": "installer/windows/test-windows-environment.ps1",
+      "before_sha256": null,
+      "after_sha256": "c6a90cbb1a3d19150a685cf477318fc1dc49d896d0e8c4c53adbbe46b8ad4e3e"
+    },
+    {
+      "path": "installer/windows/uninstall-runtime.ps1",
+      "before_sha256": "e1ec080696f30c40f034ee654402d82aaf54d279e8621c3965c273b2ec1171c9",
+      "after_sha256": "eaa1e571300509c3c2ba0dfc59e1a5645b03c094c723efc9bf4a17d15dd87248"
+    },
+    {
+      "path": "pyproject.toml",
+      "before_sha256": "8926a6c0809b40fe7c4edc760530f63dbfb3ae21075af307e8fdea745d8ad321",
+      "after_sha256": "0f7ba8fd69f9976f7adba6d6e138ae8f76ce261e87ce2b3623ad5d7c72d76bd7"
+    },
+    {
+      "path": "scripts/benchmark_workflows.py",
+      "before_sha256": null,
+      "after_sha256": "4ce71327827e1486af64d074bd090ab9c8c92b67eb599667eb3878c522ad6c74"
+    },
+    {
+      "path": "scripts/build_linux_installer.py",
+      "before_sha256": "eb88973a141f1311ad1d74c3e5be705631e67ff193e257ed518c0a3f2b4a3c4a",
+      "after_sha256": "bc5dc50ab26624b3efd02a52f30592301310eee71d2246953ef58d867a4f0f19"
+    },
+    {
+      "path": "scripts/build_macos_installer.py",
+      "before_sha256": null,
+      "after_sha256": "e615428308b2b1ec272d1bfb018c885bd5f217f9032bd4a46f8aee3294abf59e"
+    },
+    {
+      "path": "scripts/build_windows_installer_assets.py",
+      "before_sha256": "92bd632ae32f2359d7578a11dbf706ca7e0e41cbd23fa8005218827a831f8524",
+      "after_sha256": "fbe57c122f5abf77494fd8577be5b8d16608b703bfd1b9fe26e7fe8848717c34"
+    },
+    {
+      "path": "scripts/verify_contamination_update.py",
+      "before_sha256": "825f6612708957281b58831d96623237ca2371a15577e1a401774cb122fc6fe8",
+      "after_sha256": "8d499ee7ce8882351cf711cf2c28fd3a036e30d535b697b8a5a9faee9a48f6b3"
+    },
+    {
+      "path": "scripts/verify_cpi_engine.py",
+      "before_sha256": "d286f28c128e378b16a255f0f2b04260cf4e961f673c9fbaff69adec5b9486b9",
+      "after_sha256": "f0693810dd5a120a67a5e4fe0c17860e0199f972372eb857f4f398201756b278"
+    },
+    {
+      "path": "scripts/verify_dnp_engine.py",
+      "before_sha256": "1534df6938cd039d5832ed405f7423f4d2c20c3a61216ad213faef2df82abec5",
+      "after_sha256": "e377f83cbbb84e05dd3f76fb02c216918758d2b672c3f208f6bd84a2a4f20e49"
+    },
+    {
+      "path": "scripts/verify_engine_package.py",
+      "before_sha256": "559cceba6968b77add1f03107ebcadc88bebee63de05e857b235c4abb4a82090",
+      "after_sha256": "081966c03f29f7938ce1abff6e2398325c25a5d429b4d3b72329d3139fd8a6d8"
+    },
+    {
+      "path": "scripts/verify_linux_installer.py",
+      "before_sha256": "e78ff34f58977585440c9bac3392635ef872def5ed07e58ee45ed9fffe411a1b",
+      "after_sha256": "bdc389282719987e952deeed2113e9e320cec1bb568bbb1350558c37de0410eb"
+    },
+    {
+      "path": "scripts/verify_linux_upgrade.py",
+      "before_sha256": null,
+      "after_sha256": "a97fa48a9a4d623388ce90362d4fc89dd8c842a30db334a177c30bcd41e52745"
+    },
+    {
+      "path": "scripts/verify_macos_package.py",
+      "before_sha256": null,
+      "after_sha256": "ea4f347190439db9443d1c74141488d9bc555a79a682f5ce10a7c9b4c62f8abc"
+    },
+    {
+      "path": "scripts/verify_macos_runtime.py",
+      "before_sha256": null,
+      "after_sha256": "c2d419ddb587365e4aca9e674b83771dddb3411f2ae5201095a8a3db8752bf6d"
+    },
+    {
+      "path": "scripts/verify_presentation.py",
+      "before_sha256": null,
+      "after_sha256": "6845b7585856deaf4514dcc2fed427b8712ac38e3f92c196906c059a6f7bb7d0"
+    },
+    {
+      "path": "scripts/verify_snp_workflow.py",
+      "before_sha256": "24ff1df01ed3dc0f21f96b6f2af8d6197902c58f826da96ddc7367ba8130ca25",
+      "after_sha256": "67d03529dbbf3b6298e0a0f7e54f5de4f4f3e3ab4787cf6b69fd1af98c611f4a"
+    },
+    {
+      "path": "scripts/verify_windows_payload.py",
+      "before_sha256": "21c4894da194ff4e5e22ae502d15962ab9ae05fb0561eb347b625e139582efd1",
+      "after_sha256": "4462dc87c047aa64f70b26e704f784d8a42f17fc789ded853c5acbd2c5afefff"
+    },
+    {
+      "path": "src/nipat/__init__.py",
+      "before_sha256": "def754c170a99a8c515be3b86a12243269aac2c647904a1e745903665b2b3ada",
+      "after_sha256": "f6c3276d969fc555081d3e15ef8484120040eb7583bfa52e21263347888635bc"
+    },
+    {
+      "path": "src/nipat/activity.py",
+      "before_sha256": "4a84d8d3c176571cbe88a421f5e6c5e16646a5f5c792f5c6fdf8d07793071115",
+      "after_sha256": "b9adb269e234ca736dcb6985d57dbef0f2c0dd0f2b3910035e90ca2826c80880"
+    },
+    {
+      "path": "src/nipat/cli.py",
+      "before_sha256": "e4e2c2858f0b4264980b2d0893a00565ebfa183fd35ffbd9d61e82892467a2d7",
+      "after_sha256": "162f9470d810b001fe427df4af3e53c0238de7d4cdcfb769324e0162f71a6661"
+    },
+    {
+      "path": "src/nipat/distribution.py",
+      "before_sha256": null,
+      "after_sha256": "b16fe45f8754805160af773eb73453ef48185bfceb625c634fd828aa8ebc295c"
+    },
+    {
+      "path": "src/nipat/errors.py",
+      "before_sha256": "847da0e36f07d75dad4fb0d78448a649bcb711a8ba159766aca158659d6addf4",
+      "after_sha256": "45849c4e14863bc3e74e9722a53e4b015998b58ce6d481795ad3688e6b51b364"
+    },
+    {
+      "path": "src/nipat/execution/diagnostics.py",
+      "before_sha256": null,
+      "after_sha256": "5fd6bfd05e6d8ef4e08b27ce2f26ec63b861316195cbae0d9162653a52513a64"
+    },
+    {
+      "path": "src/nipat/execution/options.py",
+      "before_sha256": null,
+      "after_sha256": "26d2fffa047c5a3aecd2033b0b44e5f68e7cc657094753b00bd78aadb041567b"
+    },
+    {
+      "path": "src/nipat/execution/recovery.py",
+      "before_sha256": null,
+      "after_sha256": "25f2eeac25ad173fe820368887208bb4d359a60768b5f931f1668d3184d2b389"
+    },
+    {
+      "path": "src/nipat/execution/runner.py",
+      "before_sha256": "0d70c74e22a6fa8e0f8a5113b57be0683b2a5dc7bd209ec8e40e17170a94c8cf",
+      "after_sha256": "0962befce1d5dde8f0537870fd70056d32f498e60c95582447cb488850f83fdd"
+    },
+    {
+      "path": "src/nipat/execution/tracking.py",
+      "before_sha256": "d11e734f584e0cd3d4dacb63d6d8740357c673fd8429e65b88c199807c5f7855",
+      "after_sha256": "3b3c0e979df17391cc300ea186fd11e7aee0b5d47346b54ff16461987a531001"
+    },
+    {
+      "path": "src/nipat/execution/transport.py",
+      "before_sha256": "1569b3a7defba6c1337595b2d4790f1a6bf8b806e3068ad17c030cc4745f8068",
+      "after_sha256": "46d89ca43d9e65858cae2905cc769ff12f72a51861f8e916e73717bcf5de00be"
+    },
+    {
+      "path": "src/nipat/execution/workflows.py",
+      "before_sha256": "bd7a4a3a8801280cd078682771cb52cd92dc726c2ed9376461e49a4d83623b7e",
+      "after_sha256": "7f155eebbbbe0f507991b3e544626cdafbe7fdb7381b3159df5dcd50c44f1fba"
+    },
+    {
+      "path": "src/nipat/i18n.py",
+      "before_sha256": null,
+      "after_sha256": "d3a2261f4dab304863364c53c2d3e61fb36437bbd49420ca3df367de2a6e06a0"
+    },
+    {
+      "path": "src/nipat/installation.py",
+      "before_sha256": null,
+      "after_sha256": "889bbe96be1042624ffc3bb7661b87fe953b22cd8a335abb833086d7a25d50d8"
+    },
+    {
+      "path": "src/nipat/macos_runtime.py",
+      "before_sha256": null,
+      "after_sha256": "a2a38be8ce4d471c91ba635da828e0ea5a105cb963860ed3078f7e66df1fffcb"
+    },
+    {
+      "path": "src/nipat/paths.py",
+      "before_sha256": "e70baf0836f693b7e8e246db39c62b018064a92c6bda374a12bb40c8a6d1a907",
+      "after_sha256": "b2ed4874a5294213ccfc5f6dc91200a5e57bd963066bd64227c84c2dbb8554a6"
+    },
+    {
+      "path": "src/nipat/preferences.py",
+      "before_sha256": "740e027be5cf1be89808ff433cfacabeae3def42e0c91458f37c20a8071e6bf8",
+      "after_sha256": "ddd5d8d7bbe904606762d30a9d00a3d66d3ba532384ea1da3c75eaac75363c16"
+    },
+    {
+      "path": "src/nipat/recovery_ui.py",
+      "before_sha256": null,
+      "after_sha256": "4a3a8a3dea2e06071c6e61cec7e6f9dd1a3eb0296a2daa56faf18744504191ad"
+    },
+    {
+      "path": "src/nipat/resource_ui.py",
+      "before_sha256": null,
+      "after_sha256": "6e35ec9474494b3668a3c2b3c0004f817298b8e9501656599ea56bde6a18cfc2"
+    },
+    {
+      "path": "src/nipat/resources.py",
+      "before_sha256": null,
+      "after_sha256": "1315ea0ee7bcf48400c584c43b43bcfd9e8d738140c7d746bbe00e432e9b5479"
+    },
+    {
+      "path": "src/nipat/results.py",
+      "before_sha256": "7ebb5cd0924f228334a341a34347a6ada2ca7695ff3decbb0a472fe7a2900f12",
+      "after_sha256": "1d6f589016d62992dfb557960167d42b856905d69af9b15e83d3d887a2b1733f"
+    },
+    {
+      "path": "src/nipat/run_report.py",
+      "before_sha256": null,
+      "after_sha256": "ef1ad48977a80e385d11dcfffa24953d2a3187f3cda56430e0aae50e413236d8"
+    },
+    {
+      "path": "src/nipat/storage.py",
+      "before_sha256": null,
+      "after_sha256": "efc18f1d9064bbf7bb1e9d52c4681b9e2bc65e54d0b6f1035f2d05e649beb38b"
+    },
+    {
+      "path": "src/nipat/terminal.py",
+      "before_sha256": "f24848d81511692bff0bffabf7692f5bfa1a12dd4b60b069ff254311dc7d9adc",
+      "after_sha256": "180e56a433d01077ec95bbdc9d2c5c822d81ac5c04596c87a32b7920e3d5a983"
+    },
+    {
+      "path": "src/nipat/update_handoff.py",
+      "before_sha256": "a4df5c4e78793ffdb2656b12cdcfef67654f548a1645c6a88e4cdd4ccb20d76c",
+      "after_sha256": "cc73c33c42e12fe1f2db28b05434228dee3f40f97aad03c4be2e00c2dace4616"
+    },
+    {
+      "path": "src/nipat/update_ui.py",
+      "before_sha256": "6af9b4cb056eeaa515a2c62e0442d67297daafc99a477cf8f4f6b2e5d3e0a996",
+      "after_sha256": "d48a2b4c17989a0c7b5110dc3f68461e24bc1e71d3e643b0305fc82d1f24dea7"
+    },
+    {
+      "path": "src/nipat/updates.py",
+      "before_sha256": "e30494b68a6b0b7e3a33a7c74df3a93ea6fdc760c153c3eff4aa99fa65146fd9",
+      "after_sha256": "00f43e9e981ce5e56d380f717ee02787c386acc1380b03584a883faee6af0db1"
+    },
+    {
+      "path": "src/nipat/wizard.py",
+      "before_sha256": "3231646d0bcf0971f59b0ac78ef84f46fb7a41d7940c64ccd9c09c9ba4e62ebf",
+      "after_sha256": "21cce743d9267e598669218018368996cff6e87e54bcac54883a42de4f1daaec"
+    },
+    {
+      "path": "src/nipat/wizard_forms.py",
+      "before_sha256": "83108041fefc2f1d162f44f6718c3004016718f733e1f252159e77b60b5afd6d",
+      "after_sha256": "f7a38471e2b0f9036be46d183f6f741e4990264616947d901068435ecf96642c"
+    },
+    {
+      "path": "src/nipat/wizard_settings.py",
+      "before_sha256": "92ca11c360ca91b42e1b16487d4e7a9be910799840c1b21dd2ee6306e59143d8",
+      "after_sha256": "88b4ab9d7043147eeba0a66b0eef2b9c8628d49557e5a4d8bd3c96be60e5f948"
+    },
+    {
+      "path": "src/nipat/workflow_forms.py",
+      "before_sha256": "27b8308b5515be8cc9727be1190423af016608c6af6c0a5d311ff8f6005b8f9c",
+      "after_sha256": "ac9f17ac785c65e0c158959c501ae339f0a01cca00116454aae963f7d68abf06"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/contamination.json",
+      "before_sha256": "5de7f0d7fb5111ec0ba4e910ab8e76deb3619e96a62c6ae3bec673cd680001c4",
+      "after_sha256": "fbd406acd6adea39a38d6c0e407601806df92fa0bceb3cb921d751f61f63ad90"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/cpi.json",
+      "before_sha256": "8f9bb1bc750695aea3e8f518bc6f789a4b206390c4dbd50186eb1f571e888303",
+      "after_sha256": "b2f353725e257d81d23886c0f22a3eb989fe920c22342451d2f06bcaeb819c18"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/dnp-call.json",
+      "before_sha256": "a70391821db9c8c93dfe5571a6a1410cbbafe7d1ac17502b586f907f6707ab8b",
+      "after_sha256": "f9cd7039f2e2c5fdbc64f6f0e85cfddc7c29a18d833d7e0fb609aa2c43d44974"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/snp-call.json",
+      "before_sha256": "7653a799e7ea6fa5ed62dd59fc839c6427840c169ef474c79cc5e86badad6880",
+      "after_sha256": "3c8f24c803e2d5e5295404895f75cf6e790c694336c0360746718d40d5f4c81f"
+    },
+    {
+      "path": "src/nipat_scientific/contamination.py",
+      "before_sha256": "3d7490ace832c5da1bf42efffb13a1bab9baa2dcaa4e66664b1c69117f3282dd",
+      "after_sha256": "d1e4f3b685d17b5dcb35d57ac48379c041b088b5a8ec245c6c223c87eef22585"
+    },
+    {
+      "path": "src/nipat_scientific/cpi.py",
+      "before_sha256": "40d58cdd46d72676cf14a9ada77f34424f29dca0f882558d55e429cd96ff76f2",
+      "after_sha256": "dce51b86e7f360ee03e18cdb53010cfc2c99419feb6138de1da18f3cc0c3c33b"
+    },
+    {
+      "path": "src/nipat_scientific/dnp.py",
+      "before_sha256": "983b3b7504b79de703562ced2139af153773bb03804fd6b65a9ca963b3d974c7",
+      "after_sha256": "a7ab43ee299af67960a7708f57f0f5e82dfd408e105684631dc33107f4775c95"
+    },
+    {
+      "path": "src/nipat_scientific/errors.py",
+      "before_sha256": "18c8d4055ae4fc3adfaa69d6682efc6dc7464bf9c429b543e9da4d8a02eee816",
+      "after_sha256": "f004343c7d2cfa7994431cc8c0dcf59e592262063146a3cf5ad717747e68367f"
+    },
+    {
+      "path": "src/nipat_scientific/executor.py",
+      "before_sha256": "aefe63ee7daf1c0cf7cab480969a3a0d38e0c00f233949fdd5a6c6fa32c39903",
+      "after_sha256": "32c839fc3995fb4f075cb30fbd029d8e917ac72dd420ebd674dd4adcdaab2235"
+    },
+    {
+      "path": "src/nipat_scientific/files.py",
+      "before_sha256": "6c7eaa7425166e67552bb9be463380d0e333fe8c60ec3469e5895ce6077dded2",
+      "after_sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+    },
+    {
+      "path": "src/nipat_scientific/outputs.py",
+      "before_sha256": null,
+      "after_sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
+    },
+    {
+      "path": "src/nipat_scientific/panels.py",
+      "before_sha256": "16ee8ebd93f0328cb43d37fb84734ed7d557ea8df7a4aeec9c03bd5d24516cc3",
+      "after_sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
+    },
+    {
+      "path": "src/nipat_scientific/plan.py",
+      "before_sha256": "458769bf78083a15be0b8760cd716d0429f835abcfe1abb8673b2c291019c709",
+      "after_sha256": "a55a07fa738070f898072ea20f3154ecdc8ec7f2a942864316b4865b0b098dd3"
+    },
+    {
+      "path": "src/nipat_scientific/presentation.R",
+      "before_sha256": null,
+      "after_sha256": "f368a60172d0bc9c632c09c49a1ea5924b835fb7a1db91413dffc8817ab1f193"
+    },
+    {
+      "path": "src/nipat_scientific/presentation.py",
+      "before_sha256": null,
+      "after_sha256": "c35dc33a72aca2e7a09da3abb66525562d3e225b0cac968c008b84ff8263062e"
+    },
+    {
+      "path": "src/nipat_scientific/snp.py",
+      "before_sha256": "c35604707c9de2e8a9e65094570990b186fbf4ab8dbf058fb1b9fc74c2381f09",
+      "after_sha256": "5149405e824042d547b468d80c0ebcf42ca8f70ae5e7f810fce0be7f22d78d6e"
+    },
+    {
+      "path": "tests/test_activity.py",
+      "before_sha256": "d48e50bfcef5159a6795c99dfbe68b91368d7abe97cadfb3e6914881d6b29730",
+      "after_sha256": "8ae656c448863770fd39e9165d94a83fa4151f23b468fe8a5ff20f6a510d8c2c"
+    },
+    {
+      "path": "tests/test_benchmark_workflows.py",
+      "before_sha256": null,
+      "after_sha256": "25feafc34569f5fdd6eafd856a1df7ca1a294e8af927a43098d1afd83f542d08"
+    },
+    {
+      "path": "tests/test_bundled_runner.py",
+      "before_sha256": "eb4fe72cdef6f9499647673ddb98d416ccf5e0bc75c14578c51c82088771819c",
+      "after_sha256": "dc058e0da142e149a197c34f32074e46bd2a9e8e01382d2ceeace0d19445ecdb"
+    },
+    {
+      "path": "tests/test_cli_validation.py",
+      "before_sha256": "8ce391928c207fb7c38d96b747a540e2202659de4d6f756513412fa412ac84cf",
+      "after_sha256": "5269eddbe0ef46274a182bb9fb5f9dbe60b4d754bc9f497b749256e2507c73a6"
+    },
+    {
+      "path": "tests/test_client_reliability.py",
+      "before_sha256": null,
+      "after_sha256": "ab0648bbb0d60f42b2dda1356b0ee861427d131270c98f217531d707165cf9d2"
+    },
+    {
+      "path": "tests/test_cpi_engine.py",
+      "before_sha256": "550e1537389050d01cd134ea5c157b55e583e879fb109ae4b352223773d7887d",
+      "after_sha256": "6b8c967700d97493aa308c8f785e1f78bbdcc94108e08555fef4b15edcf8d9e5"
+    },
+    {
+      "path": "tests/test_dnp_engine.py",
+      "before_sha256": "5b6a2bdb81a71bc949338aae56429da9b91d5060e8c1bd6f98cce6cc212ea6f5",
+      "after_sha256": "caa78f56c35206fe0ed7d793960a58133d31112d185b5a95ae27a5d0cd5066df"
+    },
+    {
+      "path": "tests/test_dnp_workflow.py",
+      "before_sha256": "33b611231ae3980dcf4b3521412cdd2416a22bae3548a483b034b2349f6b716d",
+      "after_sha256": "2acb2bab515a4bb0b645420866e7df03a8ef1bfb82809580dbda4985397c2bed"
+    },
+    {
+      "path": "tests/test_engine_package.py",
+      "before_sha256": "8d6b1cdccb5463b9201f691aff9e4e3488c6bc6df75ab07c2550e2d6531307e3",
+      "after_sha256": "43da3fea0a6977d8513cdad3d879594a20e671453b8ea0ad2a7feae5328ad03e"
+    },
+    {
+      "path": "tests/test_execution_diagnostics.py",
+      "before_sha256": null,
+      "after_sha256": "b2b1e58321e3f056a57dde441599362b7c087ffbd2b954d0ea5c7de078f01d26"
+    },
+    {
+      "path": "tests/test_execution_policy.py",
+      "before_sha256": null,
+      "after_sha256": "8a89ce2b975e40e01eaebe007cc11beff3f4d77925b65648571f818df39c77ad"
+    },
+    {
+      "path": "tests/test_experimental_distribution.py",
+      "before_sha256": null,
+      "after_sha256": "ea32a034530bce4c0243e0bb6089d2c0b14382f019018e137f4692e63c42e8f4"
+    },
+    {
+      "path": "tests/test_input_modes.py",
+      "before_sha256": "bcf293de12009f5bf2dfd5c8d2778ece5464fae8d593a3feb9f038e875cd28df",
+      "after_sha256": "5d982246f356643c1a4f20cbf479240e19cc562d322b5d5f7951376afd2257ed"
+    },
+    {
+      "path": "tests/test_installation_client.py",
+      "before_sha256": null,
+      "after_sha256": "772fe8b6868c3fd8983289b51b40438c8faa734051a948e2649bddc5e4f818d7"
+    },
+    {
+      "path": "tests/test_installer_assets.py",
+      "before_sha256": "c5a12372f4c8decca64b118d526f89d98485bebfbfdcd79d1a0175edfe821412",
+      "after_sha256": "d8bcac288be8ed42501597a36b3083adae76df865a4072627217c6abf05d57ad"
+    },
+    {
+      "path": "tests/test_lima_transport.py",
+      "before_sha256": null,
+      "after_sha256": "b2e8e2133412c83003a96cbf5e5967bcc6f1275221c243a915c1bfeb571928c4"
+    },
+    {
+      "path": "tests/test_linux_installation_check.py",
+      "before_sha256": "eeac0001ee55a7fffd0319e7a6e395d8c869c1af5e8b67fa83be89085e562470",
+      "after_sha256": "a039dce70e6b1b6c74b25a2ec5802766c105573c49114b32d2cf29c34e9b5bd8"
+    },
+    {
+      "path": "tests/test_linux_installer.py",
+      "before_sha256": "ac95669cdc7cb46c10eecf10a354f064524e95e990a50c3d389fd7213694a422",
+      "after_sha256": "cd60eeb2067e1e41882bc1ca60acaea16db2a73fa5ed59e0532d58c78f10e60a"
+    },
+    {
+      "path": "tests/test_linux_launcher.py",
+      "before_sha256": "c87ac79c2b2c48aaf33c42449ff539de973bad23d33dcc603e92e4ba172e3d5e",
+      "after_sha256": "5bddd22da875a124b88733d3c3e982e3a8b9df30aa7b7117768865d1cf1e21e1"
+    },
+    {
+      "path": "tests/test_linux_upgrade.py",
+      "before_sha256": null,
+      "after_sha256": "1641121bf895e3d9b279cb5f02d2c2c4e92927267ea13deeb00af252a9cf30cb"
+    },
+    {
+      "path": "tests/test_macos_installer.py",
+      "before_sha256": null,
+      "after_sha256": "aac6af4ca9c4d0735de09f05fde478d3f21707e78ba305a6ba8eed51d52a5e0a"
+    },
+    {
+      "path": "tests/test_macos_runtime.py",
+      "before_sha256": null,
+      "after_sha256": "fbe16f7727720ca5eef73207f746e88f9b12cd72602bb09d07d2cc6410dab43e"
+    },
+    {
+      "path": "tests/test_resource_ui.py",
+      "before_sha256": null,
+      "after_sha256": "4ab98ef1b06e6becaf442941abc3070b5efe7f0d629e4d8042f8294d2f91c33c"
+    },
+    {
+      "path": "tests/test_resources.py",
+      "before_sha256": null,
+      "after_sha256": "bfa4adbe0b972f878df2f5a56aeb9c6ac6e09160d6d12b094383a3d8bb1204a0"
+    },
+    {
+      "path": "tests/test_results.py",
+      "before_sha256": "d40ab3f846dcba8a6342d1610ad0f87e39528d9b80535cd65e10163224281f19",
+      "after_sha256": "58a76e0df36be54247bd57c291422af58296c07b24b66f3b273954d6de8547b0"
+    },
+    {
+      "path": "tests/test_run_recovery.py",
+      "before_sha256": null,
+      "after_sha256": "ae15e43db782af95260e7f74787b8927118dbf13c795adb3678bb7d0632ecf2f"
+    },
+    {
+      "path": "tests/test_run_report.py",
+      "before_sha256": null,
+      "after_sha256": "ed764e94c21677c755f703a51a073f490715641c1a3c5ea608cc11cc3c4ccf07"
+    },
+    {
+      "path": "tests/test_run_tracking.py",
+      "before_sha256": "3c1b72221dfe7ba05c08669b0241f32e5f325ebb7acf9d42899d9c6b9ab391e9",
+      "after_sha256": "5e406195b30fd1461374e6162cd850c428c7d444a7b52894cd88afa29451ad64"
+    },
+    {
+      "path": "tests/test_runtime_component.py",
+      "before_sha256": null,
+      "after_sha256": "733ff9a049d8f3b8adde6984f7907f417f32fe72f5c53c7723e5338cee017533"
+    },
+    {
+      "path": "tests/test_scientific_outputs.py",
+      "before_sha256": null,
+      "after_sha256": "9b518618c590be24666ffe851030c1a3b2bfc052935c08f1d1129540d9fb9683"
+    },
+    {
+      "path": "tests/test_scientific_preflight.py",
+      "before_sha256": null,
+      "after_sha256": "8c018e619b39948550a1452f938b2444019496bf5e645ae89ee50d5f20e31214"
+    },
+    {
+      "path": "tests/test_scientific_presentation.py",
+      "before_sha256": null,
+      "after_sha256": "a1a51ab79ed331c65d2ff4df184a855b68525b1d1b866a5362e70ab97c90631d"
+    },
+    {
+      "path": "tests/test_snp_engine.py",
+      "before_sha256": "0a748e3e7b64ecc5482b7bb5bf8d3431cd26392a7f71fe8860cf894a82dd09b3",
+      "after_sha256": "b1a712a047fae0ad56360a1b74eff1a0ee115e9a03d92b117084894c18a27663"
+    },
+    {
+      "path": "tests/test_snp_workflow_execution.py",
+      "before_sha256": "31c837175ad9647677ea6add51861e9facf0db72104e8c9ee5e2724a097f0059",
+      "after_sha256": "4dead2dcf76287e8d845b0b60fa894662aa46d9489e80c9ffbaf36779cf9b1a1"
+    },
+    {
+      "path": "tests/test_terminal.py",
+      "before_sha256": "0a7252383e24880f899d276bef1ad07bdcac3b829b09fd99374b34b0936595c8",
+      "after_sha256": "bdb6cf962cc54d98d7cb12bfd464019cbcc0072baf3796518d0248da710926f3"
+    },
+    {
+      "path": "tests/test_update_ui.py",
+      "before_sha256": "f17b84c5091a9192bf30417c7da52db208c063fc9106a2b6f792bfbcf9cb9b7d",
+      "after_sha256": "56c0d1ddb52a1bf97bdb7be653a6f18f711b2f7170b6651a46d828a81f19bb71"
+    },
+    {
+      "path": "tests/test_updates.py",
+      "before_sha256": "85157dc1e6e8916617038d05f6bc4851aca9494ef4657f2b50bf511f76924582",
+      "after_sha256": "9c2032492b9c3932be59f3479db2609c10b1f5282ce9f192f67770a749a747a0"
+    },
+    {
+      "path": "tests/test_windows_payload.py",
+      "before_sha256": "2326f613893e76de3ca8b644989cfe81301faa782e97c7b7dfdc2ab5f5caefb1",
+      "after_sha256": "556378ee97208263883991325c5f3f8f0a921238d6e1328033ad746f9582411b"
+    },
+    {
+      "path": "tests/test_wizard_guidance.py",
+      "before_sha256": "4c601c995588a7d335b03d6bace43c12e0a22c7e3a24d9c23dd8b20d52654967",
+      "after_sha256": "13d3c8a3fbf4930fed8dcfcaae85693de4832c3efe1047997a84257378376ec7"
+    },
+    {
+      "path": "tests/test_wizard_settings.py",
+      "before_sha256": "56ef04c159f41aa11333bffbd04c47f4f6924b7de22aabb2ee33354eec857d09",
+      "after_sha256": "d38b088d672e85e88d655cdc93bbdd5e620f1991d462617051cfbc4919e7ccb9"
+    },
+    {
+      "path": "tests/test_workflow_client.py",
+      "before_sha256": "9f06c4910f4d1504b0656b501a042d31da435d7f796953b20ea482c75c29fd81",
+      "after_sha256": "7b034a1e52dac60aa96e84da65c0e1c4ea8966ef9c57e6ea46008a37a78d07c0"
+    },
+    {
+      "path": "tests/test_workflow_execution.py",
+      "before_sha256": "75fb888cf96a22a1146e1eeacfa517fd516b2825ab9e694cb6fb0448e6d6195c",
+      "after_sha256": "dbd2e1b3cdb4eb06e35f59a63a998541fc0d3f22317b24523284a76192993aff"
+    },
+    {
+      "path": "tests/test_workflow_wizard.py",
+      "before_sha256": "34ea60fc6168e53336da12c869c52344812a66ddce95778c330db481b814f626",
+      "after_sha256": "5cbfccd0d0114196324a3d5a9696496bc28b8e1859db485a96bc13c9e85f594e"
+    },
+    {
+      "path": "tests/test_wsl_transport.py",
+      "before_sha256": "806726486eb834b6081d7d813cd54ee3b5a857d660bd7ef73773c0c8d9ec8e86",
+      "after_sha256": "7ca3b3323d769624f0d88bb45b5066a4863fc1dd0f5afbd343d63a1965bf355f"
+    }
+  ],
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "pending-domain-researchers",
+  "qualification_evidence_sha256": "f721ec1515d6f93c9c31b4665b10a55d81f93ea32dfabb437e5b9e9a7f002808",
+  "linux_upgrade_check_sha256": "c76f23a8ebc3fd161acf77b2d176bc9a704eb875f4d1c54d9e28bc13526c73fd",
+  "macos_validation": {
+    "arm64": {
+      "status": "not-performed",
+      "evidence": []
+    },
+    "x86_64": {
+      "status": "not-performed",
+      "evidence": []
+    }
+  }
+}

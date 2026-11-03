@@ -37,6 +37,46 @@ ROOTFS = "sha256:" + "c" * 64
 
 
 class InstallerAssetTests(unittest.TestCase):
+    def test_official_profile_preserves_desktop_and_rejects_experiment(self):
+        profile = assets.EXPECTED_INSTALLATION_PROFILE
+        stable = {
+            "schema_version": 1, "channel": "desktop", "display_name": "NIPAT Desktop",
+            "app_dir_name": "NIPAT-Desktop", "data_dir_name": "NIPAT-Desktop",
+            "distro_prefix": "NIPAT-Desktop-", "resume_key": "NIPAT-Desktop-ResumeSetup",
+            "mutex_prefix": "Local\\NIPAT-Desktop-Setup-",
+            "app_id": "6B1702B6-F75C-4F8C-956F-86626C60AF45",
+        }
+        self.assertEqual(profile, stable)
+        assets.validate_installation_profile(stable)
+        experimental = dict(stable, channel="experimental08", app_dir_name="NIPAT-Experimental08",
+                            app_id="A83D7E42-162C-438A-9B56-17F86C9F0800")
+        with self.assertRaises(ValueError):
+            assets.validate_installation_profile(experimental)
+
+    def test_windows_entry_points_keep_the_same_supported_client_builds(self):
+        root = Path(__file__).resolve().parents[1] / "installer/windows"
+        inno = (root / "NIPAT.iss").read_text()
+        self.assertIn("MinVersion=10.0.19045", inno)
+        self.assertIn("ArchitecturesAllowed=x64compatible and not arm64", inno)
+        self.assertIn("Version.ProductType = VER_NT_WORKSTATION", inno)
+        self.assertIn("(Version.Build = 19045) or (Version.Build >= 22000)", inno)
+        # Actual PowerShell/C# decisions run in test-windows-environment.ps1;
+        # this cross-language guard prevents a silent mismatch in the Inno gate.
+        bootstrap = (root / "bootstrap-common.ps1").read_text()
+        helper = (root / "EnableWsl.cs").read_text()
+        self.assertIn("$Build -ne 19045 -and $Build -lt 22000", bootstrap)
+        self.assertIn("build == 19045 || build >= 22000", helper)
+
+    def test_official_upgrade_preserves_runtime_namespace_and_protects_experimental_locations(self):
+        root = Path(__file__).resolve().parents[1] / "installer/windows"
+        layout = (root / "install-layout.ps1").read_text()
+        self.assertIn("$RootfsSha256.Substring(0, 32)", layout)
+        self.assertIn("@{ Channel = 'experimental08'; Directory = 'NIPAT-Experimental08' }", layout)
+        self.assertNotIn("@{ Channel = 'desktop'; Directory = 'NIPAT-Desktop' }", layout)
+        inno = (root / "NIPAT.iss").read_text()
+        self.assertIn("Programs\\NIPAT-Experimental08", inno)
+        self.assertNotIn("NipatPathsOverlap(Path, ExpandConstant('{localappdata}\\Programs\\NIPAT-Desktop'))", inno)
+
     def test_repository_release_versions_agree(self):
         # Packaging spans Python, PowerShell and Inno Setup. Catch a version
         # bump that the installer would reject before exporting large assets.

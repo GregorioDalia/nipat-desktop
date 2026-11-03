@@ -3,3 +3,5 @@
 scientific/SHA256SUMS text eol=lf
 *.sh text eol=lf
 scientific/vendor/** -whitespace
+# Preserve upstream license bytes and their recorded checksums.
+installer/macos/licenses/** -text -whitespace

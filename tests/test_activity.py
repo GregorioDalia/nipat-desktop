@@ -24,7 +24,7 @@ class ActivityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch('nipat.activity.sys.platform', 'win32'), \
                 patch('nipat.activity._authorized_setup_child', return_value=False), \
                 patch('nipat.activity._windows_kernel', return_value=kernel), \
-                patch.dict(os.environ, {'LOCALAPPDATA': directory}):
+                patch.dict(os.environ, {'LOCALAPPDATA': str(Path(directory).resolve())}):
             with self.assertRaisesRegex(RuntimeError, 'analysis failed'):
                 with activity_session(project_dir=Path(directory)):
                     raise RuntimeError('analysis failed')

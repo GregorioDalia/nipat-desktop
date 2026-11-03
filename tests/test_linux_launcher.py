@@ -15,6 +15,8 @@ import time
 import unittest
 from unittest.mock import patch
 
+from nipat import __version__
+
 
 PROJECT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("nipat_linux_launcher", PROJECT / "installer/linux/launch.py")
@@ -81,6 +83,18 @@ class LinuxLauncherTests(unittest.TestCase):
         self.assertEqual(record["source_runtime_image"], SOURCE_ID)
         self.assertEqual(record["resolved_runtime_image"], LOADED_ID)
         self.assertEqual(record["runtime_archive_sha256"], launcher.digest(self.archive))
+
+    def test_current_release_prepares_its_actual_manifest_version(self):
+        self.manifest.update(version=__version__, release_tag="v" + __version__)
+        self.write_manifest()
+        image, load, cli = self.preparation()
+        self.assertEqual(image, LOADED_ID)
+        self.assertEqual(load.call_count, 1)
+        self.assertEqual([call.args[1] for call in cli.call_args_list],
+                         [["doctor", "--runtime"], ["self-test"]])
+        record = json.loads((self.state / "state.json").read_text())
+        self.assertEqual(record["phase"], "ready")
+        self.assertEqual(record["version"], __version__)
 
     def test_normal_launch_reuses_verified_binding_without_loading(self):
         self.preparation()
@@ -215,6 +229,7 @@ class LinuxLauncherTests(unittest.TestCase):
             ("asset", "../outside.tar.gz"), ("source", "../outside"),
             ("source", "/outside"), ("source", "foo/../outside"),
             ("source", "foo\\outside"), ("channel", "stable"), ("channel", "preview-0.5"),
+            ("channel", "experimental08"),
         ]
         original = json.dumps(self.manifest)
         for kind, value in cases:
@@ -230,14 +245,16 @@ class LinuxLauncherTests(unittest.TestCase):
                 launcher.load_manifest(self.app)
 
     def test_manifest_rejects_other_release_families(self):
-        for version in ("0.4.1", "0.5.0a1", "0.8.0", "1.0.0", "0.7.0dev1", "0.7.0a"):
+        for version in ("0.4.1", "0.5.0a1", "0.8.0a1", "0.8.0", "0.8.1", "0.8.2rc1",
+                        "0.9.0", "1.0.0", "0.7.0dev1", "0.7.0a"):
             self.manifest.update(version=version, release_tag="v" + version)
             self.write_manifest()
             with self.subTest(version=version), self.assertRaises(launcher.SetupError):
                 launcher.load_manifest(self.app)
 
     def test_manifest_accepts_supported_desktop_series_with_exact_tag(self):
-        for version in ("0.6.0", "0.6.1rc2", "0.7.0a1", "0.7.0b2", "0.7.0rc1", "0.7.0"):
+        for version in ("0.6.0", "0.6.1rc2", "0.7.0a1", "0.7.0b2", "0.7.0rc1", "0.7.0",
+                        "0.8.2", "0.8.3", "0.8.10"):
             self.manifest.update(version=version, release_tag="v" + version)
             self.write_manifest()
             with self.subTest(version=version):

@@ -65,6 +65,13 @@ RUN Rscript /usr/local/lib/nipat/verify-packages.R \
     && samtools --version | head -n 1 \
     && R --version | head -n 1
 
+# Cairo embeds readable Latin/Greek sample labels in presentation PDF copies.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends fonts-dejavu-core \
+    && dpkg-query -W -f='${Package}\t${Version}\n' > /usr/share/nipat/apt-versions.tsv \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 # Bundle only reviewed code and notices. Do not copy arbitrary local files or
 # mount the host project over this path in production.
 COPY LICENSE THIRD_PARTY_NOTICES.md /opt/nipat/
@@ -75,7 +82,7 @@ COPY scientific/vendor/NEWPAT/SNPcall/SNPcall.R /opt/nipat/scientific/vendor/NEW
 COPY scientific/vendor/NEWPAT/contamination/detect_contamination.R /opt/nipat/scientific/vendor/NEWPAT/contamination/detect_contamination.R
 COPY scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R /opt/nipat/scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R
 COPY engine/main.py /opt/nipat/engine/main.py
-COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py src/nipat_scientific/catalog.py src/nipat_scientific/plan.py src/nipat_scientific/executor.py src/nipat_scientific/outputs.py /opt/nipat/lib/nipat_scientific/
+COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py src/nipat_scientific/catalog.py src/nipat_scientific/plan.py src/nipat_scientific/executor.py src/nipat_scientific/outputs.py src/nipat_scientific/presentation.py src/nipat_scientific/presentation.R /opt/nipat/lib/nipat_scientific/
 COPY src/nipat_scientific/catalog_data/ /opt/nipat/lib/nipat_scientific/catalog_data/
 RUN python3 /opt/nipat/engine/main.py verify \
     && python3 /opt/nipat/engine/main.py catalog --json > /tmp/nipat-catalog-check.json \

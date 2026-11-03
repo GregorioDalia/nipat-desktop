@@ -85,6 +85,7 @@ class WorkflowClientTests(unittest.TestCase):
         self.assertEqual({path.name for path in (run / "work").iterdir()}, {"engine-plan.json"})
         plan = self.plan(run)
         self.assertEqual(validate_plan(plan)["execution_order"], ["dnp", "contamination"])
+        self.assertEqual(plan["presentation"], {"samples": {"sample_0001": self.bam.name}, "pairs": {}})
         self.assertEqual(plan["samples"], [{"id": "sample_0001", "kind": "bam",
                                             "path": "/workspace/inputs/bams/sample_0001.bam"}])
         self.assertEqual(plan["steps"][1]["inputs"]["samples"], [
@@ -109,6 +110,9 @@ class WorkflowClientTests(unittest.TestCase):
         listing = self.write("selected.txt", b'"two/sample.bam"\n\n\'one/sample.bam\'\n')
         run = self.invoke(bamlist=listing, parallel=True)
         plan = self.plan(run)
+        self.assertEqual(plan["presentation"]["samples"], {
+            "sample_0001": "sample.bam", "sample_0002": "sample.bam",
+        })
         record = self.runner.records[0][1]
         self.assertEqual(record["parameters"]["bams"], [str(second), str(first)])
         self.assertEqual([item["original_path"] for item in record["parameters"]["sample_mapping"]],
@@ -248,6 +252,9 @@ class WorkflowClientTests(unittest.TestCase):
         run = self.workflows.dnp_cpi(**arguments)
         plan = self.plan(run)
         self.assertEqual(validate_plan(plan)["execution_order"], ["dnp", "cpi"])
+        self.assertEqual(plan["presentation"], {"samples": {
+            "sample_0001": self.bam.name, "sample_0002": arguments["pairs"][0][2].name,
+        }, "pairs": {}})
         cpi = plan["steps"][1]
         self.assertEqual(cpi["inputs"]["pairs"], [{
             "id": "FamilyA",

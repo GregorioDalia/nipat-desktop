@@ -33,15 +33,24 @@ class PublishedUpdateContract(unittest.TestCase):
             with self.subTest(channel=channel):
                 self.check_published_pair(channel)
 
-    def check_published_pair(self, channel):
+    def test_official_four_platform_release_uses_compatible_separate_feeds(self):
+        self.check_published_pair("stable", version="0.8.2")
+
+    def check_published_pair(self, channel, version="0.6.1"):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             commit = "c" * 40
-            version, tag = "0.6.1", "v0.6.1"
+            tag = "v" + version
             manifest = {"version": version, "release_tag": tag, "source_commit": commit}
             pair = {"version": version, "source_commit": commit}
-            for system, name in (("windows", "NIPAT-Setup.exe"),
-                                 ("linux", "nipat-desktop_0.6.1_amd64.deb")):
+            packages = [("windows", "NIPAT-Setup.exe"), ("linux", f"nipat-desktop_{version}_amd64.deb")]
+            platforms = [("windows-x86_64", "windows"), ("linux-x86_64", "linux")]
+            feeds = ["update-manifest.json"]
+            if version == "0.8.2":
+                packages += [(f"macos_{arch}", f"NIPAT-{version}-macos-{arch}.pkg") for arch in ("arm64", "x86_64")]
+                platforms += [(f"darwin-{arch}", f"macos_{arch}") for arch in ("arm64", "x86_64")]
+                feeds.append("update-manifest-macos.json")
+            for system, name in packages:
                 path = root / name
                 path.write_bytes(b"fixture bytes for verified " + system.encode())
                 pair[system] = {"file": name, "sha256": publisher.sha256(path)}
@@ -49,7 +58,8 @@ class PublishedUpdateContract(unittest.TestCase):
             release_url = f"{WEB}/releases/tag/{tag}"
             payloads = {}
             assets = []
-            for name in ("update-manifest.json", "NIPAT-Setup.exe", "nipat-desktop_0.6.1_amd64.deb"):
+            self.assertEqual({entry["platform"] for entry in document["assets"]}, {"windows-x86_64", "linux-x86_64"})
+            for name in [*feeds, *(name for _, name in packages)]:
                 content = (root / name).read_bytes()
                 url = f"{WEB}/releases/download/{tag}/{name}"
                 payloads[url] = content
@@ -69,7 +79,7 @@ class PublishedUpdateContract(unittest.TestCase):
                 return Response(request.full_url, payloads[request.full_url])
 
             client = UpdateClient(opener=open_fixture)
-            for platform, system in (("windows-x86_64", "windows"), ("linux-x86_64", "linux")):
+            for platform, system in platforms:
                 check = client.check("0.6.0", "testing", platform)
                 self.assertEqual(check.status, "available", check.message)
                 self.assertEqual(check.offer.source_commit, commit)
@@ -83,7 +93,7 @@ class PublishedUpdateContract(unittest.TestCase):
                 self.assertEqual(stable.offer.channel, "stable")
             else:
                 self.assertIsNone(stable.offer)
-            self.assertIsNone(client.check("0.6.2", "testing", "windows-x86_64").offer)
+            self.assertIsNone(client.check(version, "testing", "windows-x86_64").offer)
             self.assertTrue(all(url.startswith((API + "/", WEB + "/releases/")) for url in requests))
 
 

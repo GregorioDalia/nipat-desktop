@@ -1,4 +1,4 @@
-# Permanent Desktop identity: never infer it from another installation channel.
+# Official desktop identity: never infer it from another installation.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -38,7 +38,7 @@ function Assert-NipatInstallationChannel($Value, [string] $Description) {
         else { $present = $null -ne $Value.PSObject.Properties['installation_channel'] }
     }
     if (-not $present -or $Value.installation_channel -cne (Get-NipatInstallationProfile).channel) {
-        throw "$Description appartiene a un altro canale di installazione. NIPAT Desktop non adotta configurazioni delle installazioni 0.4 o 0.5."
+        throw "$Description appartiene a un altro canale di installazione. NIPAT Desktop non adotta configurazioni sperimentali o di altre installazioni."
     }
 }
 

@@ -1,429 +1,105 @@
 # Integrazione continua e distribuzione
 
-NIPAT separa i controlli sui sorgenti, la costruzione degli installatori e la
-pubblicazione. La versione 0.7.2 appartiene al canale desktop. La pipeline
-produce installatori Windows WSL e Ubuntu per revisione. La pubblicazione
-richiede una coppia di pacchetti verificata e un record di accettazione
-revisionato, riferito agli stessi file. La distribuzione per ricerca pre-1.0
-mantiene separate prove manuali documentate, controlli automatici e scenari
-estesi rinviati. Il publisher verifica il record prima di modificare una release.
+NIPAT verifica separatamente il client, il motore scientifico, gli installatori
+e il funzionamento sui dispositivi reali. La versione 0.8.2 distribuisce
+Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
+Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
 ## Workflow GitHub Actions
 
 | Workflow | Attivazione | Risultato |
 | --- | --- | --- |
-| [CI](../.github/workflows/ci.yml) | Push sui branch, aggiornamenti delle pull request, incluse le bozze, e avvio manuale. | Test Linux/Windows, documentazione e verifiche scientifiche quando richieste; controllo aggregato `required` su pull request e `main`. |
-| [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale su un commit scelto. | Installatore WSL e pacchetto Ubuntu con lo stesso archivio scientifico, prove ed evidenze di costruzione. |
-| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Due avvii manuali distinti da `main`: `prepare`, poi `publish`. | Prepara una bozza completa verificata; dopo la revisione, ricontrolla e pubblica gli stessi file nel canale scelto. |
-| [Published runtime security report](../.github/workflows/security-monitoring.yml) | Settimanale e avvio manuale. | Inventari dei componenti e associazioni candidate a vulnerabilità sugli archivi pubblicati; rapporto informativo da esaminare. |
+| [CI](../.github/workflows/ci.yml) | Push, pull request, avvio manuale. | Test del client e dei contratti, controlli dei sorgenti e della documentazione, componenti di piattaforma e regressioni scientifiche applicabili. |
+| [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale su un commit revisionato. | Quattro installatori con manifest, checksum e rapporti; nessuna pubblicazione automatica. |
+| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Preparazione di una bozza o pubblicazione separata dei pacchetti accettati, senza ricompilarli. |
+| [Published runtime security report](../.github/workflows/security-monitoring.yml) | Pianificazione e avvio manuale. | Inventari e segnalazioni sulle immagini pubblicate, da esaminare separatamente. |
 
-La CI controlla ogni aggiornamento senza ricostruire gli installatori completi.
-Quando un push riguarda una pull request aperta dello stesso repository e
-dello stesso commit, e risulta avviata una CI della pull request corrispondente,
-i controlli sono assegnati alla pull request per evitare
-una seconda esecuzione equivalente. Il controllo delle pull request è sempre
-attivo; se GitHub non consente di confermare questa corrispondenza, vengono
-eseguiti anche i controlli del push. Una pull request con conflitti o priva di
-una CI confermata non sopprime quindi le verifiche del branch.
-Le esecuzioni manuali rimangono indipendenti
-e non vengono annullate da nuovi push.
+La CI seleziona i controlli in base ai file modificati. Contratti, runtime,
+installer e pipeline attivano i livelli corrispondenti; un confronto Git non
+disponibile non viene interpretato come una modifica della sola documentazione.
+Il controllo aggregato `required` verifica l'esito dei job richiesti.
+I controlli della pull request rimangono attivi quando il push viene deduplicato.
+Gli installatori completi vengono costruiti su richiesta, non a ogni push.
 
-Il selettore distingue quattro aree: client, motore scientifico, ambiente
-Linux dedicato e packaging. Le modifiche a `installer/runtime` attivano anche
-la costruzione e la prova dell'avvio del daemon dedicato; le modifiche ai
-builder, agli installer e all'inventario distribuito attivano i controlli
-dei pacchetti. La selezione mantiene le regressioni scientifiche già previste
-per sorgenti e test. Una comparazione Git non disponibile richiede tutti
-i livelli: non viene interpretata come modifica soltanto documentale.
-Il controllo aggregato `required` verifica gli esiti dei job richiesti.
+## Copertura e limiti
 
-Una build destinata alla pubblicazione deve essere avviata
-manualmente su un commit revisionato di questo repository; può provenire
-dal branch di sviluppo prima dell’integrazione. La decisione di distribuzione
-identifica esattamente i pacchetti prodotti; le prove manuali riportano il
-commit realmente osservato e il loro ambito. Prima della pubblicazione,
-sorgenti e record di accettazione devono essere integrati in `main`, conservando il commit
-compilato nella sua storia. Il publisher opera da `main` e riusa gli stessi
-artefatti verificati senza ricostruirli; non modifica release già pubblicate.
-Un artefatto prodotto da un evento `pull_request` non è pubblicabile.
-Il commit effettivamente compilato è quello riportato nel manifest e nel
-riepilogo di build: un checkout di pull request può identificare un merge
-temporaneo, diverso dalla testa del branch. Nome del branch e sola versione
-del programma non bastano a identificare un installatore.
+| Livello | Verifiche | Limite dell'evidenza |
+| --- | --- | --- |
+| Python e contratti | CLI/menu, input, workflow, registri, risultati, aggiornamenti e annullamento sui sistemi previsti dalla matrice. | Non sostituisce l'installazione sul computer del ricercatore. |
+| Risorse | Configurazione WSL/Lima, anteprima, backup, conferme, lock fra processi, conservazione delle impostazioni estranee. | Le simulazioni WSL non dimostrano un riavvio reale di Windows 10. |
+| Diagnostica | Identità del container, raccolta dello stato prima della pulizia, OOM confermato o causa non accertata. | Il solo codice 137 non dimostra memoria esaurita. |
+| Presentazione | Mappa dei campioni, nomi originali, HTML/TSV, esportazione scientifica e testo nei PDF. | La leggibilità su ogni visualizzatore rimane una prova d'uso. |
+| Windows | Prerequisiti, bootstrap, layout, riparazione/rimozione, compilazione e verifica del Python incorporato. | Il payload preparato non equivale a installazione Inno Setup e avvio WSL su un desktop pulito. |
+| Ubuntu | Installazione APT, dipendenze, analisi da utente non root, reinstallazione/rimozione e aggiornamento dalla 0.7.2. | Il runner configurato non rappresenta ogni Ubuntu Desktop. |
+| macOS | Pacchetti ARM64/Intel, launcher e componenti nativi, trasporto e configurazione Lima. | La costruzione del `.pkg` non prova l'avvio della VM o l'accettazione Gatekeeper. |
+| Motore scientifico | Quattro analisi, piani composti, BAM sintetici, confronti numerici, input errati e originali invariati. | Non costituisce validazione di dominio su tutti i campioni reali. |
+| Documentazione | File, immagini, link relativi e sezioni Markdown. | Non verifica disponibilità dei siti esterni o contenuto scientifico della prosa. |
 
-## Copertura e livelli di prova
+Ogni difetto riproducibile deve essere coperto dal test del livello pertinente.
+Il numero di test non sostituisce l'esame dei casi coperti. Gli esiti distinguono
+prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
+è una prova superata.
 
-| Livello | Esecuzione | Verifiche principali | Limite |
-| --- | --- | --- | --- |
-| Client e contratti | CI su Linux e Windows a ogni aggiornamento applicabile. | Tutta la suite Python, CLI/menu, preferenze, percorsi, errori, interruzioni, aggiornamenti e registrazione dei run. | Processi esterni simulati dove occorre; non prova l'installazione su un PC nuovo. |
-| Documentazione | CI Linux a ogni aggiornamento applicabile. | Link a file locali, asset e sezioni Markdown, inclusi README e guide. | Non verifica disponibilità di siti esterni né correttezza scientifica della prosa. |
-| Motore scientifico reale | CI selettiva; sempre nella CI manuale e nella build installatori. | Container autonomo, quattro workflow, BAM sintetici, risultati numerici, casi non validi e isolamento degli input. | Casi sintetici e regressioni non equivalgono a validazione di dominio. |
-| Componenti Windows | CI e build installatori. | PowerShell, percorsi, migrazione, riparazione, rimozione, blocchi attività, aggiornamento, launcher e compilazione Inno Setup. | Le simulazioni WSL e il passaggio a un installatore di prova non sono una prima installazione o un aggiornamento reale fra versioni. |
-| Pacchetti completi | Build installatori manuale. | Archivio comune, importazione nel motore distribuito, confezionamento Windows/Ubuntu e ciclo APT reale sul runner. | Il runner predisposto e il container delle dipendenze non sono un desktop utente pulito. |
-| Accettazione per ricerca pre-1.0 | Evidenze osservate e revisione esplicita, integrate con la build verificata. | Dalla 0.7.2, schema 4: sorgenti R invariati, differenze operative revisionate, regressioni complete, aggiornamento reale Ubuntu e rapporto permanente. | La prova precedente resta evidenza storica della piattaforma; non attesta installazione manuale Windows della candidata o qualificazione desktop completa. |
-| Qualificazione desktop completa | Prove registrate sui due installatori esatti. | Sei scenari Windows/Ubuntu, avvio, riavvio, conservazione dei dati e rimozione. | Percorso progressivo distinto dalla distribuzione pre-1.0; la valutazione scientifica rimane separata. |
+## Regressioni scientifiche
 
-I nomi e il numero dei test possono evolvere; la copertura viene valutata
-rispetto ai comportamenti e ai rischi verificati, non al solo conteggio.
+Il container contiene R, samtools, gli script scientifici, gli adattatori e
+l'orchestrazione. Il client verifica i contratti e non monta gli script R
+dalla cartella dell'applicazione. I workflow composti vengono confrontati
+con le analisi singole equivalenti, usando risultati attesi.
 
-Il catalogo scientifico è verificato rispetto ai sorgenti R identificati da
-SHA-256, al numero di righe e alla copertura delle sezioni esaminate. I test
-del contratto dei piani verificano struttura, riferimenti tipizzati,
-dipendenze e ordine deterministico. La suite dell'esecutore verifica inoltre
-stati dei passaggi, errori, interruzioni, output mancanti e rifiuto di una
-destinazione già utilizzata. Il confronto scientifico reale del workflow
-DNPcall → Contamination, dei piani con CPI e delle attività SNPcall è
-distinto da questi test unitari: viene eseguito nell'immagine con R e samtools. Nessuno di questi controlli attesta da solo
-la validità biologica degli input.
+La verifica della presentazione confronta le tabelle numeriche con e senza
+etichette leggibili e controlla il testo estratto dai PDF. Gli output canonici
+rimangono disponibili; gli export leggibili non sostituiscono gli input delle
+fasi successive. Il catalogo scientifico identifica tramite hash gli script
+R e i componenti di preparazione effettivamente distribuiti.
 
-## Controlli sui sorgenti
+Su Apple Silicon Lima usa un guest ARM64 e Rosetta per il container AMD64.
+Il successo del calcolo su Ubuntu AMD64 non sostituisce una prova di questo
+trasporto su Mac. I risultati attesi rimangono gli stessi.
 
-I job `linux-checks` e `windows-checks` eseguono la suite Python su entrambi
-i sistemi. Il primo comprende i test della selezione CI, del publisher e la
-verifica sintattica dell'helper del motore. I test del menu e delle preferenze
-controllano persistenza, annullamento e ripristino, priorità dei percorsi e
-separazione dai comandi diretti. Il secondo comprende parsing con
-PowerShell 5.1, protezioni del bootstrap, identità delle immagini, configurazione
-WSL riprendibile e compilazione/prova del launcher. I controlli di riparazione
-e inventario verificano il backup selettivo, la gestione dei componenti
-sostituiti o obsoleti e la conservazione dei file estranei. I controlli relativi
-ai percorsi e alla rimozione devono verificare separazione delle destinazioni,
-identità delle risorse possedute e conservazione dei dati; non sostituiscono
-la prova dell'interfaccia del setup su Windows. I controlli dell'aggiornatore
-comprendono selezione del canale, rifiuto dei metadati non coerenti, integrità
-del download, conferme esplicite e comportamento senza rete; le prove simulate
-non attestano l'installazione completa di una versione successiva.
-Il verificatore [`check_docs.py`](../.github/scripts/check_docs.py) controlla
-la documentazione mantenuta nel repository senza richieste di rete; i documenti
-importati in `scientific/vendor` restano esclusi dalla scansione dei sorgenti.
+## Build degli installatori
 
-Il job Linux esegue anche Ruff con un insieme mirato di regole di correttezza
-(`E9`, `F821`, `F822`, `F823`) e raccoglie la copertura dei rami Python.
-Le versioni degli strumenti sono fissate in
-[quality-requirements.txt](../.github/quality-requirements.txt).
-I rapporti JSON, XML e testuali identificano i rami non esercitati e sono
-conservati nell'artefatto `nipat-python-quality`; non è imposta una percentuale
-arbitraria di copertura. Un rapporto non sostituisce l'analisi della qualità
-dei casi di test. Le prove del launcher Linux attraversano anche il processo
-che avvia il wizard, per verificare l'annullamento nel contesto reale dei segnali.
+Avviare **Installers (review build)** sul commit da distribuire, su `main`,
+`release/0.8.2` o `release/0.8.2-...`. Il controllo
+`installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
+comune ai quattro pacchetti. La build produce:
 
-Il job `scientific` costruisce il motore e avvia:
-
-- `scripts/verify_engine_package.py`: quattro workflow nell'immagine, senza
-  sorgenti applicativi montati, con aspettative numeriche e casi non validi;
-  controlla inoltre il catalogo incorporato, la validazione dei piani e
-  i workflow automatici DNPcall → Contamination, DNPcall → CPI e DNPcall →
-  Contamination e CPI tramite `scripts/verify_workflow_execution.py`, oltre
-  ai piani SNPcall tramite `scripts/verify_snp_workflow.py`;
-- `python -m nipat doctor --runtime`: compatibilità e identità del motore;
-- `python -m nipat self-test`: regressioni distribuite e modalità di input.
-
-Le prove DNPcall includono BAM sintetici, campioni singoli e multipli, liste,
-parità sequenziale/parallela e confronto con l'invocazione R. Le prove CPI
-comprendono modalità dei pannelli, assenza di siti informativi e variazione
-della costante d'errore. Le fixture dichiarano dati, valori attesi e tolleranze.
-
-La regressione del workflow automatico usa due BAM sintetici ed esegue
-DNPcall → Contamination in un solo container, senza sorgenti del client montati.
-Confronta conteggi, genotipi, verosimiglianze e grafici DNPcall con il caso
-atteso, poi confronta le tabelle con le analisi separate. Per Contamination
-controlla due siti per campione, media e deviazione standard attese pari a zero.
-Verifica anche l'associazione fra identità dei campioni e risultati, stato e
-manifest, conservazione degli input, rifiuto del riutilizzo della destinazione
-e arresto della catena su input non valido. I casi negativi non equivalgono
-alla validazione scientifica su campioni reali.
-
-Le regressioni CPI dei piani comprendono due livelli distinti:
-
-- **Tabelle importate:** casi informativi e senza siti, più coppie con un
-  campione materno condiviso, modalità ALL, pannello singolo e pannelli
-  etichettati, oltre a una costante d'errore non predefinita. Valori attesi
-  indipendenti e confronto con l'analisi separata verificano il CSV; nomi,
-  intestazioni PDF e mappa delle coppie verificano l'identità degli output.
-- **BAM e workflow completi:** il percorso DNPcall → CPI verifica il caso
-  senza siti informativi. Il percorso DNPcall → Contamination e CPI usa BAM
-  sintetici con tre loci, 96 letture REF e 4 ALT per il campione materno e
-  50 REF/50 ALT per quello paterno. I valori attesi sono frazione fetale 8%
-  e log10 CPI `0.903` sul pannello completo; un pannello con un solo locus
-  produce log10 CPI `0.301`. Contamination deve restituire media `0.04` per
-  il campione materno e nessun sito informativo per quello paterno.
-
-La [fixture del workflow CPI](../tests/fixtures/workflow_cpi/README.md)
-documenta come sono costruiti i BAM e come sono derivati i valori attesi.
-Il caso completo verifica che CPI riceva i conteggi DNPcall originali anche
-quando Contamination scarta i loci paterni; il suo risultato non viene usato
-come filtro o trasformazione degli input CPI. La prova attraversa il client
-senza sorgenti R locali, richiede un solo comando container e controlla stati,
-parametri effettivi, checksum, campioni condivisi e conservazione degli input.
-Il confronto dei PDF ne verifica presenza e formato, non l'aspetto grafico.
-
-Le regressioni SNPcall dei piani eseguono i due percorsi BAM e pileup con
-risultati numerici attesi e confronto con le analisi singole. Il percorso
-BAM conserva BED, pileup e log samtools, verificando anche i checksum degli
-intermedi; quello importato verifica il riuso del pileup senza rigenerarlo. Il client viene esercitato con più campioni e
-nomi di file coincidenti in cartelle diverse, controllando l'associazione fra
-input originali, passaggi e tabelle. L'opzione SNPcall nei workflow DNPcall
-verifica la condivisione dei BAM e la separazione dei risultati delle due
-analisi. Un caso negativo reale verifica che un errore samtools impedisca
-l'avvio di R e blocchi il campione SNP successivo, anche se indipendente.
-Queste prove avvengono senza sorgenti scientifici del client montati.
-La suite dell'esecutore distingue errore samtools, pileup non valido, errore R
-e annullamento, verificando l'arresto dei passaggi non ancora avviati.
-
-La selezione delle verifiche scientifiche è definita in
-[`ci_changes.py`](../.github/scripts/ci_changes.py). Modifiche al motore, ai
-sorgenti scientifici, a qualsiasi file sotto `src/` o `tests/`, agli script
-di verifica scientifica e alla configurazione CI pertinente le rendono
-obbligatorie. Anche una modifica ai soli test può quindi eseguire il motore.
-I dati JSON del catalogo, il validatore e l'esecutore dei piani appartengono
-a questi percorsi: le loro modifiche richiedono le prove nell'immagine reale.
-Un avvio manuale le richiede sempre.
-Se il confronto Git non riesce, vengono richieste per precauzione.
-Le modifiche esclusivamente documentali possono evitare la ricostruzione
-scientifica, mantenendo i controlli rapidi.
-
-Il controllo conclusivo `required` viene valutato anche dopo un fallimento.
-Riesce soltanto se i controlli rapidi e la selezione hanno avuto successo e
-le prove scientifiche richieste sono riuscite. Un controllo obbligatorio
-fallito, annullato o saltato impedisce un esito positivo.
-I push sui branch di sviluppo espongono il nome `branch-required`, così un
-push delegato alla propria pull request non può soddisfare il controllo
-protetto `required` al suo posto.
-
-Nel repository ufficiale `main` è protetto da pull request obbligatoria,
-controllo `required`, branch aggiornato e divieto di force push e cancellazione.
-Queste sono impostazioni GitHub, non proprietà applicate automaticamente a un
-fork copiando i file. Le azioni di CI e costruzione hanno permessi di sola
-lettura; soltanto il job di pubblicazione dispone di `contents: write`.
-
-## Costruzione degli installatori
-
-La build esegue i controlli Windows prima delle operazioni più costose.
-Una compilazione Inno Setup con componenti minimi di prova controlla lo script
-dell'installatore prima di costruire il runtime; non esegue il setup né verifica
-la sua interfaccia grafica. Il medesimo `NIPAT.exe` compilato e verificato
-viene incorporato nell'installatore.
-Successivamente costruisce e verifica il motore scientifico e il filesystem
-WSL, esporta gli archivi e genera il manifest con commit, dimensioni e SHA-256.
-
-Il test di importazione usa un motore isolato del filesystem WSL distribuito,
-inizialmente privo dell'immagine. Carica l'archivio esportato, avvia R e samtools
-e ripete il caricamento per verificare la ripresa. La compilazione Inno Setup
-usa gli stessi archivi verificati, il profilo di installazione e il launcher.
-La verifica finale Windows confronta manifest, sorgenti, EXE ed evidenze
-di costruzione.
-
-Il controllo `windows-client-check.json` usa il payload destinato al setup,
-trasferito in una cartella isolata con spazi e caratteri Unicode. Esegue
-Python incorporato, importazioni, catalogo, navigazione del menu e simulazioni
-dei workflow automatici, verificando i piani e la conservazione degli input.
-Le evidenze identificano EXE, manifest, launcher e inventario del medesimo
-pacchetto. Lo scenario `staged-embedded-python-client` non installa Inno Setup
-e non esegue WSL o il calcolo scientifico sul runner Windows.
-
-Il job `linux-installer` riceve il medesimo archivio esportato, senza
-ricostruirlo, e prepara il pacchetto `nipat-desktop` per Ubuntu 24.04 amd64.
-Il builder verifica versione, commit, sorgenti e checksum, quindi produce
-il `.deb`, il manifest e le evidenze. La prova installa il pacchetto con APT
-su un runner con Docker configurato e avvia preparazione e analisi da
-un account non root. Oltre agli autotest SNPcall, CPI e Contamination,
-esegue DNPcall su BAM sintetico con confronto dei conteggi e dei genotipi
-attesi. Usa input privati e percorsi con spazi e caratteri non ASCII;
-verifica proprietà e accessibilità dei risultati, ripetizione dell’avvio,
-reinstallazione dello stesso pacchetto e rimozione con conservazione dei
-dati, dello stato e delle risorse Docker estranee. La reinstallazione
-non equivale a una prova di aggiornamento fra versioni differenti.
-
-Una verifica distinta, [`verify_linux_upgrade.py`](../scripts/verify_linux_upgrade.py),
-installa il pacchetto ufficiale 0.7.1 e lo aggiorna con APT alla candidata.
-Controlla la conservazione di run, dati e preferenze e ripete gli autotest
-scientifici reali sul pacchetto aggiornato. `linux-upgrade-check.json`
-identifica entrambi i pacchetti e l'esito. La prova usa Ubuntu predisposto
-sul runner; non attesta un aggiornamento Windows o un desktop Ubuntu pulito.
-
-La prova del pacchetto 0.7 comprende inoltre un piano DNPcall, Contamination,
-CPI e SNPcall sui due BAM sintetici. Controlla i cinque passaggi nel medesimo
-motore, risultati numerici, associazioni dei campioni, file intermedi e hash
-degli output. I campi `automatic_workflow_plan` e `preferences_preserved`
-registrano rispettivamente questo controllo e la conservazione delle
-preferenze durante esecuzione, reinstallazione e rimozione.
-
-Una prova separata usa un container Ubuntu 24.04 identificato da digest,
-inizialmente privo delle dipendenze. Installa il `.deb` tramite APT e
-verifica l’installazione di Python 3.12, `docker.io` e `docker-compose-v2`,
-l’avvio di `--help` e `--version` da un account non root e l’assenza di
-modifiche ai repository e di autorizzazioni Docker automatiche per l’utente.
-Conserva versioni ed esiti in `linux-dependency-check.json`. Non avvia
-un daemon nel container e non prova l’interfaccia Ubuntu Desktop.
-
-Il job conclusivo `installer-required` richiede il successo dei pacchetti
-Windows e Ubuntu e confronta commit, manifest e archivio scientifico nelle
-evidenze dei due installatori. Richiede anche le prove Linux del ciclo
-di installazione, delle dipendenze e dell’aggiornamento fra versioni. Conserva l’esito in
-`installer-set-check.json`, con `publication_authorized: false`: la verifica
-automatica non costituisce accettazione sui sistemi destinatari.
-
-| Artefatto Actions | Contenuto |
+| Artefatto Actions | Pacchetto |
 | --- | --- |
-| `nipat-tested-launcher` | Launcher compilato e verificato. |
-| `nipat-runtime-assets` | Archivio scientifico, filesystem WSL, manifest e checksum. |
-| `nipat-installer-inputs` | Applicazione preparata e manifest destinati al compilatore. |
-| `nipat-scientific-check-logs` | Registri e metadati delle regressioni conservati dalla build. |
-| `nipat-windows-setup` | `NIPAT-Setup.exe`, manifest, checksum ed evidenze dell'installatore, del launcher e del client preparato (`windows-client-check.json`). |
-| `NIPAT-Setup.exe` | Download diretto del solo installatore Windows, senza ZIP, disponibile dopo la verifica congiunta Windows/Ubuntu. |
-| `nipat-linux-setup` | Pacchetto `.deb`, manifest comune, checksum, evidenze di costruzione, installazione e risoluzione delle dipendenze. |
-| `nipat-desktop_<versione>_amd64.deb` | Download diretto del solo pacchetto Ubuntu, senza ZIP, disponibile dopo la verifica congiunta Windows/Ubuntu. |
-| `nipat-installer-set-evidence` | `installer-set-check.json`, archivio delle evidenze sintetiche, descrittore e checksum associati alla coppia di pacchetti. |
+| `nipat-windows-setup` | `NIPAT-Setup.exe`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.2_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.2-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.2-macos-x86_64.pkg`. |
+| `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
-Per il collaudo, accedere a GitHub e aprire il run riuscito indicato dal
-referente. Il riepilogo offre i download diretti di **NIPAT-Setup.exe** per
-Windows e del **.deb** per Ubuntu, disponibili anche nella sezione
-**Artifacts**. Non richiedono estrazione o assemblaggio. I download contengono
-gli stessi byte dei pacchetti conservati negli artefatti di evidenza
-`nipat-windows-setup` e `nipat-linux-setup`; le prove e la procedura di
-accettazione restano associate alla coppia Windows/Ubuntu.
+La release espone direttamente il file da installare per ciascuna piattaforma.
+I pacchetti **Source code** non contengono l'ambiente pronto all'uso. Gli archivi
+del runtime e i rapporti servono a verifica e recupero, non richiedono operazioni
+manuali durante l'installazione ordinaria.
 
-Gli artefatti ordinari sono conservati per **14 giorni** dalla creazione e non
-equivalgono a una release pubblica. Per una distribuzione accettata, il publisher
-conserva anche `qualification-evidence.json`, `qualification-evidence.zip` e
-`linux-upgrade-check.json` fra gli asset della release. L'archivio raccoglie
-le sole verifiche sintetiche della build e i loro rapporti; l'inventario e i
-checksum ne identificano il contenuto. I dati dei ricercatori non fanno parte
-di questa raccolta. Conservare il riferimento al run per identificare la build
-usata nelle prove. La distribuzione desktop non produce un installatore Docker Desktop.
+## Verifiche Lima su runner dedicati
 
-## Pubblicazione dei canali di aggiornamento
+Il parametro `qualify_macos_runtime` abilita le prove reali su runner dedicati
+con etichette `self-hosted`, `macOS`, `nipat-runtime` e `ARM64` oppure `X64`.
+Devono esporre virtualizzazione e requisiti del pacchetto. Non eseguire codice
+di pull request non fidate su questi runner.
 
-**Prepare or publish verified release** richiede una scelta esplicita del canale:
-`testing` è il valore predefinito e pubblica una pre-release; `stable` pubblica
-una release stabile e richiede una versione numerica `MAJOR.MINOR.PATCH`.
-Entrambi richiedono avvio manuale da `main`, coppia verificata e decisione di
-accettazione riferita ai medesimi pacchetti. Il canale non cambia lo schema
-di accettazione e non certifica il metodo scientifico. Tutti i controlli
-automatici e di identità dei pacchetti rimangono obbligatori.
+Registrare hardware, macOS, architettura, Lima/Rosetta, commit e checksum del
+pacchetto. Una prova su un'architettura non qualifica l'altra. Le prove di VM
+non sostituiscono quelle di interazione Finder o delle policy del dispositivo.
 
-`prepare` crea e completa una bozza senza renderla pubblica. Il riepilogo
-restituisce l'ID della bozza e il commit della preparazione. Dopo averne
-controllato note, pacchetti e canale, un secondo avvio con `publish` deve
-indicare entrambi gli identificativi. La pubblicazione ricontrolla build,
-accettazione invariata e byte della bozza; non carica file mancanti e non
-ripara una bozza alterata. Una release `stable` diventa **Latest**; una
-pre-release `testing` non lo diventa. Il solo push di un branch o tag non
-pubblica software.
+## Pubblicazione
 
-Nell'accettazione per ricerca, le note della versione provengono dal commit
-di preparazione e vengono mantenute nella pubblicazione. La provenienza
-identifica tale revisione separatamente dal commit del pacchetto; i collegamenti
-puntano alla stessa revisione documentale. `baseline-source-check.json` conserva
-il confronto dei sorgenti con la build osservata manualmente. Per gli schemi 3
-e 4 verifica l'elenco completo delle modifiche operative revisionate e i relativi
-hash. Lo schema 4 dichiara esplicitamente che il confronto non attesta
-equivalenza operativa né installazione manuale del candidato Windows.
-Nessuna di queste operazioni ricompila gli installatori.
+Sorgenti e record di accettazione vengono integrati in `main` conservando il
+commit compilato. Il publisher crea una bozza con gli stessi byte verificati;
+un secondo avvio pubblica quella bozza dopo averne ricontrollato i contenuti.
+`stable` identifica la release ufficiale e `Latest`; `testing` una pre-release.
+La scelta non dichiara una validazione scientifica generale.
 
-La repository abilita l'immutabilità delle nuove release pubblicate: asset
-e tag vengono protetti dopo la pubblicazione. Tutti i file devono quindi
-essere caricati e verificati mentre la release è ancora una bozza. Le versioni
-pubblicate non vengono ricostruite o sostituite per correggere un problema;
-una correzione produce una nuova versione con proprie evidenze.
-
-Dopo le verifiche, il publisher genera `update-manifest.json`, lo include in
-`SHA256SUMS` e lo pubblica con gli installatori. Il manifest identifica prodotto,
-versione, tag, commit, canale e protocollo minimo dell'aggiornatore; elenca nome,
-piattaforma, dimensione, checksum e URL ufficiale di EXE e `.deb`. Il client
-propone soltanto release già pubblicate e compatibili. Una build di revisione
-non diventa un aggiornamento per il solo fatto di avere superato la CI.
-
-## Dipendenze e riproducibilità
-
-| Componente | Vincolo |
-| --- | --- |
-| Base scientifica | `rocker/r-ver:4.4.2` con digest nel Dockerfile. |
-| Pacchetti R | Snapshot CRAN del 27 febbraio 2025 e versioni attese in [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv), verificate durante la build. |
-| samtools | Versione 1.21 e SHA-256 dell'archivio sorgente. |
-| Filesystem WSL | Base Debian identificata da digest e versioni esplicite di Docker Engine/CLI, containerd, Buildx e Compose. |
-| Python Windows | Archivio portabile 3.12.10 identificato e verificato dal builder. |
-| Python Ubuntu | Pacchetto di sistema 3.12.x dichiarato nelle dipendenze del `.deb`. |
-| Docker Ubuntu | Engine e Compose v2 del sistema, con accesso utente al socket locale; il launcher verifica la configurazione supportata. |
-| Azioni GitHub | Riferimenti a commit espliciti nei workflow. |
-
-L'immagine scientifica conserva gli inventari R e APT in
-`/usr/share/nipat/r-versions.tsv` e `/usr/share/nipat/apt-versions.tsv`.
-Il filesystem WSL conserva l'inventario APT e i metadati dei pacchetti Docker.
-`component-inventory.json` raccoglie gli inventari effettivi APT, R e samtools
-associati agli archivi distribuiti. L'identità del componente WSL è distinta
-dal commit del client: il builder può riutilizzare byte verificati di un
-archivio pubblicato quando sorgenti e dipendenze risolte coincidono. La prova
-di importazione verifica l'archivio effettivamente selezionato, anche se
-riutilizzato.
-Le dipendenze di sistema risolte dai repository APT firmati non garantiscono
-una ricostruzione identica byte per byte. L'unità di distribuzione è quindi
-l'archivio esportato e verificato dalla build identificata.
-
-La cache BuildKit accelera la compilazione, con ambiti distinti per le due
-immagini `linux/amd64`. Non sostituisce test o verifiche degli asset.
-Un errore nell'esportazione della cache non invalida una build che abbia
-superato tutti i controlli di correttezza.
-
-## Monitoraggio delle dipendenze
-
-Il workflow settimanale scarica gli archivi della release pubblicata e ne
-verifica l'identità prima dell'inventario e della scansione. Conserva rapporti
-SBOM, associazioni candidate componente-vulnerabilità e informazioni sugli
-input della scansione per 90 giorni. Le versioni di Syft e Grype sono fissate
-nel workflow per rendere espliciti gli strumenti impiegati. Un errore di raccolta viene segnalato come
-monitoraggio incompleto, non come assenza di problemi.
-
-I risultati richiedono revisione: copertura dell'inventario, corrispondenza
-dei pacchetti e applicabilità al comportamento di NIPAT non si deducono dal
-solo numero delle associazioni. Il monitoraggio non aggiorna i componenti,
-non effettua merge automatici e non blocca automaticamente le release di ricerca.
-[Dependabot](../.github/dependabot.yml) propone aggiornamenti settimanali delle
-Actions e degli strumenti Python di qualità; ogni modifica rimane soggetta
-alle verifiche della pull request.
-
-## Evidenze richieste per una distribuzione
-
-Il successo della CI non dimostra l’installazione completa sui sistemi
-destinatari. Le prove PowerShell simulano i confini Windows/WSL; il test
-del motore interno usa Linux. La risoluzione APT in un container Ubuntu
-non verifica riavvio, autorizzazione dell’account o apertura del collegamento
-in un desktop reale.
-
-Il [protocollo di accettazione](ACCETTAZIONE_INSTALLATORI.md) distingue la
-distribuzione per ricerca pre-1.0 dalla qualificazione completa dei desktop.
-La prima conserva una prova manuale di installazione e funzionamento e una
-decisione del manutentore, con i limiti della prova e gli scenari rinviati.
-Dalla 0.7.2 lo schema 4 identifica la prova precedente come evidenza storica
-della piattaforma. Richiede sorgenti R invariati, revisione di tutte le
-differenze operative e verifiche automatiche della nuova candidata, comprese
-le prove dei pacchetti, l'aggiornamento reale Ubuntu dalla 0.7.1 e il rapporto
-permanente delle evidenze. Il confronto non dichiara equivalenza operativa.
-Differenze non dichiarate, modifiche R o digest errati interrompono la
-pubblicazione. Gli schemi 2 e 3 restano riferimenti delle rispettive serie
-precedenti e non sostituiscono i requisiti dello schema 4.
-
-La qualificazione completa conserva i sei scenari Windows/Ubuntu: sistema
-pulito, coesistenza, riavvio, percorsi personalizzati, riparazione e rimozione
-con protezione dei dati. Gli aggiornamenti fra versioni differenti richiedono
-casi dedicati. Questi collaudi sono organizzati progressivamente; la campagna
-con le esperte di dominio usa la versione 0.7.2.
-
-Il record revisionato su `main` identifica build, commit, manifest, archivio
-scientifico e checksum dei due installatori. Il publisher verifica i requisiti
-dello schema scelto e ricontrolla gli artefatti prima di creare o modificare
-una bozza. Un record assente, non approvato o incoerente interrompe la
-pubblicazione. Gli artefatti accettati non vengono ricostruiti; file differenti
-richiedono una nuova decisione associata ai nuovi checksum.
-
-La CI viene ampliata con casi riproducibili per i difetti osservati, i valori
-di confine e i nuovi comportamenti. La copertura della 0.7.2 comprende
-propagazione dei parametri, impostazioni scientifiche fisse, equivalenza
-tra analisi separate e workflow concatenati, gestione dei fallimenti fra
-passaggi, navigazione e annullamento. Le verifiche sono associate ai commit
-eseguiti dalla pipeline e non vengono attribuite retroattivamente ad altre versioni.
-
-Le prove di dominio utilizzano input e attese indipendenti dalle fixture di
-regressione. Esiti, versioni e limiti sono registrati nella
-[scheda di validazione](VALIDAZIONE.md). La procedura tecnica di pubblicazione
-è descritta in [Pubblicazione](../.github/RELEASE.md).
+Windows/Linux usano `update-manifest.json`; macOS usa
+`update-manifest-macos.json`. I client verificano piattaforma, versione,
+dimensione e checksum. Le build Actions e le bozze non sono aggiornamenti.
+Per ricerca pre-1.0 sono ammessi scenari desktop non ancora eseguiti, dichiarati
+nel record; la [procedura di pubblicazione](../.github/RELEASE.md) specifica
+le evidenze richieste e la [scheda di validazione](VALIDAZIONE.md) raccoglie
+le osservazioni dei ricercatori.

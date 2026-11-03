@@ -103,7 +103,9 @@ def release_inputs(tag, kinds, output):
     for kind in kinds:
         if kind == "deb":
             names = [name for name in assets if name.startswith("nipat-desktop_") and name.endswith("_amd64.deb")]
-            require(len(names) == 1, "Expected one released Ubuntu package")
+            deb_version = re.sub(r"(a|b|rc)([0-9]+)$", r"~\1\2", manifest["version"])
+            require(names == [f"nipat-desktop_{deb_version}_amd64.deb"],
+                    "Expected one Ubuntu package matching the requested release version")
             downloaded[kind] = download(names[0])
         else:
             require(kind in {"rootfs", "scientific_image"}, "Unknown release input kind")

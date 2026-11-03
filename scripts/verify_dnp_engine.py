@@ -98,7 +98,8 @@ def check_dnp_outputs(run_dir: Path, samples: tuple[str, ...]) -> None:
         pdfs.update(f"plots/{sample_id}/{sample_id}_{suffix}.pdf" for suffix in (
             "N_genotypes", "Ref_read_count", "Alt_read_count", "Other_read_count",
         ))
-    actual_pdfs = {path.relative_to(output).as_posix() for path in output.rglob("*.pdf")}
+    actual_pdfs = {path.relative_to(output).as_posix() for path in output.rglob("*.pdf")
+                   if "presentation" not in path.relative_to(output).parts}
     if actual_pdfs != pdfs or any(not (output / name).read_bytes().startswith(b"%PDF-") for name in pdfs):
         raise ValueError(f"Missing, invalid or unexpected DNP plots in {run_dir}: {actual_pdfs}.")
     if any((run_dir / name).exists() for name in ("mpileup.txt", "bedfile_for_mpileup.bed")):
@@ -108,9 +109,11 @@ def check_dnp_outputs(run_dir: Path, samples: tuple[str, ...]) -> None:
 def compare_dnp_tables(first: Path, second: Path) -> None:
     """Compare all scientific fields, including GL, but not PDF metadata/times."""
     first_tables = {path.relative_to(first / "output"): path
-                    for path in (first / "output").rglob("*.txt")}
+                    for path in (first / "output").rglob("*.txt")
+                    if "presentation" not in path.relative_to(first / "output").parts}
     second_tables = {path.relative_to(second / "output"): path
-                     for path in (second / "output").rglob("*.txt")}
+                     for path in (second / "output").rglob("*.txt")
+                     if "presentation" not in path.relative_to(second / "output").parts}
     if set(first_tables) != set(second_tables):
         raise ValueError("DNPcall table names differ between execution modes.")
     for name, path in first_tables.items():

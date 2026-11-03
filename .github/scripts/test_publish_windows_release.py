@@ -58,6 +58,7 @@ class ReleaseGuards(unittest.TestCase):
                                         read_source=lambda commit, name: self.sources[name], desktop=desktop)
 
     def make_wsl_package(self, version):
+        previous_version = self.manifest["version"]
         self.manifest["version"] = version
         self.manifest["release_tag"] = f"v{version}"
         self.manifest["runtime_image"] = "sha256:" + "b" * 64
@@ -66,8 +67,8 @@ class ReleaseGuards(unittest.TestCase):
             self.sources["pyproject.toml"]).hexdigest()
         for entry in self.manifest["assets"].values():
             old = entry["file"]
-            entry["file"] = old.replace("0.3.0a1", version)
-            entry["url"] = entry["url"].replace("0.3.0a1", version)
+            entry["file"] = old.replace(previous_version, version)
+            entry["url"] = entry["url"].replace(previous_version, version)
             (self.runtime / old).rename(self.runtime / entry["file"])
         self.write_manifests()
         (self.setup / "NIPAT.exe").write_bytes(b"MZ launcher fixture")
@@ -139,8 +140,8 @@ class ReleaseGuards(unittest.TestCase):
         (self.setup / "installer-build.json").write_text(json.dumps(evidence), encoding="utf-8")
 
     def make_desktop_package(self, version="0.6.0"):
-        profile_path = Path(__file__).resolve().parents[2] / publisher.INSTALLATION_PROFILE_SOURCE
-        profile_bytes = profile_path.read_bytes()
+        # Stable publication tests must not inherit an experimental checkout identity.
+        profile_bytes = json.dumps(publisher.DESKTOP_INSTALLATION_PROFILE).encode()
         self.sources[publisher.INSTALLATION_PROFILE_SOURCE] = profile_bytes
         self.sources["distribution-files.txt"] = ("\n".join(sorted(self.sources)) + "\n").encode()
         self.manifest["source_sha256"] = {
@@ -206,7 +207,7 @@ class ReleaseGuards(unittest.TestCase):
         calls = []
         def verify_set(*args, **kwargs):
             calls.append((args, kwargs))
-            return actual
+            return {key: value for key, value in actual.items() if not key.startswith("macos_")}
         original = publisher.prepare_assets
         original_load = publisher.load_module
         def prepare(*args, **kwargs):
@@ -221,7 +222,8 @@ class ReleaseGuards(unittest.TestCase):
                 patch.object(publisher, "prepare_assets", side_effect=prepare):
             result = publisher.prepare_installer_set(
                 self.setup, self.runtime, linux, evidence, self.root / "release", COMMIT,
-                record, json.dumps(record).encode(), 123, "b" * 40, self.root / "exact-built-source")
+                record, json.dumps(record).encode(), 123, "b" * 40, self.root / "exact-built-source",
+                macos=getattr(self, "native_directories", None))
         return result, calls
 
     def test_joint_assets_require_fresh_verification_and_publish_both_packages_and_evidence(self):
@@ -383,6 +385,59 @@ class ReleaseGuards(unittest.TestCase):
         parts[-1]["qualification_evidence_sha256"] = "f" * 64
         with patch.object(parts[-2], "verify_baseline", return_value={}), self.assertRaisesRegex(ValueError, "differs from the accepted"):
             self.prepare_joint(*parts)
+
+    def multiplatform_fixture(self):
+        linux, evidence, actual, validator, record = self.reliability_fixture()
+        self.make_desktop_package("0.8.2")
+        package = linux / "nipat-desktop_0.8.2_amd64.deb"
+        (linux / actual["linux"]["file"]).rename(package)
+        actual.update(version="0.8.2", installer_manifest_sha256=publisher.sha256(self.setup / publisher.MANIFEST))
+        actual["scientific_archive"] = {key: self.manifest["assets"]["scientific_image"][key]
+                                        for key in ("file", "sha256", "size")}
+        actual["windows"]["sha256"] = publisher.sha256(self.setup / "NIPAT-Setup.exe")
+        actual["linux"]["file"] = package.name
+        native = publisher.load_module("mac_fixture", Path(__file__).with_name("test_macos_release.py"))
+        helper = publisher.load_module("mac_release_fixture", Path(__file__).with_name("macos_release.py"))
+        self.native_directories = {arch: native.native_fixture(self.root, arch, self.manifest)
+                                   for arch in ("arm64", "x86_64")}
+        actual = helper.extend_installer_set(actual, self.native_directories, self.manifest)
+        (evidence / "installer-set-check.json").write_text(json.dumps(actual))
+        for name in ("qualification-evidence.zip", "qualification-evidence.json"):
+            (evidence / name).unlink()
+        qualification = publisher.load_module("qualification_fixture", Path(__file__).with_name("qualification_evidence.py"))
+        qualification.build(evidence, actual, {"synthetic": self.root / "synthetic"})
+        record.update(validator.identity(actual))
+        record.update(schema_version=5, qualification_evidence_sha256=publisher.sha256(evidence / "qualification-evidence.zip"),
+                      macos_validation={arch: {"status": "not-performed", "evidence": []} for arch in ("arm64", "x86_64")})
+        record["observed_baseline"]["source_comparison_scope"] = validator.MULTIPLATFORM_SOURCE_SCOPE
+        return linux, evidence, actual, validator, record
+
+    def test_four_installers_have_retained_native_reports_and_compatible_update_feeds(self):
+        parts = self.multiplatform_fixture()
+        with patch.object(parts[-2], "verify_baseline", return_value={"vendored_r_sources_unchanged": True}):
+            self.prepare_joint(*parts)
+        output = self.root / "release"
+        hashes = publisher.checksums(output / "SHA256SUMS")
+        windows_linux = json.loads((output / "update-manifest.json").read_text())
+        macos = json.loads((output / "update-manifest-macos.json").read_text())
+        self.assertEqual({entry["platform"] for entry in windows_linux["assets"]}, {"windows-x86_64", "linux-x86_64"})
+        self.assertEqual({entry["platform"] for entry in macos["assets"]}, {"darwin-arm64", "darwin-x86_64"})
+        self.assertEqual({key: value for key, value in windows_linux.items() if key != "assets"},
+                         {key: value for key, value in macos.items() if key != "assets"})
+        for arch in ("arm64", "x86_64"):
+            for name in (f"NIPAT-0.8.2-macos-{arch}.pkg", f"macos-{arch}-package-verification.json",
+                         f"macos-{arch}-installer-build.json"):
+                self.assertEqual(hashes[name], publisher.sha256(output / name))
+        for entry in windows_linux["assets"] + macos["assets"]:
+            self.assertEqual(entry["sha256"], hashes[entry["name"]])
+
+    def test_four_platform_release_cannot_omit_or_replace_native_package(self):
+        parts = self.multiplatform_fixture()
+        package = next(self.native_directories["arm64"].glob("*.pkg"))
+        package.write_bytes(b"different native package")
+        with self.assertRaisesRegex(ValueError, "not bound"):
+            self.prepare_joint(*parts)
+        self.assertFalse((self.root / "release").exists())
 
     def test_update_manifest_requires_both_matching_source_and_installer_name(self):
         parts = self.joint_fixture()

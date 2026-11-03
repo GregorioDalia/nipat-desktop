@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -46,6 +47,40 @@ class ReleaseInputTests(unittest.TestCase):
     def test_redirect_to_external_host_is_rejected_before_opening(self):
         with self.assertRaises(ValueError):
             release.RestrictedRedirect().redirect_request(None, None, 302, "", {}, "https://evil.test/file")
+
+    def test_pinned_072_upgrade_input_records_source_and_exact_github_digest(self):
+        tag = "v0.7.2"
+        source = "5bc05e00c7e231f7f3d501ace91131dae3bd1458"
+        deb_name = "nipat-desktop_0.7.2_amd64.deb"
+        deb_hash = "e623897ffa46698250b1ee32216b1ab392607b6f7e3082a1932a164ef4992675"
+        manifest = json.dumps({"version": "0.7.2", "release_tag": tag, "source_commit": source}).encode()
+        records = [{"name": "installer-manifest.json", "size": len(manifest),
+                    "digest": "sha256:" + hashlib.sha256(manifest).hexdigest()},
+                   {"name": deb_name, "size": 603740352, "digest": "sha256:" + deb_hash}]
+        for item in records:
+            item["browser_download_url"] = f"https://github.com/{release.REPOSITORY}/releases/download/{tag}/{item['name']}"
+        metadata = {"draft": False, "tag_name": tag, "id": 123, "assets": records}
+        calls = []
+        def download(url, path, digest, size):
+            calls.append((url, digest, size))
+            path.write_bytes(manifest if path.name == "installer-manifest.json" else b"fixture; downloader tested separately")
+            return path
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(release, "fetch_json", return_value=metadata) as fetch, \
+                    patch.object(release, "checked_download", side_effect=download):
+                paths = release.release_inputs(tag, ["deb"], root)
+            fetch.assert_called_once_with(f"https://api.github.com/repos/{release.REPOSITORY}/releases/tags/v0.7.2")
+            self.assertEqual(paths["deb"].name, deb_name)
+            self.assertEqual(calls[-1][1:], (deb_hash, 603740352))
+            provenance = json.loads((root / "release-inputs.json").read_text())
+            self.assertEqual(provenance["source_commit"], source)
+            self.assertEqual(provenance["files"]["deb"]["sha256"], deb_hash)
+            records[-1]["name"] = "nipat-desktop_0.7.1_amd64.deb"
+            with patch.object(release, "fetch_json", return_value=metadata), \
+                    patch.object(release, "checked_download", side_effect=download), \
+                    self.assertRaisesRegex(ValueError, "matching the requested"):
+                release.release_inputs(tag, ["deb"], root)
 
 
 if __name__ == "__main__":

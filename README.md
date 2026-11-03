@@ -10,13 +10,17 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione documentata: NIPAT Desktop 0.7.2**, destinata alla valutazione
-tecnica e scientifica da parte dei ricercatori. Scaricare gli installatori
-dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
-e consultare le [note della versione](docs/RELEASE_0.7.2.md).
-Gli artefatti GitHub Actions sono pacchetti di revisione tecnica, distinti
-dalle release. NIPAT è software per la ricerca: gli autotest verificano casi
-noti, mentre la validazione scientifica dipende dai dati e dall'impiego previsto.
+**Versione documentata: NIPAT Desktop 0.8.2.**
+Scaricare il pacchetto del proprio sistema da
+[GitHub Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+La [guida di distribuzione](docs/DISTRIBUZIONE.md) descrive requisiti e installazione;
+le [note della versione](docs/RELEASE_0.8.2.md) identificano le verifiche effettuate.
+
+I risultati per la consultazione conservano i nomi originali dei campioni
+nelle tabelle e nei grafici. Ogni run registra l'associazione con gli
+identificativi interni, i parametri effettivi e gli esiti delle fasi.
+Il menu **Configura** distingue risorse del computer, della VM e del container,
+con anteprima delle modifiche e indicazione di quelle ancora da applicare.
 
 ## Analisi disponibili
 
@@ -56,48 +60,25 @@ modalità di consultazione e significato delle informazioni esposte.
 
 ## Piattaforme e installazione
 
-| Piattaforma | Ambiente di esecuzione | Installatore |
+| Sistema | Ambiente scientifico | Pacchetto |
 | --- | --- | --- |
-| Windows 11 x64 | WSL2 con distribuzione NIPAT dedicata e Docker Engine gestito dall'applicazione | Unico file `NIPAT-Setup.exe`. |
-| Ubuntu 24.04 LTS x86_64 | Docker Engine locale e Compose v2, accessibili all’utente | Unico pacchetto `.deb`. |
+| Windows 10 22H2 x64, build 19045, o Windows 11 x64 | WSL2 e Docker Engine gestiti da NIPAT | `NIPAT-Setup.exe` |
+| macOS 14 o successivo, Intel | VM Lima e container AMD64 | `NIPAT-0.8.2-macos-x86_64.pkg` |
+| macOS 14 o successivo, Apple Silicon | VM Lima ARM64, Rosetta e container AMD64 | `NIPAT-0.8.2-macos-arm64.pkg` |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale | `nipat-desktop_0.8.2_amd64.deb` |
 
-Il pacchetto Windows contiene Python portabile, l'ambiente Linux e l'immagine
-scientifica. Non richiede installazioni separate di Python, R, samtools o
-Docker Desktop. WSL2 e la virtualizzazione devono essere disponibili sul
-computer; la loro attivazione può richiedere Internet, autorizzazione
-amministrativa e riavvio.
+Windows e macOS includono Python e i componenti NIPAT. Docker Desktop, R e
+samtools installati separatamente non sono necessari. Il setup Windows
+prepara WSL e può richiedere consenso amministrativo e riavvio; il primo
+avvio Mac prepara Lima. Queste operazioni possono richiedere Internet.
+Ubuntu usa APT per le dipendenze e richiede accesso autorizzato al daemon Docker.
+Dopo la preparazione, aprire **NIPAT Desktop** per accedere al menu.
 
-L'installazione Windows usa il nome **NIPAT Desktop**. Avviare
-`NIPAT-Setup.exe` con doppio clic dal proprio account, senza scegliere
-«Esegui come amministratore»;
-la configurazione deve terminare con `NIPAT: ready`. Per ogni utilizzo
-successivo, aprire con doppio clic il collegamento **NIPAT Desktop**
-sul desktop o selezionarlo dal menu Start. Non occorre spostare archivi o aprire
-manualmente PowerShell. Il setup permette di scegliere separatamente le
-cartelle dell'applicazione, dell'ambiente WSL, della cache, dei dati e dei
-risultati, anche su dischi locali fissi diversi. Le scelte vengono riproposte
-alla reinstallazione. Un’installazione NIPAT Desktop riconosciuta può essere aggiornata o riparata
-nella stessa cartella, conservando i file estranei ai componenti installati.
-La disinstallazione conserva sempre dati e risultati;
-la rimozione dell'ambiente NIPAT e della cache è facoltativa.
-Requisiti, percorsi e gestione dell'installazione sono nella
-[guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) e nella
-[documentazione di distribuzione](docs/DISTRIBUZIONE.md).
-
-Il pacchetto Windows non è firmato digitalmente da NIPAT. Le protezioni
-del computer possono impedirne il download, la preparazione o l'avvio;
-l'installazione va verificata sui dispositivi destinati al collaudo. La
-[guida Windows](docs/INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser)
-descrive come documentare un blocco.
-
-Il pacchetto Ubuntu incorpora l’applicazione e lo stesso archivio scientifico
-del pacchetto Windows. APT installa anche Python, Docker Engine e Compose v2
-se mancano, scaricandoli dai repository configurati. Servono Internet e
-autorizzazione amministrativa per queste dipendenze; l’accesso dell’utente
-a Docker richiede una configurazione amministrativa distinta. Il collegamento
-**NIPAT Desktop** o il comando `nipat` apre il menu.
-Requisiti, preparazione iniziale e rimozione
-sono descritti nell’[installatore Linux](docs/INSTALLATORE_LINUX.md).
+Le guide [Windows](docs/INSTALLATORE_WINDOWS.md), [macOS](docs/INSTALLATORE_MACOS.md)
+e [Ubuntu](docs/INSTALLATORE_LINUX.md) descrivono requisiti, aggiornamento e rimozione.
+I pacchetti non hanno una firma NIPAT riconosciuta dai sistemi; macOS non dispone
+di notarizzazione Apple. La guida Mac spiega l'autorizzazione specifica in
+Privacy e sicurezza. Il setup non disattiva le protezioni del dispositivo.
 
 ## Utilizzo
 
@@ -121,10 +102,10 @@ Ogni analisi permette di modificarli prima della conferma; campioni, coppie
 e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
 CLI diretti. **6 — Ultima esecuzione** riapre il run più recente della sessione;
 **7 — Guida e informazioni** e **8 — Verifica ambiente** separano consultazione
-e diagnostica. **9 — Verifica aggiornamenti** cerca versioni pubblicate e
-approvate su GitHub; download e installazione richiedono conferme distinte.
-In **Configura → Aggiornamenti** si scelgono il canale e l'eventuale avviso
-all'avvio, disattivato inizialmente. L'applicazione resta utilizzabile offline.
+e diagnostica. **9 — Verifica aggiornamenti** consulta le release compatibili
+e verifica il download del pacchetto. Le installazioni sperimentali conservano
+identità e dati separati e non vengono adottate automaticamente.
+Dopo la preparazione l'applicazione esegue le analisi offline.
 **W — Workflow automatici** offre le tre composizioni DNPcall e SNPcall su più
 campioni, con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
 usare il setup.
@@ -277,11 +258,13 @@ indipendenti e problemi riproducibili.
 ## Documentazione e licenza
 
 - [Sintesi del prodotto](SUNTO.md)
-- [Note della versione 0.7.2](docs/RELEASE_0.7.2.md)
+- [Risorse e memoria](docs/RISORSE.md)
+- [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)
-- [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [Ubuntu](docs/INSTALLATORE_LINUX.md)
+- [Installazione Windows](docs/INSTALLATORE_WINDOWS.md) e [macOS](docs/INSTALLATORE_MACOS.md)
+- [Installatore Ubuntu](docs/INSTALLATORE_LINUX.md)
 - [Architettura](docs/ARCHITECTURE.md)
 - [Piano di sviluppo: workflow e lingue](docs/ROADMAP.md)
 - [Controlli CI/CD](docs/CI_CD.md)

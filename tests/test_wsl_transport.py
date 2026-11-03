@@ -181,6 +181,21 @@ class WslRunnerTests(unittest.TestCase):
         patch("nipat.execution.transport._windows_path", side_effect=simulated_windows_path).start()
         patch("nipat.execution.transport._drive_type", return_value=3).start()
         patch("nipat.execution.tracking.platform.platform", return_value="Windows-test-fixture").start()
+        # This fixture models the WSL command bridge, not the CI host's resource
+        # discovery. ResourceManager has its own platform-specific tests; its
+        # sysctl/WSL-list probes must not enter the Docker-only command mock.
+        self.resource_snapshot = {
+            "schema_version": 1, "backend": "wsl",
+            "host": {"memory_mib": 8192, "cpus": 4},
+            "runtime": {"configured": {"memory_mib": None, "cpus": None},
+                        "effective": {"memory_mib": 4096, "cpus": 2}, "running": True,
+                        "scope": "all-wsl2-distributions", "config_path": None},
+            "container": {"memory_mib": None, "cpus": None},
+            "suggested": {"memory_mib": 4096, "cpus": 3}, "warnings": [],
+        }
+        self.resource_probe = patch(
+            "nipat.resources.ResourceManager.snapshot", return_value=self.resource_snapshot,
+        ).start()
         self.subprocess_run = patch("nipat.execution.runner.subprocess.run", side_effect=self.execute).start()
         self.runner = DockerComposeRunner(self.layout)
         self.stdout = io.StringIO()
@@ -204,6 +219,18 @@ class WslRunnerTests(unittest.TestCase):
                 output = '{"services":{"scientific":{"image":"runtime:tag"}}}'
             elif docker[:2] == ["image", "inspect"]:
                 output = json.dumps({"id": self.image, "os": "linux", "architecture": "amd64"})
+            elif docker[:2] == ["container", "inspect"]:
+                launch = self.runner._record.data["commands"][-1]["argv"]
+                labels = dict(value.split("=", 1) for index, value in enumerate(launch)
+                              if index and launch[index - 1] == "--label")
+                output = json.dumps({
+                    "id": "b" * 64, "name": "/" + docker[2], "image": self.image,
+                    "labels": labels,
+                    "state": {"status": "exited", "oom_killed": False, "exit_code": 0,
+                              "started_at": "2026-11-03T10:00:00Z", "finished_at": "2026-11-03T10:01:00Z"},
+                    "limits": {"memory_bytes": 0, "memory_swap_bytes": 0, "nano_cpus": 0,
+                               "cpu_period": 0, "cpu_quota": 0, "pids_limit": None},
+                })
             elif docker[0] == "run":
                 output = "R version fixture\nsamtools fixture\n"
             elif docker[:2] == ["rm", "--force"] or docker[-2:] == ["build", "scientific"]:
@@ -248,6 +275,8 @@ class WslRunnerTests(unittest.TestCase):
         self.assertEqual(record["status"], "succeeded")
         self.assertEqual(record["transport"]["wsl_distro"], "NIPAT-Test")
         self.assertEqual(record["runtime"]["backend"], "wsl")
+        self.assertEqual(record["resource_snapshot"], self.resource_snapshot)
+        self.resource_probe.assert_called_once_with(container_options=self.runner.options)
         self.assertEqual(record["commands"][0]["argv"], popen.call_args.args[0])
         argv = popen.call_args.args[0]
         self.assertEqual(argv[-len(scientific):], scientific)
@@ -277,7 +306,7 @@ class WslRunnerTests(unittest.TestCase):
                     self.runner.run(["Rscript", "second-stage.R"])
         self.assertEqual(len(self.ensure_calls()), 2)
 
-    def test_interruption_removes_only_named_container_using_same_backend(self):
+    def test_interruption_removes_only_verified_container_id_using_same_backend(self):
         process = MagicMock()
         process.stdout.__iter__.side_effect = KeyboardInterrupt()
         process.poll.return_value = 130
@@ -292,7 +321,7 @@ class WslRunnerTests(unittest.TestCase):
         self.assertEqual(record["status"], "interrupted")
         cleanup = stage["container_cleanup"]
         self.assertEqual(cleanup["status"], "removed")
-        self.assertEqual(cleanup["argv"][-4:], ["docker", "rm", "--force", stage["container_name"]])
+        self.assertEqual(cleanup["argv"][-4:], ["docker", "rm", "--force", "b" * 64])
         self.assertEqual(cleanup["argv"][:4], ["wsl.exe", "--distribution", "NIPAT-Test", "--user"])
 
     def test_timed_out_probe_cleans_up_its_exact_container(self):
@@ -318,6 +347,7 @@ class WslRunnerTests(unittest.TestCase):
             with runner.record_run(run, workflow="test", inputs=[self.source], parameters={}, mounts=mounts):
                 runner.run(["Rscript", "test.R", target])
         popen.assert_not_called()
+        self.resource_probe.assert_not_called()
         self.subprocess_run.assert_not_called()
         record = json.loads((run / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(record["status"], "planned")

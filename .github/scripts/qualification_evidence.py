@@ -26,7 +26,7 @@ def digest(data):
 
 
 def identity(installer_set):
-    return {
+    result = {
         "schema_version": 1, "version": installer_set["version"],
         "source_commit": installer_set["source_commit"],
         "installer_manifest_sha256": installer_set["installer_manifest_sha256"],
@@ -34,6 +34,10 @@ def identity(installer_set):
         "linux_installer_sha256": installer_set["linux"]["sha256"],
         "synthetic_only": True,
     }
+    if tuple(int(n) for n in installer_set["version"].split(".")[:2]) >= (0, 8):
+        for architecture in ("arm64", "x86_64"):
+            result[f"macos_{architecture}_installer_sha256"] = installer_set[f"macos_{architecture}"]["sha256"]
+    return result
 
 
 def safe_name(name):

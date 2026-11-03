@@ -11,6 +11,7 @@ import sys
 from typing import Iterator
 
 from .errors import NipatError
+from .distribution import WINDOWS_DIRECTORY
 
 _BUSY = "NIPAT e in aggiornamento. Attendere la fine dell'installazione prima di avviare una sessione."
 _TOKEN = "NIPAT_SETUP_ACTIVITY_TOKEN"
@@ -26,7 +27,7 @@ def windows_activity_path() -> Path:
     base = os.environ.get("LOCALAPPDATA", "")
     if not base or not Path(base).is_absolute():
         raise NipatError("LOCALAPPDATA non disponibile per coordinare le sessioni NIPAT.")
-    path = Path(base) / "NIPAT-Desktop" / "activity.lock"
+    path = Path(base) / WINDOWS_DIRECTORY / "activity.lock"
     _safe_parent(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     _safe_parent(path)
@@ -95,7 +96,7 @@ def _authorized_setup_child() -> bool:
     kernel = _windows_kernel()
     kernel.OpenEventW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
     kernel.OpenEventW.restype = wintypes.HANDLE
-    handle = kernel.OpenEventW(0x00100000, False, "Local\\NIPAT-Desktop-SetupLease-" + match[2])
+    handle = kernel.OpenEventW(0x00100000, False, "Local\\" + WINDOWS_DIRECTORY + "-SetupLease-" + match[2])
     if not handle:
         return False
     kernel.CloseHandle(handle)

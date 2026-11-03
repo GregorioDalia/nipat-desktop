@@ -16,6 +16,7 @@ import tempfile
 from typing import Any, Mapping
 
 from nipat.errors import ValidationError
+from nipat.distribution import WINDOWS_DIRECTORY, UNIX_DIRECTORY
 from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout
 from nipat.storage import validate_windows_storage_path as _validate_windows_storage_path
@@ -43,12 +44,14 @@ def preferences_path() -> Path:
         base = os.environ.get("LOCALAPPDATA")
         if not base:
             raise ValidationError("LOCALAPPDATA non disponibile per le impostazioni NIPAT.")
-        path = Path(base) / "NIPAT-Desktop" / "preferences.json"
+        path = Path(base) / WINDOWS_DIRECTORY / "preferences.json"
+    elif sys.platform == "darwin":
+        path = Path.home() / "Library" / "Application Support" / WINDOWS_DIRECTORY / "preferences.json"
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
         if not base.is_absolute():
             raise ValidationError("XDG_CONFIG_HOME deve essere un percorso assoluto.")
-        path = base / "nipat-desktop" / "preferences.json"
+        path = base / UNIX_DIRECTORY / "preferences.json"
     return path.expanduser().absolute()
 
 

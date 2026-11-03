@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "lima_version": "2.2.1",
+  "python_version": "3.12.16",
+  "python_build": "20261026",
+  "architectures": {
+    "arm64": {
+      "lima": {
+        "file": "lima-2.2.1-Darwin-arm64.tar.gz",
+        "url": "https://github.com/lima-vm/lima/releases/download/v2.2.1/lima-2.2.1-Darwin-arm64.tar.gz",
+        "sha256": "9e9eacce88f37e185c346bad73aa6136f738d8cdf8c3bb23cd42b071824bc66e",
+        "size": 38328082
+      },
+      "python": {
+        "file": "cpython-3.12.16+20261026-aarch64-apple-darwin-install_only.tar.gz",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-aarch64-apple-darwin-install_only.tar.gz",
+        "sha256": "fbf4afef53c2a6b72bb741bc06d5671a9dfaf87bd84e5aa73ac9b3d0d589f14e",
+        "size": 25172086
+      }
+    },
+    "x86_64": {
+      "lima": {
+        "file": "lima-2.2.1-Darwin-x86_64.tar.gz",
+        "url": "https://github.com/lima-vm/lima/releases/download/v2.2.1/lima-2.2.1-Darwin-x86_64.tar.gz",
+        "sha256": "6b776e4bc41f358e6ee01fefcc78e2eb26f11635a0fcff632234af77a566c6c4",
+        "size": 24958659
+      },
+      "python": {
+        "file": "cpython-3.12.16+20261026-x86_64-apple-darwin-install_only.tar.gz",
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261026/cpython-3.12.16%2B20261026-x86_64-apple-darwin-install_only.tar.gz",
+        "sha256": "a962e47df522889eaa7ff0d6a56203f1079f68aabb65ffdbe8455f362bc769f3",
+        "size": 24873291
+      }
+    }
+  }
+}

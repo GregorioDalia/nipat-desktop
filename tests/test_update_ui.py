@@ -35,6 +35,7 @@ class UpdateUITests(unittest.TestCase):
         self.messages = []
 
     def invoke(self, answers=(), **kwargs):
+        kwargs.setdefault("current_version", "0.7.2")
         ui = Terminal(read=Mock(side_effect=list(answers)), write=self.messages.append)
         return run_updates(ui, self.layout, Preferences(), client=self.client,
                            download_directory=self.root / "updates", handoff=self.handoff,
@@ -57,6 +58,19 @@ class UpdateUITests(unittest.TestCase):
         self.handoff.assert_not_called()
         self.assertIn("versione installata non e' stata modificata", "\n".join(self.messages))
 
+    def test_mac_download_explains_manual_close_and_installer_without_unsupported_handoff(self):
+        self.offer.asset.platform = "darwin-arm64"
+        self.offer.asset.name = "NIPAT-0.8.2-macos-arm64.pkg"
+        self.client.download.return_value = self.root / self.offer.asset.name
+        ui = Terminal(read=Mock(side_effect=["1"]), write=self.messages.append)
+        self.assertFalse(run_updates(ui, self.layout, Preferences(), client=self.client,
+                                    platform="darwin-arm64", download_directory=self.root / "updates",
+                                    handoff=self.handoff, current_version="0.8.1"))
+        self.client.download.assert_called_once()
+        self.handoff.assert_not_called()
+        self.assertIn("chiudere tutte le sessioni NIPAT", "\n".join(self.messages))
+        self.assertIn(str(self.client.download.return_value), "\n".join(self.messages))
+
     def test_install_requires_two_explicit_choices_and_handoff_success(self):
         self.assertTrue(self.invoke(["1", "1"]))
         self.handoff.assert_called_once_with(self.offer, self.client.download.return_value, self.layout.project_dir)
@@ -71,7 +85,7 @@ class UpdateUITests(unittest.TestCase):
         ui = Terminal(read=Mock(side_effect=["1", "1"]), write=write)
         started = run_updates(ui, self.layout, Preferences(), client=self.client,
                               download_directory=self.root / "updates", handoff=self.handoff,
-                              platform="windows-x86_64")
+                              platform="windows-x86_64", current_version="0.7.2")
         self.assertTrue(started)
         self.handoff.assert_called_once()
         self.assertNotIn("annullata", "\n".join(self.messages))

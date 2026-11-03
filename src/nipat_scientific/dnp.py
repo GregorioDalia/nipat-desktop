@@ -13,6 +13,7 @@ import re
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, write_input_report
 from nipat_scientific.panels import read_dnp_list, write_dnp_list
 
@@ -53,8 +54,9 @@ def _native_path(path: Path, label: str) -> str:
 
 def prepare_dnp(request: object) -> DnpPreparation:
     """Validate all inputs before writing native panel/list for unchanged R."""
-    if not isinstance(request, dict) or set(request) != REQUEST_FIELDS:
+    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
         raise ValidationError("Richiesta DNPcall non valida: campi mancanti o inattesi.")
+    validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta DNPcall non supportata.")
     if request["workflow"] != "dnp-call":

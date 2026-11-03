@@ -1,11 +1,9 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.7.2**,
-con interfaccia testuale guidata e CLI diretta per Windows e Ubuntu.
-Consultare la pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) per le
-versioni pubblicate e gli installatori disponibili. I pacchetti ottenuti dagli
-artefatti GitHub Actions sono destinati alla revisione tecnica.
+Questa guida descrive **NIPAT Desktop 0.8.2**, con menu testuale guidato e CLI
+diretta su Windows, macOS e Ubuntu. I pacchetti sono nella pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases);
+le [note della versione](RELEASE_0.8.2.md) identificano il perimetro verificato.
 
 La versione offre
 **W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
@@ -25,14 +23,16 @@ campioni richiede una valutazione appropriata al contesto di utilizzo.
 
 ## Requisiti e avvio su Windows
 
-Il pacchetto richiede **Windows 11 x64**, virtualizzazione disponibile e WSL2.
+Il pacchetto richiede **Windows 10 22H2 x64 (build 19045) o Windows 11 x64**,
+virtualizzazione disponibile e WSL2. Windows Server, ARM e 32 bit non sono
+supportati. Il setup rileva la disponibilità di WSL e prepara i componenti mancanti.
 L'attivazione di WSL può richiedere Internet, autorizzazione amministrativa
 e riavvio, secondo la configurazione del computer. Le policy dell'istituzione
 possono richiedere l'intervento del servizio informatico. Non sono necessarie
 installazioni separate di Python, R, samtools o Docker Desktop.
 
-Nella pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases),
-aprire la versione desiderata e scaricare **NIPAT-Setup.exe** dagli asset.
+Dalla pagina Releases, scaricare
+**NIPAT-Setup.exe**.
 Si utilizza un solo file eseguibile, senza archivi da estrarre. I file
 **Source code** sono destinati allo sviluppo e non sono installatori.
 
@@ -68,24 +68,29 @@ l'uso, conservare il messaggio completo e il nome del file bloccato e comunicarl
 al responsabile tecnico insieme alla versione del pacchetto. Le indicazioni
 per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser).
 
-## Requisiti e avvio su Ubuntu
+## Requisiti e avvio su macOS
 
-Il pacchetto `.deb` richiede **Ubuntu 24.04 LTS x86_64**, Python 3.12,
-Docker Engine locale e Compose v2. L’installazione con APT scarica e installa
-queste dipendenze se mancano. Prima di avviare NIPAT, Docker deve essere
-avviato e accessibile al proprio account, con daemon di sistema senza
-rimappatura degli UID.
-L’installazione e l’autorizzazione a usare Docker sono descritte nella
-[guida dell’installatore Linux](INSTALLATORE_LINUX.md).
+Usare macOS 14 o successivo e il pacchetto della propria architettura:
+`NIPAT-0.8.2-macos-arm64.pkg` per Apple Silicon,
+`NIPAT-0.8.2-macos-x86_64.pkg` per Intel.
+Aprire il `.pkg`, completare l'installazione e avviare **NIPAT Desktop**
+da Applicazioni. Il menu si apre nel Terminale. Il primo avvio prepara Lima
+e richiede Internet; Python e Lima sono inclusi, senza installazione manuale
+di Homebrew o Docker Desktop.
 
-Dopo l’installazione, aprire **NIPAT Desktop** dal menu delle applicazioni,
-oppure eseguire `nipat` nel terminale. Il primo avvio importa
-l’immagine inclusa e completa diagnostica e autotest; il menu appare solo
-dopo la riuscita della preparazione. NIPAT non va eseguito con `sudo`.
+Il calcolo usa un container Linux AMD64. Su Apple Silicon l'esecuzione avviene
+tramite Rosetta nella VM Lima ARM64. Cartelle e runtime appartengono al profilo
+desktop. Installatore e applicazione non sono notarizzati: le protezioni
+del sistema possono impedirne l'avvio. Requisiti, percorsi e diagnostica sono
+nella [guida macOS](INSTALLATORE_MACOS.md).
 
-Per riprendere una preparazione interrotta, risolvere la causa segnalata e
-riaprire NIPAT oppure eseguire `nipat --setup`. Il launcher
-conserva stato e log in `${XDG_STATE_HOME:-~/.local/state}/nipat-desktop`.
+## Utilizzo su Ubuntu
+
+Installare `nipat-desktop_0.8.2_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
+[guida Ubuntu](INSTALLATORE_LINUX.md). Il pacchetto include l'immagine scientifica;
+APT risolve le dipendenze mancanti. Il motore Docker locale deve essere accessibile
+all'utente. La [procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti)
+è destinata allo sviluppo.
 
 ## Menu guidato
 
@@ -110,7 +115,7 @@ rendere di nuovo utilizzabili le frecce nel menu successivo.
 | 6 | Risultati e log dell'ultima esecuzione della sessione. |
 | 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
 | 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
-| 9 | Verifica aggiornamenti: ricerca, download verificato e avvio dell'installatore dopo conferma. |
+| 9 | Verifica aggiornamenti: consulta le release compatibili e verifica il download del pacchetto. |
 | W | Workflow automatici: composizioni DNPcall con Contamination/CPI e SNPcall facoltativo; SNPcall su più campioni. |
 | 0 | Uscita dal programma. |
 
@@ -189,8 +194,8 @@ precedenti a un salvataggio.
 | CPI | Prefissi materno/paterno, frequenze di popolazione, modalità di selezione dei siti e relativi pannelli o mappe, costante d'errore. |
 | Riepilogo impostazioni | Consultazione dei valori salvati. |
 | Ripristina impostazioni | Ritorno ai valori iniziali del menu dopo conferma esplicita; non elimina campioni o risultati. |
-| Aggiornamenti | Canale `testing` o `stable` e verifica facoltativa all'avvio. |
-| Esecuzione e provenienza | Checksum degli input e limiti CPU, memoria e processi del container. |
+| Aggiornamenti | Canale e verifica della disponibilità di release compatibili. |
+| Risorse e provenienza | Checksum e limiti dell’analisi; consultazione e configurazione RAM/CPU dell’ambiente con anteprima, backup e conferma. |
 
 I valori salvati vengono riproposti anche dopo aver chiuso NIPAT. Si possono
 modificare durante la compilazione di una singola analisi senza cambiare le
@@ -203,7 +208,8 @@ Le preferenze del menu sono conservate in:
 | Sistema | File |
 | --- | --- |
 | Windows | `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json` |
-| Ubuntu | `${XDG_CONFIG_HOME:-~/.config}/nipat-desktop/preferences.json` |
+| macOS | `~/Library/Application Support/NIPAT-Desktop/preferences.json` |
+| Ubuntu | `~/.config/nipat-desktop/preferences.json`, oppure sotto `XDG_CONFIG_HOME`. |
 
 Questa configurazione riguarda esclusivamente il menu guidato. I comandi CLI
 diretti usano le proprie opzioni esplicite e i normali valori predefiniti,
@@ -221,7 +227,7 @@ Per cambiare la posizione dell'applicazione, dell'ambiente WSL o della cache,
 usare l'installatore. **Configura** non trasferisce questi componenti e non
 sposta i dati già presenti. La gestione delle cartelle è descritta di seguito.
 
-**Esecuzione e provenienza** propone `auto` per i checksum: i file fino a
+**Risorse e provenienza** propone `auto` per i checksum: i file fino a
 16 MiB vengono verificati con SHA-256, quelli maggiori sono identificati dai
 metadati. La scelta `full` calcola e verifica anche gli hash dei file grandi,
 con letture aggiuntive prima e dopo il calcolo. I limiti CPU, memoria e processi
@@ -231,55 +237,16 @@ Le modalità sono descritte in [Esecuzioni e risultati](ESECUZIONI.md).
 
 ## Aggiornamenti
 
-**9 — Verifica aggiornamenti** consulta le release pubblicate del repository
-ufficiale. Sono proposte soltanto versioni successive, compatibili con la
-piattaforma e accompagnate dalle evidenze di pubblicazione e accettazione
-richieste. Le build di revisione di GitHub Actions e le bozze non sono aggiornamenti.
-L'assenza di una versione proposta non attesta una nuova pubblicazione.
+**9 — Verifica aggiornamenti** consulta le release compatibili, mostra
+versione e note e verifica il pacchetto scaricato. Su Windows e Ubuntu il
+passaggio all'installatore segue la procedura guidata. Su Mac, al termine del
+download, chiudere NIPAT e aprire il `.pkg` verificato. L'installazione non
+può sostituire il programma mentre è in uso.
 
-In **5 — Configura → 8 — Aggiornamenti** sono disponibili:
-
-| Impostazione | Comportamento |
-| --- | --- |
-| Canale `testing`, predefinito | Considera pre-release e release stabili approvate. |
-| Canale `stable` | Considera soltanto release stabili approvate. |
-| Verifica all'avvio, inizialmente disattivata | Se attivata, consulta le release e mostra un breve avviso; non scarica né installa automaticamente. |
-
-Quando è disponibile una versione:
-
-1. Controllare versione e dimensione dell'installatore e consultare il
-   collegamento alle note della release mostrato dal menu.
-2. Selezionare **1 — Scarica aggiornamento** oppure **0 — Più tardi**,
-   la scelta predefinita. Viene scaricato l'installatore completo della propria
-   piattaforma; NIPAT ne verifica dimensione e checksum prima dell'utilizzo.
-3. Al termine, scegliere esplicitamente **1 — Installa l'aggiornamento** o
-   rimandare. Il download da solo non cambia l'applicazione installata.
-4. Confermando l'installazione, il menu si chiude per consentire la sostituzione
-   dei componenti. Su Windows seguire il setup; su Ubuntu l'installazione del
-   `.deb` richiede autorizzazione amministrativa tramite APT.
-5. Riaprire NIPAT quando la preparazione del pacchetto è completata. L'avvio
-   delle analisi resta subordinato alla configurazione verificata del runtime.
-
-La verifica automatica è soltanto informativa e non interrompe le analisi.
-È possibile annullare o rimandare; una connessione assente o un errore di
-verifica non impediscono di usare l'installazione già pronta. La ricerca e
-il download richiedono Internet, mentre i calcoli continuano a usare il motore
-locale. In modalità `--dry-run` la voce aggiornamenti non esegue connessioni,
-download o installazioni.
-
-Ctrl+C interrompe la verifica o il download e torna al menu principale.
-Prima dell'avvio dell'installatore, `:annulla` nei menu testuali consente lo
-stesso ritorno. Dopo la conferma e l'avvio del programma di installazione,
-seguire i suoi comandi: l'annullamento nel menu NIPAT non controlla un
-installatore esterno già avviato.
-
-L'installatore dello stesso prodotto conserva percorsi configurati, preferenze,
-dati e risultati. Un aggiornamento non modifica i record delle analisi già
-eseguite: i nuovi run registrano la versione dell'applicazione e il motore
-utilizzati. Il backup di riparazione non costituisce un rollback completo
-automatico. In caso di errore conservare messaggi e log, quindi seguire la
-[guida Windows](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione) o la
-[guida Ubuntu](INSTALLATORE_LINUX.md#aggiornamento-e-rimozione).
+I run già prodotti conservano versione e identità del motore utilizzato.
+Non vengono ricalcolati dall'installazione di un nuovo pacchetto. Su Windows
+seguire la [procedura di riparazione](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione);
+su macOS consultare la [guida dell'installatore](INSTALLATORE_MACOS.md).
 
 ## Installazione e spazio
 
@@ -357,10 +324,11 @@ precedenti rimangono nella vecchia destinazione e si consultano con Esplora file
 dell'ambiente WSL prepara un ambiente dedicato nella nuova posizione e
 conserva quello precedente.
 
-Su Ubuntu installato dal pacchetto, l’applicazione si trova in
-`/opt/nipat-desktop`; dati e risultati predefiniti sono nelle sottocartelle
-`data` e `runs` di `${XDG_DATA_HOME:-~/.local/share}/nipat-desktop`.
-Le variabili XDG, se definite, devono indicare percorsi assoluti.
+Su macOS l’applicazione è `/Applications/NIPAT Desktop.app`; dati e
+risultati predefiniti sono nelle sottocartelle `data` e `runs` di
+`~/Library/Application Support/NIPAT-Desktop`. La VM Lima vive in
+`~/.nipat/lima`. I mount e le autorizzazioni macOS limitano i percorsi
+accessibili, come descritto nella [guida macOS](INSTALLATORE_MACOS.md).
 
 Per il checkout da sorgenti, `data` e `runs` si trovano accanto alla cartella
 del progetto. `data` è una cartella di comodità e non limita la selezione
@@ -527,9 +495,21 @@ Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-Desktop")
 
 `nipat.cmd wizard` apre il menu; `nipat.cmd` senza argomenti mostra la guida
 dei comandi. Per l'uso ordinario è sufficiente l'icona NIPAT.
-Su Ubuntu installato dal pacchetto, usare `nipat` al posto di
-`.\nipat.cmd` e la sintassi dei percorsi Linux. Nel checkout da sorgenti
-il comando è `nipat`. Per esempio:
+Su macOS il launcher del pacchetto accetta gli stessi argomenti:
+
+```bash
+"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" --help
+"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" doctor --runtime
+"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" self-test
+```
+
+Il launcher Mac prepara il runtime prima di avviare il client. La preparazione
+verifica archivio e contratti del motore; gli autotest numerici si avviano
+esplicitamente con `self-test`. Per i comandi di manutenzione vedere la
+[guida macOS](INSTALLATORE_MACOS.md#cli-e-diagnostica).
+
+Nel checkout Linux da sorgenti il comando è `nipat`, con percorsi POSIX.
+Per esempio:
 
 ```bash
 nipat --help
@@ -537,10 +517,6 @@ nipat dnp-call --help
 nipat --runs-dir "$HOME/risultati-nipat" contamination \
   --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
 ```
-
-Il launcher Ubuntu permette `--help` e `--version` anche senza Docker
-disponibile. `--setup` ripete la verifica dell’archivio, la diagnostica e
-gli autotest senza aprire il menu.
 
 Le opzioni globali precedono il sottocomando. Esempio di simulazione:
 
@@ -553,9 +529,9 @@ Le opzioni globali precedono il sottocomando. Esempio di simulazione:
 motore scientifico. Registra uno stato `planned`, non produce risultati
 scientifici e non sostituisce una verifica del runtime. La prova reale richiede
 un nuovo nome di run. Per simulare il menu usare `nipat.cmd --dry-run wizard`;
-per effettuare analisi reali aprire normalmente NIPAT. Nel pacchetto Ubuntu,
-`--dry-run` non importa l’immagine e non avvia la preparazione o gli autotest;
-non attesta quindi che l’ambiente scientifico sia disponibile.
+per effettuare analisi reali aprire normalmente NIPAT. La simulazione non
+attesta la riuscita di un calcolo. Il launcher Mac verifica comunque la
+preparazione dell'ambiente prima di aprire il client, anche per una simulazione.
 
 Le opzioni `--input-hashes auto|full`, `--cpus`, `--memory-mb` e `--pids-limit`
 precedono il sottocomando dell'analisi, `workflow` o `wizard`. Per esempio:
@@ -902,3 +878,17 @@ esiti positivi. Una nuova prova deve usare una nuova cartella.
 Nomi e percorsi dei campioni sono presenti nei metadati e non vengono
 anonimizzati automaticamente. Prima di allegare log o file a una segnalazione,
 verificarne il contenuto e scegliere un canale adatto ai dati condivisi.
+
+## Nomi dei campioni e risorse
+
+I risultati per la consultazione mostrano il nome originale del campione.
+Gli identificativi come `sample_0001` collegano input e passaggi internamente:
+non indicano che il file originale sia stato rinominato. La mappa dei campioni
+permette di risalire al percorso completo e distingue file omonimi.
+Le esportazioni leggibili affiancano gli artefatti scientifici verificati;
+non cambiano i valori calcolati da R.
+
+La gestione delle [risorse](RISORSE.md) mostra separatamente RAM fisica,
+RAM della VM e limite dell'analisi. Aumentare il limite dell'analisi non
+modifica automaticamente Lima o WSL. Per un run fallito conservare il
+resoconto, `run.json` ed `execution.log` prima di riprovare con nuovi valori.

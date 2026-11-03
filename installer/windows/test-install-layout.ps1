@@ -65,7 +65,7 @@ try {
         $invalid.schema_version = $badSchema
         Assert-Rejected { Assert-NipatInstallLayout $invalid } 'schema version is validated without coercion'
     }
-    foreach ($foreignChannel in @('stable', 'preview-0.5')) {
+    foreach ($foreignChannel in @('stable', 'preview-0.5', 'experimental08')) {
         $invalid = Copy-Layout $layout
         $invalid.installation_channel = $foreignChannel
         Assert-Rejected { Assert-NipatInstallLayout $invalid } 'another channel cannot authorize Desktop storage'
@@ -92,6 +92,8 @@ try {
         (Join-Path $env:LOCALAPPDATA 'NIPAT'),
         (Join-Path $env:LOCALAPPDATA 'Programs\NIPAT-0.5-Preview'),
         (Join-Path $env:LOCALAPPDATA 'NIPAT-0.5-Preview'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\NIPAT-Experimental08'),
+        (Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08'),
         (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\preferences.json'),
         (Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\installations'),
         $env:WINDIR,
@@ -132,6 +134,21 @@ try {
     foreach ($file in $previewSentinels.Keys) {
         Assert-Test ((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash -ceq $previewSentinels[$file]) 'reading prior Preview history preserves all prior files and metadata'
     }
+    $experimentalLayout = Copy-Layout $layout
+    $experimentalLayout.installation_channel = 'experimental08'
+    foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        $experimentalLayout.$field = Join-Path (Join-Path $temporary 'retained experimental custom roots') $field
+    }
+    $experimentalHistory = Join-Path $env:LOCALAPPDATA 'NIPAT-Experimental08\installations\retained-layout.json'
+    Write-NipatJsonAtomic $experimentalHistory $experimentalLayout
+    $experimentalHash = (Get-FileHash -LiteralPath $experimentalHistory -Algorithm SHA256).Hash
+    foreach ($field in @('app_dir', 'runtime_dir', 'cache_dir', 'data_dir', 'runs_dir')) {
+        $invalid = Copy-Layout $layout
+        $invalid.$field = $experimentalLayout.$field
+        Assert-Rejected { Assert-NipatInstallLayout $invalid } 'official install cannot reuse custom experimental roots, even after uninstall'
+        Assert-Test (-not (Test-Path -LiteralPath $invalid.$field)) 'experimental protection never creates a destination'
+    }
+    Assert-Test ((Get-FileHash -LiteralPath $experimentalHistory -Algorithm SHA256).Hash -ceq $experimentalHash) 'experimental history remains unchanged'
     foreach ($badPair in @(
         @('data_dir', 'app_dir'), @('runs_dir', 'data_dir'), @('runtime_dir', 'cache_dir')
     )) {
@@ -155,7 +172,7 @@ try {
     Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'a nonempty custom managed folder requires an ownership marker'
     Write-StorageMarker $unownedCache 'runtime'
     Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'a runtime marker cannot authorize a cache directory'
-    foreach ($foreignChannel in @('stable', 'preview-0.5')) {
+    foreach ($foreignChannel in @('stable', 'preview-0.5', 'experimental08')) {
         Write-StorageMarker $unownedCache 'cache' $foreignChannel
         Assert-Rejected { Assert-NipatInstallLayout $invalid -CheckExisting } 'another channel storage marker is not adopted'
     }

@@ -1,109 +1,77 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.7.2** è un'applicazione locale per eseguire quattro workflow
-scientifici da un menu testuale guidato o dalla riga di comando. Le analisi
-possono essere avviate singolarmente oppure nei workflow automatici
-**DNPcall → Contamination**, **DNPcall → CPI** e **DNPcall → Contamination e CPI**.
-SNPcall può essere aggiunto sugli stessi BAM o eseguito da solo su più BAM
-o pileup. Una sola conferma avvia tutti i passaggi selezionati.
-Questa versione non include una GUI grafica.
+**NIPAT Desktop 0.8.2** esegue DNPcall, SNPcall, Contamination e CPI sul computer
+dell'utente attraverso una CLI guidata. Le analisi possono essere avviate
+singolarmente oppure collegate in un workflow automatico con una sola conferma.
 
-Il catalogo scientifico consultabile dal menu o con `nipat parameters`
-descrive in italiano e inglese le opzioni R, le regole interne e la
-preparazione degli input. Il motore convalida i piani concatenati e ne
-esegue le quattro analisi in sequenza, rispettandone le dipendenze. SNPcall
-rimane un'attività indipendente anche quando appartiene allo stesso piano.
-La versione è destinata alla valutazione da parte dei ricercatori.
-Le [note della versione 0.7.2](docs/RELEASE_0.7.2.md) descrivono funzionalità,
-pacchetti e ambito delle verifiche.
-
-| Workflow | Funzione |
+| Analisi | Funzione |
 | --- | --- |
 | DNPcall | Conteggi e genotipi di dinucleotidi da uno o più BAM. |
 | SNPcall | Conteggi SNP da BAM o pileup con nomi delle letture. |
 | Contamination | Stima della contaminazione da tabelle di conteggi compatibili. |
 | CPI | Stima della frazione fetale e calcolo dell'indice di paternità. |
 
-Il client Python gestisce selezione degli input, parametri e registrazione
-delle esecuzioni. Un'immagine scientifica autonoma contiene la preparazione
-degli input, l'esecuzione dei piani, gli script R, samtools e le dipendenze. Su Windows l'immagine
-viene eseguita in un ambiente WSL2 dedicato; su Ubuntu tramite Docker Engine
-nativo. I calcoli e i dati rimangono sul computer.
+I workflow automatici collegano **DNPcall → Contamination**, **DNPcall → CPI**
+oppure **DNPcall → Contamination e CPI**. SNPcall può essere aggiunto sugli stessi
+BAM, con il proprio pannello, o eseguito su più campioni. Le coppie per CPI
+richiedono l'assegnazione esplicita dei ruoli; il programma non deduce relazioni
+biologiche dai nomi dei file.
 
-Prima di R, il motore Python controlla formato e contenuto degli input.
-I pannelli vengono normalizzati in copie di lavoro; conteggi e frequenze
-incompatibili con il formato sono rifiutati. Le incongruenze che richiedono
-una valutazione scientifica vengono segnalate senza correggere i dati.
-Il menu mostra gli avvisi anche dopo un completamento tecnico riuscito.
-Checksum integrali degli input e limiti di risorse sono configurabili;
-le esecuzioni incomplete possono essere consultate senza riscrivere i risultati.
+Il client Python raccoglie gli input e controlla l'esecuzione. Una sola immagine
+scientifica contiene R, samtools, dipendenze, script scientifici e orchestrazione.
+Windows usa WSL2, macOS una VM Lima, Ubuntu Docker Engine locale. Su Apple Silicon
+il container Linux AMD64 viene eseguito tramite Rosetta. Gli input sono letti
+senza modificarli; ogni run conserva risultati, intermedi, parametri e log.
 
-Il pacchetto Windows è un singolo `NIPAT-Setup.exe`, con
-installazione con doppio clic e avvio dal collegamento **NIPAT Desktop**
-sul desktop o nel menu Start. Il setup consente di scegliere cinque cartelle
-separate per applicazione, ambiente WSL, cache, dati e risultati e ricorda le
-scelte nelle reinstallazioni. L'aggiornamento e la riparazione riutilizzano
-la cartella di NIPAT Desktop riconosciuta. La rimozione dell'applicazione conserva
-dati e risultati; eliminare l'ambiente NIPAT e la cache è facoltativo. Non richiede
-l'installazione separata degli strumenti scientifici.
-Ubuntu 24.04 x86_64 utilizza un singolo
-pacchetto `.deb`, con lo stesso archivio scientifico e avvio dal collegamento
-**NIPAT Desktop** o dal comando `nipat`. APT installa
-automaticamente le dipendenze mancanti, inclusi Docker Engine e Compose v2;
-l’accesso dell’utente a Docker richiede autorizzazione amministrativa.
-Le versioni pubblicate e i relativi pacchetti sono elencati nella pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases); gli
-artefatti GitHub Actions sono invece destinati alla revisione tecnica.
+## Installazione
 
-Per utilizzare NIPAT si sceglie il workflow, si indicano file e parametri e
-si conferma il riepilogo con **Avvia analisi**. Le indicazioni nei campi
-spiegano formati, valori predefiniti e comandi di navigazione. **Configura**
-conserva cartelle e impostazioni del menu fra gli avvii; ogni analisi consente
-di correggere i valori proposti. Campioni, coppie e nome del run si scelgono
-sempre per la singola analisi. **Guida e informazioni** e **Verifica ambiente**
-sono funzioni separate. **W — Workflow automatici** configura le analisi
-successive a DNPcall e SNPcall su più campioni; per CPI si indicano
-esplicitamente le coppie e i ruoli cfDNA materno e paterno. Le preferenze non cambiano la CLI diretta. Gli input
-possono restare nelle cartelle originali e vengono letti senza modificarli.
-Su Windows sono supportati dischi locali fissi. I percorsi relativi partono
-dalla cartella corrente indicata nell'interfaccia, non automaticamente da
-**Dati**. Per il riferimento si sceglie il file FASTA, accompagnato dai suoi indici.
+Scaricare il pacchetto del proprio sistema dalla pagina
+[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+Gli archivi Source code sono destinati allo sviluppo.
 
-`:annulla` nei campi testuali e Ctrl+C anche durante il calcolo riportano al
-menu principale. Durante un'analisi NIPAT esegue prima la procedura di arresto,
-conservando log e risultati già prodotti. Le impostazioni non salvate vengono
-scartate; quelle già salvate restano disponibili.
+| Sistema | Pacchetto |
+| --- | --- |
+| Windows 10 22H2 x64 o Windows 11 x64 | `NIPAT-Setup.exe` |
+| macOS 14 o successivo, Apple Silicon | `.pkg` arm64 |
+| macOS 14 o successivo, Intel | `.pkg` x86_64 |
+| Ubuntu 24.04 LTS x86_64 | `.deb` amd64 |
 
-**Verifica aggiornamenti** propone gli installatori completi delle versioni
-pubblicate e approvate su GitHub. Download e installazione sono scelte esplicite;
-si può rimandare e continuare a lavorare. Il canale iniziale è `testing`, che
-include pre-release e versioni stabili; `stable` considera solo le stabili.
-L'eventuale verifica all'avvio è disattivata inizialmente e mostra solo un avviso.
+Windows e Mac includono Python e i componenti NIPAT; non richiedono Docker Desktop.
+L'attivazione di WSL o la preparazione iniziale Lima possono richiedere Internet,
+autorizzazioni e, su Windows, un riavvio. Ubuntu installa le dipendenze attraverso
+APT. Dopo la preparazione, le analisi si svolgono localmente senza rete.
+Le [guide di installazione](docs/DISTRIBUZIONE.md) descrivono anche gli eventuali
+avvisi di sicurezza e i requisiti del dispositivo.
 
-Ogni analisi crea un nuovo run con risultati in `output`, intermedi conservati
-in `work`, metadati in `run.json` e messaggi in `execution.log`. Le cartelle
-esistenti non vengono sovrascritte. Il workflow automatico conserva in
-`output/workflow` lo stato complessivo, gli output e i log di ogni passaggio.
-DNPcall produce una volta sola le tabelle individuali utilizzate da
-Contamination e CPI. Un campione condiviso fra coppie viene elaborato una sola
-volta, mantenendo il ruolo dichiarato. Se un passaggio fallisce, quelli
-successivi non vengono avviati. Contamination non modifica i conteggi DNPcall
-e non produce tabelle «decontaminate».
+## Utilizzo
 
-CPI richiede frequenze di popolazione appropriate e può usare tutti i siti
-disponibili o pannelli selezionati. I risultati comprendono un CSV riepilogativo,
-un PDF per coppia e un PDF complessivo; il record conserva l'associazione
-con gli identificatori delle coppie. SNPcall usa un proprio pannello e produce
-una tabella SNP per campione, che non è un input diretto di Contamination o
-CPI. In modalità BAM conserva anche BED, pileup e log della preparazione;
-i pileup importati vengono letti senza rigenerarli.
+1. Aprire NIPAT e scegliere l'analisi oppure **W — Workflow automatici**.
+2. Indicare file e parametri, poi verificare il riepilogo.
+3. Confermare **Avvia analisi**.
+4. Consultare risultati e resoconto dell'esecuzione dalla schermata finale.
 
-La verifica degli strumenti controlla l'ambiente di esecuzione; gli autotest
-confrontano casi noti. Il completamento di un run non sostituisce la
-validazione scientifica sui campioni e sullo scenario d'uso.
+I risultati per la consultazione riportano i nomi originali dei campioni,
+anche nelle etichette di tabelle e grafici. Gli identificativi interni collegano
+in modo univoco le fasi; una mappa leggibile associa ogni campione ai suoi input
+e risultati. File omonimi mantengono identità distinte.
 
-La [guida per l'utilizzo](docs/GUIDA_UTILIZZO.md) descrive la procedura operativa;
-la [scheda di validazione](docs/VALIDAZIONE.md) aiuta a documentare le prove.
-Il [piano di sviluppo](docs/ROADMAP.md) descrive la valutazione dei workflow,
-il supporto italiano/inglese e la futura interfaccia grafica.
-Il codice originale è distribuito con licenza [GPL-3.0-or-later](LICENSE).
+**5 — Configura** gestisce cartelle, valori predefiniti e risorse.
+La schermata risorse distingue memoria del computer, memoria dell'ambiente
+virtuale e limite del container. Le modifiche all'ambiente richiedono un'anteprima
+e una conferma; quelle che richiedono un riavvio restano indicate come non ancora
+attive. Su Windows i limiti globali WSL interessano anche le altre distribuzioni.
+
+**6 — Ultima esecuzione** riapre risultati e log della sessione.
+`:indietro` corregge un campo, `:annulla` torna al menu e **Ctrl+C** interrompe
+l'operazione corrente attraverso la procedura di arresto.
+Il catalogo scientifico in **Guida e informazioni** descrive parametri,
+regole fisse e preparazione degli input in italiano e inglese.
+
+Un esito tecnico positivo indica che l'analisi è terminata e gli output hanno
+superato i controlli previsti. La valutazione scientifica sui campioni resta
+affidata alle persone esperte di dominio.
+
+- [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
+- [Risultati e tracciabilità](docs/ESECUZIONI.md)
+- [Risorse e memoria](docs/RISORSE.md)
+- [Note della versione](docs/RELEASE_0.8.2.md)

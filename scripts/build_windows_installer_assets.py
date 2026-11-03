@@ -33,7 +33,7 @@ APPLICATION_FILES_NAME = "application-files.json"
 RUNTIME_INCLUDE_NAME = "runtime-assets.iss"
 PROFILE_INCLUDE_NAME = "install-profile.iss"
 PROFILE_PATH = Path("installer/windows/install-profile.json")
-# This guard excludes the published 0.4 and 0.5 installation identities.
+# This guard excludes experimental and legacy installation identities.
 # The JSON is the shared input for PowerShell, generated Inno directives and metadata.
 EXPECTED_INSTALLATION_PROFILE = {
     "schema_version": 1,

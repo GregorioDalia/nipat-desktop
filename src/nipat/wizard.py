@@ -74,6 +74,7 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "Selezionare un'analisi dal menu e seguire le indicazioni mostrate prima di ogni campo.",
             "Per un file, incollare il percorso completo oppure un percorso relativo alla cartella corrente.",
             "In Windows si puo' usare 'Copia come percorso': le virgolette vengono accettate.",
+            "Su macOS selezionare il file nel Finder e premere Opzione+Comando+C per copiarne il percorso.",
             "Nelle liste di file inserire un percorso alla volta; dopo almeno un file, Invio conclude la lista.",
             "Negli altri campi Invio mantiene il valore tra parentesi oppure lascia vuoto un campo facoltativo.",
             "Un campo obbligatorio senza valore iniziale richiede una risposta prima di proseguire.",
@@ -121,10 +122,10 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
         "5": ("Informazioni su NIPAT", (
             f"NIPAT {__version__} - piattaforma locale per l'esecuzione e la validazione dei workflow scientifici.",
             "I dati sono elaborati localmente. La distribuzione include gli script scientifici R e le loro dipendenze nell'immagine di analisi.",
-            "Windows utilizza il runtime WSL dedicato; Linux utilizza Docker Engine locale.",
+            "Windows utilizza il runtime WSL dedicato; macOS utilizza Lima incluso; Linux utilizza Docker Engine locale.",
             "Verifica ambiente controlla gli strumenti senza analizzare campioni. E' separata dalla guida e non attesta la validita' scientifica di un risultato.",
-            "Verifica aggiornamenti consulta GitHub e propone download e installazione con conferme distinte. L'avviso all'avvio, attivabile in Configura, non scarica file.",
-            "Per i comandi diretti: NIPAT.exe --help su Windows; nipat --help su Linux.",
+            "La versione sperimentale 0.8 non usa gli aggiornamenti automatici della stabile. La voce Aggiornamenti indica dove trovare nuovi pacchetti sperimentali.",
+            "Per i comandi diretti: NIPAT.exe --help su Windows; il launcher NIPAT.command incluso nell'app su macOS; nipat --help su Linux.",
             f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}",
         )),
     }
@@ -204,6 +205,8 @@ def run_wizard(
         ui.message(f"Cartella corrente: {Path.cwd()}", kind="muted")
         if os.environ.get("NIPAT_BACKEND", "").strip().lower() == "wsl":
             ui.message("Input su dischi locali; le unita' di rete non sono supportate.", kind="muted")
+        elif os.environ.get("NIPAT_BACKEND", "").strip().lower() == "lima":
+            ui.message("Input nella cartella personale o nei dischi condivisi con Lima. Restano applicati i permessi di macOS.", kind="muted")
         else:
             ui.message("Input in cartelle accessibili a Docker.", kind="muted")
         ui.message(":indietro corregge il campo precedente; :annulla torna al menu.", kind="muted")

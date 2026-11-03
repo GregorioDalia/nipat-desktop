@@ -43,14 +43,16 @@ def require(condition, message):
 
 def installation_checks(version):
     require(isinstance(version, str) and re.fullmatch(
-        r"0\.[67]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
-        "This review contract supports NIPAT 0.6 and 0.7")
-    return INSTALLATION_CHECKS | (WORKFLOW_INSTALLATION_CHECKS if version.startswith("0.7.") else set())
+        r"0\.[678]\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
+        "This review contract supports NIPAT 0.6, 0.7 and 0.8")
+    require(not version.startswith("0.8.") or (re.fullmatch(r"0\.8\.[0-9]+", version) and int(version.split(".")[2]) >= 2),
+            "The official 0.8 review contract starts at 0.8.2")
+    return INSTALLATION_CHECKS | (WORKFLOW_INSTALLATION_CHECKS if not version.startswith("0.6.") else set())
 
 
 def requires_reliability_evidence(version):
     match = re.fullmatch(r"0\.7\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version)
-    return bool(match and int(match.group(1)) >= 2)
+    return version.startswith("0.8.") or bool(match and int(match.group(1)) >= 2)
 
 
 def verify_upgrade_check(evidence, manifest, manifest_bytes, package_record):
@@ -63,7 +65,7 @@ def verify_upgrade_check(evidence, manifest, manifest_bytes, package_record):
         "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "package_sha256": package_record["sha256"],
         "runtime_archive_sha256": manifest["assets"]["scientific_image"]["sha256"],
-        "previous": checker.BASELINE,
+        "previous": checker.baseline_for(manifest["version"]),
     }
     require(isinstance(evidence, dict) and set(evidence) == set(expected) | {
         "nonroot_uid", "resolved_runtime_image", "checks"}
@@ -213,7 +215,7 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
     dependencies = read_json(linux / "linux-dependency-check.json")
     verify_dependency_check(dependencies, manifest, manifest_bytes, record)
     windows_record = {"file": "NIPAT-Setup.exe", "sha256": publisher.sha256(windows / "NIPAT-Setup.exe")}
-    if manifest["version"].startswith("0.7."):
+    if not manifest["version"].startswith("0.6."):
         client_check = read_json(windows / "windows-client-check.json")
         inventory_path = windows / "application-files.json"
         require(inventory_path.is_file() and not inventory_path.is_symlink(),
@@ -257,10 +259,20 @@ def main():
     parser.add_argument("--assets-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--macos-arm64-dir", type=Path)
+    parser.add_argument("--macos-x86-64-dir", type=Path)
     args = parser.parse_args()
-    verify_set(args.windows_dir, args.linux_dir, args.assets_dir, args.output_dir, args.source_commit)
-    print("PASS: Windows and Linux installers identify the same verified source and scientific archive.")
-    print("Review evidence alone does not authorize publication; desktop acceptance is required.")
+    result = verify_set(args.windows_dir, args.linux_dir, args.assets_dir, args.output_dir, args.source_commit)
+    from macos_release import requires_macos, extend_installer_set
+    if requires_macos(result["version"]):
+        if args.macos_arm64_dir is None or args.macos_x86_64_dir is None:
+            raise ValueError("Both architecture-specific macOS installers are required.")
+        manifest = read_json(args.assets_dir / "installer-manifest.json")
+        result = extend_installer_set(result, {"arm64": args.macos_arm64_dir,
+                                              "x86_64": args.macos_x86_64_dir}, manifest)
+        (args.output_dir / "installer-set-check.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print("PASS: All required installers identify the same verified source and scientific archive.")
+    print("Review evidence alone does not authorize publication; record observed desktop checks before publication.")
 
 
 if __name__ == "__main__":

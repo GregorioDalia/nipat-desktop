@@ -24,9 +24,9 @@ DefaultGroupName={#NipatDisplayName}
 UsePreviousGroup=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
-ArchitecturesAllowed=x64os
+ArchitecturesAllowed=x64compatible and not arm64
 ArchitecturesInstallIn64BitMode=x64os
-MinVersion=10.0.22000
+MinVersion=10.0.19045
 OutputDir={#OutputDir}
 OutputBaseFilename=NIPAT-Setup
 Compression=lzma2
@@ -175,7 +175,17 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
+var
+  Version: TWindowsVersion;
 begin
+  GetWindowsVersionEx(Version);
+  Result := (Version.ProductType = VER_NT_WORKSTATION) and
+    ((Version.Build = 19045) or (Version.Build >= 22000));
+  if not Result then begin
+    MsgBox('NIPAT richiede Windows 10 22H2 x64 (build 19045) oppure Windows 11 x64. ' +
+      'Windows Server e le versioni precedenti non sono supportati.', mbError, MB_OK);
+    Exit;
+  end;
   Result := not IsAdmin;
   if not Result then
     MsgBox('Avvia NIPAT-Setup.exe normalmente, senza "Esegui come amministratore". ' +
@@ -368,6 +378,8 @@ begin
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\Programs\NIPAT-0.5-Preview')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-0.5-Preview')) or
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\Programs\NIPAT-Experimental08')) or
+     NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Experimental08')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Desktop\preferences.json')) or
      NipatPathsOverlap(Path, ExpandConstant('{localappdata}\NIPAT-Desktop\activity.lock')) then begin
     Result := LabelText + ': scegliere una cartella separata da Windows, Program Files e dalle altre installazioni NIPAT.';

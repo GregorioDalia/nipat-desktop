@@ -118,7 +118,7 @@ class LinuxInstallerTests(unittest.TestCase):
             for asset in manifest["assets"].values():
                 asset["url"] = asset["url"].replace("/v0.6.0/", "/v" + version + "/")
             self.write_manifest(manifest)
-            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "versione 0.6|Preview 0.5"):
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "Desktop ufficiale|Preview 0.5"):
                 self.inputs()
 
     def set_version(self, version):
