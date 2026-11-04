@@ -6,8 +6,9 @@ non occorre scaricarla separatamente o importarla manualmente.
 
 I [download per piattaforma](../README.md#download) sono disponibili nel README.
 La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
-conserva tutte le versioni. La 0.8.2 è il canale stabile; la prerelease 0.8.5
-aggiunge la [diagnostica facoltativa delle prestazioni](PERFORMANCE.md).
+conserva tutte le versioni. La versione stabile 0.8.5 include la
+[diagnostica facoltativa delle prestazioni](PERFORMANCE.md), disattivata per
+impostazione predefinita.
 Scegliere l'installatore nella sezione Assets. Gli archivi **Source code**
 non sono installatori. Gli artefatti GitHub Actions sono build per revisione,
 identificate da commit e checksum, e non sostituiscono una release pubblicata.
@@ -64,7 +65,7 @@ Le installazioni sperimentali hanno identità separata e non vengono rimosse.
 Installare il `.deb` con il gestore pacchetti oppure, nella cartella del download:
 
 ```bash
-sudo apt install ./nipat-desktop_0.8.2_amd64.deb
+sudo apt install ./nipat-desktop_0.8.5_amd64.deb
 ```
 
 APT installa le dipendenze mancanti dai repository configurati, inclusi Python,

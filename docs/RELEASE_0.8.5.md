@@ -1,9 +1,10 @@
 # NIPAT Desktop 0.8.5
 
-NIPAT Desktop 0.8.5 è una prerelease per la misura delle prestazioni delle
-analisi locali. Aggiunge una diagnostica facoltativa al client e al motore
-scientifico su Windows, macOS e Ubuntu. Gli script R, i parametri scientifici
-e gli algoritmi distribuiti restano invariati.
+NIPAT Desktop 0.8.5 è la versione stabile per le analisi locali su Windows,
+macOS e Ubuntu. Aggiunge una diagnostica delle prestazioni facoltativa al client
+e al motore scientifico, disattivata per impostazione predefinita. **Avvia analisi**
+esegue il normale workflow senza monitoraggio delle prestazioni. Gli script R,
+i parametri scientifici e gli algoritmi distribuiti restano invariati.
 
 ## Funzionalità
 
@@ -34,9 +35,8 @@ Scaricare un solo installer dalla
 | Ubuntu 24.04 LTS x86_64 | [nipat-desktop_0.8.5_amd64.deb](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/nipat-desktop_0.8.5_amd64.deb) |
 
 La 0.8.5 usa l'identità **NIPAT Desktop** e aggiorna un'installazione desktop
-esistente; non crea un'applicazione diagnostica separata. La
-[0.8.2](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.2)
-rimane la release stabile. I requisiti e le procedure di installazione,
+esistente; non crea un'applicazione diagnostica separata. I requisiti e le
+procedure di installazione,
 aggiornamento e rimozione sono descritti nelle guide
 [Windows](INSTALLATORE_WINDOWS.md), [macOS](INSTALLATORE_MACOS.md) e
 [Ubuntu](INSTALLATORE_LINUX.md).

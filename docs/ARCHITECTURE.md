@@ -16,10 +16,12 @@ di analisi remoto.
 | `src/nipat/execution/workflows.py` | Selezione e convalida preliminare degli input, richiesta del workflow e creazione del run. |
 | `src/nipat/execution/runner.py` | Identificazione del motore, isolamento del container, esecuzione, interruzione e diagnostica. |
 | `src/nipat/execution/transport.py` | Accesso al Docker Engine locale su Linux, al motore WSL2 su Windows o alla VM Lima su macOS. |
+| `src/nipat/execution/performance.py` | Osservazione facoltativa delle statistiche del container dal client. |
 | `src/nipat/storage.py` | Regole condivise per separare dati e risultati dalle cartelle applicative e dalle destinazioni riservate. |
 | `engine/main.py` | Contratto del motore, verifica dei sorgenti scientifici e avvio dei workflow nell'immagine. |
 | `src/nipat_scientific/` | Validatori, catalogo e preparazione dei file, condivisi dal client e dal motore. |
 | `src/nipat_scientific/plan.py` ed `executor.py` | Contratto dei piani e orchestrazione scientifica eseguita nell'immagine. |
+| `src/nipat_scientific/performance.py` | Campionamento facoltativo di cgroup e processi e registrazione delle fasi nel motore. |
 | `scientific/vendor/` | Sorgenti R e risorse dei progetti scientifici integrati. |
 
 Il client e il motore includono la stessa libreria di preparazione, ma non
@@ -34,7 +36,7 @@ con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
 come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
 workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
-singoli. Questo documento descrive la versione 0.8.2.
+singoli. Questo documento descrive la versione 0.8.5.
 
 ### Confini dei workflow automatici
 
@@ -302,3 +304,11 @@ Un blocco delle analisi coordina le riconfigurazioni; anteprima e hash della
 configurazione impediscono di applicare una proposta divenuta obsoleta.
 WSL richiede una conferma distinta per l'effetto globale; Lima è dedicata;
 Linux nativo usa limiti del container senza riconfigurare il sistema.
+
+La diagnostica delle prestazioni è disattivata normalmente e si abilita per
+una singola analisi. Un osservatore nel client e un monitor nel container
+scrivono campioni e riepiloghi separati, senza modificare gli argomenti
+scientifici o gli script R. La raccolta ha limiti di dimensione e segnala
+esplicitamente dati parziali o non disponibili. Un errore del monitoraggio
+non sostituisce l'esito dell'analisi. Contratto, misure e limiti sono descritti
+in [PERFORMANCE.md](PERFORMANCE.md).

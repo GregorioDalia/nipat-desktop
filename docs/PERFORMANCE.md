@@ -3,7 +3,6 @@
 Disponibile in **NIPAT Desktop 0.8.5**. Installare il pacchetto del proprio
 sistema dalla [release 0.8.5](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.5);
 il banner dell'applicazione deve riportare `NIPAT 0.8.5`.
-La 0.8.2 esegue le analisi, ma non comprende questa raccolta delle misure.
 
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri

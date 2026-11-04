@@ -10,9 +10,10 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.2. Anteprima con diagnostica delle prestazioni: 0.8.5.**
-La 0.8.5 aggiunge il monitoraggio facoltativo di tempi, memoria, CPU e I/O;
-non introduce ottimizzazioni degli algoritmi R. Le [note della 0.8.5](docs/RELEASE_0.8.5.md)
+**Versione stabile: 0.8.5.** La diagnostica delle prestazioni è facoltativa e
+disattivata per impostazione predefinita: le analisi ordinarie si avviano con
+**Avvia analisi**. La 0.8.5 aggiunge il monitoraggio di tempi, memoria, CPU e I/O
+su richiesta e non introduce ottimizzazioni degli algoritmi R. Le [note della 0.8.5](docs/RELEASE_0.8.5.md)
 e la [guida alle misure](docs/PERFORMANCE.md) descrivono funzionalità e limiti.
 
 ## Download
@@ -21,16 +22,17 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.2 | Diagnostica 0.8.5 — prerelease |
-| --- | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.2/NIPAT-Setup.exe) | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.2/NIPAT-0.8.2-macos-arm64.pkg) | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/NIPAT-0.8.5-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.2/NIPAT-0.8.2-macos-x86_64.pkg) | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/NIPAT-0.8.5-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.2/nipat-desktop_0.8.2_amd64.deb) | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/nipat-desktop_0.8.5_amd64.deb) |
+| Sistema | Versione stabile 0.8.5 |
+| --- | --- |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/NIPAT-0.8.5-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/NIPAT-0.8.5-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.5/nipat-desktop_0.8.5_amd64.deb) |
 
-Le pagine della [release stabile](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.2)
-e della [prerelease diagnostica](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.5)
-riportano note, checksum e verifiche dei pacchetti. La
+La pagina della [release 0.8.5](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.5)
+riporta note, checksum e verifiche dei pacchetti. Le
+[release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
+restano disponibili. La
 [guida di distribuzione](docs/DISTRIBUZIONE.md) descrive requisiti e installazione.
 
 I risultati per la consultazione conservano i nomi originali dei campioni
@@ -105,8 +107,9 @@ Privacy e sicurezza. Il setup non disattiva le protezioni del dispositivo.
 4. Confermare **Avvia analisi** per eseguire il calcolo scientifico.
 5. Consultare risultati e log dalla schermata finale.
 
-Nella **0.8.5**, scegliere **Avvia analisi con diagnostica prestazioni** nel
-riepilogo per raccogliere le misure di quella sola esecuzione. Non occorrono
+Per raccogliere misure facoltative, scegliere **Avvia analisi con diagnostica
+prestazioni** nel riepilogo. La scelta riguarda quella sola esecuzione e non
+viene salvata nelle preferenze. Non occorrono
 script aggiuntivi: aprire `run-report.html` nella cartella del run per consultarle.
 La [procedura per un BAM grande](docs/PERFORMANCE.md#prima-misura-dal-menu)
 spiega come preparare una prova ordinaria e una diagnostica confrontabili.
@@ -283,8 +286,8 @@ indipendenti e problemi riproducibili.
 - [Sintesi del prodotto](SUNTO.md)
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
-- [Note della versione 0.8.5 — diagnostica](docs/RELEASE_0.8.5.md)
-- [Note della versione stabile 0.8.2](docs/RELEASE_0.8.2.md)
+- [Note della versione stabile 0.8.5](docs/RELEASE_0.8.5.md)
+- [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)
 - [Distribuzione e requisiti](docs/DISTRIBUZIONE.md)

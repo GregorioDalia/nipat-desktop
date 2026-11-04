@@ -1,6 +1,6 @@
 # Accettazione degli installatori
 
-NIPAT Desktop 0.8.2 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+NIPAT Desktop 0.8.5 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
 macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
 identifica commit, build e checksum; distingue prove automatiche,
 osservazioni sui dispositivi e validazione scientifica di dominio.
@@ -44,7 +44,7 @@ una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
 Usare una build manuale **Installers (review build)** completata sul commit
 revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
 i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
-di build diverse. Le [note 0.8.2](RELEASE_0.8.2.md) descrivono le funzionalità;
+di build diverse. Le [note 0.8.5](RELEASE_0.8.5.md) descrivono le funzionalità;
 i risultati di qualificazione devono riferirsi ai pacchetti esatti.
 
 La sequenza è: costruire, raccogliere evidenze, revisionare il record,
@@ -221,9 +221,9 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Per la 0.8.2 il comando genera lo schema 5 in stato `pending`; non esegue
+Per la 0.8.5 il comando genera lo schema 5 in stato `pending`; non esegue
 prove né autorizza pubblicazioni. Compilare soltanto con evidenze disponibili
-e revisionare `.github/release-acceptance/v0.8.2.json`. Il record è separato
+e revisionare `.github/release-acceptance/v0.8.5.json`. Il record è separato
 dal commit e dai byte dell'installatore, e viene letto da `main` dal publisher.
 
 Gli schemi precedenti rimangono disponibili per le relative release storiche.
