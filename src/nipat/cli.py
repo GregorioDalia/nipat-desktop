@@ -52,6 +52,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="quota CPU del container; non imposta il numero di worker R")
     parser.add_argument("--memory-mb", type=int, help="limite memoria del container in MiB")
     parser.add_argument("--pids-limit", type=int, help="limite dei processi nel container")
+    parser.add_argument(
+        "--performance-diagnostics", action="store_true", default=None,
+        help="raccoglie misure locali delle prestazioni per questa analisi; nel wizard solo per la prossima analisi",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     doctor = subparsers.add_parser("doctor", help="controlla ambiente e runtime")
@@ -236,13 +240,15 @@ def main(argv: list[str] | None = None) -> int:
         if (args.yes or args.restart) and not args.apply:
             parser.error("--yes e --restart richiedono --apply; senza --apply viene mostrata solo l'anteprima")
     execution_overrides = {
-        name: getattr(args, name) for name in ("input_hashes", "cpus", "memory_mb", "pids_limit")
+        name: getattr(args, name) for name in (
+            "input_hashes", "cpus", "memory_mb", "pids_limit", "performance_diagnostics",
+        )
         if getattr(args, name) is not None
     }
     if execution_overrides and args.command not in {
         "wizard", "workflow", "dnp-call", "snp-call", "contamination", "cpi",
     }:
-        parser.error("Le opzioni di provenienza e risorse si applicano alle analisi e al wizard; "
+        parser.error("Le opzioni di provenienza, risorse e prestazioni si applicano alle analisi e al wizard; "
                      "rimuoverle per diagnostica, autotest e manutenzione.")
     completion_label = "Esecuzione pianificata" if args.dry_run else "Esecuzione completata"
 

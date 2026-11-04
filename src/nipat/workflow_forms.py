@@ -124,7 +124,7 @@ class DnpContaminationForm(WorkflowForm):
             kind="muted",
         )
 
-    def review(self, *, dry_run: bool = False) -> bool:
+    def review(self, *, dry_run: bool = False, performance_diagnostics: bool = False) -> bool:
         self.ui.message(
             "Sequenza: 1. DNPcall su tutti i BAM selezionati; 2. Contamination sulle tabelle prodotte. "
             "Le due fasi sono automatiche e conservano risultati e stato separati.", kind="muted",
@@ -135,7 +135,7 @@ class DnpContaminationForm(WorkflowForm):
             kind="muted",
         )
         self._describe_snp()
-        return super().review(dry_run=dry_run)
+        return super().review(dry_run=dry_run, performance_diagnostics=performance_diagnostics)
 
     def arguments(self) -> dict:
         return {
@@ -374,7 +374,7 @@ class DnpCpiForm(DnpContaminationForm):
     def _read(self, field: Field) -> Any:
         return self._pairs() if field.kind == "pairs" else super()._read(field)
 
-    def review(self, *, dry_run: bool = False) -> bool:
+    def review(self, *, dry_run: bool = False, performance_diagnostics: bool = False) -> bool:
         self.ui.message(
             "Sequenza: DNPcall sui BAM distinti, poi Contamination e CPI sulle rispettive tabelle DNPcall."
             if self.include_contamination else
@@ -386,7 +386,7 @@ class DnpCpiForm(DnpContaminationForm):
         self.ui.message("Controllare esplicitamente ID, file e ruoli di tutte le coppie. Una sola conferma avvia l'intero workflow; risultati e stato di ogni fase rimangono separati.", kind="muted")
         self.ui.message("NIPAT assegna automaticamente i nomi e i prefissi dei file CPI mantenendo le associazioni mostrate.", kind="muted")
         self._describe_snp()
-        return WorkflowForm.review(self, dry_run=dry_run)
+        return WorkflowForm.review(self, dry_run=dry_run, performance_diagnostics=performance_diagnostics)
 
     def arguments(self) -> dict:
         values = self.values
@@ -467,13 +467,13 @@ class SnpBatchForm(WorkflowForm):
         }[answer]
         self.ui.message(f"Selezione: {message}", kind="muted")
 
-    def review(self, *, dry_run: bool = False) -> bool:
+    def review(self, *, dry_run: bool = False, performance_diagnostics: bool = False) -> bool:
         self.ui.message(
             "Il workflow esegue SNPcall una volta per ciascun campione, in sequenza. "
             "Una sola conferma avvia tutte le analisi; input, risultati e log restano separati. "
             "Un errore o un'interruzione arresta anche le analisi non ancora avviate.", kind="muted",
         )
-        return super().review(dry_run=dry_run)
+        return super().review(dry_run=dry_run, performance_diagnostics=performance_diagnostics)
 
     def arguments(self) -> dict:
         values = self.values

@@ -8,6 +8,56 @@ from nipat.run_report import sample_rows, write_run_report
 
 
 class RunReportTests(unittest.TestCase):
+    def test_optional_performance_report_separates_memory_meanings_and_partial_phases(self):
+        self.metadata["execution_options"] = {"performance_diagnostics": True}
+        engine = self.root / "performance" / "engine"
+        engine.mkdir(parents=True)
+        (engine.parent / "summary.json").write_text(json.dumps({
+            "status": "completed", "sample_count": 5,
+            "sampled_maxima": {"memory_cache_adjusted_bytes": 2 * 1024 * 1024},
+        }), encoding="utf-8")
+        (engine / "summary.json").write_text(json.dumps({
+            "status": "partial", "samples": 10,
+            "sampled_memory_max_bytes": 3 * 1024 * 1024,
+            "observed_kernel_memory_peak_bytes": None,
+        }), encoding="utf-8")
+        (engine / "phases.jsonl").write_text(json.dumps({
+            "event": "end", "phase": "R <script>", "workflow": "dnp-call",
+            "duration_seconds": 1.25, "outcome": "returned",
+        }) + '\n{"event":', encoding="utf-8")
+        self.save()
+        write_run_report(self.root)
+        html = (self.root / "run-report.html").read_text(encoding="utf-8")
+        self.assertIn("2.00 MiB", html)
+        self.assertIn("3.00 MiB", html)
+        self.assertIn("Non disponibile", html)
+        self.assertIn("cache inattiva sottratta", html)
+        self.assertIn("R &lt;script&gt;", html)
+        self.assertIn("1.25", html)
+        self.assertIn("performance/engine/phases.jsonl", html)
+
+    def test_unrequested_or_linked_performance_is_not_read(self):
+        self.save()
+        write_run_report(self.root)
+        html = (self.root / "run-report.html").read_text(encoding="utf-8")
+        self.assertNotIn("Diagnostica delle prestazioni", html)
+        (self.root / "run-report.html").unlink()
+        (self.root / "sample-map.tsv").unlink()
+        self.metadata["execution_options"] = {"performance_diagnostics": True}
+        elsewhere = self.root / "elsewhere"
+        elsewhere.mkdir()
+        (elsewhere / "summary.json").write_text('{"status":"SECRET_STATUS"}', encoding="utf-8")
+        try:
+            (self.root / "performance").symlink_to(elsewhere, target_is_directory=True)
+        except OSError:
+            return
+        self.save()
+        write_run_report(self.root)
+        html = (self.root / "run-report.html").read_text(encoding="utf-8")
+        self.assertNotIn("SECRET_STATUS", html)
+        self.assertNotIn("href='performance/", html)
+        self.assertIn("resoconto non disponibile", html)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

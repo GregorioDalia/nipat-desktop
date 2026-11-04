@@ -331,6 +331,7 @@ installer/macos/licenses/python-build-standalone/provenance.json
 .github/scripts/test_official_delivery.py
 .github/scripts/verify_release_source.py
 docs/RELEASE_0.8.2.md
+docs/RELEASE_0.8.5.md
 docs/RISORSE.md
 scripts/verify_presentation.py
 src/nipat/execution/diagnostics.py
@@ -344,3 +345,11 @@ tests/test_resource_ui.py
 tests/test_resources.py
 tests/test_run_report.py
 tests/test_scientific_presentation.py
+docs/PERFORMANCE.md
+scripts/verify_performance.py
+src/nipat/execution/performance.py
+src/nipat_scientific/performance.py
+tests/test_engine_performance.py
+tests/test_performance_observer.py
+tests/test_performance_options.py
+tests/test_performance_verification.py

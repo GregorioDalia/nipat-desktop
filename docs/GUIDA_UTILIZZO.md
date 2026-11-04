@@ -1,9 +1,9 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.8.2**, con menu testuale guidato e CLI
+Questa guida descrive **NIPAT Desktop 0.8.5**, con menu testuale guidato e CLI
 diretta su Windows, macOS e Ubuntu. I pacchetti sono nella pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases);
-le [note della versione](RELEASE_0.8.2.md) identificano il perimetro verificato.
+le [note della versione](RELEASE_0.8.5.md) identificano il perimetro verificato.
 
 La versione offre
 **W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
@@ -71,8 +71,8 @@ per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-
 ## Requisiti e avvio su macOS
 
 Usare macOS 14 o successivo e il pacchetto della propria architettura:
-`NIPAT-0.8.2-macos-arm64.pkg` per Apple Silicon,
-`NIPAT-0.8.2-macos-x86_64.pkg` per Intel.
+`NIPAT-0.8.5-macos-arm64.pkg` per Apple Silicon,
+`NIPAT-0.8.5-macos-x86_64.pkg` per Intel.
 Aprire il `.pkg`, completare l'installazione e avviare **NIPAT Desktop**
 da Applicazioni. Il menu si apre nel Terminale. Il primo avvio prepara Lima
 e richiede Internet; Python e Lima sono inclusi, senza installazione manuale
@@ -86,7 +86,7 @@ nella [guida macOS](INSTALLATORE_MACOS.md).
 
 ## Utilizzo su Ubuntu
 
-Installare `nipat-desktop_0.8.2_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
+Installare `nipat-desktop_0.8.5_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
 [guida Ubuntu](INSTALLATORE_LINUX.md). Il pacchetto include l'immagine scientifica;
 APT risolve le dipendenze mancanti. Il motore Docker locale deve essere accessibile
 all'utente. La [procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti)
@@ -150,6 +150,13 @@ nel riepilogo. È possibile correggere i campi prima di scegliere
 **1 — Avvia analisi**. La scelta predefinita è **0 — Annulla**: il solo Invio
 non avvia il calcolo. La conferma esplicita esegue il motore scientifico,
 inclusi gli script R e samtools quando il workflow lo richiede.
+
+**Avvia analisi con diagnostica prestazioni** aggiunge la raccolta facoltativa
+di tempi, CPU, memoria e I/O per quella sola esecuzione. **Avvia analisi**
+mantiene la modalità ordinaria senza monitoraggio. La scelta diagnostica non
+viene salvata nelle preferenze. Le misure sono consultabili in `run-report.html`;
+la [guida alle prestazioni](PERFORMANCE.md) descrive attivazione, confronto
+fra prove e limiti dei contatori.
 
 La schermata finale consente di aprire risultati, cartella del run e log,
 o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file

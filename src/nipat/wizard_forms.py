@@ -419,7 +419,9 @@ class WorkflowForm:
             return f"{value[0]} = {value[1]}"
         return str(value)
 
-    def review(self, *, dry_run: bool = False) -> bool:
+    def review(self, *, dry_run: bool = False, performance_diagnostics: bool = False) -> bool:
+        # This is an execution choice, never a scientific parameter or a saved default.
+        self.performance_diagnostics = False
         while True:
             self.ui.heading(f"{self.title} / Riepilogo prima dell'avvio")
             fields = self.fields()
@@ -440,14 +442,26 @@ class WorkflowForm:
             self.ui.message("Controllare gli input. 'Modifica un campo' permette di correggerli conservando gli altri valori.", kind="muted")
             self.ui.message("La conferma preparera' file e comandi, senza eseguire il calcolo scientifico." if dry_run else
                             "Il calcolo scientifico iniziera' solo confermando 'Avvia analisi'.", kind="muted")
+            self.ui.message(
+                "La diagnostica delle prestazioni raccoglie CPU, memoria e tempi nella cartella del run. "
+                "Puo' aumentare il tempo di esecuzione; non modifica i parametri scientifici e non invia dati.",
+                kind="muted",
+            )
+            if performance_diagnostics:
+                self.ui.message("Diagnostica richiesta da riga di comando per la prossima analisi. La scelta vale solo per questa esecuzione.", kind="muted")
+            start_label = "Prepara dry-run" if dry_run else "Avvia analisi"
             choice = self.ui.menu("Come procedere?", [
-                ("1", "Prepara dry-run" if dry_run else "Avvia analisi", "Con i valori mostrati"),
+                ("1", start_label + (" con diagnostica prestazioni" if performance_diagnostics else ""),
+                 "Con i valori mostrati"),
                 ("2", "Modifica un campo", "Gli altri valori vengono conservati"),
+                ("3", start_label + (" senza diagnostica" if performance_diagnostics else " con diagnostica prestazioni"),
+                 "Solo per questa esecuzione"),
                 ("0", "Annulla", "Torna al menu senza avviare"),
             ], default="0")
             if choice in {"0", ":annulla", ":indietro"}:
                 return False
-            if choice == "1":
+            if choice in {"1", "3"}:
+                self.performance_diagnostics = performance_diagnostics if choice == "1" else not performance_diagnostics
                 return True
             if choice != "2":
                 self.ui.message("Scegliere una delle opzioni indicate.", kind="error")

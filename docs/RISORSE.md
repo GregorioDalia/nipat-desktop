@@ -105,7 +105,7 @@ Le opzioni sono esplicite anche negli script automatizzati.
 Il backup indicato dall'applicazione è un file JSON che conserva percorso,
 hash e contenuto precedente codificato in base64, compresa l'eventuale assenza
 del file. Non va copiato direttamente al posto di `.wslconfig` o del file Lima.
-La 0.8.2 non include un comando di ripristino guidato. Conservare il backup
+La 0.8.5 non include un comando di ripristino guidato. Conservare il backup
 per diagnosi e recupero della configurazione precedente.
 
 ## Velocità di DNPcall

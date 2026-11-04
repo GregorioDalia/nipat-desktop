@@ -1,6 +1,6 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.8.2** esegue DNPcall, SNPcall, Contamination e CPI sul computer
+**NIPAT Desktop 0.8.5** esegue DNPcall, SNPcall, Contamination e CPI sul computer
 dell'utente attraverso una CLI guidata. Le analisi possono essere avviate
 singolarmente oppure collegate in un workflow automatico con una sola conferma.
 
@@ -50,6 +50,10 @@ avvisi di sicurezza e i requisiti del dispositivo.
 3. Confermare **Avvia analisi**.
 4. Consultare risultati e resoconto dell'esecuzione dalla schermata finale.
 
+La diagnostica delle prestazioni è facoltativa e disattivata normalmente.
+**Avvia analisi con diagnostica prestazioni** raccoglie le misure per quella
+sola esecuzione; la [guida alle misure](docs/PERFORMANCE.md) ne descrive l'uso.
+
 I risultati per la consultazione riportano i nomi originali dei campioni,
 anche nelle etichette di tabelle e grafici. Gli identificativi interni collegano
 in modo univoco le fasi; una mappa leggibile associa ogni campione ai suoi input
@@ -74,4 +78,4 @@ affidata alle persone esperte di dominio.
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Risultati e tracciabilità](docs/ESECUZIONI.md)
 - [Risorse e memoria](docs/RISORSE.md)
-- [Note della versione](docs/RELEASE_0.8.2.md)
+- [Note della versione](docs/RELEASE_0.8.5.md)

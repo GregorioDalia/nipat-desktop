@@ -18,6 +18,7 @@ from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.diagnostics import diagnose, inspect_container
 from nipat.execution.mounts import InputMounts
 from nipat.execution.options import ExecutionOptions
+from nipat.execution.performance import ContainerPerformanceObserver
 from nipat.execution.recovery import incomplete_runs, ownership_labels, reconcile_run
 from nipat.execution.tracking import (
     RunRecord, file_evidence, project_evidence, utc_now, verify_input_evidence,
@@ -352,6 +353,18 @@ class DockerComposeRunner:
         verified = self._validate_engine_description(
             description, self._bundled_workflow,
         )
+        if self.options.performance_diagnostics:
+            capability = verified.get("performance_diagnostics")
+            files = verified.get("preparation", {}).get("file_sha256", {})
+            if (not isinstance(capability, dict)
+                    or capability.get("interface") != "performance-diagnostics-v1"
+                    or type(capability.get("schema_version")) is not int
+                    or capability.get("schema_version") != 1
+                    or "lib/nipat_scientific/performance.py" not in files):
+                raise RuntimeExecutionError(
+                    "La diagnostica prestazioni richiesta non e supportata dal motore scientifico. "
+                    "Usare il runtime costruito per questa versione oppure disattivare la diagnostica."
+                )
         if self._record:
             self._record.data["runtime"]["engine"] = verified
             self._record.save()
@@ -625,6 +638,16 @@ class DockerComposeRunner:
             docker_command.extend(["--label", f"{key}={value}"])
         if working_dir is not None:
             docker_command.extend(["--workdir", str(working_dir)])
+        performance_directory = None
+        if self.options.performance_diagnostics and self._record is not None:
+            number = len(self._record.data["commands"]) + 1
+            performance_directory = self._record.run_dir / "performance"
+            if number > 1:
+                performance_directory = performance_directory / f"command-{number:03d}"
+            docker_command.extend([
+                "--env", "NIPAT_PERFORMANCE_DIR=" + str(
+                    self.layout.container_path(performance_directory / "engine")),
+            ])
         docker_command.append("scientific")
         docker_command.extend(str(part) for part in command)
         docker_command = self._transport.command(docker_command, self._environment())
@@ -644,6 +667,7 @@ class DockerComposeRunner:
                 self._record.save()
             return
         process = None
+        observer = None
         interrupted = False
         try:
             process = subprocess.Popen(
@@ -651,6 +675,18 @@ class DockerComposeRunner:
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                 text=True, encoding="utf-8", errors="replace", bufsize=1,
             )
+            if performance_directory is not None:
+                try:
+                    observer = ContainerPerformanceObserver(
+                        self, container_name, expected_labels, performance_directory,
+                    )
+                    observer.start()
+                except Exception as exc:
+                    observer = None
+                    stage["performance_diagnostics"] = {
+                        "enabled": True, "status": "unavailable", "reason": type(exc).__name__,
+                    }
+                    self._write("Diagnostica prestazioni esterna non avviata; il calcolo prosegue.\n")
             assert process.stdout is not None
             with process.stdout:
                 for line in process.stdout:
@@ -684,6 +720,23 @@ class DockerComposeRunner:
             raise
         finally:
             with _finish_cleanup():
+                if observer is not None:
+                    try:
+                        summary = observer.stop()
+                        stage["performance_diagnostics"] = {
+                            "enabled": True, "status": summary["status"],
+                            "reason": summary.get("reason"),
+                            "sample_count": summary.get("sample_count", 0),
+                            "directory": performance_directory.relative_to(self._record.run_dir).as_posix(),
+                            "summary": ((performance_directory / "summary.json").relative_to(
+                                self._record.run_dir).as_posix()
+                                if summary.get("summary", "summary.json") is not None else None),
+                        }
+                    except Exception as exc:
+                        stage["performance_diagnostics"] = {
+                            "enabled": True, "status": "partial", "reason": type(exc).__name__,
+                        }
+                        self._write("Diagnostica prestazioni incompleta; consultare i file gia salvati.\n")
                 if process is not None:
                     if "container_diagnostics" not in stage:
                         stage["container_diagnostics"] = inspect_container(self, container_name, expected_labels)

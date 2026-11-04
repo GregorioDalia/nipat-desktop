@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable
 
@@ -191,6 +192,11 @@ def run_wizard(
 ) -> int:
     """Collect and review values, then call a workflow only after confirmation."""
     ui = Terminal(read=read, write=write, cancel_to_menu=True)
+    execution_overrides = dict(execution_overrides or {})
+    requested_diagnostics = execution_overrides.pop("performance_diagnostics", False)
+    if type(requested_diagnostics) is not bool:
+        from nipat.errors import ValidationError
+        raise ValidationError("La diagnostica delle prestazioni deve essere attiva o disattiva.")
     settings = GuidedSettings(layout, preferences_store, directory_overrides, execution_overrides)
     layout = settings.layout
     workflows.layout = workflows.runner.layout = layout
@@ -284,8 +290,22 @@ def run_wizard(
                     form = WorkflowForm(choice, ui, layout, err_const,
                                         defaults=settings.preferences.workflow_defaults(choice))
                 form.collect()
-                while form.review(dry_run=dry_run):
+                while form.review(dry_run=dry_run, performance_diagnostics=requested_diagnostics):
+                    workflows.runner.options = replace(
+                        settings.execution_options(),
+                        performance_diagnostics=form.performance_diagnostics,
+                    )
+                    # A command-line request is consumed by this attempt, even
+                    # if the analysis fails or is interrupted. It is not saved.
+                    requested_diagnostics = False
                     ui.heading(f"{form.title} / {'Preparazione dry-run' if dry_run else 'Esecuzione'}")
+                    if form.performance_diagnostics:
+                        ui.message(
+                            "Diagnostica prestazioni pianificata: in dry-run non vengono raccolte misure."
+                            if dry_run else
+                            "Diagnostica prestazioni attiva per questa esecuzione. Le misure saranno conservate in performance/ nella cartella del run.",
+                            kind="muted",
+                        )
                     ui.message("I dettagli del processo vengono conservati anche in execution.log.")
                     ui.message("Ctrl+C: interrompi e torna al menu principale. Attendere l'arresto; log e risultati gia' prodotti saranno conservati.", kind="muted")
                     started = time.monotonic()
@@ -318,6 +338,8 @@ def run_wizard(
                         if choice == "w":
                             ui.message("Consultare gli stati delle fasi e i log nella cartella indicata dal processo. Per ripetere il workflow scegliere un nuovo nome: i risultati gia' presenti sono conservati.", kind="muted")
                         continue
+                    finally:
+                        workflows.runner.options = settings.execution_options()
                     last_run = run_dir
                     ui.message(f"Tempo trascorso: {time.monotonic() - started:.1f} s")
                     if choice == "w" and not dry_run:
@@ -335,8 +357,11 @@ def run_wizard(
                     show_results(ui, run_dir, dry_run=dry_run)
                     break
                 else:
+                    requested_diagnostics = False
                     ui.message("Operazione annullata prima dell'avvio.")
             except (Cancelled, Back, KeyboardInterrupt):
+                requested_diagnostics = False
+                workflows.runner.options = settings.execution_options()
                 ui.message("Operazione annullata. Ritorno al menu principale.")
             except (NipatError, OSError) as exc:
                 had_failure = True

@@ -22,6 +22,7 @@ class QualificationEvidenceTests(unittest.TestCase):
         (self.source / "result.csv").write_text("expected,actual\n0.602,0.602\n", encoding="utf-8")
         (self.source / "command.log").write_text("/private/runner/fixture.txt: PASS\n", encoding="utf-8")
         (self.source / "sample.bam").write_bytes(b"not published")
+        (self.source / "samples.jsonl").write_text(' {"memory_bytes": 1048576}\n', encoding="utf-8")
         self.installer_set = {"version": "0.7.2", "source_commit": "a" * 40,
                               "installer_manifest_sha256": "b" * 64,
                               "windows": {"sha256": "c" * 64}, "linux": {"sha256": "d" * 64}}
@@ -35,9 +36,10 @@ class QualificationEvidenceTests(unittest.TestCase):
     def test_round_trip_retains_numeric_evidence_without_binary_inputs_or_host_roots(self):
         qualification.verify(self.output, self.installer_set)
         with zipfile.ZipFile(self.output / qualification.ARCHIVE) as handle:
-            self.assertEqual(set(handle.namelist()), {"science/result.csv", "science/command.log"})
+            self.assertEqual(set(handle.namelist()), {"science/result.csv", "science/command.log", "science/samples.jsonl"})
             self.assertIn(b"${CI_WORKSPACE}/fixture.txt", handle.read("science/command.log"))
             self.assertIn(b"0.602,0.602", handle.read("science/result.csv"))
+            self.assertEqual(json.loads(handle.read("science/samples.jsonl"))["memory_bytes"], 1048576)
 
     def test_official_mac_release_evidence_binds_both_package_hashes(self):
         record = dict(self.installer_set, version="0.8.2", macos_arm64={"sha256": "e" * 64},

@@ -307,7 +307,9 @@ class GuidedSettings:
     def _execution(self, ui: Terminal) -> None:
         from dataclasses import asdict
 
-        values = asdict(self.preferences.execution_options())
+        # One-run diagnostics must not become a persistent execution default.
+        values = {key: value for key, value in asdict(self.preferences.execution_options()).items()
+                  if key != "performance_diagnostics"}
         labels = {"cpus": "Quota CPU per analisi", "memory_mb": "Limite RAM per analisi (MiB)",
                   "pids_limit": "Numero massimo di processi"}
         while True:
