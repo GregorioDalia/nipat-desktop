@@ -1,23 +1,24 @@
 {
   "schema_version": 5,
   "version": "0.8.5",
-  "source_commit": "df39340ba33ff89a65a7b3313b63725e794cbd5f",
-  "installer_manifest_sha256": "cdc406487745483e406f7593146a8aae24539eacef50ccb1877758fa16a6f0cb",
-  "scientific_archive_sha256": "d62b4df38c20c337312f4e868667a3a124b9ffb279d696b1f86cd63cbbb2a960",
-  "windows_installer_sha256": "509ecdcb31eccb597f3cead98a4e1e9b39f5745a43c1e9e682feb64cf36aa633",
-  "linux_installer_sha256": "f8842e4d2a6b708e794e6237a0aa3f3faf237a3aea959d75afb4be8f7fa83f47",
-  "macos_arm64_installer_sha256": "11aa3230cab61228a11777be20740be88ba3336541b14a14313b8e571c074c8b",
-  "macos_x86_64_installer_sha256": "b66553d719da1b2dc6dd94c79035f9affaaab0fec24516e2476ac91b5546bdf8",
-  "build_run_id": 41820282041,
+  "source_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+  "installer_manifest_sha256": "ae71a966008e5099e39297ceac60d446512b5a67ed87b01b6ae92c43fb3d8d5e",
+  "scientific_archive_sha256": "3249a4ef3851132690ee2bbb6990567d0b65c60f326b1ad68e847bcbc7ce1f21",
+  "windows_installer_sha256": "204b13d1f8852ef7accb63b4f7795e93cc02d504fb4832278eaf15327dae2390",
+  "linux_installer_sha256": "e4800809b8c0ec5d6c004b99e0ca3c297841608a1415d271f47e8d235c1da4f2",
+  "macos_arm64_installer_sha256": "ded41ec8260bc477640621c6fbc22836988cfad6ff2b6283451c17fe35af2e11",
+  "macos_x86_64_installer_sha256": "2d5a6e63e4b6b93c94279d9dcb5ac9bda05ad6e354ad520ed7307bf954766a71",
+  "build_run_id": 41828594202,
   "decision": "accepted-for-research",
   "scope": "pre-1.0-research",
   "review": {
     "reviewer": "Codex, revisione tecnica",
-    "reviewed_at": "2026-11-04T11:53:25Z",
+    "reviewed_at": "2026-11-04T12:46:25Z",
     "evidence": [
-      "https://github.com/GregorioDalia/nipat-desktop/pull/17",
-      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41820153615",
-      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41820282041"
+      "https://github.com/GregorioDalia/nipat-desktop/pull/18",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41828311855",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41829521409",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/41828594202"
     ]
   },
   "observed_baseline": {
@@ -858,8 +859,8 @@
     "windows_stable_coexistence"
   ],
   "domain_validation": "pending-domain-researchers",
-  "qualification_evidence_sha256": "0b37979e13ca6e257870040af1e11f18da4adf01a29ee38655f22904fc1f9664",
-  "linux_upgrade_check_sha256": "d125eae97c5d8cd1f5950ae443dea02b0125b7f16051dd8e90096e2bbd2fa957",
+  "qualification_evidence_sha256": "a5029e0f70d84515cb73a1529ce2a52e674ea4716f3530e0d17982bb20f2250f",
+  "linux_upgrade_check_sha256": "40f5e167aa4a01514e5506ae8fa113d4b65efe7f42c8a8fda19847752c889c7a",
   "macos_validation": {
     "arm64": {
       "status": "not-performed",
