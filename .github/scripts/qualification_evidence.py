@@ -13,7 +13,7 @@ DESCRIPTOR = "qualification-evidence.json"
 MAX_FILE = 8 * 1024 * 1024
 MAX_TOTAL = 64 * 1024 * 1024
 MAX_ENTRIES = 3000
-ALLOWED = {".json", ".log", ".txt", ".tsv", ".csv", ".md"}
+ALLOWED = {".json", ".jsonl", ".log", ".txt", ".tsv", ".csv", ".md"}
 
 
 def require(condition, message):

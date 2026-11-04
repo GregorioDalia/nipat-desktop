@@ -331,6 +331,7 @@ installer/macos/licenses/python-build-standalone/provenance.json
 .github/scripts/test_official_delivery.py
 .github/scripts/verify_release_source.py
 docs/RELEASE_0.8.2.md
+docs/RELEASE_0.8.5.md
 docs/RISORSE.md
 scripts/verify_presentation.py
 src/nipat/execution/diagnostics.py

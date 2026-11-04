@@ -1,9 +1,51 @@
 # Diagnostica delle prestazioni
 
+Disponibile in **NIPAT Desktop 0.8.5**. Installare il pacchetto del proprio
+sistema dalla [release 0.8.5](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.5);
+il banner dell'applicazione deve riportare `NIPAT 0.8.5`.
+La 0.8.2 esegue le analisi, ma non comprende questa raccolta delle misure.
+
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri
 scientifici, gli input o gli script R e non invia dati a servizi esterni.
 Il monitoraggio introduce un costo che deve essere misurato separatamente.
+
+## Prima misura dal menu
+
+Per misurare DNPcall su un singolo BAM, preparare:
+
+- Il BAM e il relativo indice, conservato accanto al file.
+- Il FASTA della stessa assembly del BAM, con indice `.fai` ed eventuale `.gzi`
+  per un FASTA BGZF. Nel menu si seleziona il FASTA, non il suo indice.
+- Il pannello DNP effettivamente usato nell'analisi: cinque colonne senza
+  intestazione, `chr`, `pos1`, `pos2`, `REF`, `ALT`.
+- Una cartella locale per i risultati, con spazio per intermedi, tabelle e grafici.
+
+Eseguire la prima coppia di prove:
+
+1. Aprire **NIPAT Desktop** e controllare che il banner riporti `0.8.5`.
+   Eseguire **8 — Verifica ambiente** prima del benchmark.
+2. In **5 — Configura**, controllare la cartella risultati e i limiti delle
+   risorse. Mantenerli uguali fra le prove; non aumentare CPU o RAM durante
+   il confronto. Chiudere le applicazioni che possono introdurre carichi variabili.
+3. Scegliere **1 — DNPcall**, inserire un solo BAM, il FASTA e il pannello.
+   Mantenere gli stessi parametri scientifici e la stessa modalità di verifica
+   degli input nelle due prove. Assegnare il nome `dnp-baseline-01` e confermare
+   **Avvia analisi** nel riepilogo.
+4. Ripetere DNPcall con gli stessi input e parametri, usando il nome
+   `dnp-diagnostica-01`. Nel riepilogo scegliere
+   **Avvia analisi con diagnostica prestazioni**.
+5. Conservare entrambe le cartelle dei run. In `dnp-diagnostica-01`, aprire
+   `run-report.html` e controllare la sezione **Diagnostica delle prestazioni**.
+   Conservare anche `run.json`, `execution.log`, la cartella `performance` e gli
+   output scientifici, necessari per interpretare le misure e confrontare i risultati.
+
+La diagnostica è inclusa nell'installer e nel motore scientifico: questa
+procedura non richiede di scaricare o avviare script separati. Non usare
+`--dry-run`, perché quella modalità prepara il run senza eseguire il calcolo.
+Una sola coppia di prove serve a verificare il funzionamento della raccolta;
+per valutare i tempi seguire il [protocollo di ripetizione](#protocollo-per-un-bam-grande).
+Se un'analisi fallisce o viene interrotta, conservare comunque il run.
 
 ## Attivazione per una singola analisi
 

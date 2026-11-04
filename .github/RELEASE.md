@@ -2,7 +2,7 @@
 
 NIPAT distribuisce installatori costruiti e verificati da GitHub Actions.
 La pubblicazione riutilizza gli stessi file, senza ricompilare applicazione
-o runtime. La versione 0.8.2 comprende Windows 10/11 x64, Ubuntu 24.04 x86_64
+o runtime. Le versioni Desktop 0.8.2 e successive comprendono Windows 10/11 x64, Ubuntu 24.04 x86_64
 e macOS Intel/Apple Silicon, con un archivio scientifico comune.
 
 La distribuzione per ricerca pre-1.0 distingue controlli automatici, prove
@@ -23,7 +23,8 @@ ambito ed esiti originali; non attestano prove su versioni successive.
 ## Build identificata
 
 Avviare manualmente **Installers (review build)** su un commit revisionato
-di `main`, `release/0.8.2` o `release/0.8.2-...`.
+di `main` oppure del branch `release/VERSIONE` o `release/VERSIONE-...`
+corrispondente alla versione del pacchetto.
 Il branch di sviluppo permette di costruire e verificare la candidata prima
 dell'integrazione in `main`. Conservare il commit completo, non soltanto il
 nome del branch o il numero di versione.
@@ -91,7 +92,7 @@ non sostituiscono una firma del distributore o la notarizzazione Apple.
 
 ## Accettazione dei pacchetti
 
-Il record della candidata è `.github/release-acceptance/v0.8.2.json`.
+Il record della candidata è `.github/release-acceptance/vVERSIONE.json`.
 Viene revisionato dopo la build e integrato in `main` insieme ai sorgenti,
 conservando il commit compilato nella storia. Non fa parte del pacchetto.
 La generazione del modello non equivale ad accettazione:
@@ -103,7 +104,7 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Per la 0.8.2 il modello usa lo **schema 5**, con decisione iniziale `pending`.
+Per Desktop 0.8.2 e successive il modello usa lo **schema 5**, con decisione iniziale `pending`.
 Una distribuzione per ricerca richiede:
 
 - versione, commit, build e checksum dei quattro installatori, del manifest
@@ -142,7 +143,7 @@ completo e `channel`. Lasciare `preparation_commit` vuoto. La procedura:
 1. verifica build, commit, versione e accettazione;
 2. scarica e ricontrolla i quattro pacchetti e l'archivio comune;
 3. confronta checksum, rapporti e revisione dei sorgenti;
-4. usa le note `docs/RELEASE_0.8.2.md` del commit di preparazione;
+4. usa le note `docs/RELEASE_VERSIONE.md` del commit di preparazione;
 5. crea una bozza, carica i file e verifica dimensioni e digest restituiti;
 6. riporta ID della bozza e commit della preparazione nel riepilogo Actions.
 

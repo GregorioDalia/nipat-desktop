@@ -386,12 +386,12 @@ class ReleaseGuards(unittest.TestCase):
         with patch.object(parts[-2], "verify_baseline", return_value={}), self.assertRaisesRegex(ValueError, "differs from the accepted"):
             self.prepare_joint(*parts)
 
-    def multiplatform_fixture(self):
+    def multiplatform_fixture(self, version="0.8.2"):
         linux, evidence, actual, validator, record = self.reliability_fixture()
-        self.make_desktop_package("0.8.2")
-        package = linux / "nipat-desktop_0.8.2_amd64.deb"
+        self.make_desktop_package(version)
+        package = linux / f"nipat-desktop_{version}_amd64.deb"
         (linux / actual["linux"]["file"]).rename(package)
-        actual.update(version="0.8.2", installer_manifest_sha256=publisher.sha256(self.setup / publisher.MANIFEST))
+        actual.update(version=version, installer_manifest_sha256=publisher.sha256(self.setup / publisher.MANIFEST))
         actual["scientific_archive"] = {key: self.manifest["assets"]["scientific_image"][key]
                                         for key in ("file", "sha256", "size")}
         actual["windows"]["sha256"] = publisher.sha256(self.setup / "NIPAT-Setup.exe")
@@ -430,6 +430,24 @@ class ReleaseGuards(unittest.TestCase):
                 self.assertEqual(hashes[name], publisher.sha256(output / name))
         for entry in windows_linux["assets"] + macos["assets"]:
             self.assertEqual(entry["sha256"], hashes[entry["name"]])
+
+    def test_diagnostic_release_keeps_testing_channel_and_exact_installer_identities(self):
+        parts = self.multiplatform_fixture("0.8.5")
+        with patch.object(parts[-2], "verify_baseline", return_value={"vendored_r_sources_unchanged": True}):
+            self.prepare_joint(*parts)
+        output = self.root / "release"
+        manifests = [json.loads((output / name).read_text())
+                     for name in ("update-manifest.json", "update-manifest-macos.json")]
+        hashes = publisher.checksums(output / "SHA256SUMS")
+        for manifest in manifests:
+            self.assertEqual(manifest["version"], "0.8.5")
+            self.assertEqual(manifest["channel"], "testing")
+            for entry in manifest["assets"]:
+                self.assertEqual(entry["sha256"], hashes[entry["name"]])
+                self.assertIn("/releases/download/v0.8.5/", entry["url"])
+        for name in ("NIPAT-Setup.exe", "nipat-desktop_0.8.5_amd64.deb",
+                     "NIPAT-0.8.5-macos-arm64.pkg", "NIPAT-0.8.5-macos-x86_64.pkg"):
+            self.assertIn(name, hashes)
 
     def test_four_platform_release_cannot_omit_or_replace_native_package(self):
         parts = self.multiplatform_fixture()

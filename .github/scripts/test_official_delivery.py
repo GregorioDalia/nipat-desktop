@@ -33,6 +33,14 @@ class OfficialDeliveryTests(unittest.TestCase):
             source.validate_dispatch("workflow_dispatch", "refs/heads/main", "0.8.2",
                                      dict(source.PROFILE, channel="experimental08"))
 
+    def test_diagnostic_candidate_uses_same_version_source_gate(self):
+        for ref in ("refs/heads/main", "refs/heads/release/0.8.5", "refs/heads/release/0.8.5-diagnostics"):
+            source.validate_dispatch("workflow_dispatch", ref, "0.8.5", source.PROFILE)
+        for ref in ("refs/heads/release/0.8.2", "refs/heads/release/0.8.50",
+                    "refs/heads/release/0.8.5evil", "refs/heads/feature/0.8.5-performance-diagnostics"):
+            with self.subTest(ref=ref), self.assertRaises(ValueError):
+                source.validate_dispatch("workflow_dispatch", ref, "0.8.5", source.PROFILE)
+
     def test_four_downloads_match_exact_bound_packages(self):
         record = {"publication_authorized": False}
         environment = {}
@@ -50,12 +58,13 @@ class OfficialDeliveryTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()
         self.assertIn("needs: [windows-installer, linux-installer, macos-installer]", workflow)
         for verifier in ("verify_linux_dependencies.py", "verify_linux_installer.py", "verify_linux_upgrade.py",
-                         "verify_installer_set.py", "verify_presentation.py"):
+                         "verify_installer_set.py", "verify_presentation.py", "verify_performance.py"):
             self.assertIn(verifier, workflow)
         self.assertIn("--previous-package build/upgrade-baseline/nipat-desktop_0.7.2_amd64.deb", workflow)
         self.assertIn("--macos-arm64-dir build/macos-arm64 --macos-x86-64-dir build/macos-x86_64", workflow)
         self.assertNotIn("verify_experimental_installers.py", workflow)
         self.assertNotIn("contents: write", workflow)
+        self.assertIn("${{ runner.temp }}/nipat-performance-check/", workflow)
 
     def test_publisher_required_jobs_match_actual_workflow_display_names(self):
         workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()

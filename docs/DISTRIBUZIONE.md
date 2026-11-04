@@ -1,11 +1,13 @@
 # Distribuzione e requisiti
 
-NIPAT Desktop 0.8.2 distribuisce la stessa CLI e lo stesso motore scientifico
+NIPAT Desktop distribuisce la stessa CLI e lo stesso motore scientifico
 su Windows, macOS e Ubuntu. Ogni pacchetto contiene l'immagine scientifica:
 non occorre scaricarla separatamente o importarla manualmente.
 
-I download ufficiali sono nella pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
+I [download per piattaforma](../README.md#download) sono disponibili nel README.
+La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
+conserva tutte le versioni. La 0.8.2 è il canale stabile; la prerelease 0.8.5
+aggiunge la [diagnostica facoltativa delle prestazioni](PERFORMANCE.md).
 Scegliere l'installatore nella sezione Assets. Gli archivi **Source code**
 non sono installatori. Gli artefatti GitHub Actions sono build per revisione,
 identificate da commit e checksum, e non sostituiscono una release pubblicata.
@@ -17,7 +19,7 @@ identificate da commit e checksum, e non sostituiscono una release pubblicata.
 | Windows 10 22H2 x64, build 19045, o Windows 11 x64 | WSL2 con Docker Engine gestito da NIPAT | `NIPAT-Setup.exe` |
 | macOS 14 o successivo, Intel | VM Lima AMD64 con Docker Engine | `.pkg` x86_64 |
 | macOS 14 o successivo, Apple Silicon | VM Lima ARM64, Rosetta e Docker Engine | `.pkg` arm64 |
-| Ubuntu 24.04 LTS x86_64 | Docker Engine locale | `nipat-desktop_0.8.2_amd64.deb` |
+| Ubuntu 24.04 LTS x86_64 | Docker Engine locale | `nipat-desktop_VERSIONE_amd64.deb` |
 
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 L'immagine contiene gli script R, samtools, dipendenze, validazione degli

@@ -145,6 +145,13 @@ jobs:
           mkdir -p "$NIPAT_DATA_DIR" "$NIPAT_RUNS_DIR"
           python -m nipat doctor --runtime
           python -m nipat self-test
+      - name: Verify optional performance evidence and unchanged DNP results
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-performance-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Build dedicated WSL filesystem from pinned dependencies
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -229,6 +236,7 @@ jobs:
             ${{ runner.temp }}/nipat-validation/runs/**/execution.log
             ${{ runner.temp }}/nipat-engine-check/
             ${{ runner.temp }}/nipat-presentation-check/
+            ${{ runner.temp }}/nipat-performance-check/
             build/quality/
           retention-days: 14
           if-no-files-found: ignore
@@ -686,7 +694,9 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.qualify_macos_runtime == true &&
       github.repository == 'GregorioDalia/nipat-desktop' &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/0.8.2'))
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/0.8.'))
+    # installer-required depends on release-source, which verifies that the branch
+    # exactly matches the package version and the Desktop installation profile.
     needs: installer-required
     strategy:
       fail-fast: false
