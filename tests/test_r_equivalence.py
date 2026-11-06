@@ -109,7 +109,8 @@ class REquivalenceTests(unittest.TestCase):
         self.assertEqual(result["plot.pdf"]["pages"], 1)
 
         def changed_render(arguments):
-            color = b"\xff\x00\x00" if "/candidate/" in arguments[-2] else b"\x00\x00\x00"
+            source = Path(arguments[-2])
+            color = b"\xff\x00\x00" if source.parent.name == "candidate" else b"\x00\x00\x00"
             Path(arguments[-1] + "-1.ppm").write_bytes(b"P6\n1 1\n255\n" + color)
             return ""
 
