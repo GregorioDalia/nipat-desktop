@@ -38,7 +38,7 @@ The `GPL-3.0-or-later` grant for original NIPAT material does not add an
 them.
 
 [scientific/README.md](scientific/README.md) records the upstream revisions
-and local compatibility changes;
+and local compatibility and performance changes;
 [scientific/SHA256SUMS](scientific/SHA256SUMS) identifies the exact scientific
 files used by NIPAT. Preserve these records when distributing a modified copy.
 

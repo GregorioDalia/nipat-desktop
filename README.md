@@ -16,6 +16,12 @@ disattivata per impostazione predefinita: le analisi ordinarie si avviano con
 su richiesta e non introduce ottimizzazioni degli algoritmi R. Le [note della 0.8.5](docs/RELEASE_0.8.5.md)
 e la [guida alle misure](docs/PERFORMANCE.md) descrivono funzionalità e limiti.
 
+**Sviluppo 0.8.9:** questo branch contiene una revisione sperimentale dei
+programmi R e i confronti differenziali con la 0.8.5. Non è una release
+ufficiale né un aggiornamento distribuito. I download sottostanti rimangono
+quelli della versione stabile. Il [piano di verifica](docs/OPTIMIZATION_0.8.9.md)
+descrive il riferimento, i criteri di equivalenza e le prove necessarie.
+
 ## Download
 
 Scaricare **un solo pacchetto**, scegliendo sistema e architettura.

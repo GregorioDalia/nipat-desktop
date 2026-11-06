@@ -43,6 +43,15 @@ prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
 
 ## Regressioni scientifiche
 
+Le modifiche R della 0.8.9 richiedono anche un confronto differenziale con i
+sorgenti congelati della 0.8.5. `scripts/verify_r_equivalence.py` esegue le
+due versioni nello stesso runtime e conserva risultati, log e rapporto
+`r-equivalence.json`. Un errore o una differenza impedisce il completamento
+del job scientifico. La build degli installatori applica lo stesso controllo
+prima dell'esportazione del runtime. I riferimenti di test non sono inclusi
+nel payload installato. I criteri sono descritti nel
+[piano di verifica 0.8.9](OPTIMIZATION_0.8.9.md).
+
 Il container contiene R, samtools, gli script scientifici, gli adattatori e
 l'orchestrazione. Il client verifica i contratti e non monta gli script R
 dalla cartella dell'applicazione. I workflow composti vengono confrontati

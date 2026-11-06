@@ -1,3 +1,5 @@
+# NIPAT 0.8.9 optimization, 2026-11-06: reuse grouping indices and release
+# consumed intermediates; preserve scientific calculations and output formats.
 cat("\n###### DNPcall ######\n\n\n\n")
 
 
@@ -225,6 +227,7 @@ process_individual <- function(i) {
 
   # select necessary columns
   df2 <- data.frame(df.chr = indiv_df$chr, df.V5 = indiv_df$V5, df.V7 = indiv_df$V7, df.qual = indiv_df$V6)
+  rm(indiv_df)
 
   # substitution of characters to modify the df
   clean_df <- function(df2) {
@@ -260,6 +263,7 @@ process_individual <- function(i) {
   }
 
   df4.1 <- split_and_filter_df(df2)
+  rm(df2)
 
   update_peak_ind()
 
@@ -272,39 +276,31 @@ process_individual <- function(i) {
   }
 
   df6 <- unique_labels(df4.1, ForUniqReads)
+  rm(df4.1)
 
   # convert ASCII pred score to number
   df6$df.qual <- sapply(df6$df.qual, function(x) as.integer(charToRaw(x)) - 33)
 
 
   # group by new read label
-  DF_chr <- df6 %>%
+  DF <- df6 %>%
     group_by(readUniq) %>%
-    summarise(BASE = paste(df.chr, collapse = "|"))
-  DF_pos <- df6 %>%
-    group_by(readUniq) %>%
-    summarise(BASE = paste(df.V5, collapse = "|"))
-  DF_qual <- df6 %>%
-    group_by(readUniq) %>%
-    summarise(BASE = paste(df.qual, collapse = "|"))
-
-  # merge and rename col
-  merge_DF <- function(DF_chr, DF_pos, DF_qual) {
-    DF1 <- merge(DF_chr, DF_pos, by = "readUniq")
-    DF <- merge(DF1, DF_qual, by = "readUniq")
-    names(DF) <- c("ID_DNP", "chr", "pos", "qual")
-    return(DF)
-  }
-
-  DF <- merge_DF(DF_chr, DF_pos, DF_qual)
+    summarise(
+      chr = paste(df.chr, collapse = "|"),
+      pos = paste(df.V5, collapse = "|"),
+      qual = paste(df.qual, collapse = "|"),
+      .groups = "drop"
+    )
+  # The original merges return a data.frame sorted using the current locale.
+  DF <- as.data.frame(DF)
+  names(DF)[1] <- "ID_DNP"
+  DF <- DF[order(DF$ID_DNP), , drop = FALSE]
+  rownames(DF) <- NULL
+  rm(df6)
 
   # substitute characters strand specific characters (unecessary) with only uppercase letters
   UppLowSub <- function(DF) {
-    DF$pos <- gsub('g', 'G', DF$pos)
-    DF$pos <- gsub('a', 'A', DF$pos)
-    DF$pos <- gsub('c', 'C', DF$pos)
-    DF$pos <- gsub('t', 'T', DF$pos)
-    DF$pos <- gsub(',', '.', DF$pos)
+    DF$pos <- chartr("gact,", "GACT.", DF$pos)
     return(DF)
   }
 
@@ -318,9 +314,7 @@ process_individual <- function(i) {
 
     DF_INDEL <- DF_with_INDEL %>%
       mutate(
-        pos1 = substr(pos, 1, 2),
-        pos2 = substr(pos, 3, 5),
-        pos3 = substr(pos, 6, 7)
+        pos2 = substr(pos, 3, 5)
       ) %>%
       select(-pos)
 
@@ -338,7 +332,6 @@ process_individual <- function(i) {
     dfIND_summary <- dfIND_count %>%
       group_by(chr) %>%
       summarise(
-        observed_comb = paste(pos2, collapse = ";"),
         total_reads = sum(n),
         indel_reads = sum(n[is_indel]),
         indel_ratio = indel_reads / total_reads,
@@ -370,15 +363,15 @@ process_individual <- function(i) {
   # eliminate reads with "@", indicating reads with INDELs
   DFnoINDEL <- DF %>%
     filter_all(all_vars(!grepl("@", .)))
+  rm(DF)
 
   # keep only micro haplotype
   righe_modificate <- DFnoINDEL[nchar(DFnoINDEL$pos)>6,]
+  rm(DFnoINDEL)
 
   # extract DNP info
   df_3coppie <- righe_modificate %>%
-    mutate(pos1 = substr(pos, 1, 2),
-           pos2 = substr(pos, 3, 5),
-           pos3 = substr(pos, 6, 7),
+    mutate(pos2 = substr(pos, 3, 5),
            qual1=sapply(qual, function(x) {
              parts <- strsplit(x, "\\|")[[1]]
              paste(parts[2:3], collapse = "|")
@@ -388,7 +381,8 @@ process_individual <- function(i) {
              paste(parts[2:3], collapse = "|")
            }))
 
-  good_reads <- df_3coppie[,c(9,6,8)]
+  good_reads <- df_3coppie[,c("chr1", "pos2", "qual1")]
+  rm(righe_modificate, df_3coppie)
 
   # compute BQ average between the two DNP positions
   good_reads <- good_reads%>%
@@ -420,16 +414,7 @@ process_individual <- function(i) {
 
   # merge with ref alt data
   data_info <- merge(good_reads, RefAltDNP, by.x = "chr1", by.y = "POS")
-
-  # create df for other (error) alleles
-  altro_dt <- subset(data_info, pos2 != ref & pos2 != alt)
-
-  altro_dt_grouped <- altro_dt %>%
-    group_by(chr1, pos2) %>%
-    summarise(n = n())
-
-  altro_dt2 <- data.frame(DNPs = altro_dt_grouped$chr1, n = altro_dt_grouped$n)
-  altro_dt3 <- altro_dt2 %>% group_by(DNPs) %>% summarise(n_altro = sum(n))
+  rm(good_reads)
 
   # create df for other (error) alleles
   make_df_other <- function(data_info) {
@@ -481,10 +466,21 @@ process_individual <- function(i) {
   # loop on DNPs
   positions <- unique(ref_alt_dt$chr1)
   out <- vector("list", length(positions))
+  # Build row indices once, preserving both locus and within-locus read order.
+  # Retain the native logical-subset behavior for missing keys in direct R input.
+  position_rows <- if (anyNA(ref_alt_dt$chr1)) {
+    NULL
+  } else {
+    split(seq_len(nrow(ref_alt_dt)), match(ref_alt_dt$chr1, positions))
+  }
 
   for (k in seq_along(positions)) {
     pos <- positions[k]
-    sub <- ref_alt_dt[ref_alt_dt$chr1 == pos, ]
+    sub <- if (is.null(position_rows)) {
+      ref_alt_dt[ref_alt_dt$chr1 == pos, ]
+    } else {
+      ref_alt_dt[position_rows[[k]], , drop = FALSE]
+    }
 
     # alleles without'|'
     haps <- gsub("\\|", "", sub$pos2)
@@ -513,6 +509,7 @@ process_individual <- function(i) {
   }
 
   res <- do.call(rbind, out)
+  rm(ref_alt_dt, position_rows)
 
   update_peak_ind()
 
@@ -550,6 +547,7 @@ process_individual <- function(i) {
   }
 
   alt_dt_grouped <- make_df_alt(data_info)
+  rm(data_info)
 
 
   # merge the 3 dfs

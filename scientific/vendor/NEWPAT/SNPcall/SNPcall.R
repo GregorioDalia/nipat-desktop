@@ -1,4 +1,6 @@
 #!/usr/bin/env Rscript
+# Modified by NIPAT contributors, 2026-11-06 (0.8.9): consolidate read
+# aggregation and release unused intermediate data; scientific rules unchanged.
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -50,6 +52,7 @@ df$chr <- paste(df$V1, df$V2, sep = ":")
 
 # keep only needed columns
 df2 <- data.frame(df$chr, df$V5, df$V7)
+rm(df)
 
 # add commas at both ends of read names to enable the next step
 df2$df.V7 <- paste0(",", df2$df.V7, ",")
@@ -64,25 +67,34 @@ df2$df.V7 <- gsub(',', ' ', df2$df.V7)
 
 # split values pairing base with the corresponding read
 df3 <- df2 %>% separate_rows(df.V5, df.V7, sep = " ")
+rm(df2)
 
-# aggregate bases by read
-df5 <- df3 %>% group_by(df.V7) %>% summarise(df.V5 = paste(df.V5, collapse = "|"), .groups = "drop")
+# Empty names introduced by the delimiters are discarded below. Remove them
+# before grouping, while retaining missing names for the existing filters.
+df3 <- df3[is.na(df3$df.V7) | nchar(df3$df.V7) > 0, ]
 
-# aggregate positions by read
-df6 <- df3 %>% group_by(df.V7) %>% summarise(df.chr = paste(df.chr, collapse = "|"), .groups = "drop")
+# Aggregate bases and positions together, preserving their order within reads.
+df_merged <- df3 %>%
+  group_by(df.V7) %>%
+  summarise(
+    df.V5 = paste(df.V5, collapse = "|"),
+    df.chr = paste(df.chr, collapse = "|"),
+    .groups = "drop"
+  ) %>%
+  as.data.frame()
+rm(df3)
 
-# merge the two datasets
-df_merged <- merge(df5, df6)
+# Match the locale-dependent ordering of the original base merge.
+df_merged <- df_merged[order(df_merged$df.V7), , drop = FALSE]
+rownames(df_merged) <- NULL
 
 # keep only reads called on both positions of a single read (micro haplotypes)
 df_merged2 <- df_merged[nchar(df_merged$df.V5) > 4, ]
 df_merged3 <- df_merged2[nchar(df_merged2$df.V7) > 0, ]
+rm(df_merged, df_merged2)
 
 # harmonize strand characters
-df_merged3$df.V5 <- gsub('g', 'G', df_merged3$df.V5)
-df_merged3$df.V5 <- gsub('a', 'A', df_merged3$df.V5)
-df_merged3$df.V5 <- gsub('c', 'C', df_merged3$df.V5)
-df_merged3$df.V5 <- gsub('t', 'T', df_merged3$df.V5)
+df_merged3$df.V5 <- chartr('acgt', 'ACGT', df_merged3$df.V5)
 df_merged3$df.V5 <- gsub(',', '.', df_merged3$df.V5)
 
 # count rows containing @
@@ -91,6 +103,7 @@ print(conteggio)
 
 # remove rows containing @
 df_merged4 <- df_merged3 %>% filter_all(all_vars(!grepl("@", .)))
+rm(df_merged3)
 
 # recount rows containing @
 conteggio2 <- sum(grepl("@", df_merged4$df.V5))
@@ -99,9 +112,11 @@ print(conteggio2)
 # extract the third character as genotype and drop the original base string
 df_merged5 <- df_merged4 %>% mutate(df.V5.1 = substring(df.V5, 3, 3))
 df_merged5 <- subset(df_merged5, select = -df.V5)
+rm(df_merged4)
 
 # count all genotypes found
 df_count2 <- df_merged5 %>% group_by(df.chr, df.V5.1) %>% summarise(n = n(), .groups = "drop")
+rm(df_merged5)
 
 # extract the text between pipes and remove the first and last pipe
 df_count2$df.chr <- str_extract(df_count2$df.chr, "\\|.*\\|")

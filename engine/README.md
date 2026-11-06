@@ -286,7 +286,7 @@ originali, `pairs` associa gli ID di coppia a etichette leggibili. La mappa
 dei campioni deve essere completa; quella delle coppie può essere parziale.
 Le etichette sono dati: non vengono interpretate come codice R o comandi.
 
-Il motore esegue gli script vendorizzati invariati e crea copie leggibili
+Il motore esegue gli script scientifici identificati dal manifest e crea copie leggibili
 in `output/presentation`; nei piani l'indice è in `workflow/presentation`.
 L'adattatore R salva i grafici nativi e rende una copia con le etichette
 originali. L'esportazione delle tabelle modifica solo i campi identificativi.

@@ -46,6 +46,7 @@ docs/INSTALLATORE_WINDOWS.md
 docs/RELEASE_0.5.0a1.md
 docs/RELEASE_0.6.0.md
 docs/ROADMAP.md
+docs/OPTIMIZATION_0.8.9.md
 docs/VALIDAZIONE.md
 docs/WORKFLOW_CONTRACT.md
 engine/README.md

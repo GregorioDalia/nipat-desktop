@@ -11,12 +11,16 @@ automatici su Windows, macOS e Ubuntu. Il perimetro corrente è descritto nelle
 | Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi degli utilizzi scientifici previsti. |
 | Tracciabilità | Collegare senza ambiguità nomi originali, identità interne, fasi e risultati. |
 | Uso delle risorse | Rendere leggibili e configurabili i limiti dell'ambiente e dell'analisi, conservando diagnosi e configurazione effettiva. |
-| Prestazioni | Usare la diagnostica facoltativa e i benchmark riproducibili della 0.8.5 per selezionare le ottimizzazioni della 0.8.7, con confronto numerico e temporale. |
+| Prestazioni | Sviluppare la revisione R 0.8.9 mediante confronti differenziali con la 0.8.5 e benchmark riproducibili, distinguendo equivalenza dei risultati e prestazioni. |
 | Portabilità | Raccogliere prove reali Windows 10/11, Ubuntu e Mac Intel/Apple Silicon oltre ai controlli automatici. |
 | Interfaccia | Preparare una GUI sugli stessi contratti della CLI, dopo il consolidamento delle analisi. |
 | Lingue | Estendere italiano e inglese dal catalogo scientifico all'interfaccia e alla documentazione, senza duplicare le regole applicative. |
 
 ## Metodo di verifica
+
+La [revisione 0.8.9](OPTIMIZATION_0.8.9.md) è sperimentale. La versione
+ufficiale rimane la 0.8.5; il completamento dei test di sviluppo non pubblica
+automaticamente un aggiornamento o un installatore.
 
 Ogni difetto riproducibile aggiunge una regressione al livello appropriato.
 I test distinguono input e parametri, calcoli numerici, trasporto, installer,

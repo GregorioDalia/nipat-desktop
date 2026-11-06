@@ -9,14 +9,14 @@ from unittest.mock import Mock, patch
 from nipat.cli import main
 from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout
-from nipat.resource_ui import configure_resources, resource_lines
+from nipat.resource_ui import configure_resources, memory_label, resource_lines
 from nipat.wizard_forms import Cancelled
 
 
 class FakeUI:
     def __init__(self, answers):
         self.answers = iter(answers)
-        self.lines, self.menus = [], []
+        self.lines, self.menus, self.prompts = [], [], []
 
     def heading(self, text):
         self.lines.append(text)
@@ -29,6 +29,7 @@ class FakeUI:
         return next(self.answers)
 
     def prompt(self, title, default=""):
+        self.prompts.append((title, default))
         return next(self.answers)
 
 
@@ -50,6 +51,87 @@ def manager(backend="wsl", running=True):
 
 
 class ResourceUITests(unittest.TestCase):
+    def test_enter_preserves_automatic_wsl_limits_despite_lower_suggestion(self):
+        backend = manager()
+        snapshot = backend.snapshot.return_value
+        snapshot["runtime"]["configured"] = {"memory_mib": None, "cpus": None}
+        snapshot["runtime"]["effective"] = {"memory_mib": 15858, "cpus": 32}
+        snapshot["suggested"] = {"memory_mib": 8192, "cpus": 4}
+        ui = FakeUI(["2", "", "", "0"])
+        configure_resources(ui, None, ExecutionOptions(), manager=backend)
+        backend.preview.assert_not_called()
+        backend.apply.assert_not_called()
+        self.assertEqual([default for _, default in ui.prompts], ["mantieni", "mantieni"])
+        text = "\n".join(ui.lines)
+        self.assertIn("risorse effettive attuali: RAM 15.49 GiB", text)
+        self.assertIn("Suggerimento facoltativo: RAM 8 GiB", text)
+        self.assertIn("Configurazione invariata", text)
+
+    def test_configured_values_are_defaults_and_enter_is_a_no_op(self):
+        for name in ("wsl", "lima"):
+            with self.subTest(backend=name):
+                backend = manager(name)
+                backend.snapshot.return_value["runtime"]["configured"] = {
+                    "memory_mib": 15858, "cpus": 12,
+                }
+                backend.snapshot.return_value["suggested"] = {"memory_mib": 8192, "cpus": 4}
+                ui = FakeUI(["2", "", "", "0"])
+                configure_resources(ui, None, ExecutionOptions(), manager=backend)
+                self.assertEqual([default for _, default in ui.prompts], ["15.486328125", "12"])
+                backend.preview.assert_not_called()
+                backend.apply.assert_not_called()
+
+    def test_unknown_resources_do_not_become_suggested_limits_on_enter(self):
+        backend = manager(running=False)
+        backend.snapshot.return_value["runtime"]["configured"] = {"memory_mib": None, "cpus": None}
+        backend.snapshot.return_value["runtime"]["effective"] = {"memory_mib": None, "cpus": None}
+        backend.snapshot.return_value["suggested"] = {"memory_mib": None, "cpus": None}
+        ui = FakeUI(["2", ":suggerito", "", "", "0"])
+        configure_resources(ui, None, ExecutionOptions(), manager=backend)
+        backend.preview.assert_not_called()
+        backend.apply.assert_not_called()
+        self.assertIn("Suggerimento non disponibile", "\n".join(ui.lines))
+
+    def test_suggested_limits_require_explicit_selection_and_preview_confirmation(self):
+        backend = manager()
+        backend.snapshot.return_value["suggested"] = {"memory_mib": 8192, "cpus": 4}
+        ui = FakeUI(["2", ":suggerito", ":suggerito", "0", "0"])
+        configure_resources(ui, None, ExecutionOptions(), manager=backend)
+        backend.preview.assert_called_once_with(memory_mib=8192, cpus=4)
+        backend.apply.assert_not_called()
+
+    def test_changing_ram_requires_explicit_cpu_when_cpu_configuration_is_automatic(self):
+        backend = manager()
+        backend.snapshot.return_value["runtime"]["configured"] = {"memory_mib": None, "cpus": None}
+        backend.snapshot.return_value["runtime"]["effective"] = {"memory_mib": 15858, "cpus": 32}
+        ui = FakeUI(["2", "12", "", "6", "0", "0"])
+        configure_resources(ui, None, ExecutionOptions(), manager=backend)
+        backend.preview.assert_called_once_with(memory_mib=12288, cpus=6)
+        backend.apply.assert_not_called()
+        self.assertEqual(len(ui.prompts), 3)
+        self.assertEqual(ui.prompts[2][1], "")
+        self.assertIn("occorre indicare sia RAM sia CPU", "\n".join(ui.lines))
+
+    def test_changing_cpu_does_not_silently_freeze_effective_memory(self):
+        backend = manager()
+        backend.snapshot.return_value["runtime"]["configured"] = {"memory_mib": None, "cpus": None}
+        backend.snapshot.return_value["runtime"]["effective"] = {"memory_mib": 15858, "cpus": 32}
+        ui = FakeUI(["2", "", "8", ":indietro", "0"])
+        configure_resources(ui, None, ExecutionOptions(), manager=backend)
+        backend.preview.assert_not_called()
+        backend.apply.assert_not_called()
+
+    def test_resource_summary_distinguishes_configuration_and_effective_memory(self):
+        data = manager().snapshot()
+        data["runtime"]["configured"]["memory_mib"] = 16384
+        data["runtime"]["effective"]["memory_mib"] = 15858
+        data["warnings"] = ["RAM e CPU della VM WSL sono condivise da tutte le distribuzioni WSL2 dell'utente."]
+        text = "\n".join(resource_lines(data))
+        self.assertIn("configurazione salvata: RAM 16 GiB", text)
+        self.assertIn("risorse effettive attuali: RAM 15.49 GiB", text)
+        self.assertEqual(text.count("condivise"), 1)
+        self.assertEqual(memory_label(None), "Non rilevata")
+
     def test_wsl_save_and_restart_are_separate_explicit_choices(self):
         backend = manager()
         ui = FakeUI(["2", "8", "4", "1", "0", "0"])
