@@ -5,9 +5,9 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive **NIPAT Desktop 0.8.5**. Scaricare `NIPAT-Setup.exe`
+Questo documento descrive **NIPAT Desktop 0.8.9**. Scaricare `NIPAT-Setup.exe`
 dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-Le [note della versione](RELEASE_0.8.5.md) distinguono controlli automatici,
+Le [note della versione](RELEASE_0.8.9.md) distinguono controlli automatici,
 prove desktop e valutazione di dominio. Il setup aggiorna le installazioni
 NIPAT Desktop riconosciute e conserva i percorsi scelti dall'utente.
 

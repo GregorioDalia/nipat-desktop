@@ -1,3 +1,5 @@
+# NIPAT 0.8.9 optimization: tokenize pileup observations directly, reuse quality
+# conversions and grouping indices, and release consumed intermediate data.
 cat("\n###### DNPcall ######\n\n\n\n")
 
 
@@ -225,23 +227,12 @@ process_individual <- function(i) {
 
   # select necessary columns
   df2 <- data.frame(df.chr = indiv_df$chr, df.V5 = indiv_df$V5, df.V7 = indiv_df$V7, df.qual = indiv_df$V6)
+  rm(indiv_df)
 
   # substitution of characters to modify the df
   clean_df <- function(df2) {
-    df2 <- df2
-
-    # wrap df.V7 between ","
-    df2$df.V7 <- paste0(",", df2$df.V7, ",")
-
-    # substitute * with @
     df2$df.V5 <- gsub("\\*", "@", df2$df.V5)
-
-    # substitute indels patterns with @
     df2$df.V5 <- gsub("[actgACTG]([+-]\\d+)+", "@", df2$df.V5)
-
-    df2$df.V5    <- gsub("", " ", df2$df.V5)
-    df2$df.V7    <- gsub(",", " ", df2$df.V7)
-    df2$df.qual  <- gsub("", " ", df2$df.qual)
     return(df2)
   }
 
@@ -249,17 +240,45 @@ process_individual <- function(i) {
 
   update_peak_ind()
 
-
-  # split bases and reads columns in single cells
+  # Tokenize valid pileup observations directly. The original separator-based
+  # path remains the fallback for missing fields, embedded whitespace or unequal
+  # lengths, retaining its recycling and validation semantics for those inputs.
   split_and_filter_df <- function(df2) {
+    fields <- df2[, c("df.V5", "df.V7", "df.qual")]
+    direct <- nrow(df2) > 0L && !anyNA(fields) &&
+      !any(vapply(fields, function(x) any(grepl("[[:space:]]", x)), logical(1)))
+    if (direct) {
+      bases <- strsplit(as.character(df2$df.V5), "", fixed = TRUE)
+      reads <- strsplit(as.character(df2$df.V7), ",", fixed = TRUE)
+      qualities <- strsplit(as.character(df2$df.qual), "", fixed = TRUE)
+      counts <- lengths(bases)
+      direct <- all(counts > 0L & counts == lengths(reads) &
+                    counts == lengths(qualities)) &&
+        !any(vapply(reads, function(x) any(!nzchar(x)), logical(1))) &&
+        !any(endsWith(as.character(df2$df.V7), ","))
+      if (direct) {
+        return(tibble(
+          df.V7 = unlist(reads, use.names = FALSE),
+          df.chr = rep(df2$df.chr, counts),
+          df.V5 = unlist(bases, use.names = FALSE),
+          df.qual = unlist(qualities, use.names = FALSE)
+        ))
+      }
+      rm(bases, reads, qualities, counts)
+    }
+    df2$df.V7 <- paste0(",", df2$df.V7, ",")
+    df2$df.V5 <- gsub("", " ", df2$df.V5)
+    df2$df.V7 <- gsub(",", " ", df2$df.V7)
+    df2$df.qual <- gsub("", " ", df2$df.qual)
     df3 <- df2 %>%
       separate_rows(df.V5, df.V7, df.qual, sep = " ")
     df4 <- df3[, c(3, 1, 2, 4)]
-    df4.1 <- df4[ df4$df.V7 != "", ]
+    df4.1 <- df4[df4$df.V7 != "", ]
     return(df4.1)
   }
 
   df4.1 <- split_and_filter_df(df2)
+  rm(df2)
 
   update_peak_ind()
 
@@ -272,39 +291,41 @@ process_individual <- function(i) {
   }
 
   df6 <- unique_labels(df4.1, ForUniqReads)
+  rm(df4.1)
 
   # convert ASCII pred score to number
-  df6$df.qual <- sapply(df6$df.qual, function(x) as.integer(charToRaw(x)) - 33)
+  # A single lookup replaces one R callback per observation for SAM quality
+  # characters. Keep the original conversion for nonstandard direct R input.
+  quality_codes <- match(df6$df.qual, intToUtf8(33:126, multiple = TRUE))
+  if (is.character(df6$df.qual) && length(quality_codes) > 0L && !anyNA(quality_codes)) {
+    quality_names <- if (is.null(names(df6$df.qual))) df6$df.qual else names(df6$df.qual)
+    df6$df.qual <- setNames(quality_codes - 1, quality_names)
+    rm(quality_names)
+  } else {
+    df6$df.qual <- sapply(df6$df.qual, function(x) as.integer(charToRaw(x)) - 33)
+  }
+  rm(quality_codes)
 
 
   # group by new read label
-  DF_chr <- df6 %>%
+  DF <- df6 %>%
     group_by(readUniq) %>%
-    summarise(BASE = paste(df.chr, collapse = "|"))
-  DF_pos <- df6 %>%
-    group_by(readUniq) %>%
-    summarise(BASE = paste(df.V5, collapse = "|"))
-  DF_qual <- df6 %>%
-    group_by(readUniq) %>%
-    summarise(BASE = paste(df.qual, collapse = "|"))
-
-  # merge and rename col
-  merge_DF <- function(DF_chr, DF_pos, DF_qual) {
-    DF1 <- merge(DF_chr, DF_pos, by = "readUniq")
-    DF <- merge(DF1, DF_qual, by = "readUniq")
-    names(DF) <- c("ID_DNP", "chr", "pos", "qual")
-    return(DF)
-  }
-
-  DF <- merge_DF(DF_chr, DF_pos, DF_qual)
+    summarise(
+      chr = paste(df.chr, collapse = "|"),
+      pos = paste(df.V5, collapse = "|"),
+      qual = paste(df.qual, collapse = "|"),
+      .groups = "drop"
+    )
+  # The original merges return a data.frame sorted using the current locale.
+  DF <- as.data.frame(DF)
+  names(DF)[1] <- "ID_DNP"
+  DF <- DF[order(DF$ID_DNP), , drop = FALSE]
+  rownames(DF) <- NULL
+  rm(df6)
 
   # substitute characters strand specific characters (unecessary) with only uppercase letters
   UppLowSub <- function(DF) {
-    DF$pos <- gsub('g', 'G', DF$pos)
-    DF$pos <- gsub('a', 'A', DF$pos)
-    DF$pos <- gsub('c', 'C', DF$pos)
-    DF$pos <- gsub('t', 'T', DF$pos)
-    DF$pos <- gsub(',', '.', DF$pos)
+    DF$pos <- chartr("gact,", "GACT.", DF$pos)
     return(DF)
   }
 
@@ -318,9 +339,7 @@ process_individual <- function(i) {
 
     DF_INDEL <- DF_with_INDEL %>%
       mutate(
-        pos1 = substr(pos, 1, 2),
-        pos2 = substr(pos, 3, 5),
-        pos3 = substr(pos, 6, 7)
+        pos2 = substr(pos, 3, 5)
       ) %>%
       select(-pos)
 
@@ -338,7 +357,6 @@ process_individual <- function(i) {
     dfIND_summary <- dfIND_count %>%
       group_by(chr) %>%
       summarise(
-        observed_comb = paste(pos2, collapse = ";"),
         total_reads = sum(n),
         indel_reads = sum(n[is_indel]),
         indel_ratio = indel_reads / total_reads,
@@ -370,32 +388,57 @@ process_individual <- function(i) {
   # eliminate reads with "@", indicating reads with INDELs
   DFnoINDEL <- DF %>%
     filter_all(all_vars(!grepl("@", .)))
+  rm(DF)
 
   # keep only micro haplotype
   righe_modificate <- DFnoINDEL[nchar(DFnoINDEL$pos)>6,]
+  rm(DFnoINDEL)
 
   # extract DNP info
-  df_3coppie <- righe_modificate %>%
-    mutate(pos1 = substr(pos, 1, 2),
-           pos2 = substr(pos, 3, 5),
-           pos3 = substr(pos, 6, 7),
-           qual1=sapply(qual, function(x) {
-             parts <- strsplit(x, "\\|")[[1]]
-             paste(parts[2:3], collapse = "|")
-           }),
-           chr1=sapply(chr, function(x) {
-             parts <- strsplit(x, "\\|")[[1]]
-             paste(parts[2:3], collapse = "|")
-           }))
+  # Coordinates and quality patterns recur across reads. Extract each distinct
+  # pattern once; preserve the original strsplit handling of short/empty values
+  # and the names produced by sapply on character vectors.
+  extract_middle_pair <- function(values) {
+    extract <- function(x) {
+      parts <- strsplit(x, "\\|")[[1]]
+      paste(parts[2:3], collapse = "|")
+    }
+    if (!length(values)) return(sapply(values, extract))
+    patterns <- unique(values)
+    pairs <- vapply(patterns, extract, character(1), USE.NAMES = FALSE)
+    result <- pairs[match(values, patterns)]
+    names(result) <- if (is.null(names(values))) values else names(values)
+    return(result)
+  }
 
-  good_reads <- df_3coppie[,c(9,6,8)]
+  # Retain only the three columns used downstream, avoiding a wider copy of all
+  # per-read data merely to select these columns immediately afterwards.
+  good_reads <- righe_modificate[, c("chr", "pos", "qual"), drop = FALSE]
+  names(good_reads) <- c("chr1", "pos2", "qual1")
+  good_reads <- good_reads %>%
+    mutate(chr1 = extract_middle_pair(chr1),
+           pos2 = substr(pos2, 3, 5),
+           qual1 = extract_middle_pair(qual1))
+  rm(righe_modificate)
 
   # compute BQ average between the two DNP positions
-  good_reads <- good_reads%>%
-    mutate(mean_quality = sapply(qual1, function(x) {
+  # Compute each distinct pair once with the original mean(), including its
+  # missing-value behavior, then restore the exact per-read order.
+  quality_pairs <- unique(good_reads$qual1)
+  pair_means <- sapply(quality_pairs, function(x) {
     values <- as.numeric(strsplit(x, "\\|")[[1]])
     mean(values)
-  }))
+  })
+  mean_quality <- pair_means[match(good_reads$qual1, quality_pairs)]
+  if (length(good_reads$qual1)) {
+    names(mean_quality) <- if (is.null(names(good_reads$qual1))) {
+      good_reads$qual1
+    } else {
+      names(good_reads$qual1)
+    }
+  }
+  good_reads <- good_reads %>% mutate(mean_quality = mean_quality)
+  rm(quality_pairs, pair_means, mean_quality)
 
 
   # for full* dataset final
@@ -420,16 +463,7 @@ process_individual <- function(i) {
 
   # merge with ref alt data
   data_info <- merge(good_reads, RefAltDNP, by.x = "chr1", by.y = "POS")
-
-  # create df for other (error) alleles
-  altro_dt <- subset(data_info, pos2 != ref & pos2 != alt)
-
-  altro_dt_grouped <- altro_dt %>%
-    group_by(chr1, pos2) %>%
-    summarise(n = n())
-
-  altro_dt2 <- data.frame(DNPs = altro_dt_grouped$chr1, n = altro_dt_grouped$n)
-  altro_dt3 <- altro_dt2 %>% group_by(DNPs) %>% summarise(n_altro = sum(n))
+  rm(good_reads)
 
   # create df for other (error) alleles
   make_df_other <- function(data_info) {
@@ -481,10 +515,21 @@ process_individual <- function(i) {
   # loop on DNPs
   positions <- unique(ref_alt_dt$chr1)
   out <- vector("list", length(positions))
+  # Build row indices once, preserving both locus and within-locus read order.
+  # Retain the native logical-subset behavior for missing keys in direct R input.
+  position_rows <- if (anyNA(ref_alt_dt$chr1)) {
+    NULL
+  } else {
+    split(seq_len(nrow(ref_alt_dt)), match(ref_alt_dt$chr1, positions))
+  }
 
   for (k in seq_along(positions)) {
     pos <- positions[k]
-    sub <- ref_alt_dt[ref_alt_dt$chr1 == pos, ]
+    sub <- if (is.null(position_rows)) {
+      ref_alt_dt[ref_alt_dt$chr1 == pos, ]
+    } else {
+      ref_alt_dt[position_rows[[k]], , drop = FALSE]
+    }
 
     # alleles without'|'
     haps <- gsub("\\|", "", sub$pos2)
@@ -513,6 +558,7 @@ process_individual <- function(i) {
   }
 
   res <- do.call(rbind, out)
+  rm(ref_alt_dt, position_rows)
 
   update_peak_ind()
 
@@ -550,6 +596,7 @@ process_individual <- function(i) {
   }
 
   alt_dt_grouped <- make_df_alt(data_info)
+  rm(data_info)
 
 
   # merge the 3 dfs

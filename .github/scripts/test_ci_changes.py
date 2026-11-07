@@ -129,6 +129,28 @@ class ScientificSelection(unittest.TestCase):
         (self.root / "tests/test_regression.py").unlink()
         self.assertTrue(self.selected())
 
+    def test_r_equivalence_reference_harness_and_cases_require_scientific_integration(self):
+        for name in (
+            ".github/scripts/test_r_equivalence_ci.py",
+            "scripts/verify_r_equivalence.py",
+            "tests/test_r_equivalence.py",
+            "tests/reference_r/0.8.5/manifest.json",
+            "tests/reference_r/0.8.5/scientific/vendor/DNPcall/DNPcall.R",
+            "tests/r_optimization/dnp/grouping.R",
+            "tests/r_optimization/cpi/cases.R",
+        ):
+            with self.subTest(path=name):
+                self.write(name, "changed\n")
+                self.assertTrue(self.selected())
+                self.base = self.git("rev-parse", "HEAD")
+
+    def test_removing_a_frozen_r_reference_cannot_skip_equivalence_checks(self):
+        name = "tests/reference_r/0.8.5/scientific/vendor/DNPcall/DNPcall.R"
+        self.write(name, "reference\n")
+        self.base = self.commit()
+        (self.root / name).unlink()
+        self.assertTrue(self.selected())
+
 
 if __name__ == "__main__":
     unittest.main()

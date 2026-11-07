@@ -1,8 +1,10 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.8.5** esegue DNPcall, SNPcall, Contamination e CPI sul computer
+**NIPAT Desktop 0.8.9** esegue DNPcall, SNPcall, Contamination e CPI sul computer
 dell'utente attraverso una CLI guidata. Le analisi possono essere avviate
 singolarmente oppure collegate in un workflow automatico con una sola conferma.
+La 0.8.9 riduce allocazioni e calcoli ripetuti nei programmi R, con confronti
+differenziali rispetto ai sorgenti congelati della 0.8.5.
 
 | Analisi | Funzione |
 | --- | --- |
@@ -63,7 +65,9 @@ e risultati. File omonimi mantengono identità distinte.
 La schermata risorse distingue memoria del computer, memoria dell'ambiente
 virtuale e limite del container. Le modifiche all'ambiente richiedono un'anteprima
 e una conferma; quelle che richiedono un riavvio restano indicate come non ancora
-attive. Su Windows i limiti globali WSL interessano anche le altre distribuzioni.
+attive. Configurazione salvata, risorse effettive e suggerimenti sono distinti:
+**Invio conserva i valori correnti**. Su Windows i limiti globali WSL interessano
+anche le altre distribuzioni.
 
 **6 — Ultima esecuzione** riapre risultati e log della sessione.
 `:indietro` corregge un campo, `:annulla` torna al menu e **Ctrl+C** interrompe
@@ -78,4 +82,4 @@ affidata alle persone esperte di dominio.
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Risultati e tracciabilità](docs/ESECUZIONI.md)
 - [Risorse e memoria](docs/RISORSE.md)
-- [Note della versione](docs/RELEASE_0.8.5.md)
+- [Note della versione](docs/RELEASE_0.8.9.md)

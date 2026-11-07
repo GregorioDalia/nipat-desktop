@@ -21,6 +21,15 @@ valori configurati ed effettivi, quando rilevabili. I suggerimenti si basano
 sulle risorse del dispositivo e lasciano spazio al sistema operativo; non
 stimano la memoria necessaria a uno specifico BAM o pannello.
 
+La configurazione salvata, le risorse effettive attuali e i suggerimenti
+sono valori distinti. Un ambiente può usare limiti automatici senza avere
+valori espliciti nel file di configurazione. Nel modulo di modifica, **Invio
+mantiene il valore corrente**, compresa l'impostazione automatica; non
+applica il suggerimento. Per adottarlo esplicitamente usare `:suggerito`.
+Se entrambi i campi restano invariati, non vengono salvati limiti né eseguiti
+riavvii. Per salvare nuovi limiti espliciti occorre indicare sia RAM sia CPU;
+un campo automatico non viene sostituito con il valore effettivo rilevato.
+
 I limiti dell'analisi sono facoltativi. **Nessun limite NIPAT** significa che
 NIPAT non impone un ulteriore tetto: restano attivi i limiti della VM, del
 sistema e delle altre applicazioni. Un limite troppo basso può causare
@@ -105,7 +114,7 @@ Le opzioni sono esplicite anche negli script automatizzati.
 Il backup indicato dall'applicazione è un file JSON che conserva percorso,
 hash e contenuto precedente codificato in base64, compresa l'eventuale assenza
 del file. Non va copiato direttamente al posto di `.wslconfig` o del file Lima.
-La 0.8.5 non include un comando di ripristino guidato. Conservare il backup
+La 0.8.9 non include un comando di ripristino guidato. Conservare il backup
 per diagnosi e recupero della configurazione precedente.
 
 ## Velocità di DNPcall

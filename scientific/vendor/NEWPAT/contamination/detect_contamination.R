@@ -1,3 +1,6 @@
+# Modified by NIPAT contributors, 2026-11-06 (0.8.9): collect sample summary
+# rows once; scientific formulas, filters and output columns unchanged.
+
 suppressPackageStartupMessages({
   library(dplyr)
   library(tools)
@@ -255,16 +258,13 @@ process_df <- function(file_path) {
 
   sample_name <- file_path_sans_ext(basename(file_path))
 
-  # add to summary
-  contamination_summary <<- rbind(
-    contamination_summary,
-    data.frame(
-      individuo = sample_name,
-      informative_DNPs = nrow(filtered_df),
-      mean_contamination = mean_contam,
-      sd_contamination = sd_contam,
-      stringsAsFactors = FALSE
-    )
+  # Return one summary row; combine rows after all files have been processed.
+  summary_row <- data.frame(
+    individuo = sample_name,
+    informative_DNPs = nrow(filtered_df),
+    mean_contamination = mean_contam,
+    sd_contamination = sd_contam,
+    stringsAsFactors = FALSE
   )
 
   # save processed file
@@ -278,10 +278,15 @@ process_df <- function(file_path) {
     row.names = FALSE,
     quote = FALSE
   )
+
+  summary_row
 }
 
 # process all files
-invisible(lapply(chip_files, process_df))
+summary_rows <- lapply(chip_files, process_df)
+if (length(summary_rows) > 0) {
+  contamination_summary <- do.call(rbind, summary_rows)
+}
 
 # save final summary
 write.table(

@@ -1,9 +1,9 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive **NIPAT Desktop 0.8.5**, con menu testuale guidato e CLI
+Questa guida descrive **NIPAT Desktop 0.8.9**, con menu testuale guidato e CLI
 diretta su Windows, macOS e Ubuntu. I pacchetti sono nella pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases);
-le [note della versione](RELEASE_0.8.5.md) identificano il perimetro verificato.
+le [note della versione](RELEASE_0.8.9.md) identificano il perimetro verificato.
 
 La versione offre
 **W — Workflow automatici** per eseguire DNPcall seguito da Contamination,
@@ -71,8 +71,8 @@ per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-
 ## Requisiti e avvio su macOS
 
 Usare macOS 14 o successivo e il pacchetto della propria architettura:
-`NIPAT-0.8.5-macos-arm64.pkg` per Apple Silicon,
-`NIPAT-0.8.5-macos-x86_64.pkg` per Intel.
+`NIPAT-0.8.9-macos-arm64.pkg` per Apple Silicon,
+`NIPAT-0.8.9-macos-x86_64.pkg` per Intel.
 Aprire il `.pkg`, completare l'installazione e avviare **NIPAT Desktop**
 da Applicazioni. Il menu si apre nel Terminale. Il primo avvio prepara Lima
 e richiede Internet; Python e Lima sono inclusi, senza installazione manuale
@@ -86,7 +86,7 @@ nella [guida macOS](INSTALLATORE_MACOS.md).
 
 ## Utilizzo su Ubuntu
 
-Installare `nipat-desktop_0.8.5_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
+Installare `nipat-desktop_0.8.9_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
 [guida Ubuntu](INSTALLATORE_LINUX.md). Il pacchetto include l'immagine scientifica;
 APT risolve le dipendenze mancanti. Il motore Docker locale deve essere accessibile
 all'utente. La [procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti)
@@ -249,6 +249,12 @@ versione e note e verifica il pacchetto scaricato. Su Windows e Ubuntu il
 passaggio all'installatore segue la procedura guidata. Su Mac, al termine del
 download, chiudere NIPAT e aprire il `.pkg` verificato. L'installazione non
 può sostituire il programma mentre è in uso.
+
+Da un'installazione 0.8.5 si può scaricare la 0.8.9 tramite questa voce o dalla
+pagina della release. L'aggiornatore confronta i numeri di versione, non i
+commit; non propone una build diversa con lo stesso numero. Le release
+pubblicate sono immutabili. I candidati di sviluppo identificati da commit e
+build non diventano aggiornamenti ufficiali automaticamente.
 
 I run già prodotti conservano versione e identità del motore utilizzato.
 Non vengono ricalcolati dall'installazione di un nuovo pacchetto. Su Windows

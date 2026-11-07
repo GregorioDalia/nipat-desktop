@@ -129,7 +129,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             architecture: arm64
           - runner: macos-15-intel
             architecture: x86_64
@@ -222,6 +222,13 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Compare optimized R with the immutable 0.8.5 reference
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-r-equivalence-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_r_equivalence.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Retain scientific diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -233,6 +240,7 @@ jobs:
             ${{ runner.temp }}/nipat-engine-check/
             ${{ runner.temp }}/nipat-presentation-check/
             ${{ runner.temp }}/nipat-performance-check/
+            ${{ runner.temp }}/nipat-r-equivalence-check/
           retention-days: 14
           if-no-files-found: ignore
 

@@ -7,6 +7,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import zipfile
 from urllib.parse import urlsplit
 
 SCENARIOS = {
@@ -26,6 +27,30 @@ RELIABILITY_DIGESTS = {"qualification_evidence_sha256", "linux_upgrade_check_sha
 RELIABILITY_RESEARCH_FIELDS = REVIEWED_RESEARCH_FIELDS | RELIABILITY_DIGESTS
 MACOS_DIGESTS = {"macos_arm64_installer_sha256", "macos_x86_64_installer_sha256"}
 MULTIPLATFORM_RESEARCH_FIELDS = RELIABILITY_RESEARCH_FIELDS | MACOS_DIGESTS | {"macos_validation"}
+SCIENTIFIC_RESEARCH_FIELDS = MULTIPLATFORM_RESEARCH_FIELDS | {"scientific_equivalence"}
+REVISED_R_SOURCE_SCOPE = "reviewed-operative-changes-with-tested-r-equivalence-v1"
+R_REFERENCE_COMMIT = "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5"
+R_REFERENCE_ROOT = "tests/reference_r/0.8.5"
+R_WORKFLOWS = {
+    "scientific/vendor/DNPcall/DNPcall.R": "dnp-call",
+    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "cpi",
+    "scientific/vendor/NEWPAT/SNPcall/SNPcall.R": "snp-call",
+    "scientific/vendor/NEWPAT/contamination/detect_contamination.R": "contamination",
+}
+R_CASES = {
+    **dict.fromkeys(("dnp-single", "dnp-multi", "dnp-parallel", "dnp-varied-qualities"), "dnp-call"),
+    **dict.fromkeys(("snp-edge", "snp-extra-columns"), "snp-call"),
+    **dict.fromkeys(("cpi-all", "cpi-panels", "cpi-zero-error", "cpi-shared-parents"), "cpi"),
+    **dict.fromkeys(("contamination-batch", "contamination-single", "contamination-panel-only"), "contamination"),
+}
+R_REQUIRED_PDFS = {
+    "dnp-single": 5, "dnp-multi": 10, "dnp-parallel": 10, "dnp-varied-qualities": 5,
+    "cpi-all": 4, "cpi-panels": 4, "cpi-zero-error": 4, "cpi-shared-parents": 6,
+}
+R_HELPERS = {
+    "tests/r_optimization/cpi/check_core.R", "tests/r_optimization/dnp/check_blocks.R",
+    "tests/r_optimization/snp/check_reads.R", "tests/r_optimization/performance/check_costs.R",
+}
 SOURCE_EQUIVALENCE_SCOPE = "distributed-operative-sources-v1"
 REVIEWED_SOURCE_SCOPE = "scientific-runtime-equivalence-with-reviewed-client-changes-v1"
 RELIABILITY_SOURCE_SCOPE = "reviewed-operative-changes-with-unchanged-r-v1"
@@ -66,7 +91,14 @@ def multiplatform_contract(version):
     return bool(match and int(match[1]) >= 2)
 
 
-def reviewable_path(path, *, reliability=False, multiplatform=False):
+def revised_r_contract(version):
+    match = re.fullmatch(r"0\.8\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
+    return bool(match and int(match[1]) >= 9)
+
+
+def reviewable_path(path, *, reliability=False, multiplatform=False, revised_r=False):
+    if revised_r and path in set(R_WORKFLOWS) | {"scientific/SHA256SUMS"}:
+        return True
     if reliability:
         # The Python preparation, orchestration and packaging may evolve, but
         # this research policy never authorizes a change to the R algorithms.
@@ -114,7 +146,7 @@ def template(installer_set, run_id):
         require(isinstance(fields[field], str) and re.fullmatch(r"[0-9a-f]{64}", fields[field]),
                 f"Invalid digest: {field}")
     if multiplatform_contract(fields["version"]):
-        return {
+        record = {
             "schema_version": 5, **fields, "build_run_id": run_id, "decision": "pending",
             "scope": "pre-1.0-research", "review": {"reviewer": "", "reviewed_at": "", "evidence": []},
             "observed_baseline": {"source_commit": "", "observations": [], "evidence": [],
@@ -126,6 +158,14 @@ def template(installer_set, run_id):
             "macos_validation": {architecture: {"status": "not-performed", "evidence": []}
                                  for architecture in ("arm64", "x86_64")},
         }
+        if revised_r_contract(fields["version"]):
+            record["schema_version"] = 6
+            record["observed_baseline"]["source_comparison_scope"] = REVISED_R_SOURCE_SCOPE
+            record["scientific_equivalence"] = {
+                "reference_source_commit": R_REFERENCE_COMMIT,
+                "report_path": "", "report_sha256": "", "runtime_image": "",
+            }
+        return record
     return {
         "schema_version": 1, **fields, "build_run_id": run_id, "decision": "pending",
         "tests": {name: {"result": "pending", "tester": "", "tested_at": "", "evidence": []}
@@ -136,7 +176,10 @@ def template(installer_set, run_id):
 def validate(record, version, commit, run_id, installer_set=None):
     """Require a committed review under the record's explicit acceptance policy."""
     acceptance_path(version)
-    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4, 5):
+    require(not revised_r_contract(version) or isinstance(record, dict)
+            and type(record.get("schema_version")) is int and record["schema_version"] == 6,
+            "Releases from 0.8.9 require scientific equivalence acceptance schema 6")
+    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4, 5, 6):
         validate_research(record, version, commit, run_id, installer_set)
         return
     require(not multiplatform_contract(version), "Official 0.8.2+ releases require four-platform acceptance schema 5")
@@ -204,10 +247,12 @@ def review_evidence(value, label):
 
 def validate_research(record, version, commit, run_id, installer_set=None):
     """A limited research decision records deferred qualification, never fictitious passes."""
-    multiplatform = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 5
-    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (4, 5)
-    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4, 5)
-    schema = 5 if multiplatform else (4 if reliability else (3 if reviewed_delta else 2))
+    revised_r = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 6
+    multiplatform = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (5, 6)
+    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (4, 5, 6)
+    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4, 5, 6)
+    schema = 6 if revised_r else 5 if multiplatform else (4 if reliability else (3 if reviewed_delta else 2))
+    require(not revised_r or revised_r_contract(version), "Revised R acceptance is available from 0.8.9 only")
     minor = "7" if reviewed_delta else "6"
     require(multiplatform_contract(version) if multiplatform else
             isinstance(version, str) and re.fullmatch(rf"0\.{minor}\.[0-9]+(?:(?:a|b|rc)[0-9]+)?", version),
@@ -217,7 +262,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
     elif reviewed_delta:
         require(not reliability_contract(version),
                 "Research releases from 0.7.2 require reliability acceptance schema 4")
-    expected_fields = (MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
+    expected_fields = (SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
     require(isinstance(record, dict) and set(record) == expected_fields
             and type(record["schema_version"]) is int and record["schema_version"] == schema,
@@ -258,7 +303,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             and bool(set(observations) & ({"scientific_self_tests", "dnp_sample_analysis"}
                                          | ({"automatic_workflow_sample_analysis"} if reviewed_delta else set()))),
             "Baseline must identify observed installation and scientific execution")
-    expected_scope = (MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else
+    expected_scope = (REVISED_R_SOURCE_SCOPE if revised_r else MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else
                       REVIEWED_SOURCE_SCOPE if reviewed_delta else SOURCE_EQUIVALENCE_SCOPE)
     require(baseline[scope_field] == expected_scope,
             "Unsupported baseline source equivalence scope")
@@ -281,6 +326,8 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             else:
                 require(observation["status"] == "not-performed" and observation["evidence"] == [],
                         "Unperformed macOS validation cannot imply a successful runtime test")
+    if revised_r:
+        validate_scientific_record(record["scientific_equivalence"])
     if reviewed_delta:
         changes = record["reviewed_source_changes"]
         require(isinstance(changes, list), "Reviewed source changes must be an explicit list")
@@ -293,8 +340,9 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                     and not PurePosixPath(path).is_absolute() and ".." not in PurePosixPath(path).parts
                     and "\\" not in path and not any(character.isspace() for character in path)
                     and PurePosixPath(path).suffix.casefold() != ".md"
-                    and reviewable_path(path, reliability=reliability, multiplatform=multiplatform),
-                    ("Only operative source changes outside protected vendored R can be reviewed" if multiplatform
+                    and reviewable_path(path, reliability=reliability, multiplatform=multiplatform, revised_r=revised_r),
+                    ("Only known scientific scripts and explicit operative sources can be reviewed" if revised_r
+                     else "Only operative source changes outside protected vendored R can be reviewed" if multiplatform
                      else "Only explicit non-R operative source changes can be reviewed" if reliability
                      else "Only explicit client, installer and test source changes can be reviewed"))
             for field in ("before_sha256", "after_sha256"):
@@ -313,6 +361,170 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                     "Acceptance does not identify the verified cross-version upgrade report")
 
 
+
+def valid_digest(value):
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def safe_evidence_path(value):
+    return (isinstance(value, str) and bool(value) and PurePosixPath(value).as_posix() == value
+            and not PurePosixPath(value).is_absolute() and ".." not in PurePosixPath(value).parts
+            and "\\" not in value and ":" not in value and not any(c.isspace() for c in value))
+
+
+def validate_scientific_record(evidence):
+    require(isinstance(evidence, dict) and set(evidence) == {
+        "reference_source_commit", "report_path", "report_sha256", "runtime_image",
+    }, "Invalid scientific equivalence record fields")
+    require(evidence["reference_source_commit"] == R_REFERENCE_COMMIT,
+            "Scientific equivalence requires the frozen 0.8.5 reference")
+    require(safe_evidence_path(evidence["report_path"])
+            and evidence["report_path"].startswith("scientific/")
+            and PurePosixPath(evidence["report_path"]).name == "r-equivalence.json",
+            "Scientific equivalence must identify its retained qualification report")
+    require(valid_digest(evidence["report_sha256"]), "Invalid scientific equivalence report digest")
+    require(isinstance(evidence["runtime_image"], str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", evidence["runtime_image"]),
+            "Scientific equivalence requires an immutable runtime image ID")
+
+
+def verify_scientific_equivalence(record, evidence_directory, manifest, read_source):
+    """Bind reviewed R results to Git, the retained build evidence and packaged image.
+
+    The caller must first verify the qualification archive and installer set.
+    This check adds scientific content validation; it does not turn synthetic
+    equivalence into domain validation or claim execution on users' desktops.
+    """
+    require(record.get("schema_version") == 6, "Scientific evidence requires acceptance schema 6")
+    validate(record, record["version"], record["source_commit"], record["build_run_id"])
+    evidence = record["scientific_equivalence"]
+    require(manifest.get("source_commit") == record["source_commit"]
+            and manifest.get("version") == record["version"]
+            and manifest.get("runtime_image") == evidence["runtime_image"],
+            "Scientific equivalence does not identify the packaged source and image")
+    archive = Path(evidence_directory) / "qualification-evidence.zip"
+    require(archive.is_file() and not archive.is_symlink()
+            and hashlib.sha256(archive.read_bytes()).hexdigest() == record["qualification_evidence_sha256"],
+            "Scientific qualification archive differs from the accepted build")
+    try:
+        with zipfile.ZipFile(archive) as handle:
+            matching = [entry for entry in handle.infolist() if entry.filename == evidence["report_path"]]
+            require(len(matching) == 1 and 0 < matching[0].file_size <= 8 * 1024 * 1024,
+                    "Missing, duplicate or oversized scientific equivalence report")
+            raw = handle.read(matching[0])
+    except (OSError, zipfile.BadZipFile, KeyError) as error:
+        raise ValueError("Cannot read retained scientific equivalence report") from error
+    require(hashlib.sha256(raw).hexdigest() == evidence["report_sha256"],
+            "Scientific equivalence report bytes differ from the review")
+    try:
+        report = json.loads(raw)
+    except (ValueError, UnicodeError) as error:
+        raise ValueError("Invalid scientific equivalence report JSON") from error
+    require(isinstance(report, dict) and type(report.get("schema_version")) is int
+            and report["schema_version"] == 1 and report.get("status") == "passed"
+            and report.get("inputs_unchanged") is True
+            and report.get("runtime_image") == evidence["runtime_image"],
+            "Scientific equivalence did not pass in the packaged image with unchanged inputs")
+    require(report.get("comparison") == {"table_bytes": "exact", "unrounded_r": "identical",
+                                       "pdf_pixels": "exact", "pdf_metadata": "excluded"},
+            "Scientific equivalence must include exact tables, unrounded R values and PDF pixels")
+
+    def source(commit, path):
+        try:
+            data = read_source(commit, path)
+        except (OSError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
+            raise ValueError(f"Cannot read scientific equivalence source: {commit}:{path}") from error
+        require(isinstance(data, bytes), "Scientific equivalence requires exact source bytes")
+        return data
+
+    commit = record["source_commit"]
+    reference = report.get("reference")
+    require(isinstance(reference, dict) and set(reference) == {
+        "schema_version", "version", "source_commit", "source_tag", "files",
+    } and type(reference["schema_version"]) is int and reference["schema_version"] == 1
+            and reference["version"] == "0.8.5" and reference["source_tag"] == "v0.8.5"
+            and reference["source_commit"] == R_REFERENCE_COMMIT,
+            "Scientific report does not identify the immutable 0.8.5 source")
+    expected_paths = set(R_WORKFLOWS) | {
+        "docker/scientific-runtime/verify-packages.R", "src/nipat_scientific/presentation.R",
+    }
+    files = reference["files"]
+    require(isinstance(files, list) and len(files) == len(expected_paths)
+            and all(isinstance(item, dict) and set(item) == {"path", "sha256"}
+                    and isinstance(item["path"], str) and valid_digest(item["sha256"]) for item in files)
+            and {item["path"] for item in files} == expected_paths,
+            "Scientific reference inventory is incomplete")
+    for item in files:
+        original = source(R_REFERENCE_COMMIT, item["path"])
+        require(hashlib.sha256(original).hexdigest() == item["sha256"]
+                and source(commit, R_REFERENCE_ROOT + "/" + item["path"]) == original,
+                "Frozen scientific reference differs from the released 0.8.5 source")
+    try:
+        frozen_manifest = json.loads(source(commit, R_REFERENCE_ROOT + "/manifest.json"))
+    except (ValueError, UnicodeError) as error:
+        raise ValueError("Invalid frozen scientific reference manifest") from error
+    require(frozen_manifest == reference, "Scientific report differs from the candidate's frozen reference manifest")
+    candidate_hashes = {path: hashlib.sha256(source(commit, path)).hexdigest() for path in R_WORKFLOWS}
+    require(report.get("candidate_r_sha256") == candidate_hashes,
+            "Scientific equivalence was performed on different candidate R sources")
+    try:
+        manifest_rows = [line.split() for line in source(commit, "scientific/SHA256SUMS").decode("ascii").splitlines()
+                         if line.strip()]
+    except UnicodeError as error:
+        raise ValueError("Invalid scientific source hash manifest") from error
+    require(len(manifest_rows) == len(candidate_hashes)
+            and all(len(row) == 2 for row in manifest_rows)
+            and {"scientific/" + row[1]: row[0] for row in manifest_rows} == candidate_hashes,
+            "Scientific source hash manifest differs from the tested candidate R sources")
+
+    cases = report.get("cases")
+    require(isinstance(cases, list) and all(isinstance(case, dict) for case in cases),
+            "Scientific differential cases are missing")
+    names = [case.get("case") for case in cases]
+    require(all(isinstance(name, str) and name for name in names) and len(set(names)) == len(names)
+            and set(R_CASES) <= set(names), "Required scientific differential cases are missing or duplicated")
+    plots_verified = 0
+    for case in cases:
+        require(case.get("status") == "passed" and case.get("unrounded_r_values") == "identical"
+                and case.get("workflow") in set(R_WORKFLOWS.values())
+                and (case["case"] not in R_CASES or case["workflow"] == R_CASES[case["case"]]),
+                "A scientific differential case failed or has a different workflow")
+        tables = case.get("table_sha256")
+        require(isinstance(tables, dict) and tables
+                and all(safe_evidence_path(name) and valid_digest(value) for name, value in tables.items()),
+                "Scientific differential table evidence is incomplete")
+        plots = case.get("plots")
+        require(isinstance(plots, dict)
+                and len(plots) >= R_REQUIRED_PDFS.get(case["case"], 0),
+                "Scientific PDF comparison evidence is missing or incomplete for a required case")
+        for name, plot in plots.items():
+            require(safe_evidence_path(name) and isinstance(plot, dict)
+                    and type(plot.get("pages")) is int and plot["pages"] > 0
+                    and type(plot.get("raster_dpi")) is int and plot["raster_dpi"] >= 36
+                    and isinstance(plot.get("page_sha256"), dict)
+                    and len(plot["page_sha256"]) == plot["pages"]
+                    and all(safe_evidence_path(page) and valid_digest(value)
+                            for page, value in plot["page_sha256"].items()),
+                    "Scientific PDF pixel comparison evidence is incomplete")
+            plots_verified += 1
+    require(plots_verified > 0, "Scientific equivalence contains no rendered PDF comparisons")
+    helpers = report.get("helpers")
+    require(isinstance(helpers, list) and all(isinstance(item, dict) for item in helpers),
+            "Scientific focused comparisons are missing")
+    paths = [item.get("path") for item in helpers]
+    require(all(safe_evidence_path(path) and path.startswith("tests/r_optimization/") for path in paths)
+            and len(set(paths)) == len(paths) and R_HELPERS <= set(paths),
+            "Required scientific focused comparisons are missing or duplicated")
+    for helper in helpers:
+        require(helper.get("status") == "passed" and helper.get("sha256") ==
+                hashlib.sha256(source(commit, helper["path"])).hexdigest(),
+                "Scientific focused comparison failed or used different test sources")
+    return {"source_commit": commit, "reference_source_commit": R_REFERENCE_COMMIT,
+            "runtime_image": evidence["runtime_image"], "report_sha256": evidence["report_sha256"],
+            "candidate_r_sha256": candidate_hashes, "cases_verified": len(cases),
+            "focused_scripts_verified": len(helpers), "pdfs_verified": plots_verified,
+            "scope": "synthetic-equivalence-only", "domain_validation_claimed": False}
+
 def verify_baseline(record, read_source):
     """Compare operative source bytes; this does not assert installer or image identity.
 
@@ -323,16 +535,19 @@ def verify_baseline(record, read_source):
     and keeps scientific, engine and runtime sources immutable. Schema 4 reviews
     non-R operative changes without claiming operational equivalence to the
     historical manual observation. Schema 5 permits reviewed presentation adapters
-    while preserving the vendored scientific R sources byte for byte.
+    while preserving the vendored scientific R sources byte for byte. Schema 6
+    allows only the four known scientific scripts and their hash manifest to be
+    reviewed; separate evidence verification is mandatory before publication.
     """
     require(isinstance(record, dict) and type(record.get("schema_version")) is int
-            and record["schema_version"] in (1, 2, 3, 4, 5), "Unsupported acceptance schema")
+            and record["schema_version"] in (1, 2, 3, 4, 5, 6), "Unsupported acceptance schema")
     if record["schema_version"] == 1:
         return None
-    multiplatform = record["schema_version"] == 5
-    reliability = record["schema_version"] in (4, 5)
-    reviewed_delta = record["schema_version"] in (3, 4, 5)
-    expected_fields = (MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
+    revised_r = record["schema_version"] == 6
+    multiplatform = record["schema_version"] in (5, 6)
+    reliability = record["schema_version"] in (4, 5, 6)
+    reviewed_delta = record["schema_version"] in (3, 4, 5, 6)
+    expected_fields = (SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
     require(set(record) == expected_fields,
             "Research acceptance record fields are invalid")
@@ -377,7 +592,7 @@ def verify_baseline(record, read_source):
             if old == new:
                 unchanged += 1
                 continue
-            require(reviewable_path(path, reliability=reliability, multiplatform=multiplatform),
+            require(reviewable_path(path, reliability=reliability, multiplatform=multiplatform, revised_r=revised_r),
                     f"Protected scientific or runtime source differs: {path}")
             changes.append({"path": path,
                             "before_sha256": hashlib.sha256(old).hexdigest() if old is not None else None,
@@ -385,11 +600,11 @@ def verify_baseline(record, read_source):
         require(record["reviewed_source_changes"] == changes,
                 "Reviewed source changes do not match the exact baseline-to-candidate delta")
         return {"baseline_source_commit": baseline, "source_commit": candidate,
-                "scope": MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
+                "scope": REVISED_R_SOURCE_SCOPE if revised_r else MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
                 "unchanged_files_verified": unchanged,
                 "reviewed_source_changes": changes, "candidate_windows_installation_claimed": False,
                 **({"operational_equivalence_claimed": False,
-                    "vendored_r_sources_unchanged" if multiplatform else "r_sources_unchanged": True}
+                    "vendored_r_sources_unchanged" if multiplatform else "r_sources_unchanged": not revised_r}
                    if reliability else {})}
     before -= REMOVABLE_SIGNING_HELPERS & (before - after)
     require(before == after, "Baseline operative inventory differs from candidate")

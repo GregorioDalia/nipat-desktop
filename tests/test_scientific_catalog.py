@@ -47,8 +47,11 @@ class ScientificCatalogTests(unittest.TestCase):
     def test_all_reviews_match_exact_sources_and_cover_every_line(self):
         catalog = load_catalog(source_root=ROOT)
         self.assertEqual(set(catalog["workflows"]), set(WORKFLOWS))
-        self.assertEqual(sum(item["source"]["line_count"]
-                             for item in catalog["workflows"].values()), 1790)
+        for document in catalog["workflows"].values():
+            with self.subTest(workflow=document["workflow"]):
+                actual_lines = (ROOT / document["source"]["path"]).read_text(
+                    encoding="utf-8").splitlines()
+                self.assertEqual(document["source"]["line_count"], len(actual_lines))
 
     def test_all_preparation_evidence_matches_the_full_source_checkout(self):
         for workflow, document in load_catalog()["workflows"].items():

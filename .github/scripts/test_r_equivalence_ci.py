@@ -1,0 +1,71 @@
+"""Keep scientific equivalence mandatory without authorizing publication."""
+
+from pathlib import Path
+import re
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+CHECK_NAME = "Compare optimized R with the immutable 0.8.5 reference"
+
+
+def job_text(workflow, identifier):
+    match = re.search(
+        rf"^  {re.escape(identifier)}:\n(.*?)(?=^  [a-z][a-z-]+:\n|\Z)",
+        workflow, re.MULTILINE | re.DOTALL,
+    )
+    if match is None:
+        raise AssertionError(f"Missing workflow job: {identifier}")
+    return match[1]
+
+
+class REquivalenceCI(unittest.TestCase):
+    def test_ci_and_installer_build_require_equivalence_in_the_tested_image(self):
+        for name, identifier in (("ci.yml", "scientific"),
+                                 ("windows-installer.yml", "linux-runtime")):
+            with self.subTest(workflow=name):
+                workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+                job = job_text(workflow, identifier)
+                self.assertEqual(job.count(CHECK_NAME), 1)
+                step = re.search(
+                    rf"^      - name: {re.escape(CHECK_NAME)}\n(.*?)(?=^      - name:|\Z)",
+                    job, re.MULTILINE | re.DOTALL,
+                )[1]
+                self.assertNotIn("continue-on-error:", job)
+                self.assertNotRegex(step, r"(?m)^        if:")
+                self.assertIn('set -o pipefail', step)
+                self.assertIn('scripts/verify_r_equivalence.py --image "$NIPAT_RUNTIME_IMAGE"', step)
+                self.assertIn('--output-dir "$TMPDIR/artifacts"', step)
+                self.assertIn('${{ runner.temp }}/nipat-r-equivalence-check/', job)
+                self.assertLess(job.index("Build scientific runtime"), job.index(CHECK_NAME))
+                if name == "windows-installer.yml":
+                    self.assertLess(job.index(CHECK_NAME), job.index("Export pinned assets"))
+                    self.assertIn("needs: [linux-runtime, windows-checks]",
+                                  job_text(workflow, "windows-installer"))
+                else:
+                    self.assertRegex(job_text(workflow, "required"),
+                                     r"needs: \[[^\n]*\bscientific\b[^\n]*\]")
+
+    def test_frozen_oracle_and_test_harness_are_not_installed_application_sources(self):
+        inventory = {
+            line.strip() for line in (ROOT / "distribution-files.txt").read_text().splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        }
+        self.assertFalse(any(path.startswith(("tests/reference_r/", "tests/r_optimization/"))
+                             for path in inventory))
+        self.assertNotIn("scripts/verify_r_equivalence.py", inventory)
+
+    def test_equivalence_does_not_enable_automatic_release_or_installer_publication(self):
+        for name in ("windows-installer.yml", "publish-windows-release.yml"):
+            with self.subTest(workflow=name):
+                workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+                triggers = re.search(r"(?ms)^on:\n(.*?)(?=^[^ #\n])", workflow)[1]
+                self.assertIn("workflow_dispatch:", triggers)
+                self.assertNotRegex(triggers, r"(?m)^  (push|pull_request|workflow_run|release):")
+        publisher = (ROOT / ".github/workflows/publish-windows-release.yml").read_text()
+        self.assertIn("github.ref == 'refs/heads/main'", publisher)
+        self.assertIn("default: testing", publisher)
+
+
+if __name__ == "__main__":
+    unittest.main()

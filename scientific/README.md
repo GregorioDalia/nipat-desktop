@@ -21,19 +21,26 @@ ispezionabile: le analisi eseguono le copie contenute nell'immagine verificata.
 
 ## Provenienza e identità
 
-CPI e Contamination sono copie senza modifiche locali del
+Le versioni di riferimento di CPI e Contamination derivano dal
 [commit NEWPAT `17d2b8bbd09b1a0ff0651198c21e544aef197824`](https://github.com/lpistacchia/NEWPAT/tree/17d2b8bbd09b1a0ff0651198c21e544aef197824).
-Il blob CPI è `a362c976f9e9280e64f5bc2ec4a7b83b1e9647e6`; il blob
+Il blob CPI originale è `a362c976f9e9280e64f5bc2ec4a7b83b1e9647e6`; il blob
 Contamination è `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
 SNPcall e DNPcall sono identificati dai byte conservati nel repository e dal
 manifest seguente.
 
+La revisione di sviluppo 0.8.9 modifica l'organizzazione dei calcoli R per
+ridurre raggruppamenti, scansioni e calcoli duplicati. I file contengono
+avvisi delle modifiche, conservando attribuzioni e licenze. Il riferimento
+per l'equivalenza è la versione distribuita nella 0.8.5, commit
+`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`. Il
+[piano di verifica](../docs/OPTIMIZATION_0.8.9.md) definisce copertura e limiti.
+
 | Componente | SHA-256 |
 | --- | --- |
-| DNPcall | `d0600427d058a141da8683d98904c51be95ec09ebd5804ea879164d1f5ce7e36` |
-| SNPcall | `00068e501d1fefe2b721001f141fc2595be42c9349873ee353a29a305816c9c9` |
-| Contamination | `28f0d0298cdce06c6d9f33ec5d7a224a8c9fa7dfb6fde87b930ee938e703cc08` |
-| CPI | `10ca01a476f5259b65a063aea95ff76e57c11567a304667065ea9c7b9206545a` |
+| DNPcall | `41b44a2deba05ded10565b08bb925178016c73f12094e4360b035a99986c2357` |
+| SNPcall | `65923278b50523c0837a9a0935abdc5f7e74c3eb17f58c25e9df2564777081ad` |
+| Contamination | `152c74cc91b0bd441e673ecf52a756604ec47e9a04c0e31fc0965c097e3437e1` |
+| CPI | `a93e98a188dff97d6a74d683729c309038ee1b6e7842755f3ac236b61363c885` |
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate
@@ -108,6 +115,10 @@ calcoli e limiti:
 
 Qualsiasi modifica ai sorgenti scientifici richiede una revisione dedicata,
 provenienza verificabile, aggiornamento del manifest e regressioni pertinenti.
+La verifica differenziale `scripts/verify_r_equivalence.py` confronta i
+candidati con il riferimento immutabile 0.8.5 nello stesso runtime: tabelle
+complete, valori non arrotondati e resa dei PDF. I confronti sono obbligatori
+nella CI scientifica e prima del confezionamento degli installatori.
 La corrispondenza degli hash o degli esempi non sostituisce la validazione
 di dominio con input indipendenti.
 

@@ -46,6 +46,7 @@ docs/INSTALLATORE_WINDOWS.md
 docs/RELEASE_0.5.0a1.md
 docs/RELEASE_0.6.0.md
 docs/ROADMAP.md
+docs/OPTIMIZATION_0.8.9.md
 docs/VALIDAZIONE.md
 docs/WORKFLOW_CONTRACT.md
 engine/README.md
@@ -332,6 +333,7 @@ installer/macos/licenses/python-build-standalone/provenance.json
 .github/scripts/verify_release_source.py
 docs/RELEASE_0.8.2.md
 docs/RELEASE_0.8.5.md
+docs/RELEASE_0.8.9.md
 docs/RISORSE.md
 scripts/verify_presentation.py
 src/nipat/execution/diagnostics.py

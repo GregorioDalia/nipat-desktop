@@ -1,6 +1,6 @@
 # Installatore macOS
 
-**NIPAT Desktop 0.8.5** è disponibile per macOS 14 o successivo, su Intel e
+**NIPAT Desktop 0.8.9** è disponibile per macOS 14 o successivo, su Intel e
 Apple Silicon. Il pacchetto comprende CLI guidata, Python e Lima nativi,
 e il motore scientifico Linux AMD64. Le note della release riportano il
 perimetro delle prove eseguite sul pacchetto e sugli ambienti reali.
@@ -9,8 +9,8 @@ perimetro delle prove eseguite sul pacchetto e sugli ambienti reali.
 
 | Mac | Pacchetto | Esecuzione scientifica |
 | --- | --- | --- |
-| Intel x86_64 | `NIPAT-0.8.5-macos-x86_64.pkg` | Guest Lima AMD64 e container Linux AMD64. |
-| Apple Silicon arm64 | `NIPAT-0.8.5-macos-arm64.pkg` | Guest Lima ARM64 e container Linux AMD64 tramite Rosetta. |
+| Intel x86_64 | `NIPAT-0.8.9-macos-x86_64.pkg` | Guest Lima AMD64 e container Linux AMD64. |
+| Apple Silicon arm64 | `NIPAT-0.8.9-macos-arm64.pkg` | Guest Lima ARM64 e container Linux AMD64 tramite Rosetta. |
 
 Python e Lima nativi per l'host sono inclusi; Homebrew, R, samtools e Docker
 Desktop non sono prerequisiti. Servono spazio per applicazione, immagine,
@@ -152,7 +152,7 @@ sui file e la ripresa su un Mac reale vanno registrati separatamente nella
 input attesi non sostituiscono il confronto numerico sul trasporto Rosetta.
 
 La [guida per l'utilizzo](GUIDA_UTILIZZO.md) descrive gli input e i workflow;
-le [note della versione](RELEASE_0.8.5.md) descrivono funzionalità e ambito delle verifiche.
+le [note della versione](RELEASE_0.8.9.md) descrivono funzionalità e ambito delle verifiche.
 
 ## Configurazione delle risorse
 

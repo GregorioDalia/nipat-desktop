@@ -1,7 +1,7 @@
 # Integrazione continua e distribuzione
 
 NIPAT verifica separatamente il client, il motore scientifico, gli installatori
-e il funzionamento sui dispositivi reali. La versione 0.8.5 distribuisce
+e il funzionamento sui dispositivi reali. La versione 0.8.9 distribuisce
 Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
@@ -43,6 +43,15 @@ prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
 
 ## Regressioni scientifiche
 
+Le modifiche R della 0.8.9 richiedono anche un confronto differenziale con i
+sorgenti congelati della 0.8.5. `scripts/verify_r_equivalence.py` esegue le
+due versioni nello stesso runtime e conserva risultati, log e rapporto
+`r-equivalence.json`. Un errore o una differenza impedisce il completamento
+del job scientifico. La build degli installatori applica lo stesso controllo
+prima dell'esportazione del runtime. I riferimenti di test non sono inclusi
+nel payload installato. I criteri sono descritti nel
+[piano di verifica 0.8.9](OPTIMIZATION_0.8.9.md).
+
 Il container contiene R, samtools, gli script scientifici, gli adattatori e
 l'orchestrazione. Il client verifica i contratti e non monta gli script R
 dalla cartella dell'applicazione. I workflow composti vengono confrontati
@@ -62,16 +71,16 @@ trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 Avviare **Installers (review build)** sul commit da distribuire, su `main`,
 `release/VERSIONE` o `release/VERSIONE-...`, con la stessa versione dichiarata
-dai sorgenti, ad esempio `release/0.8.5`. Il controllo
+dai sorgenti, ad esempio `release/0.8.9`. Il controllo
 `installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
 comune ai quattro pacchetti. La build produce:
 
 | Artefatto Actions | Pacchetto |
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`. |
-| `nipat-linux-setup` | `nipat-desktop_0.8.5_amd64.deb`. |
-| `nipat-macos-setup-arm64` | `NIPAT-0.8.5-macos-arm64.pkg`. |
-| `nipat-macos-setup-x86_64` | `NIPAT-0.8.5-macos-x86_64.pkg`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.9_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.9-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.9-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
 La release espone direttamente il file da installare per ciascuna piattaforma.

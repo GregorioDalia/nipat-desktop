@@ -193,7 +193,7 @@ def require_publication_supported(version, acceptance=None, commit=None, run_id=
 
 def verify_research_baseline(record, validator):
     """Fetch an observed PR checkout if necessary, then compare actual source bytes."""
-    if record.get("schema_version") not in (2, 3, 4, 5):
+    if record.get("schema_version") not in (2, 3, 4, 5, 6):
         return None
     baseline = record["observed_baseline"]["source_commit"]
     require(re.fullmatch(r"[0-9a-f]{40}", baseline), "Invalid baseline source commit")
@@ -208,7 +208,7 @@ def verify_research_baseline(record, validator):
 def release_notes(commit, publication_commit, version, acceptance):
     # Research acceptance can be reviewed after the immutable installers were built.
     # Pin its explanatory documentation to the same preparation commit in both phases.
-    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3, 4, 5) else commit
+    notes_commit = publication_commit if acceptance and acceptance.get("schema_version") in (2, 3, 4, 5, 6) else commit
     notes = source_bytes(notes_commit, f"docs/RELEASE_{version}.md").decode("utf-8").strip()
     return re.sub(r"\]\(([^)\s]+)\)", lambda m: "](" + urljoin(
         f"https://github.com/{REPO}/blob/{notes_commit}/docs/", m[1]) + ")", notes)
@@ -246,14 +246,19 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
     validator.validate(acceptance, actual["version"], commit, run_id, installer_set=actual)
     require(json.loads(acceptance_bytes) == acceptance, "Acceptance bytes differ from the validated record")
     baseline_check = validator.verify_baseline(acceptance, source_bytes) \
-        if acceptance.get("schema_version") in (2, 3, 4, 5) else None
+        if acceptance.get("schema_version") in (2, 3, 4, 5, 6) else None
     reliability = validator.reliability_contract(actual["version"])
     if reliability:
         qualification = load_module("nipat_qualification_evidence", PROJECT / ".github/scripts/qualification_evidence.py")
         qualification.verify(evidence, actual)
-        if acceptance.get("schema_version") in (4, 5):
+        if acceptance.get("schema_version") in (4, 5, 6):
             require(sha256(evidence / "qualification-evidence.zip") == acceptance["qualification_evidence_sha256"],
                     "Qualification evidence differs from the accepted build")
+    scientific_check = None
+    if acceptance.get("schema_version") == 6:
+        scientific_check = validator.verify_scientific_equivalence(
+            acceptance, evidence, json.loads((runtime / MANIFEST).read_text(encoding="utf-8")), source_bytes,
+        )
     manifest = prepare_assets(setup, runtime, output, commit)
     additions = {
         actual["linux"]["file"]: linux / actual["linux"]["file"],
@@ -296,6 +301,10 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
             json.dumps(baseline_check, indent=2) + "\n", encoding="utf-8")
         provenance["release_notes_commit"] = publication_commit
         provenance["acceptance_scope"] = acceptance["scope"]
+    if scientific_check is not None:
+        (output / "scientific-equivalence-check.json").write_text(
+            json.dumps(scientific_check, indent=2) + "\n", encoding="utf-8")
+        provenance["scientific_equivalence_report_sha256"] = scientific_check["report_sha256"]
     (output / "release-provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     if manifest.get("installation_profile") == DESKTOP_INSTALLATION_PROFILE:
         write_update_manifest(output, manifest, actual, channel)

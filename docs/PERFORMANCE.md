@@ -1,8 +1,8 @@
 # Diagnostica delle prestazioni
 
-Disponibile in **NIPAT Desktop 0.8.5**. Installare il pacchetto del proprio
-sistema dalla [release 0.8.5](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.5);
-il banner dell'applicazione deve riportare `NIPAT 0.8.5`.
+Guida per **NIPAT Desktop 0.8.9**. La diagnostica è disponibile dalla 0.8.5.
+Installare il pacchetto del proprio sistema dalla [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9);
+il banner dell'applicazione deve riportare `NIPAT 0.8.9`.
 
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri
@@ -22,7 +22,7 @@ Per misurare DNPcall su un singolo BAM, preparare:
 
 Eseguire la prima coppia di prove:
 
-1. Aprire **NIPAT Desktop** e controllare che il banner riporti `0.8.5`.
+1. Aprire **NIPAT Desktop** e controllare che il banner riporti `0.8.9`.
    Eseguire **8 — Verifica ambiente** prima del benchmark.
 2. In **5 — Configura**, controllare la cartella risultati e i limiti delle
    risorse. Mantenerli uguali fra le prove; non aumentare CPU o RAM durante
@@ -81,6 +81,10 @@ un'immagine precedente non viene considerata strumentata implicitamente.
 | Processi osservati | `/proc` nel container | RSS e contatori dei processi selezionati, per distinguere R, samtools e il supervisore. La somma degli RSS non è una misura esatta del container perché le pagine possono essere condivise. |
 | I/O | Contatori disponibili nel kernel e in Docker | Letture/scritture contabilizzate. Cache, filesystem condivisi e virtualizzazione possono limitarne l'attribuzione; un valore basso non esclude attese sul disco. |
 | Stato di uscita | Docker e registri del run | Il codice 137 da solo non dimostra esaurimento della RAM; la diagnosi conserva separatamente le evidenze OOM. |
+
+Il valore **Peak RAM** stampato da R è una rilevazione parziale del processo R:
+non rappresenta il picco dell'intero container. I confronti devono riportare
+sempre la fonte della misura e non scambiare questi valori.
 
 Le misure sono periodiche: il massimo dei campioni può perdere picchi tra due
 letture. I tempi reali dei campioni sono registrati e possono variare con il

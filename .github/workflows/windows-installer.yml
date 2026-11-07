@@ -152,6 +152,13 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Compare optimized R with the immutable 0.8.5 reference
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-r-equivalence-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_r_equivalence.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Build dedicated WSL filesystem from pinned dependencies
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -237,6 +244,7 @@ jobs:
             ${{ runner.temp }}/nipat-engine-check/
             ${{ runner.temp }}/nipat-presentation-check/
             ${{ runner.temp }}/nipat-performance-check/
+            ${{ runner.temp }}/nipat-r-equivalence-check/
             build/quality/
           retention-days: 14
           if-no-files-found: ignore
@@ -491,7 +499,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14
+          - runner: macos-15
             architecture: arm64
           - runner: macos-15-intel
             architecture: x86_64
