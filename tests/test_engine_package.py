@@ -135,6 +135,56 @@ class EnginePackageTests(unittest.TestCase):
         with self.assertRaisesRegex(ValidationError, "preparazione"):
             helper.check_bundled_run(run, layout)
 
+    def test_snp_plan_accepts_anonymous_scratch_without_relaxing_input_isolation(self):
+        from nipat.paths import ProjectLayout
+
+        spec = importlib.util.spec_from_file_location(
+            "nipat_snp_plan_provenance", PROJECT_ROOT / "scripts/verify_snp_workflow.py")
+        helper = importlib.util.module_from_spec(spec)
+        with patch.object(sys, "path", [str(PROJECT_ROOT / "scripts"), *sys.path]):
+            spec.loader.exec_module(helper)
+        layout = ProjectLayout(self.root, self.root, self.root / "data", self.root / "runs",
+                               self.root / "compose.yaml")
+        run = self.root / "runs/snp-plan"
+        (run / "work").mkdir(parents=True)
+        record = {
+            "status": "succeeded", "source": {"role": "client"},
+            "commands": [{"argv": ["python3", "/opt/nipat/engine/main.py", "execute-plan"]}],
+            "runtime": {"engine": {"plan_execution": {"workflows": ["snp-call"]}}},
+            "input_mounts": [{"container_path": "/inputs/sample.bam"}],
+        }
+        (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
+        original = {"type": "bind", "source": str(self.root / "original.bam"),
+                    "target": "/inputs/sample.bam", "read_only": True,
+                    "bind": {"create_host_path": False}}
+        current_run = {"type": "bind", "source": str(run),
+                       "target": str(layout.container_path(run)), "read_only": False,
+                       "bind": {"create_host_path": False}}
+        scratch = {"type": "volume", "target": "/scratch", "read_only": False}
+        compose = run / "work/engine-compose.json"
+
+        def write_mounts(volumes):
+            compose.write_text(json.dumps({"services": {"scientific": {
+                "read_only": True, "network_mode": "none", "volumes": volumes,
+            }}}), encoding="utf-8")
+
+        write_mounts([original, current_run, scratch])
+        self.assertEqual(helper._client_record(run, layout), record)
+        for label, replacement in {
+            "missing": [],
+            "host bind": [{**scratch, "type": "bind", "source": str(self.root)}],
+            "named volume": [{**scratch, "source": "shared-scratch"}],
+            "duplicate": [scratch, scratch],
+            "read-only": [{**scratch, "read_only": True}],
+        }.items():
+            with self.subTest(scratch=label):
+                write_mounts([original, current_run, *replacement])
+                with self.assertRaisesRegex(ValueError, "anonymous scratch"):
+                    helper._client_record(run, layout)
+        write_mounts([{**original, "read_only": False}, current_run, scratch])
+        with self.assertRaisesRegex(ValueError, "original input writable"):
+            helper._client_record(run, layout)
+
     def test_modified_or_missing_script_prevents_execution(self):
         source = self.root / "scientific" / engine.SCRIPT_PATHS["cpi"]
         for condition in ("modified", "missing"):
