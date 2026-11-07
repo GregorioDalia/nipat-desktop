@@ -59,6 +59,28 @@ cases$long_threshold_gaps <- make_case(
   fetal_reads=c(2, 7, 101), father_ratio=c(.5, .1, .9),
   maternal_high=c(TRUE, FALSE, TRUE)
 )
+# Each population changes at a different threshold: reuse must account for
+# maternal sites, usable PI values and mismatch counts independently.
+cases$distinct_selection_boundaries <- make_case(
+  fetal_reads=c(2, 3, 7, 12, 31, 101),
+  father_ratio=c(.2, .5, .9, .1, .5, 1),
+  maternal_high=c(TRUE, FALSE, TRUE, FALSE, TRUE, TRUE)
+)
+cases$distinct_selection_boundaries$father <-
+  cases$distinct_selection_boundaries$father[-5, ]
+cases$distinct_selection_boundaries$population <-
+  cases$distinct_selection_boundaries$population[-c(2, 6), ]
+cases$plateaus_with_missing_mismatch <- make_case(
+  fetal_reads=c(2, 3, 7, 12, 31, 101),
+  father_ratio=c(.5, NA, .9, .1, 0, 1),
+  maternal_high=c(TRUE, TRUE, TRUE, FALSE, TRUE, TRUE)
+)
+cases$plateaus_with_missing_mismatch$population$metadata <-
+  c("present", "present", NA, "present", "present", "present")
+cases$only_threshold_two <- make_case(fetal_reads=c(2L, 2L), father_ratio=c(0, 1),
+                                     maternal_high=c(TRUE, FALSE))
+cases$nonintegral_thresholds <- make_case(fetal_reads=c(2, 3.5, 7.5),
+                                        father_ratio=c(0, 1, .5))
 cases$missing_population_sites <- make_case()
 cases$missing_population_sites$population <- cases$missing_population_sites$population[-c(2, 6), ]
 cases$population_metadata_na <- make_case()
@@ -97,6 +119,12 @@ cases$zero_and_infinite_product <- make_case(c(2, 2), father_ratio=c(1, 0),
 cases$zero_and_infinite_product$population$Alt_f.pop <- c(.5, 0)
 cases$zero_and_infinite_product$err_const <- 0
 cases$all_missing_pi <- make_case(father_ratio=.2)
+cases$overflow_then_finite <- make_case(c(rep(2, 1100), 7, 9), father_ratio=0,
+                                      maternal_high=rep(TRUE, 1102))
+cases$overflow_then_finite$population$Alt_f.pop <- rep(.5, 1102)
+cases$underflow_then_finite <- make_case(c(rep(2, 1100), 7, 9), father_ratio=.5,
+                                       maternal_high=rep(TRUE, 1102))
+cases$underflow_then_finite$population$Alt_f.pop <- rep(1, 1102)
 
 comparisons <- 0L
 for (case_name in names(cases)) {

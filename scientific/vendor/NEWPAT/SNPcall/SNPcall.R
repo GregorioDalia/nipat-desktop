@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
-# Modified by NIPAT contributors, 2026-11-06 (0.8.9): consolidate read
-# aggregation and release unused intermediate data; scientific rules unchanged.
+# Modified by NIPAT contributors, 2026-11-07 (0.8.9): project input columns,
+# tokenize observations directly and aggregate read features without constructing
+# discarded base strings; scientific rules and global read grouping unchanged.
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -37,82 +38,112 @@ cat(">> output file : ", out_file,     "\n\n", sep = "")
 cat(">> reading snp list...\n")
 fake_DNP <- readr::read_tsv(snplist_file, show_col_types = FALSE)
 
-# read pileup file
+# Inspect the schema with the same parser, then skip unused columns while
+# reading. Named columns and type conversion remain identical to read.csv();
+# columns beyond QNAME are permitted but never materialized.
 cat(">> reading pileup...\n")
-df <- read.csv(pileup_file,
-               row.names = NULL,
-               stringsAsFactors = FALSE,
-               header = FALSE,
-               sep = "\t")
+pileup_arguments <- list(file = pileup_file, row.names = NULL,
+                         stringsAsFactors = FALSE, header = FALSE, sep = "\t")
+pileup_columns <- names(do.call(read.csv, c(pileup_arguments, list(nrows = 0))))
+pileup_classes <- rep("NULL", length(pileup_columns))
+pileup_classes[match(c("V1", "V2", "V5", "V7"), pileup_columns)] <- NA_character_
+df <- do.call(read.csv, c(pileup_arguments, list(colClasses = pileup_classes)))
 
 cat(">> input loaded correctly\n")
 
-# add chr:pos column
-df$chr <- paste(df$V1, df$V2, sep = ":")
-
-# keep only needed columns
-df2 <- data.frame(df$chr, df$V5, df$V7)
+df2 <- data.frame(df.chr = paste(df$V1, df$V2, sep = ":"),
+                  df.V5 = df$V5, df.V7 = df$V7)
 rm(df)
 
-# add commas at both ends of read names to enable the next step
-df2$df.V7 <- paste0(",", df2$df.V7, ",")
-
-# replace indels with a special character
+# Preserve the original indel replacement before pairing observations.
 df2$df.V5 <- gsub('\\*', '@', df2$df.V5)
 df2$df.V5 <- gsub('[.,actgACTG]([+-]\\d+)+', '@', df2$df.V5)
 
-# replace delimiters in bases and read names with a single space
-df2$df.V5 <- gsub('', ' ', df2$df.V5)
-df2$df.V7 <- gsub(',', ' ', df2$df.V7)
+# A normal mpileup row has one base and one nonempty QNAME per observation.
+# Splitting these directly avoids inserting/removing separator characters and
+# the two artificial empty observations previously added to every pileup row.
+# Inputs with missing values, whitespace or recycling keep the legacy path.
+base_parts <- strsplit(df2$df.V5, "", fixed = TRUE)
+name_parts <- strsplit(as.character(df2$df.V7), ",", fixed = TRUE)
+part_lengths <- lengths(base_parts)
+direct_observations <- all(!is.na(df2$df.V5) & !is.na(df2$df.V7)) &&
+  all(part_lengths > 0L & part_lengths == lengths(name_parts)) &&
+  !any(grepl("[[:space:]]", df2$df.V5) | grepl("[[:space:]]", df2$df.V7)) &&
+  !any(grepl("(^,|,$|,,)", df2$df.V7))
 
-# split values pairing base with the corresponding read
-df3 <- df2 %>% separate_rows(df.V5, df.V7, sep = " ")
-rm(df2)
+if (direct_observations) {
+  df3 <- data.frame(
+    df.chr = rep.int(df2$df.chr, part_lengths),
+    df.V5 = unlist(base_parts, use.names = FALSE),
+    df.V7 = unlist(name_parts, use.names = FALSE),
+    stringsAsFactors = FALSE
+  )
+  rm(df2, base_parts, name_parts, part_lengths)
 
-# Empty names introduced by the delimiters are discarded below. Remove them
-# before grouping, while retaining missing names for the existing filters.
-df3 <- df3[is.na(df3$df.V7) | nchar(df3$df.V7) > 0, ]
-
-# Aggregate bases and positions together, preserving their order within reads.
-df_merged <- df3 %>%
-  group_by(df.V7) %>%
-  summarise(
-    df.V5 = paste(df.V5, collapse = "|"),
-    df.chr = paste(df.chr, collapse = "|"),
-    .groups = "drop"
-  ) %>%
-  as.data.frame()
-rm(df3)
-
-# Match the locale-dependent ordering of the original base merge.
-df_merged <- df_merged[order(df_merged$df.V7), , drop = FALSE]
-rownames(df_merged) <- NULL
-
-# keep only reads called on both positions of a single read (micro haplotypes)
-df_merged2 <- df_merged[nchar(df_merged$df.V5) > 4, ]
-df_merged3 <- df_merged2[nchar(df_merged2$df.V7) > 0, ]
-rm(df_merged, df_merged2)
-
-# harmonize strand characters
-df_merged3$df.V5 <- chartr('acgt', 'ACGT', df_merged3$df.V5)
-df_merged3$df.V5 <- gsub(',', '.', df_merged3$df.V5)
-
-# count rows containing @
-conteggio <- sum(grepl("@", df_merged3$df.V5))
-print(conteggio)
-
-# remove rows containing @
-df_merged4 <- df_merged3 %>% filter_all(all_vars(!grepl("@", .)))
-rm(df_merged3)
-
-# recount rows containing @
-conteggio2 <- sum(grepl("@", df_merged4$df.V5))
-print(conteggio2)
-
-# extract the third character as genotype and drop the original base string
-df_merged5 <- df_merged4 %>% mutate(df.V5.1 = substring(df.V5, 3, 3))
-df_merged5 <- subset(df_merged5, select = -df.V5)
-rm(df_merged4)
+  # Group globally by QNAME, including reads spanning more than one SNP window.
+  # A joined string of single bases is longer than four characters exactly when
+  # at least three observations exist; its third character is the second base.
+  # Retain the complete coordinate path because downstream counting uses it.
+  read_features <- df3 %>%
+    group_by(df.V7) %>%
+    summarise(
+      df.V5.1 = {
+        if (length(df.V5) < 3L) NA_character_
+        else if (any(df.V5 == "@")) "@"
+        else df.V5[2L]
+      },
+      df.chr = paste(df.chr, collapse = "|"),
+      .groups = "drop"
+    ) %>%
+    as.data.frame()
+  rm(df3)
+  read_features <- read_features[order(read_features$df.V7), , drop = FALSE]
+  # Missing features mark short reads; @ marks indels anywhere in the read,
+  # including flanking observations. Neither is a retained genotype.
+  read_features <- read_features[!is.na(read_features$df.V5.1), , drop = FALSE]
+  rownames(read_features) <- NULL
+  print(sum(read_features$df.V5.1 == "@"))
+  read_features <- read_features[
+    read_features$df.V5.1 != "@" & !grepl("@", read_features$df.V7) &
+      !grepl("@", read_features$df.chr), , drop = FALSE]
+  print(0L)
+  read_features$df.V5.1 <- chartr("acgt", "ACGT", read_features$df.V5.1)
+  read_features$df.V5.1 <- gsub(",", ".", read_features$df.V5.1)
+  df_merged5 <- read_features[, c("df.V7", "df.chr", "df.V5.1"), drop = FALSE]
+  rm(read_features)
+} else {
+  rm(base_parts, name_parts, part_lengths)
+  # Keep separate_rows() recycling/error behavior for nonstandard inputs.
+  df2$df.V7 <- paste0(",", df2$df.V7, ",")
+  df2$df.V5 <- gsub("", " ", df2$df.V5)
+  df2$df.V7 <- gsub(",", " ", df2$df.V7)
+  df3 <- df2 %>% separate_rows(df.V5, df.V7, sep = " ")
+  rm(df2)
+  df3 <- df3[is.na(df3$df.V7) | nchar(df3$df.V7) > 0, ]
+  df_merged <- df3 %>%
+    group_by(df.V7) %>%
+    summarise(
+      df.V5 = paste(df.V5, collapse = "|"),
+      df.chr = paste(df.chr, collapse = "|"),
+      .groups = "drop"
+    ) %>%
+    as.data.frame()
+  rm(df3)
+  df_merged <- df_merged[order(df_merged$df.V7), , drop = FALSE]
+  rownames(df_merged) <- NULL
+  df_merged2 <- df_merged[nchar(df_merged$df.V5) > 4, ]
+  df_merged3 <- df_merged2[nchar(df_merged2$df.V7) > 0, ]
+  rm(df_merged, df_merged2)
+  df_merged3$df.V5 <- chartr("acgt", "ACGT", df_merged3$df.V5)
+  df_merged3$df.V5 <- gsub(",", ".", df_merged3$df.V5)
+  print(sum(grepl("@", df_merged3$df.V5)))
+  df_merged4 <- df_merged3 %>% filter_all(all_vars(!grepl("@", .)))
+  rm(df_merged3)
+  print(sum(grepl("@", df_merged4$df.V5)))
+  df_merged5 <- df_merged4 %>% mutate(df.V5.1 = substring(df.V5, 3, 3))
+  df_merged5 <- subset(df_merged5, select = -df.V5)
+  rm(df_merged4)
+}
 
 # count all genotypes found
 df_count2 <- df_merged5 %>% group_by(df.chr, df.V5.1) %>% summarise(n = n(), .groups = "drop")

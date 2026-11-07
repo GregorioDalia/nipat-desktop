@@ -56,6 +56,57 @@ main <- function() {
     invisible(actual$reference)
   }
 
+  # Compare the whole cleaning/tokenization boundary, including fallback
+  # inputs: equal scientific values alone would miss changed row attributes
+  # or accidental pairing of a quality with a different read.
+  preprocessing_case <- function(bases, reads, qualities) {
+    data.frame(df.chr=rep("chr1:50", length(bases)), df.V5=bases,
+               df.V7=reads, df.qual=qualities, stringsAsFactors=FALSE)
+  }
+  preprocessing <- list(
+    ordinary=preprocessing_case(c("ACGT", "TGCA"), c("a,B,z,Z", "a,B,z,Z"),
+                               c("!5I~", "~I5!")),
+    indels=preprocessing_case(c("A*", "C+1G", "g-1a"),
+                             c("a,b", "c,d", "e,f"), c("5I", "II", "I5")),
+    special_names=preprocessing_case(c("AC", "TG"),
+                                    c("r@skip,r|pipe", "\u00e9,z"), c("I5", "5I")),
+    empty_name=preprocessing_case("ACG", "a,,b", "III"),
+    missing_name=preprocessing_case("A", NA_character_, "I"),
+    whitespace_name=preprocessing_case("AC", "read name,b", "II"),
+    missing_bases=preprocessing_case(NA_character_, "a", "I"),
+    missing_quality=preprocessing_case("A", "a", NA_character_),
+    mismatched_lengths=preprocessing_case("AC", "a,b,c", "II"),
+    empty=preprocessing_case(character(), character(), character())
+  )
+  for (name in names(preprocessing)) {
+    compare_block(
+      paste("paired base/name/quality tokenization", name),
+      "# substitution of characters to modify the df",
+      "# get unique label for each DNP", list(df2=preprocessing[[name]]), "df4.1",
+      allow_reference_error=TRUE
+    )
+  }
+
+  quality_cases <- list(
+    printable_ascii=rawToChar(as.raw(33:126), multiple=TRUE),
+    repeated=c("I", "5", "I", "!", "~", "5", "|", "\\", "\""),
+    empty=character(),
+    missing=c("I", NA_character_, "5"),
+    empty_element=c("I", "", "5"),
+    outside_printable=c("I", " ", "\u00e9", "5"),
+    multiple_bytes=c("II", "55")
+  )
+  for (name in names(quality_cases)) {
+    qualities <- quality_cases[[name]]
+    compare_block(
+      paste("ASCII quality decoding", name),
+      "# convert ASCII pred score to number", "# group by new read label",
+      list(df6=data.frame(df.qual=qualities, row=seq_along(qualities),
+                         stringsAsFactors=FALSE)), "df6",
+      allow_reference_error=TRUE
+    )
+  }
+
   group_start <- "# group by new read label"
   group_end <- paste("# substitute characters strand specific characters",
                      "(unecessary) with only uppercase letters")
@@ -120,6 +171,16 @@ main <- function() {
       c("chr2:9|chr2:10|chr2:11|chr2:12", "chr1:9|chr1:10|chr1:11|chr1:12",
         "chr2:9|chr2:10|chr2:11|chr2:12")
     )
+  )
+  read_fixtures$quality_boundaries <- make_df(rep("A|T|A|G", 8))
+  read_fixtures$quality_boundaries$qual <- c(
+    "0|0|0|0", "93|92|93|93", "40|0|93|40", "20|13|14|20",
+    "40|NA|30|40", "40|20|30", "40|20", "40|20|30|40"
+  )
+  read_fixtures$coordinate_boundaries <- make_df(
+    rep("A|T|A|G", 4),
+    c("chr1:1|chr1:2|chr1:3|chr1:4", "chr2:1|chr2:2|chr2:3",
+      "chr3:1|chr3:2", "chr4:1|chr4:2|chr4:3|chr4:4")
   )
   for (name in names(read_fixtures)) {
     compare_block(

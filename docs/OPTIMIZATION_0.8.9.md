@@ -18,9 +18,9 @@ Le copie di riferimento sono usate soltanto dai test e non sono installate.
 
 | Componente | Revisione |
 | --- | --- |
-| DNPcall | Raggruppamento unico delle osservazioni, indici delle righe per locus, eliminazione del conteggio Other duplicato e riduzione degli intermedi inutilizzati. |
-| SNPcall | Raggruppamento unico per QNAME, esclusione anticipata dei nomi vuoti e riduzione delle conversioni e degli intermedi. |
-| CPI | Calcolo unico per coppia e pannello, riutilizzo delle associazioni e dei valori per sito, accumulo dei risultati senza crescita ripetuta delle tabelle. |
+| DNPcall | Preparazione diretta delle osservazioni, conversione delle qualità tramite tabella, riuso delle estrazioni da stringhe ripetute, raggruppamento unico, indici per locus ed eliminazione dei conteggi duplicati. |
+| SNPcall | Lettura delle colonne utilizzate, preparazione diretta delle osservazioni e aggregazione delle caratteristiche necessarie per lettura, conservando il raggruppamento globale per QNAME. |
+| CPI | Calcolo unico per coppia e pannello, selezione dei soli valori PI, riuso dei risultati fra soglie equivalenti, colonne preallocate e riuso dei campioni condivisi fra coppie consecutive. |
 | Contamination | Raccolta delle righe di riepilogo e assemblaggio finale unico. |
 | Configurazione risorse | Distinzione fra configurazione salvata, risorse effettive, suggerimenti e nuovi limiti; Invio conserva le impostazioni correnti. |
 
@@ -30,6 +30,20 @@ La revisione non introduce nuovi linguaggi o dipendenze R. Modifiche alla
 politica di accesso indicizzato, elaborazione per blocchi, dimensioni dei
 grafici e stime del tempo residuo richiedono verifiche distinte e non sono
 implicite in queste ottimizzazioni.
+
+Nei pileup regolari, DNPcall e SNPcall separano direttamente basi, nomi e
+qualità senza costruire stringhe con separatori artificiali. I casi con
+valori mancanti, spazi o lunghezze non corrispondenti conservano il percorso
+di preparazione compatibile. SNPcall conserva le associazioni fra letture
+presenti in finestre diverse. In DNPcall le finestre sovrapposte continuano
+ad assegnare le osservazioni a tutti i loci previsti.
+
+CPI calcola una volta le statistiche delle soglie che selezionano gli stessi
+loci, poi ricostruisce tutte le righe originali. Media, mediana e grafici
+mantengono quindi il peso di ogni soglia. Il prodotto degli indici conserva
+l'ordine originale; non viene sostituito con prodotti cumulativi o somme di
+logaritmi. Il riuso dei campioni è limitato alla coppia corrente e alla
+successiva, senza accumulare in memoria l'intero insieme di input.
 
 ## Criteri di equivalenza
 

@@ -37,10 +37,10 @@ per l'equivalenza è la versione distribuita nella 0.8.5, commit
 
 | Componente | SHA-256 |
 | --- | --- |
-| DNPcall | `b3a85a5fd336ae1c456792c0419e4765f0f6865ac44a13872a5b7b0f5cbbda50` |
-| SNPcall | `451e7e9573acb1ed15556521322928a8988db66dff504b315f21db26ad6d214f` |
+| DNPcall | `41b44a2deba05ded10565b08bb925178016c73f12094e4360b035a99986c2357` |
+| SNPcall | `9ca7f83318bc810d82d0f3aeccca3983bb326b88c7b97ec5cfe5e72ef782e352` |
 | Contamination | `152c74cc91b0bd441e673ecf52a756604ec47e9a04c0e31fc0965c097e3437e1` |
-| CPI | `58a486e7aff84bdb36d04cb39d256cd8f6811826158708dcd4f495bd02c47e5e` |
+| CPI | `a93e98a188dff97d6a74d683729c309038ee1b6e7842755f3ac236b61363c885` |
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate

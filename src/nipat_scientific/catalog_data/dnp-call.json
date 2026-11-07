@@ -3,8 +3,8 @@
   "workflow": "dnp-call",
   "source": {
     "path": "scientific/vendor/DNPcall/DNPcall.R",
-    "sha256": "b3a85a5fd336ae1c456792c0419e4765f0f6865ac44a13872a5b7b0f5cbbda50",
-    "line_count": 829
+    "sha256": "41b44a2deba05ded10565b08bb925178016c73f12094e4360b035a99986c2357",
+    "line_count": 878
   },
   "public_parameters": [
     {
@@ -319,7 +319,7 @@
       },
       "source_lines": [
         232,
-        251
+        239
       ]
     },
     {
@@ -329,12 +329,12 @@
         "qname_must_be_nonempty": true
       },
       "description": {
-        "it": "Dopo la separazione delle osservazioni, le righe con QNAME vuoto vengono escluse.",
-        "en": "After observations are separated, rows with an empty QNAME are excluded."
+        "it": "Le osservazioni sono tokenizzate direttamente quando basi, QNAME e qualità sono allineati e privi di spazi o valori mancanti. Il percorso compatibile conserva separazione e riciclo originali per gli altri input. In entrambi i casi vengono escluse le osservazioni con QNAME vuoto.",
+        "en": "Observations are tokenized directly when bases, QNAMEs and qualities align without whitespace or missing values. The compatibility path preserves the original splitting and recycling for other inputs. Both paths exclude observations with an empty QNAME."
       },
       "source_lines": [
-        256,
-        265
+        243,
+        278
       ]
     },
     {
@@ -348,8 +348,8 @@
         "en": "Each observation receives the DNP identifier associated with its coordinate; bases, coordinates and qualities are aggregated together by QNAME and DNP identifier, preserving observation order. The suffix distinguishes nearby loci covered by the same read. Aggregated rows are sorted using the current locale."
       },
       "source_lines": [
-        270,
-        299
+        285,
+        324
       ]
     },
     {
@@ -359,12 +359,12 @@
         "quality": "ASCII(base-quality character) - 33"
       },
       "description": {
-        "it": "Le qualità delle basi sono interpretate come Phred+33, sottraendo 33 al valore del carattere. La codifica non è selezionabile.",
-        "en": "Base qualities are interpreted as Phred+33 by subtracting 33 from the character value. The encoding is not selectable."
+        "it": "Le qualità sono Phred+33: ASCII del carattere meno 33. Una tabella converte i caratteri SAM validi; per valori non standard viene mantenuta la conversione originale. La codifica non è selezionabile.",
+        "en": "Qualities use Phred+33: the character ASCII value minus 33. A lookup table converts valid SAM characters; nonstandard values retain the original conversion. The encoding is not selectable."
       },
       "source_lines": [
-        281,
-        282
+        296,
+        307
       ]
     },
     {
@@ -378,8 +378,8 @@
         "en": "Lowercase bases are converted to uppercase before haplotype comparison; output counts are not separated by orientation."
       },
       "source_lines": [
-        301,
-        307
+        326,
+        332
       ]
     },
     {
@@ -399,8 +399,8 @@
         "en": "The indel summary uses observations whose serialized base string exceeds six characters and counts @ in the two central bases. Its denominator is this observation count. This differs from the following filter, which excludes @ in any column, including flanking bases."
       },
       "source_lines": [
-        311,
-        359
+        336,
+        384
       ]
     },
     {
@@ -414,8 +414,8 @@
         "en": "A grouped row is excluded when any column contains @. The filter is not restricted to the two central bases, so reads_discarded_for_indels does not necessarily describe every row removed by this condition."
       },
       "source_lines": [
-        363,
-        365
+        388,
+        390
       ]
     },
     {
@@ -437,12 +437,12 @@
         ]
       },
       "description": {
-        "it": "Dopo il filtro indel, sono mantenute le stringhe di basi lunghe più di sei caratteri. Il codice estrae i caratteri 3–5 della rappresentazione base|base|base|base e gli elementi 2–3 di qualità e coordinate. Il formato atteso contiene le quattro posizioni della finestra; il controllo di lunghezza non impone esattamente quattro osservazioni.",
-        "en": "After indel filtering, serialized base strings longer than six characters are retained. The code extracts characters 3–5 from base|base|base|base and elements 2–3 from qualities and coordinates. The expected format contains the window’s four positions; the length check does not require exactly four observations."
+        "it": "Dopo il filtro indel sono mantenute le stringhe di basi più lunghe di sei caratteri. Si estraggono i caratteri 3–5 dalle basi e gli elementi 2–3 da qualità e coordinate; ciascuna stringa distinta viene elaborata una volta e il risultato riassociato alle letture nell’ordine originale. Il formato atteso contiene quattro posizioni, ma il controllo sulla lunghezza non impone esattamente quattro osservazioni.",
+        "en": "After indel filtering, base strings longer than six characters are retained. Characters 3–5 are extracted from bases and elements 2–3 from qualities and coordinates; each distinct string is processed once and mapped back to reads in their original order. The expected format contains four positions, but the length check does not require exactly four observations."
       },
       "source_lines": [
-        368,
-        384
+        393,
+        421
       ]
     },
     {
@@ -453,12 +453,12 @@
         "na_rm": false
       },
       "description": {
-        "it": "La qualità assegnata al dinucleotide è la media aritmetica delle qualità Phred delle due basi selezionate. Non viene usato un parametro di qualità aggiuntivo in R.",
-        "en": "Dinucleotide quality is the arithmetic mean of the two selected Phred base qualities. R applies no additional configurable quality parameter."
+        "it": "La qualità del dinucleotide è la media aritmetica delle due qualità Phred selezionate. Ogni coppia distinta viene calcolata una volta con mean(), conservando gestione dei valori mancanti e ordine delle letture. Non viene applicato un parametro di qualità aggiuntivo configurabile.",
+        "en": "Dinucleotide quality is the arithmetic mean of the two selected Phred qualities. Each distinct pair is calculated once with mean(), preserving missing-value behavior and read order. No additional configurable quality parameter is applied."
       },
       "source_lines": [
-        387,
-        392
+        424,
+        441
       ]
     },
     {
@@ -477,8 +477,8 @@
         "en": "Remaining observations are counted by DNP and dinucleotide; combined_bases and combined_counts list combinations using -, while total_count sums their counts."
       },
       "source_lines": [
-        395,
-        413
+        444,
+        462
       ]
     },
     {
@@ -492,8 +492,8 @@
         "en": "N_Other counts dinucleotides differing from both panel REF and ALT. These observations are excluded from genotype-likelihood calculation."
       },
       "source_lines": [
-        415,
-        440
+        464,
+        489
       ]
     },
     {
@@ -505,8 +505,8 @@
         "en": "The model is diploid: the likelihood function is explicitly called with ploidy=2. This value is not a public script parameter."
       },
       "source_lines": [
-        466,
-        494
+        515,
+        543
       ]
     },
     {
@@ -529,8 +529,8 @@
         "en": "GL0, GL1 and GL2 sum natural logarithms of per-read probabilities, using the REF/ALT model and the error derived from mean quality. They are neither log10 values nor Phred scores. The code applies no explicit probability floor before the logarithm."
       },
       "source_lines": [
-        444,
-        464
+        493,
+        513
       ]
     },
     {
@@ -549,8 +549,8 @@
         "en": "The genotype has the highest likelihood in the order 0/0, 0/1, 1/1; which.max chooses the first maximum on a tie. No minimum separation between the best and second-best likelihood is required."
       },
       "source_lines": [
-        493,
-        508
+        542,
+        557
       ]
     },
     {
@@ -565,8 +565,8 @@
         "en": "Counts, panel and likelihoods are combined with full outer joins, then missing values are globally replaced with zero. This replacement precedes the rule that marks a genotype as unassigned."
       },
       "source_lines": [
-        553,
-        571
+        602,
+        620
       ]
     },
     {
@@ -584,8 +584,8 @@
         "en": "The genotype becomes NA when at least 10% of counted observations belong to alleles other than REF and ALT. Equality is included and the threshold is fixed in R; the site and its counts are not removed."
       },
       "source_lines": [
-        573,
-        575
+        622,
+        624
       ]
     },
     {
@@ -615,8 +615,8 @@
         "en": "The individual table exposes these columns in order. Coordinates are numeric and internal | separators are removed from alleles; the indel summary is joined by chr, pos1 and pos2."
       },
       "source_lines": [
-        577,
-        605
+        626,
+        654
       ]
     },
     {
@@ -650,8 +650,8 @@
         "en": "Each sample produces a TSV table and a plot directory. In NIPAT, the sample name is the internal alias; run metadata retain its association with the original BAM."
       },
       "source_lines": [
-        627,
-        637
+        676,
+        686
       ]
     },
     {
@@ -676,8 +676,8 @@
         "en": "The genotype plot and three count plots are 11×5-inch PDFs. Colours, rotation and label density are fixed presentation settings that do not affect counts."
       },
       "source_lines": [
-        640,
-        708
+        689,
+        757
       ]
     },
     {
@@ -697,8 +697,8 @@
         "en": "Count plots group values with cut using these boundaries and labels. Zero lies below the first boundary and does not enter a bin. Labels are constructed separately from the actual cut intervals."
       },
       "source_lines": [
-        646,
-        666
+        695,
+        715
       ]
     },
     {
@@ -721,8 +721,8 @@
         "en": "The summary joins sample genotypes on coordinates and alleles. Its native filename incorporates --out; under NIPAT’s --out=output convention, the file is output/summary/output_AllGenotypes.txt."
       },
       "source_lines": [
-        735,
-        751
+        784,
+        800
       ]
     },
     {
@@ -756,8 +756,8 @@
         "en": "The unassigned-genotype PDF counts NA values per DNP across GT columns; its width depends on the number of DNPs, with a fixed five-inch height."
       },
       "source_lines": [
-        764,
-        782
+        813,
+        831
       ]
     },
     {
@@ -779,8 +779,8 @@
         "en": "The UpSet plot is produced only with at least two samples. Displayed coverage means a non-NA genotype, not simply the presence of reads; PDF dimensions depend on sample count."
       },
       "source_lines": [
-        787,
-        817
+        836,
+        866
       ]
     },
     {
@@ -795,8 +795,8 @@
         "en": "At the end of the script, the temporary pileup and BED in the R working directory are removed. They are therefore not retained intermediate results in this DNPcall implementation."
       },
       "source_lines": [
-        822,
-        829
+        871,
+        878
       ]
     }
   ],
@@ -961,7 +961,7 @@
           154
         ],
         "url": "https://www.htslib.org/doc/1.21/samtools-mpileup.html",
-        "sha256": "b3a85a5fd336ae1c456792c0419e4765f0f6865ac44a13872a5b7b0f5cbbda50",
+        "sha256": "41b44a2deba05ded10565b08bb925178016c73f12094e4360b035a99986c2357",
         "dependencies": [
           {
             "path": "docker/scientific-runtime/Dockerfile",
@@ -1148,191 +1148,191 @@
     },
     {
       "start": 221,
-      "end": 253,
+      "end": 242,
       "summary": {
-        "it": "Espansione dei marcatori del riferimento e normalizzazione testuale di basi, QNAME e qualità.",
-        "en": "Expanding reference markers and text normalization of bases, QNAMEs and qualities."
+        "it": "Espansione dei marcatori di riferimento, colonne necessarie e normalizzazione dei marcatori indel.",
+        "en": "Reference-marker expansion, required columns and indel-marker normalization."
       }
     },
     {
-      "start": 254,
-      "end": 268,
+      "start": 243,
+      "end": 284,
       "summary": {
-        "it": "Separazione delle osservazioni ed esclusione dei QNAME vuoti.",
-        "en": "Separating observations and excluding empty QNAMEs."
+        "it": "Tokenizzazione diretta delle osservazioni allineate, percorso compatibile per gli altri input ed esclusione dei QNAME vuoti.",
+        "en": "Direct tokenization of aligned observations, compatibility path for other inputs and exclusion of empty QNAMEs."
       }
     },
     {
-      "start": 269,
-      "end": 299,
+      "start": 285,
+      "end": 325,
       "summary": {
-        "it": "Associazione QNAME-DNP, conversione Phred, aggregazione unica e ordinamento delle osservazioni.",
-        "en": "QNAME-DNP association, Phred conversion, single aggregation and observation sorting."
+        "it": "Associazione QNAME-DNP, conversione Phred tramite tabella o percorso compatibile, raggruppamento unico e ordinamento.",
+        "en": "QNAME-DNP association, Phred conversion through a lookup or compatibility path, single aggregation and sorting."
       }
     },
     {
-      "start": 300,
-      "end": 310,
+      "start": 326,
+      "end": 335,
       "summary": {
         "it": "Normalizzazione dell’orientamento delle basi.",
         "en": "Normalizing base orientation."
       }
     },
     {
-      "start": 311,
-      "end": 362,
+      "start": 336,
+      "end": 387,
       "summary": {
         "it": "Calcolo dei conteggi e del rapporto indel sulle posizioni centrali.",
         "en": "Calculating indel counts and fraction at central positions."
       }
     },
     {
-      "start": 363,
-      "end": 394,
+      "start": 388,
+      "end": 443,
       "summary": {
-        "it": "Filtro indel, selezione del dinucleotide centrale e qualità media.",
-        "en": "Indel filtering, central dinucleotide selection and mean quality."
+        "it": "Filtro indel, estrazione delle coppie centrali e qualità media con riutilizzo delle stringhe e coppie distinte.",
+        "en": "Indel filtering, central-pair extraction and mean quality with reuse of distinct strings and quality pairs."
       }
     },
     {
-      "start": 395,
-      "end": 414,
+      "start": 444,
+      "end": 463,
       "summary": {
         "it": "Conteggi delle combinazioni osservate e del totale per DNP.",
         "en": "Counting observed combinations and totals per DNP."
       }
     },
     {
-      "start": 415,
-      "end": 441,
+      "start": 464,
+      "end": 490,
       "summary": {
         "it": "Join con il pannello, conteggio OTHER e selezione delle osservazioni REF/ALT.",
         "en": "Joining the panel, counting OTHER and selecting REF/ALT observations."
       }
     },
     {
-      "start": 442,
-      "end": 465,
+      "start": 491,
+      "end": 514,
       "summary": {
         "it": "Definizione del modello di likelihood diploide.",
         "en": "Defining the diploid likelihood model."
       }
     },
     {
-      "start": 466,
-      "end": 519,
+      "start": 515,
+      "end": 568,
       "summary": {
         "it": "Indicizzazione delle righe per sito, calcolo delle likelihood e scelta del genotipo, conservando l’ordine delle osservazioni.",
         "en": "Indexing rows per locus, calculating likelihoods and selecting genotypes while preserving observation order."
       }
     },
     {
-      "start": 520,
-      "end": 552,
+      "start": 569,
+      "end": 601,
       "summary": {
         "it": "Conteggi dei dinucleotidi REF e ALT.",
         "en": "Counting REF and ALT dinucleotides."
       }
     },
     {
-      "start": 553,
-      "end": 572,
+      "start": 602,
+      "end": 621,
       "summary": {
         "it": "Unione delle tabelle, completamento dei valori mancanti e schema intermedio.",
         "en": "Joining tables, filling missing values and defining the intermediate schema."
       }
     },
     {
-      "start": 573,
-      "end": 576,
+      "start": 622,
+      "end": 625,
       "summary": {
         "it": "Invalidazione del genotipo alla soglia OTHER del 10%.",
         "en": "Marking the genotype unassigned at the 10% OTHER threshold."
       }
     },
     {
-      "start": 577,
-      "end": 626,
+      "start": 626,
+      "end": 675,
       "summary": {
         "it": "Costruzione della tabella finale, join del riepilogo indel e memoria.",
         "en": "Building the final table, joining the indel summary and memory sampling."
       }
     },
     {
-      "start": 627,
-      "end": 639,
+      "start": 676,
+      "end": 688,
       "summary": {
         "it": "Nome della colonna GT, arrotondamento e scrittura dell’output individuale.",
         "en": "GT-column naming, rounding and writing individual output."
       }
     },
     {
-      "start": 640,
-      "end": 666,
+      "start": 689,
+      "end": 715,
       "summary": {
         "it": "Grafico dei genotipi e funzione di classificazione dei conteggi per i grafici.",
         "en": "Genotype plot and count-binning function for plots."
       }
     },
     {
-      "start": 667,
-      "end": 709,
+      "start": 716,
+      "end": 758,
       "summary": {
         "it": "Grafici dei conteggi REF, ALT e OTHER.",
         "en": "REF, ALT and OTHER count plots."
       }
     },
     {
-      "start": 710,
-      "end": 723,
+      "start": 759,
+      "end": 772,
       "summary": {
         "it": "Resoconto temporale e di memoria e ritorno dei risultati individuali.",
         "en": "Timing and memory summary and return of individual results."
       }
     },
     {
-      "start": 724,
-      "end": 734,
+      "start": 773,
+      "end": 783,
       "summary": {
         "it": "Esecuzione seriale o parallela dell’elaborazione per campione.",
         "en": "Sequential or parallel execution of sample processing."
       }
     },
     {
-      "start": 735,
-      "end": 753,
+      "start": 784,
+      "end": 802,
       "summary": {
         "it": "Unione dei genotipi fra campioni e scrittura della tabella di riepilogo.",
         "en": "Joining sample genotypes and writing the summary table."
       }
     },
     {
-      "start": 754,
-      "end": 763,
+      "start": 803,
+      "end": 812,
       "summary": {
         "it": "Resoconto complessivo di tempi, memoria e numero di campioni.",
         "en": "Overall timing, memory and sample-count summary."
       }
     },
     {
-      "start": 764,
-      "end": 786,
+      "start": 813,
+      "end": 835,
       "summary": {
         "it": "Conteggio e grafico dei genotipi non assegnati.",
         "en": "Counting and plotting unassigned genotypes."
       }
     },
     {
-      "start": 787,
-      "end": 818,
+      "start": 836,
+      "end": 867,
       "summary": {
         "it": "Matrice binaria dei genotipi assegnati e grafico UpSet condizionale.",
         "en": "Binary assigned-genotype matrix and conditional UpSet plot."
       }
     },
     {
-      "start": 819,
-      "end": 829,
+      "start": 868,
+      "end": 878,
       "summary": {
         "it": "Rimozione dei file temporanei e messaggio finale.",
         "en": "Removing temporary files and final message."

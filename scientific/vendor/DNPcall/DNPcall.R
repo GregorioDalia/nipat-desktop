@@ -1,5 +1,5 @@
-# NIPAT 0.8.9 optimization, 2026-11-06: reuse grouping indices and release
-# consumed intermediates; preserve scientific calculations and output formats.
+# NIPAT 0.8.9 optimization: tokenize pileup observations directly, reuse quality
+# conversions and grouping indices, and release consumed intermediate data.
 cat("\n###### DNPcall ######\n\n\n\n")
 
 
@@ -231,20 +231,8 @@ process_individual <- function(i) {
 
   # substitution of characters to modify the df
   clean_df <- function(df2) {
-    df2 <- df2
-
-    # wrap df.V7 between ","
-    df2$df.V7 <- paste0(",", df2$df.V7, ",")
-
-    # substitute * with @
     df2$df.V5 <- gsub("\\*", "@", df2$df.V5)
-
-    # substitute indels patterns with @
     df2$df.V5 <- gsub("[actgACTG]([+-]\\d+)+", "@", df2$df.V5)
-
-    df2$df.V5    <- gsub("", " ", df2$df.V5)
-    df2$df.V7    <- gsub(",", " ", df2$df.V7)
-    df2$df.qual  <- gsub("", " ", df2$df.qual)
     return(df2)
   }
 
@@ -252,13 +240,40 @@ process_individual <- function(i) {
 
   update_peak_ind()
 
-
-  # split bases and reads columns in single cells
+  # Tokenize valid pileup observations directly. The original separator-based
+  # path remains the fallback for missing fields, embedded whitespace or unequal
+  # lengths, retaining its recycling and validation semantics for those inputs.
   split_and_filter_df <- function(df2) {
+    fields <- df2[, c("df.V5", "df.V7", "df.qual")]
+    direct <- nrow(df2) > 0L && !anyNA(fields) &&
+      !any(vapply(fields, function(x) any(grepl("[[:space:]]", x)), logical(1)))
+    if (direct) {
+      bases <- strsplit(as.character(df2$df.V5), "", fixed = TRUE)
+      reads <- strsplit(as.character(df2$df.V7), ",", fixed = TRUE)
+      qualities <- strsplit(as.character(df2$df.qual), "", fixed = TRUE)
+      counts <- lengths(bases)
+      direct <- all(counts > 0L & counts == lengths(reads) &
+                    counts == lengths(qualities)) &&
+        !any(vapply(reads, function(x) any(!nzchar(x)), logical(1))) &&
+        !any(endsWith(as.character(df2$df.V7), ","))
+      if (direct) {
+        return(tibble(
+          df.V7 = unlist(reads, use.names = FALSE),
+          df.chr = rep(df2$df.chr, counts),
+          df.V5 = unlist(bases, use.names = FALSE),
+          df.qual = unlist(qualities, use.names = FALSE)
+        ))
+      }
+      rm(bases, reads, qualities, counts)
+    }
+    df2$df.V7 <- paste0(",", df2$df.V7, ",")
+    df2$df.V5 <- gsub("", " ", df2$df.V5)
+    df2$df.V7 <- gsub(",", " ", df2$df.V7)
+    df2$df.qual <- gsub("", " ", df2$df.qual)
     df3 <- df2 %>%
       separate_rows(df.V5, df.V7, df.qual, sep = " ")
     df4 <- df3[, c(3, 1, 2, 4)]
-    df4.1 <- df4[ df4$df.V7 != "", ]
+    df4.1 <- df4[df4$df.V7 != "", ]
     return(df4.1)
   }
 
@@ -279,7 +294,17 @@ process_individual <- function(i) {
   rm(df4.1)
 
   # convert ASCII pred score to number
-  df6$df.qual <- sapply(df6$df.qual, function(x) as.integer(charToRaw(x)) - 33)
+  # A single lookup replaces one R callback per observation for SAM quality
+  # characters. Keep the original conversion for nonstandard direct R input.
+  quality_codes <- match(df6$df.qual, intToUtf8(33:126, multiple = TRUE))
+  if (is.character(df6$df.qual) && length(quality_codes) > 0L && !anyNA(quality_codes)) {
+    quality_names <- if (is.null(names(df6$df.qual))) df6$df.qual else names(df6$df.qual)
+    df6$df.qual <- setNames(quality_codes - 1, quality_names)
+    rm(quality_names)
+  } else {
+    df6$df.qual <- sapply(df6$df.qual, function(x) as.integer(charToRaw(x)) - 33)
+  }
+  rm(quality_codes)
 
 
   # group by new read label
@@ -370,26 +395,50 @@ process_individual <- function(i) {
   rm(DFnoINDEL)
 
   # extract DNP info
-  df_3coppie <- righe_modificate %>%
-    mutate(pos2 = substr(pos, 3, 5),
-           qual1=sapply(qual, function(x) {
-             parts <- strsplit(x, "\\|")[[1]]
-             paste(parts[2:3], collapse = "|")
-           }),
-           chr1=sapply(chr, function(x) {
-             parts <- strsplit(x, "\\|")[[1]]
-             paste(parts[2:3], collapse = "|")
-           }))
+  # Coordinates and quality patterns recur across reads. Extract each distinct
+  # pattern once; preserve the original strsplit handling of short/empty values
+  # and the names produced by sapply on character vectors.
+  extract_middle_pair <- function(values) {
+    extract <- function(x) {
+      parts <- strsplit(x, "\\|")[[1]]
+      paste(parts[2:3], collapse = "|")
+    }
+    if (!length(values)) return(sapply(values, extract))
+    patterns <- unique(values)
+    pairs <- vapply(patterns, extract, character(1), USE.NAMES = FALSE)
+    result <- pairs[match(values, patterns)]
+    names(result) <- if (is.null(names(values))) values else names(values)
+    return(result)
+  }
 
-  good_reads <- df_3coppie[,c("chr1", "pos2", "qual1")]
-  rm(righe_modificate, df_3coppie)
+  # Retain only the three columns used downstream, avoiding a wider copy of all
+  # per-read data merely to select these columns immediately afterwards.
+  good_reads <- righe_modificate[, c("chr", "pos", "qual"), drop = FALSE]
+  names(good_reads) <- c("chr1", "pos2", "qual1")
+  good_reads <- good_reads %>%
+    mutate(chr1 = extract_middle_pair(chr1),
+           pos2 = substr(pos2, 3, 5),
+           qual1 = extract_middle_pair(qual1))
+  rm(righe_modificate)
 
   # compute BQ average between the two DNP positions
-  good_reads <- good_reads%>%
-    mutate(mean_quality = sapply(qual1, function(x) {
+  # Compute each distinct pair once with the original mean(), including its
+  # missing-value behavior, then restore the exact per-read order.
+  quality_pairs <- unique(good_reads$qual1)
+  pair_means <- sapply(quality_pairs, function(x) {
     values <- as.numeric(strsplit(x, "\\|")[[1]])
     mean(values)
-  }))
+  })
+  mean_quality <- pair_means[match(good_reads$qual1, quality_pairs)]
+  if (length(good_reads$qual1)) {
+    names(mean_quality) <- if (is.null(names(good_reads$qual1))) {
+      good_reads$qual1
+    } else {
+      names(good_reads$qual1)
+    }
+  }
+  good_reads <- good_reads %>% mutate(mean_quality = mean_quality)
+  rm(quality_pairs, pair_means, mean_quality)
 
 
   # for full* dataset final

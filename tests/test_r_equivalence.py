@@ -130,6 +130,26 @@ class REquivalenceTests(unittest.TestCase):
         self.assertTrue(any("--parallel" in case.arguments for case in cases))
         self.assertTrue(any(case.name == "contamination-panel-only" for case in cases))
         self.assertTrue(any(case.name == "cpi-zero-error" for case in cases))
+        self.assertTrue(any(case.name == "dnp-varied-qualities" for case in cases))
+        self.assertTrue(any(case.name == "snp-extra-columns" for case in cases))
+        shared = next(case for case in cases if case.name == "cpi-shared-parents")
+        pairs = shared.arguments[shared.arguments.index("--pairs") + 1].split(",")
+        self.assertEqual(len(pairs), len(set(pairs)))
+        self.assertTrue(any(left.split(":")[0] == right.split(":")[0]
+                            for left, right in zip(pairs, pairs[1:])))
+        self.assertTrue(any(left.split(":")[1] == right.split(":")[1]
+                            for left, right in zip(pairs, pairs[1:])))
+
+    def test_generated_inputs_exercise_quality_range_and_optional_pileup_columns(self):
+        with patch.object(verification, "run", return_value=""):
+            inputs = verification.make_inputs(self.root, "synthetic-image")
+        sam = (inputs / "dnp/Quality.sam").read_text().splitlines()
+        qualities = [line.split("\t")[10] for line in sam if not line.startswith("@")]
+        self.assertTrue(set(range(13, 94)).issubset({ord(c) - 33 for q in qualities for c in q}))
+        basic = list(csv.reader((inputs / "snp/pileup.txt").read_text().splitlines(), delimiter="\t"))
+        wide = list(csv.reader((inputs / "snp/pileup-wide.txt").read_text().splitlines(), delimiter="\t"))
+        self.assertEqual([row[:7] for row in wide], basic)
+        self.assertTrue(all(len(row) == 10 for row in wide))
 
 
 if __name__ == "__main__":

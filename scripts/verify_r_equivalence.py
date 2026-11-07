@@ -196,7 +196,7 @@ def make_inputs(root: Path, image: str) -> Path:
         alternatives[position] = alt
         panel_rows.append(f"chrDnpSynthetic\t{position}\t{position + 1}\t{ref}\t{alt}\n")
     (dnp / "panel.txt").write_text("".join(panel_rows), encoding="utf-8")
-    for sample in ("A", "B"):
+    for sample in ("A", "B", "Quality"):
         records = ["@HD\tVN:1.6\tSO:coordinate", f"@SQ\tSN:chrDnpSynthetic\tLN:{len(sequence)}"]
         for start, covered in ((20, (50, 52)), (110, (140,)), (200, (230,))):
             for index, name in enumerate(("a", "A", "z", "Z", "r-1", "r.2", "r_3", "r@skip")):
@@ -206,7 +206,13 @@ def make_inputs(root: Path, image: str) -> Path:
                         bases[position - start:position - start + 2] = alternatives[position]
                     elif index == 6:
                         bases[position - start] = "ACGT"[("ACGT".index(bases[position - start]) + 1) % 4]
-                quality = "I" * len(bases)
+                # Cover distinct central qualities and every printable score
+                # retained by samtools' default minimum base quality. The
+                # repeated pattern also exercises caching without making all
+                # reads numerically identical.
+                quality = ("".join(chr(33 + 13 + (offset * 7 + index * 13) % 81)
+                                   for offset in range(len(bases)))
+                           if sample == "Quality" else "I" * len(bases))
                 records.append("\t".join(map(str, (f"{name}_{start}", 16 if index % 2 else 0,
                     "chrDnpSynthetic", start, 60, f"{len(bases)}M", "*", 0, 0, "".join(bases), quality))))
         # A deletion and an insertion at the first DNP exercise discarded-read handling.
@@ -233,6 +239,11 @@ def make_inputs(root: Path, image: str) -> Path:
             qnames = [f"{name}_{center}" if name != "shared" else name for name in names]
             lines.append(f"chrSynthetic\t{position}\t{ref}\t8\t{''.join(bases)}\tIIIIIIII\t{','.join(qnames)}\n")
     (inputs / "snp/pileup.txt").write_text("".join(lines), encoding="utf-8")
+    # Optional mpileup output columns remain accepted by the native reader.
+    # A selective import must skip them without shifting the QNAME column.
+    wide_lines = [line.rstrip("\n") + f"\tunused {index}\t{index}\tNA\n"
+                  for index, line in enumerate(lines)]
+    (inputs / "snp/pileup-wide.txt").write_text("".join(wide_lines), encoding="utf-8")
     write_tsv(inputs / "snp/panel.tsv", ("pos", "ref", "alt"),
               [("chrSynthetic:50", "A", "G"), ("chrSynthetic:120", "C", "T"),
                ("chrSynthetic:180", "A", "C")])
@@ -284,14 +295,22 @@ def cases() -> list[Case]:
            "--pairs", "Informative:Informative,NoSites:NoSites,Deep:Deep",
            "--mother_prefix", "Mother", "--father_prefix", "Father",
            "--popfreq", "/inputs/cpi/population.tsv")
+    shared_parents = list(cpi)
+    shared_parents[shared_parents.index("--pairs") + 1] = (
+        "Deep:Deep,Deep:Informative,Informative:Informative,"
+        "NoSites:Informative,Informative:Deep"
+    )
     return [
         Case("dnp-single", "dnp-call", dnp, ("/inputs/dnp/A.bam",)),
         Case("dnp-multi", "dnp-call", dnp, ("/inputs/dnp/A.bam", "/inputs/dnp/B.bam")),
         Case("dnp-parallel", "dnp-call", (*dnp, "--parallel"), ("/inputs/dnp/A.bam", "/inputs/dnp/B.bam")),
+        Case("dnp-varied-qualities", "dnp-call", dnp, ("/inputs/dnp/Quality.bam",)),
         Case("snp-edge", "snp-call", ("--pileup", "/inputs/snp/pileup.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
+        Case("snp-extra-columns", "snp-call", ("--pileup", "/inputs/snp/pileup-wide.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
         Case("cpi-all", "cpi", cpi),
         Case("cpi-panels", "cpi", (*cpi, "--cutoff_map", "Full=/inputs/cpi/full.tsv,Subset=/inputs/cpi/subset.tsv")),
         Case("cpi-zero-error", "cpi", (*cpi, "--err_const", "0")),
+        Case("cpi-shared-parents", "cpi", tuple(shared_parents)),
         Case("contamination-batch", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples", "output")),
         Case("contamination-single", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples/single.txt", "output")),
         Case("contamination-panel-only", "contamination", ("/inputs/panel-only/panel.txt", "/inputs/panel-only", "output")),
@@ -342,12 +361,21 @@ def verify(root: Path, image: str) -> dict:
     current_inputs = {p.relative_to(inputs).as_posix(): digest(p) for p in inputs.rglob("*") if p.is_file()}
     if current_inputs != input_hashes:
         raise ValueError("A reference or candidate execution modified fixture inputs")
+    performance = root / "performance-observations.tsv"
+    if not performance.is_file():
+        raise ValueError("Synthetic performance observations are missing")
     return {"schema_version": 1, "status": "passed", "reference": reference,
             "candidate_r_sha256": candidate_hashes, "runtime_image": image,
             "comparison": {"table_bytes": "exact", "unrounded_r": "identical",
                            "pdf_pixels": "exact", "pdf_metadata": "excluded"},
             "timing_scope": "single observations; includes capture instrumentation and container startup; no speed claim",
-            "inputs_unchanged": True, "input_sha256": input_hashes, "cases": results, "helpers": helpers}
+            "inputs_unchanged": True, "input_sha256": input_hashes, "cases": results, "helpers": helpers,
+            "synthetic_performance": {
+                "file": performance.name, "sha256": digest(performance),
+                "scope": "source transformations and CPI core; three timing observations per variant",
+                "memory": "Rprofmem allocation totals from a separate pass; not peak RAM",
+                "speed_threshold": "none",
+            }}
 
 
 def main() -> int:

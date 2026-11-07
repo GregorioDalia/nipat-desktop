@@ -3,8 +3,8 @@
   "workflow": "cpi",
   "source": {
     "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
-    "sha256": "58a486e7aff84bdb36d04cb39d256cd8f6811826158708dcd4f495bd02c47e5e",
-    "line_count": 460
+    "sha256": "a93e98a188dff97d6a74d683729c309038ee1b6e7842755f3ac236b61363c885",
+    "line_count": 490
   },
   "public_parameters": [
     {
@@ -250,8 +250,8 @@
         "en": "Input filenames use the configured prefixes and identifiers; tables have headers and are read with whitespace separation. Result names remain Mother<id>-Father<id>_DNPs even when input prefixes change."
       },
       "source_lines": [
-        288,
-        297
+        317,
+        341
       ]
     },
     {
@@ -296,8 +296,8 @@
         "en": "The REF ratio is recomputed separately for mother and father from counts. N_Other and any existing ratio column are excluded from the denominator. The ratio is not recomputed after minor paternal counts are set to zero."
       },
       "source_lines": [
-        302,
-        320
+        325,
+        355
       ]
     },
     {
@@ -313,8 +313,8 @@
         "en": "Both samples retain sites with N_Other/total_count <= 0.10. The denominator is the supplied total_count column; this script does not rebuild it as a sum of counts. Filtered samples are reused for plots and the final summary."
       },
       "source_lines": [
-        322,
-        327
+        325,
+        355
       ]
     },
     {
@@ -348,8 +348,8 @@
         "en": "Paternal REF counts are set to zero for REF ratio < 0.1 and ALT counts for REF ratio > 0.9. These inequalities are strict, unlike the inclusive PI classification thresholds. Subsequent steps retain the ratio computed before zeroing."
       },
       "source_lines": [
-        323,
-        327
+        340,
+        355
       ]
     },
     {
@@ -362,12 +362,12 @@
         "site_filter": "fetal_reads >= iteration"
       },
       "description": {
-        "it": "Il CPI viene calcolato per ogni soglia intera da 2 al massimo numero di fetal_reads dei siti materni selezionati. A ogni soglia sono mantenuti i siti con almeno quel numero di fetal_reads. Se il massimo non è finito o è minore di 2, l’iterazione restituisce risultati vuoti.",
-        "en": "CPI is computed at every integer threshold from 2 to the maximum fetal-read count among selected maternal sites. Each threshold retains sites with at least that many fetal reads. If the maximum is not finite or is below 2, the iteration returns no results."
+        "it": "I risultati contengono tutte le soglie intere da 2 al massimo numero di letture fetali dei siti materni selezionati. Le soglie con lo stesso insieme di loci riutilizzano il calcolo; ogni riga viene ricostruita prima di riepiloghi e grafici. Ogni soglia mantiene i siti con almeno quel numero di letture fetali. Se il massimo non è finito o è inferiore a 2, non vengono restituiti risultati.",
+        "en": "Results contain every integer threshold from 2 to the maximum fetal-read count among selected maternal sites. Thresholds selecting the same loci reuse the calculation; every row is reconstructed before summaries and plots. Each threshold retains sites with at least that many fetal reads. If the maximum is not finite or is below 2, no results are returned."
       },
       "source_lines": [
         109,
-        157
+        201
       ]
     },
     {
@@ -455,8 +455,8 @@
         "en": "CPI is the direct product of retained per-site PIs; no retained sites gives NA. log_CPI is base-10 logarithm only for a non-missing positive CPI. The product is not calculated by summing logarithms and has no explicit overflow or underflow protection. With err_const = 0, a zero mismatch PI can make CPI zero and log_CPI NA."
       },
       "source_lines": [
-        159,
-        160
+        178,
+        185
       ]
     },
     {
@@ -472,7 +472,7 @@
       },
       "source_lines": [
         145,
-        172
+        199
       ]
     },
     {
@@ -484,8 +484,8 @@
         "en": "CPI_medianFF selects log_CPI at the iteration nearest the rounded median of informative maternal fetal reads. The median is computed before joining father and frequencies; which.min selects the first minimum in a tie. This is log10(CPI), not raw CPI or CPI interpolated at the median fetal fraction."
       },
       "source_lines": [
-        180,
-        343
+        205,
+        373
       ]
     },
     {
@@ -497,8 +497,8 @@
         "en": "The target for CPI_medianFF is median fetal reads rounded with round() without decimal digits specified. If results or target are unavailable, closest_logCPI returns NA."
       },
       "source_lines": [
-        338,
-        343
+        368,
+        373
       ]
     },
     {
@@ -514,8 +514,8 @@
         "en": "Per-site fetal fraction is twice the fetal reads divided by maternal REF+ALT; the sample estimate is the median, multiplied by 100 for percentage. N_Other is excluded from the denominator. This estimate uses selected maternal sites and does not require a valid paternal PI."
       },
       "source_lines": [
-        345,
-        353
+        375,
+        383
       ]
     },
     {
@@ -531,8 +531,8 @@
         "en": "The final summary recomputes fetal reads using inclusive maternal boundaries 0.1/0.9 and retains sites with a non-missing, strictly positive fetal fraction and at least 2 fetal reads."
       },
       "source_lines": [
-        366,
-        374
+        396,
+        404
       ]
     },
     {
@@ -547,8 +547,8 @@
         "en": "N_sites_mother counts selected maternal rows. N_sites_father counts informative rows after the mother-father join, before the population-frequency join and valid-PI selection. It is therefore not generally the number of sites multiplied into CPI."
       },
       "source_lines": [
-        376,
-        392
+        406,
+        422
       ]
     },
     {
@@ -565,8 +565,8 @@
         "en": "Max_logCPI, Min_logCPI, Median_logCPI and Mean_logCPI summarize non-NA log_CPI values across all fetal-read thresholds for the pair and panel. With no values these statistics are NA. CPI_medianFF is selected separately using the median-read target."
       },
       "source_lines": [
-        395,
-        402
+        425,
+        432
       ]
     },
     {
@@ -582,8 +582,8 @@
         "en": "The CSV rounds raw fetal fraction to 4 decimal places, percentage to 2, and log10(CPI) statistics including CPI_medianFF to 3. These are presentation settings rather than PI calculation parameters."
       },
       "source_lines": [
-        405,
-        431
+        435,
+        461
       ]
     },
     {
@@ -599,8 +599,8 @@
         "en": "The persisted summary is Summary_FetalFraction_CPI.csv, with one row per pair and coordinate subset. Cutoff appears only when panels are selected; ALL mode omits it. Per-iteration series are not exported to a dedicated table."
       },
       "source_lines": [
-        405,
-        458
+        435,
+        488
       ]
     },
     {
@@ -623,8 +623,8 @@
         "en": "Plots use fixed background bands bounded by log10(CPI) = -4 and 4. These are graphical thresholds: the code does not filter results or produce an automatic decision from them."
       },
       "source_lines": [
-        230,
-        236
+        255,
+        261
       ]
     },
     {
@@ -642,8 +642,8 @@
         "en": "Tick density on the fetal-read axis depends on the maximum iteration: every integer up to 20, steps of 10 up to 100, steps of 25 up to 500 and steps of 50 above 500. These steps affect the plot only; calculation still uses every integer threshold."
       },
       "source_lines": [
-        199,
-        209
+        224,
+        234
       ]
     },
     {
@@ -659,8 +659,8 @@
         "en": "The annotation shows cfDNA percentage to 2 decimal places and log10(CPI) to 3; non-finite values display as NA. Matching/mismatching count curves share the numerical log10(CPI) scale, with an identity secondary axis and no conversion between quantities."
       },
       "source_lines": [
-        211,
-        267
+        236,
+        292
       ]
     },
     {
@@ -679,8 +679,8 @@
         "en": "One PDF per pair places panels side by side, and a combined PDF stacks pairs vertically. Dimensions passed to ggsave are at least 12 in width and 4 per row; the script exposes no format or size option."
       },
       "source_lines": [
-        435,
-        450
+        465,
+        480
       ]
     },
     {
@@ -706,8 +706,8 @@
         "en": "Plot theme, text sizes, label rotation, border and margins are fixed. They do not affect scientific calculations."
       },
       "source_lines": [
-        270,
-        281
+        295,
+        306
       ]
     }
   ],
@@ -1089,127 +1089,135 @@
     },
     {
       "start": 152,
-      "end": 179,
+      "end": 204,
       "summary": {
-        "it": "Tutte le soglie intere, selezione dei siti, prodotto CPI, logaritmo, conteggi e raccolta preallocata dei risultati.",
-        "en": "Every integer threshold, site selection, CPI product, logarithm, counts and preallocated result collection."
+        "it": "Valutazione degli intervalli con gli stessi loci, prodotto ordinato dei PI, conteggi preallocati e ricostruzione di ogni soglia intera.",
+        "en": "Evaluation of intervals selecting the same loci, ordered PI product, preallocated counts and reconstruction of every integer threshold."
       }
     },
     {
-      "start": 180,
-      "end": 186,
+      "start": 205,
+      "end": 211,
       "summary": {
         "it": "Selezione del logCPI all’iterazione più vicina al target.",
         "en": "Selection of logCPI at the iteration nearest the target."
       }
     },
     {
-      "start": 187,
-      "end": 210,
+      "start": 212,
+      "end": 235,
       "summary": {
         "it": "Grafico vuoto e selezione delle tacche dell’asse delle letture.",
         "en": "Empty plot and read-axis tick selection."
       }
     },
     {
-      "start": 211,
-      "end": 229,
+      "start": 236,
+      "end": 254,
       "summary": {
         "it": "Formattazione dell’annotazione cfDNA e CPI.",
         "en": "Formatting of cfDNA and CPI annotations."
       }
     },
     {
-      "start": 230,
-      "end": 269,
+      "start": 255,
+      "end": 294,
       "summary": {
         "it": "Fasce grafiche, curve, annotazione e scale degli assi.",
         "en": "Plot bands, curves, annotation and axis scales."
       }
     },
     {
-      "start": 270,
-      "end": 283,
+      "start": 295,
+      "end": 308,
       "summary": {
         "it": "Titolo, tema, testo, bordo e margini del grafico.",
         "en": "Plot title, theme, text, border and margins."
       }
     },
     {
-      "start": 284,
-      "end": 301,
+      "start": 309,
+      "end": 324,
       "summary": {
-        "it": "Preallocazione del riepilogo, iterazione sulle coppie e caricamento delle tabelle dei campioni.",
-        "en": "Summary preallocation, pair iteration and sample-table loading."
+        "it": "Preallocazione dei riepiloghi, coppie e percorsi; riutilizzo limitato ai due campioni della coppia corrente.",
+        "en": "Summary preallocation, pairs and paths; bounded reuse of the two samples in the current pair."
       }
     },
     {
-      "start": 302,
-      "end": 328,
+      "start": 325,
+      "end": 338,
       "summary": {
-        "it": "Ricostruzione dei rapporti, filtro OTHER e azzeramento dei conteggi paterni.",
-        "en": "Ratio computation, OTHER filter and paternal count zeroing."
+        "it": "Lettura e preparazione materna, rapporto REF e filtro OTHER; riutilizzo del campione fra coppie consecutive.",
+        "en": "Maternal loading and preparation, REF ratio and OTHER filter; sample reuse across consecutive pairs."
       }
     },
     {
-      "start": 329,
-      "end": 362,
+      "start": 339,
+      "end": 358,
+      "summary": {
+        "it": "Lettura e preparazione paterna, rapporto REF, azzeramento dei conteggi minori e filtro OTHER; riutilizzo fra coppie consecutive.",
+        "en": "Paternal loading and preparation, REF ratio, minor-count zeroing and OTHER filter; reuse across consecutive pairs."
+      }
+    },
+    {
+      "start": 359,
+      "end": 392,
       "summary": {
         "it": "Calcolo unico per coppia/pannello, target di letture, frazione fetale e grafici.",
         "en": "Single pair/panel calculation, read target, fetal fraction and plots."
       }
     },
     {
-      "start": 363,
-      "end": 377,
+      "start": 393,
+      "end": 407,
       "summary": {
         "it": "Selezione dei siti materni per il riepilogo CSV e frazione fetale per sito.",
         "en": "Maternal site selection for the CSV summary and per-site fetal fraction."
       }
     },
     {
-      "start": 378,
-      "end": 394,
+      "start": 408,
+      "end": 424,
       "summary": {
         "it": "Conteggio paterno prima dell’associazione alle frequenze di popolazione.",
         "en": "Paternal counting before population-frequency association."
       }
     },
     {
-      "start": 395,
-      "end": 403,
+      "start": 425,
+      "end": 433,
       "summary": {
         "it": "Statistiche delle frazioni fetali e dei logCPI usando i risultati già calcolati per i grafici.",
         "en": "Fetal-fraction and logCPI statistics reusing results already calculated for plots."
       }
     },
     {
-      "start": 404,
-      "end": 434,
+      "start": 434,
+      "end": 464,
       "summary": {
         "it": "Raccolta delle righe riepilogative con arrotondamenti e colonna Cutoff condizionale.",
         "en": "Collection of summary rows with rounding and a conditional Cutoff column."
       }
     },
     {
-      "start": 435,
-      "end": 445,
+      "start": 465,
+      "end": 475,
       "summary": {
         "it": "Salvataggio del PDF per coppia e raccolta dei grafici.",
         "en": "Per-pair PDF output and plot collection."
       }
     },
     {
-      "start": 446,
-      "end": 452,
+      "start": 476,
+      "end": 482,
       "summary": {
         "it": "Salvataggio del PDF aggregato per tutte le coppie.",
         "en": "Combined PDF output for all pairs."
       }
     },
     {
-      "start": 453,
-      "end": 460,
+      "start": 483,
+      "end": 490,
       "summary": {
         "it": "Unione delle righe riepilogative, esportazione CSV e messaggio di completamento.",
         "en": "Summary row assembly, CSV export and completion message."

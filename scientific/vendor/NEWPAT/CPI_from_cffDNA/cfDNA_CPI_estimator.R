@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
-# NIPAT 0.8.9 modification, 2026-11-06: reuse invariant CPI calculations and
-# pair/panel results; retain the scientific formulas and every threshold.
+# NIPAT 0.8.9 modification, 2026-11-07: reuse invariant CPI calculations and
+# identical threshold selections; retain the formulas and every output row.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -150,30 +150,55 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
        informative_all$ratio_Ref_father <= 0.1)
 
   iterations <- 2:max_fetal
-  result_rows <- vector("list", length(iterations))
-  for (iteration_index in seq_along(iterations)) {
-    i <- iterations[iteration_index]
-    n_mother <- sum(madre_info$fetal_reads >= i)
-    PI <- PI_all[pi_fetal_reads >= i, , drop=FALSE]
+  ## A locus with f fetal reads disappears at threshold floor(f) + 1.
+  ## Since iteration 1 corresponds to threshold 2, that change has index
+  ## floor(f). All joined rows originate from these maternal loci, so their
+  ## PI and mismatch selections are constant between the same boundaries.
+  ## Keep every threshold in the final table: its repetitions affect the
+  ## summary statistics, median-threshold lookup and plots.
+  interval_starts <- sort(unique(c(1L, floor(madre_info$fetal_reads))))
+  interval_starts <- interval_starts[interval_starts <= length(iterations)]
+  interval_lengths <- diff(c(interval_starts, length(iterations) + 1))
+  interval_count <- length(interval_starts)
+  pi_values <- PI_all$Paternity_Index
 
-    CPI_val <- ifelse(nrow(PI)>0, prod(PI$Paternity_Index, na.rm=TRUE), NA_real_)
-    logCPI  <- ifelse(!is.na(CPI_val) & CPI_val>0, log10(CPI_val), NA_real_)
+  mother_counts <- integer(interval_count)
+  father_counts <- integer(interval_count)
+  cpi_values <- numeric(interval_count)
+  log_cpi_values <- numeric(interval_count)
+  mismatch_counts <- integer(interval_count)
+  matching_counts <- integer(interval_count)
+
+  for (interval_index in seq_along(interval_starts)) {
+    i <- iterations[interval_starts[interval_index]]
+    mother_counts[interval_index] <- sum(madre_info$fetal_reads >= i)
+    pi_selected <- pi_fetal_reads >= i
+    father_counts[interval_index] <- sum(pi_selected)
+
+    ## Retain the original ordered product, including its handling of zero,
+    ## underflow and overflow. Neither cumulative division nor sums of logs
+    ## are equivalent substitutes for prod() on the selected PI values.
+    CPI_val <- ifelse(father_counts[interval_index] > 0,
+                      prod(pi_values[pi_selected], na.rm=TRUE), NA_real_)
+    cpi_values[interval_index] <- CPI_val
+    log_cpi_values[interval_index] <- ifelse(
+      !is.na(CPI_val) & CPI_val > 0, log10(CPI_val), NA_real_)
 
     informative_selected <- informative_fetal_reads >= i
     n_mismatch <- sum(mismatch[informative_selected])
-
-    result_rows[[iteration_index]] <- data.frame(
-      Iteration=i,
-      InfSites_mother=n_mother,
-      InfSites_father=nrow(PI),
-      CPI=CPI_val,
-      log_CPI=logCPI,
-      Mismatch=n_mismatch,
-      NotMismatch=sum(informative_selected) - n_mismatch,
-      Cutoff=cutoff_label
-    )
+    mismatch_counts[interval_index] <- n_mismatch
+    matching_counts[interval_index] <- sum(informative_selected) - n_mismatch
   }
-  results <- do.call(rbind, result_rows)
+  results <- data.frame(
+    Iteration=iterations,
+    InfSites_mother=rep(mother_counts, interval_lengths),
+    InfSites_father=rep(father_counts, interval_lengths),
+    CPI=rep(cpi_values, interval_lengths),
+    log_CPI=rep(log_cpi_values, interval_lengths),
+    Mismatch=rep(mismatch_counts, interval_lengths),
+    NotMismatch=rep(matching_counts, interval_lengths),
+    Cutoff=cutoff_label
+  )
   return(list(results=results, madre_info=madre_info))
 }
 
@@ -284,6 +309,10 @@ plot_CPI <- function(df, cutoff_label, pair_name,
 ## main containers
 fetal_fraction_rows <- vector("list", nrow(coppie) * nrow(cutoff_df))
 all_combined_plots <- list()
+## Reuse a parent shared by consecutive pairs, retaining at most the two
+## prepared tables already needed by the current pair.
+last_mother_path <- NULL
+last_father_path <- NULL
 
 for (i in 1:nrow(coppie)) {
   mamma_id <- coppie$mamma[i]
@@ -293,38 +322,39 @@ for (i in 1:nrow(coppie)) {
   mother_path <- file.path(args$pileup_dir, paste0(args$mother_prefix, mamma_id, ".txt"))
   father_path <- file.path(args$pileup_dir, paste0(args$father_prefix, papa_id, ".txt"))
 
-  madre <- read.table(mother_path, header=TRUE, check.names=FALSE)
-  padre <- read.table(father_path, header=TRUE, check.names=FALSE)
+  if (!identical(mother_path, last_mother_path)) {
+    madre <- read.table(mother_path, header=TRUE, check.names=FALSE)
+    madre$chr <- as.character(madre$chr)
+    madre <- madre %>%
+      dplyr::transmute(
+        chr, pos1, pos2, REF, ALT,
+        Ref_mother = N_REF,
+        Alt_mother = N_ALT,
+        Error_mother = N_Other,
+        ratio_Ref_mother = N_REF / (N_REF + N_ALT),
+        total_count = total_count
+      ) %>% dplyr::filter(Error_mother/total_count <= 0.10)
+    last_mother_path <- mother_path
+  }
 
-  madre$chr <- as.character(madre$chr)
-  padre$chr <- as.character(padre$chr)
-
-  madre <- madre %>%
-    dplyr::transmute(
-      chr, pos1, pos2, REF, ALT,
-      Ref_mother = N_REF,
-      Alt_mother = N_ALT,
-      Error_mother = N_Other,
-      ratio_Ref_mother = N_REF / (N_REF + N_ALT),
-      total_count = total_count
-    )
-
-  padre <- padre %>%
-    dplyr::transmute(
-      chr, pos1, pos2, REF, ALT,
-      Ref_father = N_REF,
-      Alt_father = N_ALT,
-      Error_father = N_Other,
-      ratio_Ref_father = N_REF / (N_REF + N_ALT),
-      total_count = total_count
-    )
-
-  madre <- madre %>% dplyr::filter(Error_mother/total_count <= 0.10)
-  padre <- padre %>%
-    dplyr::mutate(
-      Ref_father = ifelse(ratio_Ref_father < 0.1, 0, Ref_father),
-      Alt_father = ifelse(ratio_Ref_father > 0.9, 0, Alt_father)
-    ) %>% dplyr::filter(Error_father/total_count <= 0.10)
+  if (!identical(father_path, last_father_path)) {
+    padre <- read.table(father_path, header=TRUE, check.names=FALSE)
+    padre$chr <- as.character(padre$chr)
+    padre <- padre %>%
+      dplyr::transmute(
+        chr, pos1, pos2, REF, ALT,
+        Ref_father = N_REF,
+        Alt_father = N_ALT,
+        Error_father = N_Other,
+        ratio_Ref_father = N_REF / (N_REF + N_ALT),
+        total_count = total_count
+      ) %>%
+      dplyr::mutate(
+        Ref_father = ifelse(ratio_Ref_father < 0.1, 0, Ref_father),
+        Alt_father = ifelse(ratio_Ref_father > 0.9, 0, Alt_father)
+      ) %>% dplyr::filter(Error_father/total_count <= 0.10)
+    last_father_path <- father_path
+  }
 
   per_cutoff_plots <- list()
 
