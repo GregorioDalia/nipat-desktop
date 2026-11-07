@@ -104,7 +104,8 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Per Desktop 0.8.2 e successive il modello usa lo **schema 5**, con decisione iniziale `pending`.
+Per Desktop 0.8.2–0.8.8 il modello usa lo **schema 5**; dalla 0.8.9 usa lo
+**schema 6** per i sorgenti R revisionati. La decisione iniziale è `pending`.
 Una distribuzione per ricerca richiede:
 
 - versione, commit, build e checksum dei quattro installatori, del manifest
@@ -113,15 +114,27 @@ Una distribuzione per ricerca richiede:
 - prova storica identificata come `historical-platform-evidence`, senza
   attribuirla all'installazione della candidata;
 - elenco completo delle modifiche operative con hash prima/dopo, secondo
-  `reviewed-operative-changes-with-unchanged-vendored-r-v1`;
-- R vendorizzato invariato, regressioni della candidata e rapporto permanente
+  `reviewed-operative-changes-with-tested-r-equivalence-v1` nello schema 6
+  (`reviewed-operative-changes-with-unchanged-vendored-r-v1` nello schema 5);
+- R vendorizzato invariato nello schema 5; nello schema 6, revisione esplicita
+  dei quattro script e confronto con il riferimento congelato 0.8.5; regressioni
+  della candidata e rapporto permanente
   di qualificazione, con prova dell'aggiornamento Ubuntu;
 - `macos_validation` distinto per `arm64` e `x86_64`: `passed` con evidenze
   HTTPS oppure `not-performed` con elenco vuoto;
 - scenari desktop rinviati e `domain_validation: pending-domain-researchers`.
 
-Gli adattatori di presentazione sono revisionabili; questa regola non
-permette modifiche ai metodi R vendorizzati. Il confronto verifica i byte Git,
+Lo schema 5 permette la revisione degli adattatori di presentazione,
+preservando gli script R vendorizzati. Lo schema 6 consente le modifiche
+revisionate ai quattro script noti e a `scientific/SHA256SUMS`, richiedendo
+`scientific_equivalence` con `reference_source_commit`, `report_path`,
+`report_sha256` e `runtime_image`. Il rapporto deve appartenere al bundle
+`qualification-evidence.zip` della build accettata e confrontare sorgenti R
+esattamente corrispondenti al commit e all’immagine distribuiti. Il publisher
+verifica la baseline congelata contro il commit 0.8.5, tutti i casi differenziali
+richiesti, i controlli mirati, le tabelle, i valori non arrotondati e i rendering
+PDF; conserva l’esito in `scientific-equivalence-check.json`. Il confronto
+verifica i byte Git,
 non si limita a leggere gli hash dichiarati. Gli schemi precedenti rimangono
 utilizzati per le rispettive release storiche. Il
 [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) descrive

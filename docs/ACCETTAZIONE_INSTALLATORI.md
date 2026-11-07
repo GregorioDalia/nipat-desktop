@@ -1,6 +1,6 @@
 # Accettazione degli installatori
 
-NIPAT Desktop 0.8.5 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+NIPAT Desktop 0.8.9 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
 macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
 identifica commit, build e checksum; distingue prove automatiche,
 osservazioni sui dispositivi e validazione scientifica di dominio.
@@ -15,7 +15,8 @@ prova dell'installatore candidato; un test simulato non diventa una prova
 sul computer del ricercatore. Il canale `stable` indica la versione ufficiale,
 non una validazione scientifica generale.
 
-Il record schema 5 comprende:
+Il record schema 6 per gli script R revisionati comprende tutti i campi
+dello schema 5 e un riferimento aggiuntivo alle evidenze scientifiche:
 
 | Campo | Contenuto |
 | --- | --- |
@@ -26,15 +27,23 @@ Il record schema 5 comprende:
 | `decision`, `scope` | `accepted-for-research`, `pre-1.0-research`, dopo revisione. |
 | `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
 | `observed_baseline` | Commit effettivamente osservato, prove ricevute, ruolo `historical-platform-evidence`. |
-| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-unchanged-vendored-r-v1`. |
+| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-tested-r-equivalence-v1` nello schema 6. |
 | `reviewed_source_changes` | Elenco ordinato di percorso e hash prima/dopo; `null` per aggiunte o rimozioni. |
 | `qualification_evidence_sha256`, `linux_upgrade_check_sha256` | Rapporti permanenti della candidata e aggiornamento reale Ubuntu dalla 0.7.2. |
 | `macos_validation` | Stato separato `arm64`/`x86_64`: `passed` con evidenze HTTPS oppure `not-performed` con elenco vuoto. |
 | `deferred_desktop_scenarios` | Scenari desktop estesi ancora da svolgere. |
+| `scientific_equivalence` | Commit della baseline 0.8.5, percorso e SHA-256 del rapporto nel bundle di qualificazione e ID immutabile dell’immagine scientifica. |
 | `domain_validation` | `pending-domain-researchers`. |
 
-La revisione può includere adattatori e presentazione, preservando gli script
-R vendorizzati. Il publisher confronta file e hash effettivi dei commit;
+Lo schema 5 continua a richiedere script R vendorizzati invariati. Dalla
+0.8.9 lo schema 6 permette la revisione dei quattro script R identificati e
+del relativo manifest, mantenendo immutabile il riferimento 0.8.5. Il publisher
+verifica i byte Git prima/dopo, il rapporto conservato nel bundle della build,
+l’identità dell’immagine distribuita e gli hash dei sorgenti sottoposti ai test.
+Richiede i confronti completi per tutti i quattro moduli: tabelle esatte, valori
+R non arrotondati identici e rendering PDF esatto, oltre ai controlli mirati.
+Il risultato è conservato in `scientific-equivalence-check.json`.
+Il publisher confronta file e hash effettivi dei commit;
 una differenza non dichiarata o un rapporto riferito ad altri pacchetti
 interrompe la procedura. Le prove Mac non eseguite non impediscono di per sé
 una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
@@ -44,7 +53,7 @@ una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
 Usare una build manuale **Installers (review build)** completata sul commit
 revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
 i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
-di build diverse. Le [note 0.8.5](RELEASE_0.8.5.md) descrivono le funzionalità;
+di build diverse. Le [note 0.8.9](RELEASE_0.8.9.md) descrivono le funzionalità;
 i risultati di qualificazione devono riferirsi ai pacchetti esatti.
 
 La sequenza è: costruire, raccogliere evidenze, revisionare il record,
@@ -56,7 +65,7 @@ La [procedura di pubblicazione](../.github/RELEASE.md) specifica i parametri.
 
 La tabella seguente costituisce il catalogo della qualificazione desktop
 completa. Nello schema 1 tutti i sei scenari devono essere superati;
-nello schema 5 per ricerca sono dichiarati esplicitamente come rinviati.
+negli schemi 5 e 6 per ricerca sono dichiarati esplicitamente come rinviati.
 Le singole evidenze automatiche o manuali restano utilizzabili con il loro
 ambito effettivo, senza attribuire loro la copertura dell’intero scenario.
 

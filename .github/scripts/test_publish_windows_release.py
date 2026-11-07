@@ -449,6 +449,42 @@ class ReleaseGuards(unittest.TestCase):
                      "NIPAT-0.8.5-macos-arm64.pkg", "NIPAT-0.8.5-macos-x86_64.pkg"):
             self.assertIn(name, hashes)
 
+    def revised_r_fixture(self):
+        parts = self.multiplatform_fixture("0.8.9")
+        validator, record = parts[-2:]
+        record["schema_version"] = 6
+        record["observed_baseline"]["source_comparison_scope"] = validator.REVISED_R_SOURCE_SCOPE
+        record["scientific_equivalence"] = {
+            "reference_source_commit": validator.R_REFERENCE_COMMIT,
+            "report_path": "scientific/r-equivalence/artifacts/r-equivalence.json",
+            "report_sha256": "e" * 64, "runtime_image": self.manifest["runtime_image"],
+        }
+        return parts
+
+    def test_revised_r_evidence_is_required_before_any_assets_are_staged(self):
+        parts = self.revised_r_fixture()
+        with patch.object(parts[-2], "verify_baseline", return_value={}), \
+                patch.object(parts[-2], "verify_scientific_equivalence", side_effect=ValueError("scientific mismatch")) as verify:
+            with self.assertRaisesRegex(ValueError, "scientific mismatch"):
+                self.prepare_joint(*parts)
+        verify.assert_called_once_with(parts[-1], parts[1], self.manifest, publisher.source_bytes)
+        self.assertFalse((self.root / "release").exists())
+
+    def test_revised_r_verification_result_is_permanent_and_hashed(self):
+        parts = self.revised_r_fixture()
+        check = {"source_commit": COMMIT, "report_sha256": "e" * 64, "scope": "synthetic-equivalence-only"}
+        with patch.object(parts[-2], "verify_baseline", return_value={"vendored_r_sources_unchanged": False}), \
+                patch.object(parts[-2], "verify_scientific_equivalence", return_value=check) as verify:
+            self.prepare_joint(*parts)
+        verify.assert_called_once()
+        output = self.root / "release"
+        self.assertEqual(json.loads((output / "scientific-equivalence-check.json").read_text()), check)
+        provenance = json.loads((output / "release-provenance.json").read_text())
+        self.assertEqual(provenance["scientific_equivalence_report_sha256"], "e" * 64)
+        hashes = publisher.checksums(output / "SHA256SUMS")
+        self.assertEqual(hashes["scientific-equivalence-check.json"],
+                         publisher.sha256(output / "scientific-equivalence-check.json"))
+
     def test_four_platform_release_cannot_omit_or_replace_native_package(self):
         parts = self.multiplatform_fixture()
         package = next(self.native_directories["arm64"].glob("*.pkg"))
