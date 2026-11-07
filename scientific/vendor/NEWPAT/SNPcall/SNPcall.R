@@ -38,13 +38,13 @@ cat(">> output file : ", out_file,     "\n\n", sep = "")
 cat(">> reading snp list...\n")
 fake_DNP <- readr::read_tsv(snplist_file, show_col_types = FALSE)
 
-# Inspect the schema with the same parser, then skip unused columns while
-# reading. Named columns and type conversion remain identical to read.csv();
-# columns beyond QNAME are permitted but never materialized.
+# Probe up to five records, matching read.table() column-width inference.
+# Reuse the same parser and type conversion for the complete selective read;
+# optional columns beyond QNAME are skipped after this bounded schema probe.
 cat(">> reading pileup...\n")
 pileup_arguments <- list(file = pileup_file, row.names = NULL,
                          stringsAsFactors = FALSE, header = FALSE, sep = "\t")
-pileup_columns <- names(do.call(read.csv, c(pileup_arguments, list(nrows = 0))))
+pileup_columns <- names(do.call(read.csv, c(pileup_arguments, list(nrows = 5L))))
 pileup_classes <- rep("NULL", length(pileup_columns))
 pileup_classes[match(c("V1", "V2", "V5", "V7"), pileup_columns)] <- NA_character_
 df <- do.call(read.csv, c(pileup_arguments, list(colClasses = pileup_classes)))

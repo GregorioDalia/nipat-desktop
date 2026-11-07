@@ -3,7 +3,7 @@
   "workflow": "snp-call",
   "source": {
     "path": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
-    "sha256": "9ca7f83318bc810d82d0f3aeccca3983bb326b88c7b97ec5cfe5e72ef782e352",
+    "sha256": "65923278b50523c0837a9a0935abdc5f7e74c3eb17f58c25e9df2564777081ad",
     "line_count": 202
   },
   "public_parameters": [
@@ -161,8 +161,8 @@
         "qname": 7
       },
       "description": {
-        "it": "R legge soltanto cromosoma, posizione, basi e QNAME, dopo aver verificato le colonne con lo stesso parser. Riferimento, profondità e qualità non sono filtri aggiuntivi in R; le colonne successive alla settima non vengono materializzate.",
-        "en": "R reads only chromosome, position, bases and QNAME after inspecting the columns with the same parser. Reference, depth and qualities are not additional filters in R; columns beyond the seventh are not materialized."
+        "it": "R legge soltanto cromosoma, posizione, basi e QNAME, dopo aver verificato le colonne con lo stesso parser. Riferimento, profondità e qualità non sono filtri aggiuntivi in R; le colonne successive alla settima vengono ignorate nella lettura completa.",
+        "en": "R reads only chromosome, position, bases and QNAME after inspecting the columns with the same parser. Reference, depth and qualities are not additional filters in R; columns beyond the seventh are skipped during the full read."
       },
       "source_lines": [
         41,

@@ -38,7 +38,7 @@ per l'equivalenza è la versione distribuita nella 0.8.5, commit
 | Componente | SHA-256 |
 | --- | --- |
 | DNPcall | `41b44a2deba05ded10565b08bb925178016c73f12094e4360b035a99986c2357` |
-| SNPcall | `9ca7f83318bc810d82d0f3aeccca3983bb326b88c7b97ec5cfe5e72ef782e352` |
+| SNPcall | `65923278b50523c0837a9a0935abdc5f7e74c3eb17f58c25e9df2564777081ad` |
 | Contamination | `152c74cc91b0bd441e673ecf52a756604ec47e9a04c0e31fc0965c097e3437e1` |
 | CPI | `a93e98a188dff97d6a74d683729c309038ee1b6e7842755f3ac236b61363c885` |
 
