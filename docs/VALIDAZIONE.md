@@ -1,7 +1,7 @@
 # Validazione tecnica e di dominio
 
 Questa scheda registra separatamente installazione, esecuzione e concordanza
-scientifica di **NIPAT Desktop 0.8.5**. Identificare sempre versione,
+scientifica di **NIPAT Desktop 0.8.9**. Identificare sempre versione,
 commit, pacchetto e piattaforma realmente provati. Le evidenze delle versioni
 precedenti restano storiche e non attestano automaticamente la candidata.
 

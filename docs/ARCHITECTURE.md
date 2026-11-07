@@ -36,7 +36,7 @@ con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
 come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
 workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
-singoli. Questo documento descrive la versione 0.8.5.
+singoli. Questo documento descrive la versione 0.8.9.
 
 ### Confini dei workflow automatici
 

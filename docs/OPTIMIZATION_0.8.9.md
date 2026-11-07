@@ -1,16 +1,17 @@
 # Revisione scientifica 0.8.9
 
-La 0.8.9 è una versione di sviluppo dedicata alle prestazioni del core R e
-alla chiarezza della configurazione delle risorse. La versione ufficiale
-rimane la 0.8.5. Il numero del pacchetto identifica il codice candidato;
-non implica pubblicazione, accettazione o disponibilità nell'aggiornatore.
+La 0.8.9 revisiona i quattro programmi R per ridurre allocazioni e calcoli
+ripetuti e chiarisce la configurazione delle risorse. Le
+[note di rilascio](RELEASE_0.8.9.md) descrivono distribuzione e perimetro delle
+verifiche. Questo documento definisce il riferimento e il contratto dei
+confronti scientifici.
 
 ## Riferimento
 
 Il riferimento è la release `v0.8.5`, commit
 `eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, comprese le modifiche di
 compatibilità già distribuite. Le copie immutabili dei sei file R sono in
-[`tests/reference_r/0.8.5`](https://github.com/GregorioDalia/nipat-desktop/tree/feature/0.8.9-r-optimization/tests/reference_r/0.8.5), con manifest
+[`tests/reference_r/0.8.5`](../tests/reference_r/0.8.5/README.md), con manifest
 SHA-256. Il codice candidato rimane nelle normali directory del motore.
 Le copie di riferimento sono usate soltanto dai test e non sono installate.
 
@@ -89,8 +90,13 @@ misura del guadagno complessivo.
 
 ## Distribuzione
 
-Lo sviluppo procede su un branch separato. Push e pull request avviano i
-controlli applicabili, senza modificare `Latest`, tag o asset della 0.8.5.
-La pubblicazione richiede una decisione separata e un contratto di
-accettazione che includa le nuove evidenze di equivalenza. I precedenti
-record di accettazione rimangono riferiti esclusivamente ai propri artefatti.
+La pubblicazione lega sorgenti R revisionati, rapporto di equivalenza,
+immagine scientifica, build e installer attraverso commit e checksum.
+Il record di accettazione della 0.8.9 riguarda esclusivamente i suoi
+artefatti; i record delle release precedenti non ne autorizzano la pubblicazione.
+Le build per revisione e i confronti scientifici non modificano da soli
+il canale stabile. La procedura è descritta in [CI/CD](CI_CD.md).
+
+Le ottimizzazioni successive confluiscono in un unico prototipo 0.8.10,
+con commit verificabili e confronti estesi. La 0.8.9 rimane la release
+ufficiale finché non viene approvata una successiva pubblicazione stabile.

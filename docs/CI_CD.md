@@ -1,7 +1,7 @@
 # Integrazione continua e distribuzione
 
 NIPAT verifica separatamente il client, il motore scientifico, gli installatori
-e il funzionamento sui dispositivi reali. La versione 0.8.5 distribuisce
+e il funzionamento sui dispositivi reali. La versione 0.8.9 distribuisce
 Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
@@ -71,16 +71,16 @@ trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 Avviare **Installers (review build)** sul commit da distribuire, su `main`,
 `release/VERSIONE` o `release/VERSIONE-...`, con la stessa versione dichiarata
-dai sorgenti, ad esempio `release/0.8.5`. Il controllo
+dai sorgenti, ad esempio `release/0.8.9`. Il controllo
 `installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
 comune ai quattro pacchetti. La build produce:
 
 | Artefatto Actions | Pacchetto |
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`. |
-| `nipat-linux-setup` | `nipat-desktop_0.8.5_amd64.deb`. |
-| `nipat-macos-setup-arm64` | `NIPAT-0.8.5-macos-arm64.pkg`. |
-| `nipat-macos-setup-x86_64` | `NIPAT-0.8.5-macos-x86_64.pkg`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.9_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.9-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.9-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
 La release espone direttamente il file da installare per ciascuna piattaforma.

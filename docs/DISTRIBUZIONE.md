@@ -6,9 +6,11 @@ non occorre scaricarla separatamente o importarla manualmente.
 
 I [download per piattaforma](../README.md#download) sono disponibili nel README.
 La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
-conserva tutte le versioni. La versione stabile 0.8.5 include la
-[diagnostica facoltativa delle prestazioni](PERFORMANCE.md), disattivata per
-impostazione predefinita.
+conserva tutte le versioni. La versione stabile 0.8.9 ottimizza i programmi R
+con confronti differenziali rispetto alla 0.8.5, secondo le
+[note di rilascio](RELEASE_0.8.9.md). La
+[diagnostica delle prestazioni](PERFORMANCE.md) resta facoltativa e disattivata
+per impostazione predefinita.
 Scegliere l'installatore nella sezione Assets. Gli archivi **Source code**
 non sono installatori. Gli artefatti GitHub Actions sono build per revisione,
 identificate da commit e checksum, e non sostituiscono una release pubblicata.
@@ -65,7 +67,7 @@ Le installazioni sperimentali hanno identità separata e non vengono rimosse.
 Installare il `.deb` con il gestore pacchetti oppure, nella cartella del download:
 
 ```bash
-sudo apt install ./nipat-desktop_0.8.5_amd64.deb
+sudo apt install ./nipat-desktop_0.8.9_amd64.deb
 ```
 
 APT installa le dipendenze mancanti dai repository configurati, inclusi Python,
@@ -110,6 +112,14 @@ Il download viene verificato prima dell'installazione. L'aggiornamento dell'app
 è distinto dall'aggiornamento dei componenti del sistema, come WSL.
 Chiudere le analisi prima di aggiornare; dati e risultati restano nelle loro
 cartelle. La guida del proprio sistema descrive il passaggio all'installatore.
+
+Chi usa la 0.8.5 può selezionare **Verifica aggiornamenti** per scaricare il
+pacchetto ufficiale 0.8.9 compatibile e seguire la procedura del proprio sistema.
+Il download manuale dalla release resta disponibile. La verifica usa il numero
+di versione, non il commit: una build diversa con lo stesso numero non è un
+aggiornamento. Prima della pubblicazione i candidati sono distinti da commit,
+build e checksum; dopo la pubblicazione tag e pacchetti restano immutabili.
+Un successivo pacchetto ufficiale richiede una versione superiore.
 
 ## Integrità e verifiche
 
