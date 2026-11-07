@@ -47,7 +47,10 @@ function Wait-TestRelaunch([string] $Root) {
         $process = [Diagnostics.Process]::GetProcessById([int]$record.pid)
         # A process that already exited needs no further wait. Never attach
         # cleanup to an unrelated process that has reused its PID.
-        if ($process.StartTime.ToUniversalTime().Ticks -ne [long]$record.started_ticks) {
+        # The fixture can exit between PID lookup and StartTime retrieval;
+        # PowerShell can expose that missing property value as $null.
+        $started = $process.StartTime
+        if ($null -eq $started -or $started.ToUniversalTime().Ticks -ne [long]$record.started_ticks) {
             $process.Dispose()
             return
         }
