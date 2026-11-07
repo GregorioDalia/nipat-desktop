@@ -1,0 +1,2822 @@
+{
+  "baseline": {
+    "files": [
+      {
+        "path": "docker/scientific-runtime/verify-packages.R",
+        "sha256": "ef30c69555f6871f7c38c89baba5b52e1ef7d82fd02aaf206ae4568e2f686af7"
+      },
+      {
+        "path": "scientific/vendor/DNPcall/DNPcall.R",
+        "sha256": "d0600427d058a141da8683d98904c51be95ec09ebd5804ea879164d1f5ce7e36"
+      },
+      {
+        "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+        "sha256": "10ca01a476f5259b65a063aea95ff76e57c11567a304667065ea9c7b9206545a"
+      },
+      {
+        "path": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
+        "sha256": "00068e501d1fefe2b721001f141fc2595be42c9349873ee353a29a305816c9c9"
+      },
+      {
+        "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
+        "sha256": "28f0d0298cdce06c6d9f33ec5d7a224a8c9fa7dfb6fde87b930ee938e703cc08"
+      },
+      {
+        "path": "src/nipat_scientific/presentation.R",
+        "sha256": "f368a60172d0bc9c632c09c49a1ea5924b835fb7a1db91413dffc8817ab1f193"
+      }
+    ],
+    "schema_version": 1,
+    "source_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+    "source_tag": "v0.8.5",
+    "version": "0.8.5"
+  },
+  "candidate_r_sha256": {
+    "scientific/vendor/DNPcall/DNPcall.R": "e9725291a572a3c7dc832905fee3b4d665cf6767cb914088788a9d0c6401423b",
+    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1",
+    "scientific/vendor/NEWPAT/SNPcall/SNPcall.R": "66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64",
+    "scientific/vendor/NEWPAT/contamination/detect_contamination.R": "d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26"
+  },
+  "code_commit": "302fb5648563d80910cc9460d0bec5845106414b",
+  "comparison": {
+    "pdf_metadata": "excluded",
+    "pdf_pixels": "exact",
+    "table_bytes": "exact",
+    "unrounded_r": "identical"
+  },
+  "counts": {
+    "candidate_comparisons": 44,
+    "cases": 20,
+    "executions_completed_during_resume": 30,
+    "observed_concurrent_executions": 23,
+    "parallel_candidate_comparisons": 24,
+    "pdf_file_comparisons": 137,
+    "pdf_page_comparisons": 137,
+    "reference_executions": 20,
+    "required_concurrent_executions": 16,
+    "reused_completed_executions": 34,
+    "scientific_executions": 64,
+    "serial_candidate_comparisons": 20,
+    "table_file_comparisons": 145
+  },
+  "dnp_cancellation": {
+    "file": "dnp-cancellation/dnp-cancellation.json",
+    "observed_r_progress": {
+      "completed": 1,
+      "event": "progress",
+      "interface": "nipat-progress-v1",
+      "phase": "dnp-processing",
+      "sample_ids": [
+        "sample_cancel"
+      ],
+      "schema_version": 1,
+      "sequence": 4,
+      "source_id": "5e2e533c6fd9479187fb1323cdcf629d-4554-000000000000",
+      "step_id": "dnp",
+      "total": 32,
+      "unit": "loci",
+      "workflow": "dnp-call"
+    },
+    "sha256": "1e47852044532c9ac990c89d3fef0ab820de674f54884cce33062855eb695563",
+    "status": "passed",
+    "test_source_sha256": "8aad63d5014d826523c2da4f2240614d92f2d7de0f38c18a705b7b9b24fa3614"
+  },
+  "environment": {
+    "R": "4.4.2",
+    "container_limits_applied": false,
+    "execution": "Relocated R runtime on host Linux kernel/glibc; no Docker",
+    "extracted_runtime_image_config_sha256": "40e72d6aca3f0e3dbd2942f7b5fb548707bc987730d82a487d23152d69121f54",
+    "production_cpu_and_memory_detection": true,
+    "rootless_adapter_sha256": "22d9af1d1707762c895c9d760de93fbe9c9974886f63c468e8c1d37a73870c4a",
+    "rscript_adapter_sha256": "b83686216fbe317be2cad78f3ac3c3858d456eabe4246781da00f933ac53b81a"
+  },
+  "evidence": {
+    "complete_report_sha256": "698b7efb543280edb59b16bb85b58fc903ba8ef40cce18813d1e8de325bda5f8",
+    "resume": {
+      "adjustment": "Require overlapping real child tasks in the four principal workflow cases; the two additional tiny CPI cases still require distinct actual child PIDs and report observed overlap.",
+      "all_comparisons_and_parallel_gates_reexecuted": true,
+      "original_report_sha256": "49740bb04aceedb0725fa270368d8693494f263bd1d3b0381f07832cffb6fc4a",
+      "original_status": "failed only at the overlap gate for the repeated tiny CPI interval case",
+      "reused_executions": [
+        {
+          "case": "dnp-single",
+          "scientific_values_sha256": "887edb15cd104e47bf4d08a3d72c608643659fc57ee7c39b51079b216fa38d43",
+          "variant": "reference"
+        },
+        {
+          "case": "dnp-single",
+          "scientific_values_sha256": "887edb15cd104e47bf4d08a3d72c608643659fc57ee7c39b51079b216fa38d43",
+          "variant": "candidate"
+        },
+        {
+          "case": "dnp-multi",
+          "scientific_values_sha256": "03bf1cc38cfaec9ce0bfb39565a9770130dbf14f80c00d36a1f92c844c443667",
+          "variant": "reference"
+        },
+        {
+          "case": "dnp-multi",
+          "scientific_values_sha256": "03bf1cc38cfaec9ce0bfb39565a9770130dbf14f80c00d36a1f92c844c443667",
+          "variant": "candidate"
+        },
+        {
+          "case": "dnp-parallel",
+          "scientific_values_sha256": "03bf1cc38cfaec9ce0bfb39565a9770130dbf14f80c00d36a1f92c844c443667",
+          "variant": "reference"
+        },
+        {
+          "case": "dnp-parallel",
+          "scientific_values_sha256": "03bf1cc38cfaec9ce0bfb39565a9770130dbf14f80c00d36a1f92c844c443667",
+          "variant": "candidate"
+        },
+        {
+          "case": "dnp-varied-qualities",
+          "scientific_values_sha256": "9513f20a33074bc7d242b7e507462fbbfdc5354e1d732cc57da17d5301702ae4",
+          "variant": "reference"
+        },
+        {
+          "case": "dnp-varied-qualities",
+          "scientific_values_sha256": "9513f20a33074bc7d242b7e507462fbbfdc5354e1d732cc57da17d5301702ae4",
+          "variant": "candidate"
+        },
+        {
+          "case": "snp-edge",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "reference"
+        },
+        {
+          "case": "snp-edge",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "candidate"
+        },
+        {
+          "case": "snp-edge",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "auto"
+        },
+        {
+          "case": "snp-edge",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "manual-2"
+        },
+        {
+          "case": "snp-edge",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "manual-4"
+        },
+        {
+          "case": "snp-edge",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "manual-4-repeat"
+        },
+        {
+          "case": "snp-extra-columns",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "reference"
+        },
+        {
+          "case": "snp-extra-columns",
+          "scientific_values_sha256": "edd8be918994696583c58d58d4be030ae7b9edd6eb91ec0ada5d9ca7cd5e3f0f",
+          "variant": "candidate"
+        },
+        {
+          "case": "cpi-all",
+          "scientific_values_sha256": "be4f76e08b8cb5fa9b19147726d606963161e6487938b820244b907a80b135c5",
+          "variant": "reference"
+        },
+        {
+          "case": "cpi-all",
+          "scientific_values_sha256": "6578581277d46100a14efc22324429740a827fd2507320aed31bd59eb86e714f",
+          "variant": "candidate"
+        },
+        {
+          "case": "cpi-panels",
+          "scientific_values_sha256": "e17259a8b343fd4e3f2c5af236eec4a510a3e880a476fabca4097da75c11e9b6",
+          "variant": "reference"
+        },
+        {
+          "case": "cpi-panels",
+          "scientific_values_sha256": "b824b4e5077656d65a90287c865a663a4f39ca87fc707bd8f74090ef29a5d7ac",
+          "variant": "candidate"
+        },
+        {
+          "case": "cpi-zero-error",
+          "scientific_values_sha256": "6c863edaf0d205fcdd62192e17698e3ce92f0deddb0be79734d68b5f66a68435",
+          "variant": "reference"
+        },
+        {
+          "case": "cpi-zero-error",
+          "scientific_values_sha256": "b43a256c91e4fe210ecbc79ef95ba4d7964756c671db97c9ede6200e235db909",
+          "variant": "candidate"
+        },
+        {
+          "case": "cpi-shared-parents",
+          "scientific_values_sha256": "3629ae0acd51c2973f9aaf262d64cfdcee17954f0adea3d70db0d3976122fc36",
+          "variant": "reference"
+        },
+        {
+          "case": "cpi-shared-parents",
+          "scientific_values_sha256": "eb37b867403822011b3b39d09e7acd06853f37b9911da14aed70c74408ba5a40",
+          "variant": "candidate"
+        },
+        {
+          "case": "cpi-shared-parents",
+          "scientific_values_sha256": "eb37b867403822011b3b39d09e7acd06853f37b9911da14aed70c74408ba5a40",
+          "variant": "auto"
+        },
+        {
+          "case": "cpi-shared-parents",
+          "scientific_values_sha256": "eb37b867403822011b3b39d09e7acd06853f37b9911da14aed70c74408ba5a40",
+          "variant": "manual-2"
+        },
+        {
+          "case": "cpi-shared-parents",
+          "scientific_values_sha256": "eb37b867403822011b3b39d09e7acd06853f37b9911da14aed70c74408ba5a40",
+          "variant": "manual-4"
+        },
+        {
+          "case": "cpi-shared-parents",
+          "scientific_values_sha256": "eb37b867403822011b3b39d09e7acd06853f37b9911da14aed70c74408ba5a40",
+          "variant": "manual-4-repeat"
+        },
+        {
+          "case": "cpi-single-intervals",
+          "scientific_values_sha256": "0e3bfb77b990f3f182f4bc25f6bfc29b651688ef3e3a29db5a21a6c410fd548a",
+          "variant": "reference"
+        },
+        {
+          "case": "cpi-single-intervals",
+          "scientific_values_sha256": "2af1d988183aad13c3ac79ee19bdd11f370d4adb15b2a2256c7cd8e7a21bc4ce",
+          "variant": "candidate"
+        },
+        {
+          "case": "cpi-single-intervals",
+          "scientific_values_sha256": "2af1d988183aad13c3ac79ee19bdd11f370d4adb15b2a2256c7cd8e7a21bc4ce",
+          "variant": "auto"
+        },
+        {
+          "case": "cpi-single-intervals",
+          "scientific_values_sha256": "2af1d988183aad13c3ac79ee19bdd11f370d4adb15b2a2256c7cd8e7a21bc4ce",
+          "variant": "manual-2"
+        },
+        {
+          "case": "cpi-single-intervals",
+          "scientific_values_sha256": "2af1d988183aad13c3ac79ee19bdd11f370d4adb15b2a2256c7cd8e7a21bc4ce",
+          "variant": "manual-4"
+        },
+        {
+          "case": "cpi-single-intervals",
+          "scientific_values_sha256": "2af1d988183aad13c3ac79ee19bdd11f370d4adb15b2a2256c7cd8e7a21bc4ce",
+          "variant": "manual-4-repeat"
+        }
+      ],
+      "scientific_and_capture_source_hashes_unchanged": true
+    }
+  },
+  "fixture_input_sha256": {
+    "contamination/panel.txt": "f7bad23344c31fa30bdce20dfdea1fd43dbfe767c97e8958ad7a7fe9773e10ec",
+    "contamination/samples/batch00.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch01.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch02.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch03.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch04.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch05.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch06.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch07.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch08.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch09.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch10.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch11.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/boundaries.txt": "fea28ace426d11d02789e35bd8f8a0514504e55b0909825f3ebfe3b24244356f",
+    "contamination/samples/sample0.txt": "2f1cc1b5f46106c80d9178af26d8af893860a9d21ad333a0959d0c972bf82115",
+    "contamination/samples/sample1.txt": "a99402d5279438b5aa080149dc031470d800f18eec7cd4072b03437fe1be67fc",
+    "contamination/samples/sample2.txt": "9d65a01bbabf4619596321eb238b6c139ae259b32d47a0d3184e2cf0a603af8a",
+    "contamination/samples/single.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "cpi/full.tsv": "3b4d9c65f973d7887c7fbd30991e3ffbd5ffe65f6010d18e9c1001a87169df1d",
+    "cpi/population.tsv": "b31888e4550e921cf7c1f6e106f0b96794dd6241cf96dd54e2accd459bc7e8f1",
+    "cpi/samples/FatherDeep.txt": "abbbe137e97af59aaeb9109c39af024184c447d79c565744f2b97dfbd67b98f2",
+    "cpi/samples/FatherInformative.txt": "caf35530741113be22138412bf8190ecade424183f6d96839694de5bedb3f449",
+    "cpi/samples/FatherNoSites.txt": "caf35530741113be22138412bf8190ecade424183f6d96839694de5bedb3f449",
+    "cpi/samples/MotherDeep.txt": "4a4ef8ef02f011ce609b63304f96e6ec7f9a23df76308667a6b2df8d8a9529dc",
+    "cpi/samples/MotherInformative.txt": "3a6b729bde97a66151948ec5cf1d9c87336d0d24f7ee62f87e2686cd9562af62",
+    "cpi/samples/MotherNoSites.txt": "0e5a108989e470f213387724a62033cf5aa841e7287464ea257c08ee82d21b2a",
+    "cpi/subset.tsv": "383b5bd9af3608afe39e1191b932f80e83da7bcc97113e1f8041c3fced99ae19",
+    "dnp-blocks/Boundary.bam": "e901310c4dcfb422adc7728a6faa35c4f2bec7e434422ffd468e17063af63622",
+    "dnp-blocks/Boundary.bam.bai": "2e7ba6628b901ad44027a840befcb4f7eb11005b035b35764d44a2fdb58edbf2",
+    "dnp-blocks/Boundary.sam": "37c0c7e699fddebfbe758a8a588b7c36adcf0fe2f5fb24ca3131f3b75526a83a",
+    "dnp-blocks/Duplicate.bam": "4ca25343b3ad533f3e4f4aed34b1fb1424f3627acff4d00be55c647a7c4801e0",
+    "dnp-blocks/Duplicate.bam.bai": "6964abd03337910b396de3551480b18f9da3ee30cb39db652447f97c9edbaf0f",
+    "dnp-blocks/Duplicate.sam": "72745946501c1559d7658d46a4b524ff2fad62d80c922c4e793b049cc445775a",
+    "dnp-blocks/panel.txt": "238e7c0163a39cc9e783e1c5706c379590ba9f5d4f7bf53c288416a851f43768",
+    "dnp-blocks/reference.fa": "03ccded4c33601d17e54304ab5f1edbc81ad2aff146ca5ff9c6799c3f88367ee",
+    "dnp-blocks/reference.fa.fai": "b27aaf0b44f240c6442f1413a4f021fe9746458f33cea24b5e2fecd35954661c",
+    "dnp-numeric/Boundary.bam": "e61637bf33489f268e6f24da61b7569764f643e254e6f5dd1d4b0eb342a17776",
+    "dnp-numeric/Boundary.bam.bai": "ea60c1037e1a37e7c56bfd50bcf0117f801516b4b2a5b234078ef2fb015bf478",
+    "dnp-numeric/Boundary.sam": "cff0a59ab50deeaf4fa9dc64ddef3c86e7246ee1a61ea07e18d756e538e6a21a",
+    "dnp-numeric/panel.txt": "30b5809c0e951c53aea9b458df784ea8c429ffe57657ee6e0cfe8b76f8302a54",
+    "dnp-numeric/reference.fa": "28b996da441af17de759dd0f6efd2b3d7a7d15af43a25a6d633332cbf571df84",
+    "dnp-numeric/reference.fa.fai": "e73443e5f68dc4e8547c46c1569a6b74d321c147af5c10450321b73dd26fb9b9",
+    "dnp/A.bam": "b509b26c29cd5f0bdee04479a6114e0c678ca4a71fa476e246e988e14965a6a6",
+    "dnp/A.sam": "a8362c3fcbaca28aa0aa10c33e9a6a28ad5c2e442faccba68a85d32235241973",
+    "dnp/B.bam": "45e4215bc5dd50649c61690e24f5954fc1dde646c9e3c7a11a5841a1b292bb33",
+    "dnp/B.sam": "a4e9a1fd14a05af55093c19b0dd06e9605aea70f5b483a27f9dfbfb03479eb27",
+    "dnp/Quality.bam": "36a73e0021fea4555a47569c1931376b4c7a9f02b0323cb707923dfc4df173ae",
+    "dnp/Quality.sam": "d61a0f6fcdc07b0fc72281c8ab8ffa498a119238ef8db4598182ec57e9f52764",
+    "dnp/panel.txt": "0880e3f033c82714eea03a40b6fa6bb028c199becdebc40dbfa09d2767814083",
+    "dnp/reference.fa": "2c97cf815db8013859d4f433c7d6b276dc62c3f5d4ece76082fa772f2a79dd86",
+    "dnp/reference.fa.fai": "8c5490df4fc23c7324a09d6363b3ef7e49ffb29739c95fdaf9ec680d3da9bc59",
+    "panel-only/panel.txt": "f7bad23344c31fa30bdce20dfdea1fd43dbfe767c97e8958ad7a7fe9773e10ec",
+    "snp/panel.tsv": "d27d79e2976c5aa3cd4181c43757728a87a4b11d1e35f43589a045e41de8cbb7",
+    "snp/pileup-wide.txt": "7b3d6bffb4c48d65d9c3571711520d9d9449b8c328274b9f21e31f66ac0753b9",
+    "snp/pileup.txt": "b7f9ab52e0ee10dec89f393cef498f97872ad418f7854e9adf9c96f5748a1088"
+  },
+  "focused_r_checks": [
+    {
+      "path": "tests/r_optimization/contamination/check_parallel.R",
+      "sha256": "dbf5f1b85e9f0291f89b771e9951287a71ddc325d058d588bbda2feeb0166715",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/cpi/check_core.R",
+      "sha256": "037a4ba9d1e66eb51b652e10c9191760639114bb19f2a25eed53cb1ac81b9e0b",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/dnp/check_blocks.R",
+      "sha256": "dfcdcfc4ea01ee9a92a6c2155a3d340712cd07dfe8eba9c0af24c923ace25fdd",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/dnp/check_parallel_blocks.R",
+      "sha256": "7a36d0780151672fb48199d3b1d42ffdc231c4487e50b9cd5b5cbe6d81ee5a87",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/dnp/check_reader.R",
+      "sha256": "cfd68d9cde50313a6eb0c64688ea0a9e9c8b482ae9efff9eabf2ee75e0ccd95c",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/parallel/check_budget.R",
+      "sha256": "02683221f1a8cf7dbab2cb9026e5765d6258c8741a3aaf3a01cdf0d9253f0898",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/performance/check_costs.R",
+      "sha256": "a4de5189567963dc31ed8eec6ded0260d12f8cfcfd0b170fd5cd80fb75e53af4",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/snp/check_reads.R",
+      "sha256": "08aa3b30fde518e3f9ee8f2be97f786cf3b1ecee885123da56c8008e2c2d49fe",
+      "status": "passed"
+    }
+  ],
+  "harness_sha256": {
+    "scripts/verify_r_equivalence.py": "4dfa47e043a14d84d96d21ac5712e9e0a9185987331b1f1ebc432b88aa24b12a",
+    "tests/r_optimization/capture.R": "659b6417bb2885c0c870ad66c49071af31aecd86893be2286e56bfe2d1b058d3",
+    "tests/r_optimization/compare.R": "e5358fff2ae6f721c7e097e59e1ce9f810b078a85151c45091ab1936ad6c172e",
+    "tests/r_optimization/verify_dnp_cancellation.py": "8aad63d5014d826523c2da4f2240614d92f2d7de0f38c18a705b7b9b24fa3614",
+    "tests/r_optimization/verify_indexed_pileup.py": "ce811bceb16104ed158a13c490deedc37227d4cf0c73370d268911f5a8958081",
+    "tests/test_r_equivalence.py": "19727c725a01c876198cf45c44bec845dea2613ad72e4c23812deeaeaf5d6ec2"
+  },
+  "indexed_pileup": {
+    "cases": [
+      {
+        "case": "indexed-single",
+        "maximum_first_sample_depth": 8018,
+        "pileup_sha256": "d4ece33c92806dd6b0e3a6be77a8d9de98dda41caf7424aeef4cf5c7f14a3043",
+        "rows": 21,
+        "size_bytes": 721696,
+        "status": "passed",
+        "strategy": "indexed-pipe"
+      },
+      {
+        "case": "indexed-multiple",
+        "maximum_first_sample_depth": 10,
+        "pileup_sha256": "4b08614ea633d33628ba93c8f35304214be2796beb49fcacd43ec3a26619e7e9",
+        "rows": 21,
+        "size_bytes": 722299,
+        "status": "passed",
+        "strategy": "indexed-disk"
+      },
+      {
+        "case": "missing-index",
+        "maximum_first_sample_depth": 8018,
+        "pileup_sha256": "d4ece33c92806dd6b0e3a6be77a8d9de98dda41caf7424aeef4cf5c7f14a3043",
+        "rows": 21,
+        "size_bytes": 721696,
+        "status": "passed",
+        "strategy": "sequential"
+      },
+      {
+        "case": "mixed-index",
+        "maximum_first_sample_depth": 8018,
+        "pileup_sha256": "f940e5ac32c59237316bbc03d8cdebfa7baee6c93025465767a6a0eb85cdd0e4",
+        "rows": 21,
+        "size_bytes": 722299,
+        "status": "passed",
+        "strategy": "indexed-disk"
+      },
+      {
+        "behavior": "fails without sequential fallback",
+        "case": "corrupt-index",
+        "status": "passed"
+      },
+      {
+        "behavior": "paused real samtools reaped; partial output removed",
+        "case": "cancellation",
+        "status": "passed"
+      }
+    ],
+    "file": "indexed-pileup/indexed-pileup.json",
+    "sha256": "c5d5103f567a75956157c219e65b610fbcb1636a938d27c9cfcb2b7211b4dd31",
+    "status": "passed",
+    "test_source_sha256": "ce811bceb16104ed158a13c490deedc37227d4cf0c73370d268911f5a8958081"
+  },
+  "inputs_unchanged": true,
+  "limitations": [
+    "No Docker image, Windows/WSL, macOS/Lima or installer qualification.",
+    "Synthetic fixture equivalence does not establish equivalence for every possible real input.",
+    "Manual maximum four is a cap, not a demand for four workers; observed plans respect actual CPU and memory.",
+    "Worker counts cover computation processes; an additional R coordinator and non-R processes may exist.",
+    "Memory scheduling is heuristic and does not guarantee a hard RAM bound.",
+    "No whole-workflow speedup or peak-RAM claim is made; instrumented single execution times are not a benchmark.",
+    "PDF equality compares page pixels at 36 DPI and excludes metadata."
+  ],
+  "parallel_qualification": {
+    "concurrent_worker_cases": [
+      "contamination-batch",
+      "cpi-shared-parents",
+      "dnp-blocks-1",
+      "snp-edge"
+    ],
+    "container_limits": null,
+    "container_limits_applied": false,
+    "distinct_worker_cases": [
+      "cpi-single-cutoffs",
+      "cpi-single-intervals"
+    ],
+    "variants": [
+      "serial",
+      "auto",
+      "manual-2",
+      "manual-4",
+      "manual-4-repeat"
+    ],
+    "workflows": [
+      "contamination",
+      "cpi",
+      "dnp-call",
+      "snp-call"
+    ]
+  },
+  "reproduction": {
+    "command_for_container_qualification": "python scripts/verify_r_equivalence.py --image nipat-scientific-runtime:ci-test --output-dir build/r-equivalence",
+    "command_scope": "Run from this code commit after building its runtime image; this command performs a separate Docker qualification, not the rootless execution reported here.",
+    "rootless_adapter": "Uses the same verifier/capture/comparison sources with /repo and /opt/nipat mapped to the checkout, /inputs to synthetic fixtures, /results to per-execution directories, Rscript to R 4.4.2, and samtools to the extracted runtime. Source hashes are checked before and after.",
+    "scientific_contract": "tests/r_optimization/README.md"
+  },
+  "schema_version": 1,
+  "scope": "Local scientific source qualification on synthetic fixtures",
+  "status": "passed",
+  "supporting_source_sha256": {
+    "src/nipat_scientific/dnp_blocks.R": "723a18bac069d35b6e6e7c9c0d0b469d2fedb38e27eea635c43ea930accd7dbc",
+    "src/nipat_scientific/dnp_pileup.py": "a6bda6eed446e9f35b84f1cf0119ab880861a1cc468a4ef10377ec9150de5410",
+    "src/nipat_scientific/parallel.R": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
+    "src/nipat_scientific/parallel.py": "dd76d2f9ca9a688956ae5107173f84a3566489d0da414b8e12aee7d8dac04216",
+    "src/nipat_scientific/progress.R": "f8171a8db9d24b057fe859e78b47c03694c512bf2480ca0f09ebf753c65f19e0",
+    "src/nipat_scientific/progress.py": "991d0c99411f7ee044975e617b0ba5a51053e0d5fec28465ecb2c90d0ec2cdc0",
+    "src/nipat_scientific/scratch.py": "03b109cf778899a7c03de1ccf0753358b6890dae42feccc4ae8ec3be560c2dd6"
+  },
+  "synthetic_performance": {
+    "file": "performance-observations.tsv",
+    "memory": "Rprofmem allocation totals from a separate pass; not peak RAM",
+    "scope": "source transformations and CPI core; three timing observations per variant",
+    "sha256": "245a9651a70e983bcc2ddc505864823b561d42c2aafceb801128d41503cc62e9",
+    "speed_threshold": "none"
+  },
+  "variants": [
+    {
+      "case": "dnp-single",
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-multi",
+      "pdf_files": 10,
+      "pdf_pages": 10,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 3,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-parallel",
+      "pdf_files": 10,
+      "pdf_pages": 10,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 3,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-varied-qualities",
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "snp-edge",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-631.jsonl": "b508c5be342058b2b4497d185925f329f9fc7a0bf98e0e0602d9f18cd13b56d2"
+        },
+        "maximum_planned_workers": 1,
+        "observed_child_pids": [],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "snp-qname-groups",
+            "memory_available_mib": 7180.2578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "serial",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "snp-call"
+    },
+    {
+      "case": "snp-edge",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-665.jsonl": "1d173c232fb05e0e44c4e9da3f7068b7ad2719d76606bd87acc8d248e3d57b23",
+          "worker-682.jsonl": "0ca6a7e07af0c22dad2c708e4c9700011ac2bd68f661598d54252a9b2c50801c",
+          "worker-683.jsonl": "6b3c32825932b8b5922f972987b56df0c8e621f44bafc366896a5914c15407ab",
+          "worker-684.jsonl": "a02421dd968cb98e10807278e98b43df8a0ae854809b63c87876ba7f4ac64144",
+          "worker-685.jsonl": "71f69a901e9cbee1b87d1d99a0a18fc15be90b8e815e73757e8c05e7853b57c5"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          682,
+          683,
+          684,
+          685
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "snp-qname-groups",
+            "memory_available_mib": 7154.16015625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 4,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "auto",
+      "workflow": "snp-call"
+    },
+    {
+      "case": "snp-edge",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-703.jsonl": "b81555e90cfc99e773e07b2ff013b51d167add6e3a0f6e2fc1bf61fb75767070",
+          "worker-720.jsonl": "bab824cbce474373001227cd3760c7a803105d5c0fd6ca634c8f0ba1a1165dd2",
+          "worker-721.jsonl": "d83dc721c08403720f61f879abc65bab961cc53d7b6909127986dacff34cb042",
+          "worker-722.jsonl": "a7aefa0f46a6d6ad7ce9b88e471543676c9533aeb4e2cb5d560a68c1832324c5",
+          "worker-723.jsonl": "4c5d19e544ed55b9c4d46b82ddb963f2856c7dae7f07fb6742f925d82b7a85ed"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          720,
+          721,
+          722,
+          723
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "snp-qname-groups",
+            "memory_available_mib": 7114.12109375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 4,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 2,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-2",
+      "workflow": "snp-call"
+    },
+    {
+      "case": "snp-edge",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-741.jsonl": "10b07b506fc920353bfcc5cfb689c9232b2b95ae6378a2381df992d401973036",
+          "worker-758.jsonl": "7beebf49fe098908fc3939dc0c7eadaef097f3bf4ec398d414fd9d150de9238a",
+          "worker-759.jsonl": "9cad41f3780dd4d346fe1aecee8f206d143f7850131b6695f4b31f6740c070c7",
+          "worker-760.jsonl": "37cd0f6b52b20449ca09963cfe1db766dab596ad2fc648dba82be3726c27ae37",
+          "worker-761.jsonl": "16d0b74cf69864fcae97ccbfa59740e5df9fbbfa6d5c3a7ad46d9cc0e19e5904"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          758,
+          759,
+          760,
+          761
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "snp-qname-groups",
+            "memory_available_mib": 7159.9296875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 4,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4",
+      "workflow": "snp-call"
+    },
+    {
+      "case": "snp-edge",
+      "deterministic_repeat_of": "manual-4",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-779.jsonl": "2f1f27253e2b902b5af30ec08c6c7950a12aaa533ef51d27eb02d3d68ea08db4",
+          "worker-796.jsonl": "71d3f21bc831cc109db69551504db0d45edaa6733139f8da3a069917b9304c04",
+          "worker-797.jsonl": "c8b4ccfe8b19b0a805643d7478d1ba26a568d22557ea3fc47c753aa58d44e3f2",
+          "worker-798.jsonl": "4f72e9704a7b94f0420b77c609c7022c5d93c52519ff2bf1a8c48efa4b410d19",
+          "worker-799.jsonl": "8d7aeb4ee1ec530c1e1bd9ada733a1b95a7e9f9d43390c670e1dae67ef61cf58"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          796,
+          797,
+          798,
+          799
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "snp-qname-groups",
+            "memory_available_mib": 7157.56640625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 4,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4-repeat",
+      "workflow": "snp-call"
+    },
+    {
+      "case": "snp-extra-columns",
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "snp-call"
+    },
+    {
+      "case": "cpi-all",
+      "pdf_files": 4,
+      "pdf_pages": 4,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-panels",
+      "pdf_files": 4,
+      "pdf_pages": 4,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-zero-error",
+      "pdf_files": 4,
+      "pdf_pages": 4,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-shared-parents",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2263.jsonl": "dd334b8453ecb75c3aac0420ca2a0d2cb24152041efe8daf94db509408b665f7"
+        },
+        "maximum_planned_workers": 1,
+        "observed_child_pids": [],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 5,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7328.453125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7328.2265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7328.2265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7328.2265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "serial",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 6,
+      "pdf_pages": 6,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-shared-parents",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2522.jsonl": "036ff4c83f54576fb7f1177e0de28a131c33a667783e1d86f7773d0b520c7751",
+          "worker-2692.jsonl": "6ac7be1143c885807ada2df22a7951fb59f4362cb90f4aa95300697dc75ee63a",
+          "worker-2693.jsonl": "7024d749ef01ff84df81d349966cf4e655bd3863d1e014c021448287b75f4d2e",
+          "worker-2694.jsonl": "2532b5305745f1f8c51a7df1b65c66d9099e895c6942e1d48d6fd2c1e88e4594",
+          "worker-2695.jsonl": "19fe263a7d421629910667e1676eb60a55595bcf58f745a034e0a57116f75f53",
+          "worker-2696.jsonl": "16ee45c36d6eac2fe77695bffd3f49c2cf9baa1ebbef113a18767a0ab9c0b8b9"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2692,
+          2693,
+          2694,
+          2695,
+          2696
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7319.17578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 5,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7265.32421875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7233.70703125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7265.32421875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7241.72265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7156.13671875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7121.73828125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7163.953125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7105.859375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7085.36328125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 6,
+      "pdf_pages": 6,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "auto",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-shared-parents",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2786.jsonl": "bd9beec1694969bd12bf8722bd4a22cf0c50c8251bcc7a7d9ae68be4fa54e5ec",
+          "worker-2956.jsonl": "c461ab4c2e09499819eb16254f62f9d1bb6b2dbae1a6c77df4981c458cf066b5",
+          "worker-2957.jsonl": "11cbf6294fbc21402884e8f5d4fc9c6e1f31df1176e45d0c3c5f23204a49bea3",
+          "worker-2958.jsonl": "c5d63d88b566c94def21e813ab433580ba8775f11a5719e8818539e538b602b1",
+          "worker-2959.jsonl": "d60b3c7e221122b56ccbceadd47593f08c2a98dc7c121a2c21f992b6d7528921",
+          "worker-2960.jsonl": "dae6c253fa953991c804ae964d04ad957fd1269a290fba76f16da67547a1ba24"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2956,
+          2957,
+          2958,
+          2959,
+          2960
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7227.8203125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 5,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7210.98046875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7180.4765625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7196.0625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7164.43359375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7143.59375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7120.390625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7143.37109375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7089.41015625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7076.17578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 2,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 6,
+      "pdf_pages": 6,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-2",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-shared-parents",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3050.jsonl": "21c27da976cdd1e38a8af99962a5ec192892703468c5b5cd7b50b5b048dfbf89",
+          "worker-3220.jsonl": "5b6ad54651250e91ee1b1c252a771423ae4491b8357a2193985b711bef4d27ab",
+          "worker-3221.jsonl": "762bcc2aa3bdf6e4488c7d83a02705115805b911915781dec482873e2fd8eefa",
+          "worker-3222.jsonl": "b94d6363744b9c572e76b19d3dddd1ff6e20c21e5542835c3518ae269473e173",
+          "worker-3223.jsonl": "a80eba3e3597ce6f133529f16b2b88eaf8fddffd899408c54bf0904f82cc0377",
+          "worker-3224.jsonl": "99fd62b472f74e05896165895aabc336559d95030935968e959bb40a6a66a1b5"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          3220,
+          3221,
+          3222,
+          3223,
+          3224
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7184.3046875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 5,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7170.80078125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7151.65234375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7170.80078125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7155.21484375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7138.921875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7131.28125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7138.8515625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7114.9921875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7099.49609375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 6,
+      "pdf_pages": 6,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-shared-parents",
+      "deterministic_repeat_of": "manual-4",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3314.jsonl": "8f1c38d76e1ce788c07e156eecbe1daf09f4e1cd323551b65943540b1022b480",
+          "worker-3484.jsonl": "b84f20363ccb356e8702246c8d59f5644eacaa50e6da19697f03de37cc7587ab",
+          "worker-3485.jsonl": "e964a35542673e28b007b3ba84394824a1483721d4bb1c008391168460a423cf",
+          "worker-3486.jsonl": "29db435926da497e8967fb2cbda5ee0020bf92c20faf03339504bc9e592f51e2",
+          "worker-3487.jsonl": "ec634a047ff0091a9b9562759498eabc83e8a0eb71279932b1aa5ddf36d96db9",
+          "worker-3488.jsonl": "efb4a080a9ee366f14d40c62f6ccfc280ffb379ab24ce998dcb3e2f22d7eeeea"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          3484,
+          3485,
+          3486,
+          3487,
+          3488
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7133.2890625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 5,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7133.21875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7125.65625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7133.2265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7117.65625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7151.40625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7139.40625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7149.671875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7140.20703125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7125.06640625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 6,
+      "pdf_pages": 6,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4-repeat",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-intervals",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3750.jsonl": "605db38d39dcb6785513bb30cd1df219a8bfa269ce54be06091fe652ef024201"
+        },
+        "maximum_planned_workers": 1,
+        "observed_child_pids": [],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7208.06640625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7208.3125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7208.3125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "serial",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-intervals",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3961.jsonl": "0d08563f10411f5923dbf77828900418a92021979d163ba38a49018a3ad7f8bb",
+          "worker-4131.jsonl": "b96432e849dba3a288ef553c062d19a09ae7e35b575a9a473f22933cada2547d",
+          "worker-4132.jsonl": "92e135e988652891f08ed741971fef51be9f9554b2214c72253b5ca5ea91682d",
+          "worker-4133.jsonl": "45c9ac319bc171cbb2a25846eaeba86b85842b46dc8de4ee1f72d258f8f605b0"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          4131,
+          4132,
+          4133
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7195.21484375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7195.21484375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7195.21484375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 3,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "auto",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-intervals",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-4175.jsonl": "cc200057c307da52164b1ae6244c629f853eb89a0dde34276c4d96dde7fe612e",
+          "worker-4345.jsonl": "becc716fa3fee68f94f92dc98788331f0f4975025718dc12925c0b701f718246",
+          "worker-4346.jsonl": "e77043b553900c068251964d835518d67a76605ab941df25ea700f9504326ed8",
+          "worker-4347.jsonl": "56a64937ff9a21beecb55a593a41718e69eecec8b3f2b1b2841392633645f67e"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          4345,
+          4346,
+          4347
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7258.17578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7258.17578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7258.17578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 3,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 2,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-2",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-intervals",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-4389.jsonl": "87929ca628118aae5197efd5c22529b4e72dc248ccb72112929792830f8db015",
+          "worker-4559.jsonl": "70664624585eceae865cfa9ec184bb14932884e959fdd0b3a30908eeba0d612c",
+          "worker-4560.jsonl": "77eb2b106e7512a37aeb4a8b4b6fed5bc41bf0263a1321e7de86e608dcec901c",
+          "worker-4561.jsonl": "49c7c40017a73d7fdf46882433df87a627d05bc153ee764f17cdc4da9a5d2344"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          4559,
+          4560,
+          4561
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7255.765625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7255.765625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7255.85546875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 3,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-intervals",
+      "deterministic_repeat_of": "manual-4",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-4603.jsonl": "8664879ed0bc4b2522b5204b8f06ee4a3288fa50b0162d58ef6c878e970a52f0",
+          "worker-4773.jsonl": "e5ff769ad8ae4a5a243380b629e50300d61cd15fbab4cae1a316d9bdb2ff1d34",
+          "worker-4774.jsonl": "3cba92f6bc7ff4228d36cbeace2309d29779397f3dd6602b097968cbaf76829c",
+          "worker-4775.jsonl": "b321ddb2e1acee00beb7cb9f6e68ded9591f229680a4f82a05d5f4a5809fe9f5"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          4773,
+          4774,
+          4775
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7275.234375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7280.15234375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7284.32421875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 3,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4-repeat",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-cutoffs",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-1507.jsonl": "0c86a22393d2bf3cf2ae637d895d3dd40c2bcd4318ac3436d370934009237dd1"
+        },
+        "maximum_planned_workers": 1,
+        "observed_child_pids": [],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7211.58203125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7210.61328125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 2,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7211.37890625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7211.37890625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "serial",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-cutoffs",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-1718.jsonl": "eb65bb2ad0d8d26b7a564cbc3f9927c605ddb56e75b34d159a99beb2a1fd27c7",
+          "worker-1888.jsonl": "c512f15357125435c62520d8987f42404ac9d927bf4979adb7af5e0959de1cf1",
+          "worker-1889.jsonl": "8f520105c7ca48c834afc71b472a5ced78eb4d85c91ef4b1eedade61ee8a64ff"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          1888,
+          1889
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7205.015625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7205.015625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 2,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7181.3046875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7181.3046875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "auto",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-cutoffs",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-1931.jsonl": "887b217c9a5c37f89dcd644259daf940e31c2d937c520d5b0fb1d75a2bdee283",
+          "worker-2101.jsonl": "30e15b4080192f812b8dec15424f2f836371c4bd90683a4370b4e7fea0d2e727",
+          "worker-2102.jsonl": "2e66f0333e5845145081538a81690e9343f57dfac91f9bc97928ce32bee5bea1"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2101,
+          2102
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7207.50390625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7208.6953125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 2,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7191.265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7191.265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 2,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-2",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-cutoffs",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2144.jsonl": "c7c79e935ff4a2680161438fc6c7d9d89b22e837fc13671dc1a10aed7bd29394",
+          "worker-2314.jsonl": "c5413c28f0816db90d82d144dc13be9068ea8ae648e610e7412b409750e38ef8",
+          "worker-2315.jsonl": "72d6ea999db1718817d7874d5fb4c348a6f95148419e85b1cd076ffa950fe871"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2314,
+          2315
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7164.0859375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7164.0859375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 2,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7141.08203125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7141.08203125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4",
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-cutoffs",
+      "deterministic_repeat_of": "manual-4",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2357.jsonl": "5b1f7bfdf629dcc0aa15d62c26669eb3b87486a154319bd9bbb2ce95c6a7131a",
+          "worker-2527.jsonl": "8e841824287303fa7ede14366e3ed45d2d85fb470e258743eaadf85ae5e379d9",
+          "worker-2528.jsonl": "7c7b711b1edab57c13e48c340d86a6780882208b61007da6a3dc0396f8d72a99"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2527,
+          2528
+        ],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "cpi-pairs",
+            "memory_available_mib": 7182.375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-cutoffs",
+            "memory_available_mib": 7182.375,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 2,
+            "workers": 2
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7155.2265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          },
+          {
+            "cpu_limit": 9,
+            "label": "cpi-thresholds",
+            "memory_available_mib": 7143.42578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "shared-budget-child",
+            "tasks": 1,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 2,
+      "pdf_pages": 2,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4-repeat",
+      "workflow": "cpi"
+    },
+    {
+      "case": "contamination-batch",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2586.jsonl": "06e117ab6a0a1ea4b87494667b8a3eddc397dda0d534fa6665239e795a5a3db6"
+        },
+        "maximum_planned_workers": 1,
+        "observed_child_pids": [],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "contamination-samples",
+            "memory_available_mib": 7128.796875,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 17,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "serial",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 18,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-batch",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2617.jsonl": "e9903e7f2f3dd67444649716649c5549eb8d6aeea623361d7ef4f916290132e3",
+          "worker-2631.jsonl": "48e31a1b5cb4ba21369d828c3bca0d14443496a8baaaf84e0156e81caeb58523",
+          "worker-2632.jsonl": "c4cfcfb029ff4824329dc4f2e2bb4625678c3afbbb1e72c6106b78c8f8c61d39",
+          "worker-2633.jsonl": "8eb818941bacf411a84074e57c54998f1c4d80f6de5c0da73ac89ec6c414d845",
+          "worker-2634.jsonl": "bbb8cac3c8c956693d8b2232df67dd0d0e6bee400bb1497c63800e23e8d5d0e8",
+          "worker-2635.jsonl": "6f5f66c24ac9b217e31402ab4145112893248d38d3fa0f08019b447a9ec0c000",
+          "worker-2636.jsonl": "e195d31267c55810458c964f96514f6e58f2a0c1361bce569e732e77d5b70b26",
+          "worker-2637.jsonl": "e7f100955ae225627e8ac5c63958de88ffec405fe235985043e556432bf199ba",
+          "worker-2638.jsonl": "43a7c55c19b4be665726530517194eb2817f3c341e5ebd3034d41e0c48a4bdb7",
+          "worker-2639.jsonl": "1b5c50e1d7f30cc13394d36d1b942893e5625b0538dbaf8f9ec2ac6b35f23951",
+          "worker-2640.jsonl": "199fcea6f9481216aa83bff259f43252d931a1ab95124e780d63c4cfa00573aa",
+          "worker-2641.jsonl": "1d9b07a0b3151786fa8d355eee6bcc565c2d8970a248239055a09cce4593e52f",
+          "worker-2642.jsonl": "3badb234dc7eaf5ad19c1594cfa6d7b46adf3df377c3526520f495b127ebf0cd",
+          "worker-2643.jsonl": "2b1a7f86a96dd9c97264cedbaee9e6e3296669d4b716ca11985ed8c048a8b1a7",
+          "worker-2644.jsonl": "11982fac0d9acbe806f6832e4dfe709e494f640e5cf4790f256481b2f1adc3e7",
+          "worker-2645.jsonl": "d1269e0db68fd169e2618520f10fe4259bc7c8feecc6d31ce07009e9d3ef13fb",
+          "worker-2646.jsonl": "dc21fc8bc1bb2e2a2c8429e5b84fa68142c5b8c6a578146e85872d48771baebe",
+          "worker-2647.jsonl": "513b66be4377f2c182d6be7ac2bdc31e6f09233047e5af13d44d3984e968d385"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2631,
+          2632,
+          2633,
+          2634,
+          2635,
+          2636,
+          2637,
+          2638,
+          2639,
+          2640,
+          2641,
+          2642,
+          2643,
+          2644,
+          2645,
+          2646,
+          2647
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "contamination-samples",
+            "memory_available_mib": 7182.75,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 17,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 18,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "auto",
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-batch",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2665.jsonl": "08cc2725bebeb7221503334ba4a9ce2187924f5ecc28f2e6c5bbc3e5a9f77989",
+          "worker-2679.jsonl": "1c34d267d02a0c580f286bb309a2243416050bd7fd8e575331cbb6b3c81efb53",
+          "worker-2680.jsonl": "4aede5384e9d79cdf6e0fa848d65a2764dcde084b05b958ad1568d90a903ff74",
+          "worker-2681.jsonl": "dcafa5ac7856737f8feb554b22868a750fea51fe095bc74eac7a7d10bf38a0b1",
+          "worker-2682.jsonl": "7e77d7006f53261ae5f55a38dcd4f75dfa598c64bac566ffb241fe8fd41017dc",
+          "worker-2683.jsonl": "239d865b17c4fbb7465f46f2231a98ab5632b5b92d5ae87aaedae70fa08a7c1d",
+          "worker-2684.jsonl": "98a367251a74302f5d2582a33958db26b9972ddcbfe1ea14fbd28a4d39782b7f",
+          "worker-2685.jsonl": "9205c552082ffb765623b65bcfc8ed55a518ee07ece3052372cbc240f6bb6f0f",
+          "worker-2686.jsonl": "213083802b3f6d5802798fac6531690cfd9e1144fa7d36433d2f7195a5b0331a",
+          "worker-2687.jsonl": "a1b088b06f53eef735f709a3b8c29c19beac942917df313b11fdc21a0a9310b7",
+          "worker-2688.jsonl": "993d153ba2b8e7145d4a8bc35b41d8ee09ac6719f854907e2a061f11e7c8d6c2",
+          "worker-2689.jsonl": "2952a05c702e965c204591f5276483f74a488cb0957896e6f48376cfa7182ca1",
+          "worker-2690.jsonl": "31a8cb0d6c1ef76ef169261791cd6873e4b34d67fbc52a79b9a51e84d2264d47",
+          "worker-2691.jsonl": "2d68c78d05dc331ca3ee5c3d109e8668db0c5ca62003bc40bf9b861bf696c57c",
+          "worker-2692.jsonl": "621462603310050f0e6f783a4fa0247fda31382c848f8559035d2bbd0eca3e2a",
+          "worker-2693.jsonl": "b231d68880be0587b1dbd9a25b8d8e7ceade4d6d6df293f301d2ad774d3bb92b",
+          "worker-2694.jsonl": "3434ea8712711e74c71e9238cfe749c5269df0f01820d044da14e076f1f307f9",
+          "worker-2695.jsonl": "7e69ee33636e8e28f0689978db714f18428f012c1bb1159dfff9ea5410a59a76"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2679,
+          2680,
+          2681,
+          2682,
+          2683,
+          2684,
+          2685,
+          2686,
+          2687,
+          2688,
+          2689,
+          2690,
+          2691,
+          2692,
+          2693,
+          2694,
+          2695
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "contamination-samples",
+            "memory_available_mib": 7181.97265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 17,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 2,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 18,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-2",
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-batch",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2713.jsonl": "45be28a4f402b6c322c367e10a4ae8093d72a062e6ee7e5deed42a1e4e3ee645",
+          "worker-2727.jsonl": "117733f065a8b1a380a58c710fa20f1b878e450b9725c080ddbbaf2cf42c8a7c",
+          "worker-2728.jsonl": "009edb02b82d4cb58ba0f68a36da1eea626434aab684608f0a37662406cc3a62",
+          "worker-2729.jsonl": "8c26e376cc9b07282f4209ec99b0357162415942a1d4f670ab6c5416e929c625",
+          "worker-2730.jsonl": "62c5afa260b28cdd79c8308728c27dfdfc174077cff4f83fd341557ddef5aa94",
+          "worker-2731.jsonl": "28aa69fd0ee857833aff96a643f59d133d9f66383b947b4bd11446bf750066cd",
+          "worker-2732.jsonl": "a9d0852180d41606afbc973ae0c21515b1fa5beb2badad7adcf0dc9a9ebc372b",
+          "worker-2733.jsonl": "f0f58068e1690fc95a7e6d6c79a3763e6218a130bee341c5791c3756778d0f95",
+          "worker-2734.jsonl": "41cae8d5127137ea59f950639044277103a23753ce1121e76e81799800acb153",
+          "worker-2735.jsonl": "83bcb44f5e96d4f4301316f24ba936916e918983378eb6bc7321cb5c2ac86485",
+          "worker-2736.jsonl": "969a6d97955d6c1122b9ef59376c4d25e4d638519232dee15f9c3a5260322658",
+          "worker-2737.jsonl": "7dd1c0467acb3a00a2483c8af7753d886c67623ee23332fd2d2f8f2b71cb52d6",
+          "worker-2738.jsonl": "e3e0f1be72f37f9b09448d9a93f653d83d5054690ba94ae441eb2abd871ae960",
+          "worker-2739.jsonl": "151a403e2900256e8db5daa37707fb92ce5bb0bc77ce9af093e5a1c9736265ea",
+          "worker-2740.jsonl": "fe0fc65766f3167bcee063cdebc574de70e5051de848962f60e2c6b920f79797",
+          "worker-2741.jsonl": "3b405840ba7160740a31a79d78b689f98926d64ec96a0fab70eea55dad20e766",
+          "worker-2742.jsonl": "b3a0eb4a03a19233e11f18d16f1328f6870ab9b15fffabfff2eca9ec73da2929",
+          "worker-2743.jsonl": "72fb3534319e137053b03a302bb2ac881e2f8c0a19f9e151769d40193f37788e"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2727,
+          2728,
+          2729,
+          2730,
+          2731,
+          2732,
+          2733,
+          2734,
+          2735,
+          2736,
+          2737,
+          2738,
+          2739,
+          2740,
+          2741,
+          2742,
+          2743
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "contamination-samples",
+            "memory_available_mib": 7120.3125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 17,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 18,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4",
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-batch",
+      "deterministic_repeat_of": "manual-4",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2761.jsonl": "3fc046d7b78784b9f0f280238d3786fa8a2a652dc06038b100753a064ad27852",
+          "worker-2775.jsonl": "abb5d1a947a3a4eb3736f694eb283a58bfa2ba675d4a182e0f1470c2a917b3e5",
+          "worker-2776.jsonl": "0113705cea4e3111d71fec5fbe70cab9d83bbb13b72c0ad08cebea113609200f",
+          "worker-2777.jsonl": "c8a5d540ec6aa39d506723bccf6713086a0da8d3ca336675c278e22d2f4a3bbb",
+          "worker-2778.jsonl": "f3f59580852bf68e20a4d89629220b5cc540c4f385597f9b9f175b70e5afb04a",
+          "worker-2779.jsonl": "518a62d1ae51dd7ba7bc755106afd5996fa559c92ce61c364c26b015891ab80b",
+          "worker-2780.jsonl": "a559954fb7691962b9c32fd921eb35cf980b22e3d51489f2f3ccf1b2c23cc528",
+          "worker-2781.jsonl": "b8225fb48879f23f256599820c355c5bc69fef44bd330827f0469e49432ab6b2",
+          "worker-2782.jsonl": "e884b3e561b4dfec24821e312025646c515d41b1970d5d87ac529b35d0cef868",
+          "worker-2783.jsonl": "61363f51dbedd93117d5fc9abfd3dcc93e6f20252d52b3c0324f93b9b44b6b17",
+          "worker-2784.jsonl": "09ce90b9c58295882a665d90e788f3edc3693e14f88a877686151af97a1fee29",
+          "worker-2785.jsonl": "17f26b40fad17d3b666bc2be9ca04352e175254139f28216443719fd4abf349c",
+          "worker-2786.jsonl": "18200af59767fcb7b7035977bf3947dca6f4e703038b3a61543c81bbad65af22",
+          "worker-2787.jsonl": "16a7c9d5e13ee9a13d4d248412fd37dcabf9bca247a64faf1286ecab0dc37f45",
+          "worker-2788.jsonl": "fae80e76412bd492d3be5bd47ab6fdf1ee601f7fa91908c82b4f5d89dc40fcd5",
+          "worker-2789.jsonl": "8c6cebc933aab0bb7db275a924cdf6a7a48d1d5c3078e61633fecb2aaefbdb37",
+          "worker-2790.jsonl": "696db6321d571ad7b96a1929b3327aa6c889b594e6513819a1dc436ecb3c311d",
+          "worker-2791.jsonl": "ce791c11649a9d9ba055c4d22499b206395f5ef8e46c543c71190de21c8fbd23"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          2775,
+          2776,
+          2777,
+          2778,
+          2779,
+          2780,
+          2781,
+          2782,
+          2783,
+          2784,
+          2785,
+          2786,
+          2787,
+          2788,
+          2789,
+          2790,
+          2791
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "contamination-samples",
+            "memory_available_mib": 7096.56640625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 17,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 18,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4-repeat",
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-single",
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-panel-only",
+      "pdf_files": 0,
+      "pdf_pages": 0,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 1,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "contamination"
+    },
+    {
+      "case": "dnp-blocks-1",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-2923.jsonl": "d7f6c65c68ab99c63621c0240456cad16a72592728fc7dc7a6ff350bfe3fa7ea"
+        },
+        "maximum_planned_workers": 1,
+        "observed_child_pids": [],
+        "overlapping_workers_required": false,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "dnp-blocks",
+            "memory_available_mib": 7184.26953125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "requested-serial",
+            "tasks": 12,
+            "workers": 1
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "serial",
+        "simultaneous_child_workers": false
+      },
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-1",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3018.jsonl": "308bff8b6bbf8e520db29f2cc5b709e0466e76b4262cea678d4c3fe408f5167c",
+          "worker-3036.jsonl": "590e745b080f507b74168871f64199f9f0d9d010a995f299fe8c518282f81b89",
+          "worker-3037.jsonl": "840e6f112e96f9a75bcecee1fcc684aa25ca27d1b7d27d193c00916d0bf5a07b",
+          "worker-3038.jsonl": "6d16007ade8eb5e7adae095396fe73ad78300a0109f0e218913f98557d4ed42f",
+          "worker-3039.jsonl": "c9d003447885a6bceea7dfbfc33b3588a23b58c5f49935d8bbfd37efa3e7b77e",
+          "worker-3040.jsonl": "1f06423c82e1148b42688db260a4eb84c9087d2c3cb8d8b14e8a204f446c59a1",
+          "worker-3041.jsonl": "b5f4290450d79f57cd5063664a3c4bb66919771a14cb47bd1079515faf85ad23",
+          "worker-3042.jsonl": "eb7d79927b6b5f5fd78c60824f76319bc480c8a69470447b3e40e6211f57ca61",
+          "worker-3043.jsonl": "2acf8e96223b9aa319dc6e007aae7c87769d3b54b005e4a36270d7e937964f0c",
+          "worker-3044.jsonl": "1aad22e95ee54eb9c8c49bb2b39a6e223345f76293cd836771adfb5947012df5",
+          "worker-3045.jsonl": "2f617d0ceb01ab7d9fad4785075cfa6d13f443b6cdf9e08e5e4d43a0104f46c2",
+          "worker-3046.jsonl": "9a528dceef21330b2114ace23e881a5c6264b3926d34914987a7f2853759096f",
+          "worker-3047.jsonl": "761e7a770f6262a47f1a5a008525f650c6b20d68574f115779cd3da8158e8b16"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          3036,
+          3037,
+          3038,
+          3039,
+          3040,
+          3041,
+          3042,
+          3043,
+          3044,
+          3045,
+          3046,
+          3047
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "dnp-blocks",
+            "memory_available_mib": 7250.140625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 12,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": null,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "auto",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-1",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3125.jsonl": "37ab5e6389cd80805754c735e5fc4639784ee7ea897045e7e8221087f4cc504a",
+          "worker-3143.jsonl": "732262d575a4221b850ec65a6e37b183954d793cd7d6861fbd8c2221adf56cb0",
+          "worker-3144.jsonl": "cb92bb7e8145f0dacbd1a58ab877a14b2f493b91a47b571c8269b9f5bf37bb87",
+          "worker-3145.jsonl": "0e1d69b35d9d677d2e80a0969e01e38de9f56575c1879a0fe305deb0a43d3d75",
+          "worker-3146.jsonl": "156ad7971328b717788d8fdcfba89cf5f904aeff87d62a2520bfde4403796d13",
+          "worker-3147.jsonl": "bed1575728b33a151499ee83ea45a57165a4a9440dfeb296f2117d43cc3fa6f6",
+          "worker-3148.jsonl": "4a92a6cecd6b972078fc97faa6e6edd9c9a03e863699ae4afb96838645d71f09",
+          "worker-3149.jsonl": "f2abb4eaec78a634fe42e993213eff21369bffa7a0256fbad30bbb8280938584",
+          "worker-3150.jsonl": "382f57644f5b5953bc8e7330299f21bf1c875cfb6c591299e8b4e4c7a460f05d",
+          "worker-3151.jsonl": "aa730cac6ac10c458bb6aaf3a57b5e131956f2960c635e612e3046757c628dbb",
+          "worker-3152.jsonl": "78dc9c8584e305363c889bf50e256af5c9877c512747363358d8750ed5d1d1b8",
+          "worker-3153.jsonl": "36b1f7e1fd69c1b5f9461470c9e00488ea6c170467771038c0a2151a430d06f9",
+          "worker-3154.jsonl": "012fd2f1bf26b06b6fde35f015af398c63c6adad1e40f7af105e74f8fcbe0166"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          3143,
+          3144,
+          3145,
+          3146,
+          3147,
+          3148,
+          3149,
+          3150,
+          3151,
+          3152,
+          3153,
+          3154
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "dnp-blocks",
+            "memory_available_mib": 7081.3125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 12,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 2,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-2",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-1",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3232.jsonl": "478c212d651c9d38b1ed49fa719d3d60f1438ef2cc17112d7ef8f6eb30d1f5b5",
+          "worker-3250.jsonl": "6fde08071238823662c0c996109b05f5093f10ef6d09b8072c9f2a4ebeea247c",
+          "worker-3251.jsonl": "732c16a3806d412774ba18997bec611850837a9c9a391b1b73569cf85ecae0b6",
+          "worker-3252.jsonl": "8f31a30e7d1b745d4a32d2994b5f6c3d79f768abfaec037e4dc7fbcf813507cb",
+          "worker-3253.jsonl": "aa4032c757212da0de19fb3c390f2e16709c18adb856824adcca6cc30bc7dc30",
+          "worker-3254.jsonl": "bee65240f475922e7e008c59a89c6b49b885f1f93ff7cc7e4954a5608b88bff0",
+          "worker-3255.jsonl": "8a186366133e080e3f331cb38889c36d0aeb6d04dcbbcb396f2cff4cc29ce8a0",
+          "worker-3256.jsonl": "fddef5a5bb6262027c123106246b63f00b1b545a5e976081c4a83318339b70d4",
+          "worker-3257.jsonl": "2a38bf6f06f7d86d75570ee207e3aa9aba4688ebaff5ba5cce0250e4ef82ac39",
+          "worker-3258.jsonl": "b06acdf50c10f347ab344f2bfd4cd8201ce975bc8d08d91e7520211588aae441",
+          "worker-3259.jsonl": "0fdb06379d9a25f7382593a0801515a0ec1478c88c138c35e40b0168bb099203",
+          "worker-3260.jsonl": "2b2ec29d46caae925fbfe3678e078259043dd93bbe87999000c48e3d3c75e3dd",
+          "worker-3261.jsonl": "bf83feb53a6e68fda37e77cc03c92a7f449feb3b0c6c11d9909d0f41b1e6844d"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          3250,
+          3251,
+          3252,
+          3253,
+          3254,
+          3255,
+          3256,
+          3257,
+          3258,
+          3259,
+          3260,
+          3261
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "dnp-blocks",
+            "memory_available_mib": 7223.7265625,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 12,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-1",
+      "deterministic_repeat_of": "manual-4",
+      "parallel": {
+        "event_file_sha256": {
+          "worker-3339.jsonl": "a23c4d66cdb0b0d50ad97f31d9573e98ac8142a795efdb4e05d59940e000202c",
+          "worker-3357.jsonl": "36f37447510392760cebb8f40135c7268c769d4afcab261e32f1ebbb381fdc67",
+          "worker-3358.jsonl": "7339aee1046873e0fb685fe620f7dd6c941d3738e199068685f12fc4dd24f74f",
+          "worker-3359.jsonl": "43d957283cfbf0fe4c8fc9abe1a51fb26bd833c5127ff8331aa20d9c9158262a",
+          "worker-3360.jsonl": "7fe5583b938baace919a275dce9246a7d516c885f3fdf8ac18c733ab7d7ab40b",
+          "worker-3361.jsonl": "1d7f21baeb4c928cf4152673e860124e0c381c4cc77f04defb7242f6e72c8ca1",
+          "worker-3362.jsonl": "bc2a429b9d93c86ee4a6ad8acb7514e6af7d781f302233da5fe7c3c473800260",
+          "worker-3363.jsonl": "df13c2ca92e3ea1cb46b80f7488ed78c11238192471467186be54ec8b9161832",
+          "worker-3364.jsonl": "f5e5caa7dda9585e5c5ccc38a1e8882557f1e105331e1520d0f3caec05410435",
+          "worker-3365.jsonl": "6d28db21d43aed6547e43f6c5f21d6c741082ac47e7524fc7079aac83f8f5a02",
+          "worker-3366.jsonl": "7f8f1cfefb53f476f90b23aa0d8fb82020addca9840c6a2bbe6ea0cf3fed0fc1",
+          "worker-3367.jsonl": "6e22e79917e12e07fb931bf5df0c02a3689871638d3844245d3245387f28fbd8",
+          "worker-3368.jsonl": "b02b9729d5431f40d46d1bc3188eed4700b7b68e00d239fb5ee00b595e281b1a"
+        },
+        "maximum_planned_workers": 2,
+        "observed_child_pids": [
+          3357,
+          3358,
+          3359,
+          3360,
+          3361,
+          3362,
+          3363,
+          3364,
+          3365,
+          3366,
+          3367,
+          3368
+        ],
+        "overlapping_workers_required": true,
+        "plans": [
+          {
+            "cpu_limit": 9,
+            "label": "dnp-blocks",
+            "memory_available_mib": 7090.578125,
+            "memory_per_worker_mib": 2048,
+            "memory_worker_limit": 2,
+            "reason": "cpu-memory-task-budget",
+            "tasks": 12,
+            "workers": 2
+          }
+        ],
+        "plans_within_cpu_memory_and_manual_budgets": true,
+        "requested_max_workers": 4,
+        "requested_mode": "auto",
+        "simultaneous_child_workers": true
+      },
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "manual-4-repeat",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-2",
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-3",
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-numeric-blocks",
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-repeated-qname-compatibility",
+      "pdf_files": 5,
+      "pdf_pages": 5,
+      "pdf_pixels": "exact at 36 DPI; metadata excluded",
+      "status": "passed",
+      "table_files": 2,
+      "tables": "exact bytes including order",
+      "unrounded_r": "identical",
+      "variant": "serial",
+      "workflow": "dnp-call"
+    }
+  ]
+}

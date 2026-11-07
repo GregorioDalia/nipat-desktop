@@ -177,3 +177,34 @@ equivalenza, determinismo e misure di velocità/RAM. Restano necessari il
 confronto sul dataset reale concordato, prove ripetute a risorse fisse e il
 collaudo delle piattaforme finali prima di una release. I dati grezzi e i
 risultati identificativi non vanno pubblicati nel repository.
+
+## Verifiche locali eseguite
+
+La [sintesi della qualifica locale](validation/0.8.12-rootless.json) registra
+il commit `302fb5648563d80910cc9460d0bec5845106414b`, gli hash dei sorgenti e dei
+test e il riferimento 0.8.5. Su R 4.4.2 sono passati **20 casi sintetici e 44
+confronti**: 20 candidati seriali e 24 esecuzioni parallele distribuite fra
+sei casi rappresentativi. Tutte le 145 tabelle confrontate sono identiche
+nei byte, i valori R non arrotondati risultano `identical()` e le 137 pagine
+PDF confrontate hanno pixel identici a 36 DPI, escludendo i metadati.
+
+Per ciascuno dei quattro moduli, automatico, massimo 2, massimo 4 e relativa
+ripetizione hanno mostrato processi figli realmente sovrapposti. Il budget
+disponibile ha scelto due processi di calcolo anche con massimo 4. I due
+casi CPI supplementari verificano inoltre i percorsi cutoff e intervalli:
+richiedono PID figli distinti e registrano la sovrapposizione osservata;
+le attività più brevi possono terminare prima dell'avvio del processo
+successivo. Sono passati anche gli otto controlli R focalizzati, l'audit
+del pileup indicizzato e la cancellazione durante l'elaborazione R reale.
+
+Le 64 esecuzioni scientifiche comprendono 34 risultati già completati e
+riutilizzati dopo aver verificato invariati gli hash scientifici e di
+cattura; tutti i confronti sono stati rieseguiti. Il report documenta la
+correzione del criterio di sovrapposizione per i due piccoli casi CPI e gli
+hash dell'evidenza precedente. Nessun input privato è incluso.
+
+Questa verifica usa il runtime R rilocato sul sistema Linux locale: **non
+valida l'immagine Docker né gli installer Windows o macOS**. Non dimostra un
+aumento della velocità sui dati reali, un limite RAM garantito o
+l'equivalenza per ogni input possibile. Restano necessari i collaudi del
+runtime distribuito, delle piattaforme finali e del dataset reale concordato.

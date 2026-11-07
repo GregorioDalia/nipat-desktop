@@ -375,3 +375,4 @@ src/nipat_scientific/parallel.R
 src/nipat_scientific/parallel.py
 tests/test_parallel_client.py
 tests/test_parallel_runtime.py
+docs/validation/0.8.12-rootless.json
