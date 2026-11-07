@@ -13,6 +13,58 @@ SPEC.loader.exec_module(release)
 
 
 class ReleaseInputTests(unittest.TestCase):
+    def metadata_request(self, url, token):
+        opener = Mock()
+        opener.open.return_value = io.BytesIO(b'{"id": 123}')
+        with patch.dict(release.os.environ, {"GH_TOKEN": token}), \
+                patch.object(release.urllib.request, "build_opener", return_value=opener):
+            self.assertEqual(release.fetch_json(url), {"id": 123})
+        return opener.open.call_args.args[0]
+
+    def test_optional_token_is_scoped_to_own_release_metadata(self):
+        prefix = f"https://api.github.com/repos/{release.REPOSITORY}/releases/"
+        for suffix in ("latest", "tags/v0.7.2", "tags/v0.8.10rc1"):
+            with self.subTest(metadata=suffix):
+                request = self.metadata_request(prefix + suffix, "test-token")
+                self.assertEqual(request.get_header("Authorization"), "Bearer test-token")
+                self.assertNotIn("Authorization", request.headers)
+        for url in (
+            prefix + "assets/123", prefix + "tags/v0.7.2?redirect=1", prefix + "latest#fragment",
+            "https://api.github.com/repos/anchore/syft/releases/latest",
+            "https://api.github.com/repos/GregorioDalia/other/releases/latest",
+            f"https://github.com/{release.REPOSITORY}/releases/download/v0.7.2/installer-manifest.json",
+            "https://release-assets.githubusercontent.com/download",
+        ):
+            with self.subTest(unauthenticated=url):
+                self.assertFalse(self.metadata_request(url, "test-token").has_header("Authorization"))
+        self.assertFalse(self.metadata_request(prefix + "latest", "").has_header("Authorization"))
+
+    def test_metadata_token_is_not_forwarded_on_any_approved_redirect(self):
+        request = self.metadata_request(
+            f"https://api.github.com/repos/{release.REPOSITORY}/releases/latest", "test-token")
+        for destination in (
+            f"https://api.github.com/repos/{release.REPOSITORY}/releases/tags/v0.7.2",
+            f"https://github.com/{release.REPOSITORY}/releases/download/v0.7.2/installer-manifest.json",
+            "https://release-assets.githubusercontent.com/download",
+        ):
+            with self.subTest(destination=destination):
+                redirected = release.RestrictedRedirect().redirect_request(
+                    request, None, 302, "Found", {}, destination)
+                self.assertFalse(redirected.has_header("Authorization"))
+                self.assertEqual(redirected.get_header("Accept"), "application/vnd.github+json")
+
+    def test_asset_download_does_not_add_metadata_token(self):
+        url = f"https://github.com/{release.REPOSITORY}/releases/download/v0.7.2/asset"
+        opener = Mock()
+        opener.open.return_value = io.BytesIO(b"asset")
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.dict(release.os.environ, {"GH_TOKEN": "test-token"}), \
+                patch.object(release.urllib.request, "build_opener", return_value=opener):
+            target = Path(temporary) / "asset"
+            release.checked_download(url, target, hashlib.sha256(b"asset").hexdigest(), 5)
+            self.assertEqual(target.read_bytes(), b"asset")
+        opener.open.assert_called_once_with(url, timeout=120)
+
     def test_download_hosts_are_https_exact_and_without_credentials(self):
         for url in ("https://github.com/example", "https://release-assets.githubusercontent.com/download"):
             self.assertTrue(release.allowed_url(url))
