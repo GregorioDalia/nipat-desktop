@@ -43,6 +43,10 @@ R_CASES = {
     **dict.fromkeys(("cpi-all", "cpi-panels", "cpi-zero-error", "cpi-shared-parents"), "cpi"),
     **dict.fromkeys(("contamination-batch", "contamination-single", "contamination-panel-only"), "contamination"),
 }
+R_REQUIRED_PDFS = {
+    "dnp-single": 5, "dnp-multi": 10, "dnp-parallel": 10, "dnp-varied-qualities": 5,
+    "cpi-all": 4, "cpi-panels": 4, "cpi-zero-error": 4, "cpi-shared-parents": 6,
+}
 R_HELPERS = {
     "tests/r_optimization/cpi/check_core.R", "tests/r_optimization/dnp/check_blocks.R",
     "tests/r_optimization/snp/check_reads.R", "tests/r_optimization/performance/check_costs.R",
@@ -172,6 +176,9 @@ def template(installer_set, run_id):
 def validate(record, version, commit, run_id, installer_set=None):
     """Require a committed review under the record's explicit acceptance policy."""
     acceptance_path(version)
+    require(not revised_r_contract(version) or isinstance(record, dict)
+            and type(record.get("schema_version")) is int and record["schema_version"] == 6,
+            "Releases from 0.8.9 require scientific equivalence acceptance schema 6")
     if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4, 5, 6):
         validate_research(record, version, commit, run_id, installer_set)
         return
@@ -487,7 +494,9 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                 and all(safe_evidence_path(name) and valid_digest(value) for name, value in tables.items()),
                 "Scientific differential table evidence is incomplete")
         plots = case.get("plots")
-        require(isinstance(plots, dict), "Scientific PDF comparison evidence is missing")
+        require(isinstance(plots, dict)
+                and len(plots) >= R_REQUIRED_PDFS.get(case["case"], 0),
+                "Scientific PDF comparison evidence is missing or incomplete for a required case")
         for name, plot in plots.items():
             require(safe_evidence_path(name) and isinstance(plot, dict)
                     and type(plot.get("pages")) is int and plot["pages"] > 0

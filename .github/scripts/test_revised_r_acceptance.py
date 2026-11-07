@@ -76,7 +76,8 @@ class RevisedRAcceptanceTests(unittest.TestCase):
             "comparison": {"table_bytes": "exact", "unrounded_r": "identical", "pdf_pixels": "exact", "pdf_metadata": "excluded"},
             "cases": [{"case": name, "workflow": workflow, "status": "passed", "unrounded_r_values": "identical",
                        "table_sha256": {"result.tsv": "c" * 64},
-                       "plots": {"plot.pdf": {"pages": 1, "raster_dpi": 36, "page_sha256": {"page-1.ppm": "d" * 64}}}}
+                       "plots": {f"plot{number}.pdf": {"pages": 1, "raster_dpi": 36, "page_sha256": {"page-1.ppm": "d" * 64}}
+                                 for number in range(acceptance.R_REQUIRED_PDFS.get(name, 0))}}
                       for name, workflow in acceptance.R_CASES.items()],
             "helpers": [{"path": path, "status": "passed", "sha256": digest(candidate[path])}
                         for path in sorted(acceptance.R_HELPERS)],
@@ -122,8 +123,16 @@ class RevisedRAcceptanceTests(unittest.TestCase):
         record.update(schema_version=5)
         del record["scientific_equivalence"]
         record["observed_baseline"]["source_comparison_scope"] = acceptance.MULTIPLATFORM_SOURCE_SCOPE
-        with self.assertRaisesRegex(ValueError, "protected vendored R"):
+        with self.assertRaisesRegex(ValueError, "require scientific equivalence acceptance schema 6"):
             acceptance.validate(record, "0.8.9", COMMIT, 123)
+
+    def test_changing_baseline_to_candidate_cannot_downgrade_scientific_acceptance(self):
+        self.record.update(schema_version=5, reviewed_source_changes=[])
+        del self.record["scientific_equivalence"]
+        self.record["observed_baseline"].update(source_commit=COMMIT,
+            source_comparison_scope=acceptance.MULTIPLATFORM_SOURCE_SCOPE)
+        with self.assertRaisesRegex(ValueError, "require scientific equivalence acceptance schema 6"):
+            acceptance.validate(self.record, "0.8.9", COMMIT, 123)
 
     def test_new_schema_does_not_allow_unknown_scientific_sources(self):
         self.record["reviewed_source_changes"].insert(0, {
@@ -159,8 +168,10 @@ class RevisedRAcceptanceTests(unittest.TestCase):
             lambda r: r["cases"][0].update(status="failed"),
             lambda r: r["cases"][0].update(unrounded_r_values="not-compared"),
             lambda r: r["cases"][0].update(table_sha256={}),
-            lambda r: r["cases"][0]["plots"]["plot.pdf"].update(page_sha256={}),
+            lambda r: r["cases"][0]["plots"]["plot0.pdf"].update(page_sha256={}),
             lambda r: [case.update(plots={}) for case in r["cases"]],
+            lambda r: r["cases"][0]["plots"].pop("plot0.pdf"),
+            lambda r: r["cases"][1].update(plots={}),
             lambda r: r["helpers"].pop(), lambda r: r["helpers"][0].update(status="failed"),
             lambda r: r["helpers"][0].update(sha256="f" * 64),
             lambda r: r["candidate_r_sha256"].update({next(iter(acceptance.R_WORKFLOWS)): "f" * 64}),
