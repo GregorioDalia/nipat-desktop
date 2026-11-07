@@ -28,19 +28,28 @@ Contamination è `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
 SNPcall e DNPcall sono identificati dai byte conservati nel repository e dal
 manifest seguente.
 
-La revisione di sviluppo 0.8.9 modifica l'organizzazione dei calcoli R per
-ridurre raggruppamenti, scansioni e calcoli duplicati. I file contengono
-avvisi delle modifiche, conservando attribuzioni e licenze. Il riferimento
-per l'equivalenza è la versione distribuita nella 0.8.5, commit
-`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`. Il
-[piano di verifica](../docs/OPTIMIZATION_0.8.9.md) definisce copertura e limiti.
+La revisione di sviluppo **0.8.12** aggiunge un budget comune per il
+parallelismo dei quattro programmi R alle ottimizzazioni introdotte dalla
+0.8.9 e all'elaborazione DNP per blocchi. Modalità, limiti e unità di lavoro
+sono descritti nella [guida al parallelismo](../docs/PARALLELISMO_0.8.12.md).
+I file conservano attribuzioni e licenze e indicano le modifiche NIPAT.
+
+Il riferimento per l'equivalenza rimane **NIPAT v0.8.5**, commit
+`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copie congelate in
+[`tests/reference_r/0.8.5`](../tests/reference_r/0.8.5/README.md). Comprende
+le modifiche di compatibilità già distribuite in quella versione: non è
+una dichiarazione di identità con sorgenti upstream mai modificati. La
+baseline non viene aggiornata per far passare un candidato. Il
+[piano iniziale](../docs/OPTIMIZATION_0.8.9.md) e il
+[contratto delle verifiche R](../tests/r_optimization/README.md) documentano
+copertura, controlli di equivalenza e limiti delle evidenze.
 
 | Componente | SHA-256 |
 | --- | --- |
-| DNPcall | `41b44a2deba05ded10565b08bb925178016c73f12094e4360b035a99986c2357` |
-| SNPcall | `65923278b50523c0837a9a0935abdc5f7e74c3eb17f58c25e9df2564777081ad` |
-| Contamination | `152c74cc91b0bd441e673ecf52a756604ec47e9a04c0e31fc0965c097e3437e1` |
-| CPI | `a93e98a188dff97d6a74d683729c309038ee1b6e7842755f3ac236b61363c885` |
+| DNPcall | `e9725291a572a3c7dc832905fee3b4d665cf6767cb914088788a9d0c6401423b` |
+| SNPcall | `66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64` |
+| Contamination | `d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26` |
+| CPI | `d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1` |
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate
@@ -64,10 +73,13 @@ UpSet richiede almeno due campioni: un run con un solo campione non produce
 `DNPs_covered_UpSet_plot.pdf`. Questi adattamenti riguardano i riepiloghi e
 non la logica di chiamata del genotipo.
 
-DNPcall elimina i propri file temporanei BED e pileup al termine. La sua
-chiamata interna a samtools sopprime lo stderr e non ne controlla esplicitamente
-il codice di uscita. La verifica degli output resta quindi necessaria anche
-quando R termina senza errore.
+DNPcall acquisisce il pileup tramite l'helper Python incluso nel motore e
+interrompe l'analisi se l'acquisizione fallisce. Gli indici BAM disponibili
+consentono la selezione delle letture nelle regioni richieste; in loro assenza
+si usa la scansione sequenziale. Gli intermedi grandi vengono scritti sul
+disco Linux temporaneo del runtime. BED e pileup sono rimossi al termine,
+mentre il client gestisce la pulizia del volume dell'esecuzione. La verifica
+degli output resta parte del completamento del workflow.
 
 ### SNPcall
 

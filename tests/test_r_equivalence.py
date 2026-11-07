@@ -150,6 +150,89 @@ class REquivalenceTests(unittest.TestCase):
                             for left, right in zip(pairs, pairs[1:])))
         self.assertTrue(any(left.split(":")[1] == right.split(":")[1]
                             for left, right in zip(pairs, pairs[1:])))
+        selected = [case for case in cases if case.name in verification.PARALLEL_CASES]
+        self.assertEqual({case.workflow for case in selected}, set(verification.SCRIPTS))
+        concurrent = [case for case in cases if case.name in verification.CONCURRENT_CASES]
+        self.assertEqual({case.workflow for case in concurrent}, set(verification.SCRIPTS))
+        self.assertEqual(set(verification.PARALLEL_VARIANTS),
+                         {"auto", "manual-2", "manual-4", "manual-4-repeat"})
+
+    def parallel_events(self, *, workers=2, mode="auto", overlap=True, children=True):
+        budget = {"schema_version": 1, "interface": "nipat-parallel-v1", "label": "real-module",
+                  "coordinator_pid": 100, "workers": workers, "tasks": 2,
+                  "mode": mode, "max_workers": None, "cpu_limit": 4,
+                  "memory_worker_limit": 3}
+        events = [{**budget, "event": "plan", "pid": 100, "observed_at_unix": 1000.0}]
+        for index in range(2):
+            pid = 101 + index if children else 100
+            start = 1001.0 + index * (0.1 if overlap else 2.0)
+            for kind, stamp in (("task-start", start), ("task-end", start + 1.0)):
+                events.append({**budget, "event": kind, "pid": pid, "task_index": index + 1,
+                               "observed_at_unix": stamp, "elapsed_seconds": stamp - 900 - index * 10})
+        directory = self.root / "parallel-log"
+        directory.mkdir(exist_ok=True)
+        for pid in {event["pid"] for event in events}:
+            self.file(f"parallel-log/worker-{pid}.jsonl", "".join(
+                json.dumps(event) + "\n" for event in events if event["pid"] == pid))
+        return directory
+
+    def test_parallel_qualification_requires_real_overlapping_worker_intervals(self):
+        directory = self.parallel_events()
+        result = verification.verify_parallel_execution(directory, mode="auto", cap=2, require_parallel=True)
+        self.assertEqual(result["observed_child_pids"], [101, 102])
+        self.assertTrue(result["simultaneous_child_workers"])
+        # Separate per-process elapsed origins must not affect the common clock.
+        self.assertEqual(result["maximum_planned_workers"], 2)
+
+    def test_multiple_pids_without_concurrency_do_not_qualify(self):
+        directory = self.parallel_events(overlap=False)
+        with self.assertRaisesRegex(ValueError, "two simultaneous"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=2, require_parallel=True)
+
+    def test_requested_pool_without_real_children_does_not_qualify(self):
+        directory = self.parallel_events(children=False)
+        with self.assertRaisesRegex(ValueError, "two actual"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=2, require_parallel=True)
+
+    def test_tiny_supplemental_cases_still_require_actual_children(self):
+        directory = self.parallel_events(overlap=False)
+        result = verification.verify_parallel_execution(directory, mode="auto", cap=2,
+                                                        require_parallel=True, require_overlap=False)
+        self.assertEqual(result["observed_child_pids"], [101, 102])
+        self.assertFalse(result["simultaneous_child_workers"])
+        self.assertFalse(result["overlapping_workers_required"])
+
+    def test_parallel_qualification_rejects_process_budget_excess(self):
+        directory = self.parallel_events()
+        with self.assertRaisesRegex(ValueError, "exceeded"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=1, require_parallel=True)
+        directory = self.parallel_events(workers=4)
+        with self.assertRaisesRegex(ValueError, "worker count|exceeded"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=4, require_parallel=True)
+
+    def test_serial_qualification_rejects_child_processes(self):
+        directory = self.parallel_events(workers=1, mode="serial")
+        with self.assertRaisesRegex(ValueError, "Serial scientific execution used"):
+            verification.verify_parallel_execution(directory, mode="serial", cap=None, require_parallel=False)
+
+    def test_serial_qualification_passes_parent_execution(self):
+        directory = self.parallel_events(workers=1, mode="serial", children=False, overlap=False)
+        result = verification.verify_parallel_execution(directory, mode="serial", cap=None, require_parallel=False)
+        self.assertEqual(result["observed_child_pids"], [])
+
+    def test_candidate_modes_never_reconfigure_the_frozen_reference(self):
+        case = verification.cases()[0]
+        reference = verification.case_environment(case, "reference", verification.BASELINE / verification.SCRIPTS[case.workflow],
+                                                   verification.PARALLEL_VARIANTS["manual-4"])
+        self.assertNotIn("NIPAT_EXECUTION_MODE", reference)
+        self.assertNotIn("NIPAT_MAX_WORKERS", reference)
+        self.assertNotIn("NIPAT_PARALLEL_LOG_DIR", reference)
+        candidate = verification.case_environment(case, "candidate", Path(verification.SCRIPTS[case.workflow]))
+        self.assertEqual(candidate["NIPAT_EXECUTION_MODE"], "serial")
+        parallel = verification.case_environment(case, "candidate", Path(verification.SCRIPTS[case.workflow]),
+                                                   verification.PARALLEL_VARIANTS["manual-2"])
+        self.assertEqual(parallel["NIPAT_EXECUTION_MODE"], "auto")
+        self.assertEqual(parallel["NIPAT_MAX_WORKERS"], "2")
 
     def test_block_settings_do_not_change_the_reference_execution(self):
         cases = [case for case in verification.cases() if case.compare_pileup]

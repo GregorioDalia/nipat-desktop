@@ -68,7 +68,7 @@ class WizardTests(unittest.TestCase):
 
     def test_dnp_uses_paths_with_spaces_and_explicit_confirmation(self):
         result, messages = self.invoke(['1', '1', f'"{self.bam}"', '', self.reference,
-                                        self.panel, '1', 'my-run', '1', '0', '0'])
+                                        self.panel, 'my-run', '1', '0', '0'])
         self.assertEqual(result, 0)
         self.workflows.dnp_call.assert_called_once_with(
             bams=[self.bam], bamlist=None, reference=self.reference, panel=self.panel,
@@ -163,16 +163,16 @@ class WizardTests(unittest.TestCase):
                 for key, value in expected.items():
                     self.assertEqual(self.workflows.cpi.call_args.kwargs[key], value)
 
-    def test_dnp_bamlist_relative_entries_and_parallel(self):
+    def test_dnp_bamlist_relative_entries_with_automatic_execution(self):
         bamlist = self.file('bams.txt', '"sample one.bam"\nsample two.bam\n')
-        self.invoke(['1', '2', bamlist, self.reference, self.panel, '2', '', '1', '0', '0'])
+        self.invoke(['1', '2', bamlist, self.reference, self.panel, '', '1', '0', '0'])
         self.workflows.dnp_call.assert_called_once_with(
             bams=None, bamlist=bamlist, reference=self.reference, panel=self.panel,
-            parallel=True, run_name=None)
+            parallel=False, run_name=None)
 
     def test_dnp_multiple_bams_and_duplicate_retry(self):
         result, messages = self.invoke(['1', '1', self.bam, self.bam, self.other_bam, '',
-                                        self.reference, self.panel, '1', '', '1', '0', '0'])
+                                        self.reference, self.panel, '', '1', '0', '0'])
         self.assertEqual(result, 0)
         self.assertEqual(self.workflows.dnp_call.call_args.kwargs['bams'], [self.bam, self.other_bam])
         self.assertIn("gia' presente nella lista", messages)

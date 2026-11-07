@@ -1,4 +1,4 @@
-# NIPAT 0.8.10: indexed acquisition and bounded complete-window processing.
+# NIPAT 0.8.12: resource-bounded sample or complete-window parallel processing.
 # Scientific formulas and within-locus observation order remain unchanged.
 cat("\n###### DNPcall ######\n\n\n\n")
 
@@ -85,16 +85,9 @@ format_df_decimals <- function(df, digits = 3) {
 
 
 
-# check if parallel mode is enabled
-parallel_mode <- "--parallel" %in% args
-
-# determine the number of cores to use (automatically use all if --parallel is specified)
-if ("--parallel" %in% args) {
-  ncores <- parallel::detectCores()
-  if (is.na(ncores)) ncores <- 1L
-} else {
-  ncores <- 1
-}
+# The legacy --parallel argument remains accepted. The common execution policy
+# selects automatic or serial work for all R modules and caps the global pool.
+source(Sys.getenv("NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
 
 
 
@@ -201,7 +194,10 @@ nipat_dnp_write_metrics("work/dnp-blocks.json", list(
   memory_limit_scope = "raw input proxy; complete windows and legacy compatibility groups are never split or truncated"
 ))
 nipat_progress("end", "pileup-index", outcome = "succeeded")
-ncores <- min(ncores, length(samplelist))
+# Multiple samples use the outer pool; one sample can use all eligible block
+# workers. The common helper forces nested calls to serial execution.
+ncores <- nipat_parallel_workers(length(samplelist),
+                                 memory_mib = nipat_dnp_worker_memory_mib(block_plan))
 common_columns <- 3
 final_merged_data <- NULL
 
@@ -735,31 +731,19 @@ process_individual <- function(i) {
   result
   }
 
-  pileup_connection <- file(pileup_index$path, open = "rb")
-  on.exit(close(pileup_connection), add = TRUE)
-  block_results <- vector("list", length(block_plan$blocks))
-  block_metrics <- vector("list", length(block_plan$blocks))
-  completed_loci <- 0L
-  processing_started <- proc.time()[["elapsed"]]
-  for (block_number in seq_along(block_plan$blocks)) {
-    block <- block_plan$blocks[[block_number]]
-    block_started <- proc.time()[["elapsed"]]
-    block_pileup <- nipat_dnp_read(pileup_index, block$row_ids, pileup_connection)
-    block_results[[block_number]] <- compute_block(
-      block_pileup, ForUniqReads[ForUniqReads$uniq %in% block$locus_ids, , drop = FALSE],
-      RefAltDNP[block$locus_ids, , drop = FALSE])
-    rm(block_pileup)
-    peak_ind_mem <- max(peak_ind_mem, block_results[[block_number]]$peak_mem)
-    block_metrics[[block_number]] <- list(
-      loci = length(block$locus_ids), raw_rows = length(block$row_ids),
-      raw_bytes = block$raw_bytes,
-      elapsed_seconds = unname(proc.time()[["elapsed"]] - block_started))
-    completed_loci <- completed_loci + length(block$locus_ids)
-    nipat_progress("progress", "dnp-processing", sample_ids = i,
-                   completed = completed_loci, total = nrow(r_DNPlist), unit = "loci")
-    gc(verbose = FALSE)
-  }
-  processing_seconds <- unname(proc.time()[["elapsed"]] - processing_started)
+  processed <- nipat_dnp_process_blocks(pileup_index, block_plan, ForUniqReads,
+    RefAltDNP, compute_block, workers = if (ncores > 1L) 1L else NULL,
+    progress = function(completed, total) {
+      nipat_progress("progress", "dnp-processing", sample_ids = i,
+                     completed = completed, total = total, unit = "loci")
+    })
+  block_results <- processed$results
+  block_metrics <- processed$metrics
+  block_workers <- processed$workers
+  processing_seconds <- processed$elapsed_seconds
+  peak_ind_mem <- max(peak_ind_mem,
+                      vapply(block_results, function(value) value$peak_mem, numeric(1)))
+  rm(processed)
   # The legacy whole-sample calculation fails when no ref/alt likelihood can
   # be formed anywhere. Empty blocks must not turn that failure into a result.
   if (!any(vapply(block_results, function(value) value$has_likelihoods, logical(1)))) {
@@ -864,17 +848,19 @@ process_individual <- function(i) {
   cat(paste0("Peak RAM (MB): ", peak_ind_mem, "\n"))
   nipat_progress("end", "plots", sample_ids = i, outcome = "succeeded")
   return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem,
-              block_metrics = block_metrics, processing_seconds = processing_seconds))
+              block_metrics = block_metrics, block_workers = block_workers,
+              processing_seconds = processing_seconds))
 }
 
 update_peak()
 
-# run the individual-level processing in parallel or serial mode
-cat(paste0("\nRunning ", ifelse(parallel_mode, "in parallel", "sequentially"), "\n"))
-
-
-if (parallel_mode) {
-  results <- mclapply(samplelist, process_individual, mc.cores = ncores)
+# A serial outer call must not mark the current process as a nested worker:
+# the one-sample case needs to fan out its independent blocks below.
+cat(paste0("\nRunning with ", ncores, " sample worker(s); block workers follow the execution budget\n"))
+if (ncores > 1L) {
+  results <- nipat_parallel_lapply(samplelist, process_individual, label = "dnp-samples",
+    workers = ncores, memory_mib = nipat_dnp_worker_memory_mib(block_plan))
+  ncores <- attr(results, "workers")
 } else {
   results <- lapply(samplelist, process_individual)
 }
@@ -976,9 +962,12 @@ nipat_dnp_write_metrics("work/dnp-blocks.json", list(
   compatibility_reasons = I(block_plan$compatibility_reasons),
   unmatched_coordinate_rows = block_plan$unmatched_rows,
   repeated_qname_rows = pileup_index$repeated_qname_rows,
-  sample_workers = ncores, block_workers = 1L,
+  sample_workers = ncores,
+  block_workers = max(vapply(results, function(result) result$block_workers, integer(1))),
+  estimated_worker_memory_mib = nipat_dnp_worker_memory_mib(block_plan),
   samples = setNames(lapply(results, function(result) list(
-    processing_seconds = result$processing_seconds, blocks = result$block_metrics)), samplelist),
+    processing_seconds = result$processing_seconds, block_workers = result$block_workers,
+    blocks = result$block_metrics)), samplelist),
   elapsed_seconds_including_acquisition_and_index = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 ))
 

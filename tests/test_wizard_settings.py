@@ -81,7 +81,7 @@ class WizardSettingsTests(unittest.TestCase):
         self.assertIn("prossimi avvii", output)
 
     def test_cancelled_edits_and_empty_confirmation_never_save(self):
-        self.invoke(["5", "1", "2", self.root / "discarded", "", "2", "4", "2", "0", "0", "0"])
+        self.invoke(["5", "1", "2", self.root / "discarded", "", "2", "1", "2", "0", "0", "0"])
         self.assertFalse(self.store.path.exists())
         self.assertFalse((self.root / "discarded").exists())
         self.assert_no_analyses()
@@ -128,7 +128,7 @@ class WizardSettingsTests(unittest.TestCase):
 
     def test_back_stays_in_configuration_without_saving_pending_edits(self):
         for answers in (["1", "2", ":indietro", "0", "0"],
-                        ["2", "4", ":indietro", "0", "0"],
+                        ["2", "3", ":indietro", "0", "0"],
                         ["8", "1", ":indietro", "0", "0"],
                         ["8", "2", ":indietro", "0", "0"]):
             with self.subTest(answers=answers):
@@ -141,14 +141,14 @@ class WizardSettingsTests(unittest.TestCase):
                 self.assertFalse(self.store.path.exists())
 
     def test_dnp_defaults_are_reused_but_sample_and_run_are_selected_each_time(self):
-        self.invoke(["5", "2", "1", "2", "2", self.ref, "3", self.panel, "4", "2", "9", "0", "0"])
+        self.invoke(["5", "2", "1", "2", "2", self.ref, "3", self.panel, "9", "0", "0"])
         saved = self.store.load().workflow_defaults("1")
-        self.assertEqual(saved, {"mode": "2", "reference": self.ref, "panel": self.panel, "parallel": "2"})
+        self.assertEqual(saved, {"mode": "2", "reference": self.ref, "panel": self.panel})
         self.assert_no_analyses()
-        self.invoke(["1", "", self.bamlist, "", "", "", "new-run", "1", "0", "0"])
+        self.invoke(["1", "", self.bamlist, "", "", "new-run", "1", "0", "0"])
         self.workflows.dnp_call.assert_called_once_with(
             bams=None, bamlist=self.bamlist, reference=self.ref, panel=self.panel,
-            parallel=True, run_name="new-run")
+            parallel=False, run_name="new-run")
         self.assertEqual(self.store.load().workflow_defaults("1"), saved)
 
     def test_defaults_for_snp_contamination_and_cpi_are_separate(self):

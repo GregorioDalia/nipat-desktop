@@ -1,7 +1,8 @@
 #!/usr/bin/env Rscript
-# Modified by NIPAT contributors, 2026-11-07 (0.8.9): project input columns,
+# Modified by NIPAT contributors, 2026-11-07 (0.8.12): project input columns,
 # tokenize observations directly and aggregate read features without constructing
-# discarded base strings; scientific rules and global read grouping unchanged.
+# discarded base strings. Complete QNAME groups can run concurrently; scientific
+# rules, each read's observation order and global read grouping stay unchanged.
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -28,6 +29,39 @@ if ( is.null(opt$pileup) | is.null(opt$snplist) ) {
 pileup_file  <- opt$pileup
 snplist_file <- opt$snplist
 out_file     <- opt$out
+
+source(Sys.getenv("NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
+
+nipat_snp_group_reads <- function(observations, aggregate_reads) {
+  aggregate_serial <- function() {
+    parts <- nipat_parallel_lapply(list(NULL), function(task) aggregate_reads(observations),
+                                   label = "snp-qname-groups", workers = 1L)
+    parts[[1L]]
+  }
+  # Do not construct a global grouping index or copy the whole observation
+  # frame when the configured mode/resource budget permits only one worker.
+  workers <- nipat_parallel_workers(max(1L, nrow(observations)))
+  if (workers <= 1L || !nrow(observations)) return(aggregate_serial())
+  # A QNAME can span several SNP windows. Assign the entire global QNAME group
+  # to one task instead of splitting by genomic position or input row ranges.
+  # match() also keeps all missing QNAMEs together on the compatibility path.
+  qnames <- unique(observations$df.V7)
+  if (length(qnames) <= 1L) return(aggregate_serial())
+  workers <- min(workers, length(qnames))
+  group_ids <- match(observations$df.V7, qnames)
+  task_count <- min(length(qnames), 2L * workers)
+  # Preserve the original observation order within every complete read. The
+  # parent restores the existing global QNAME order after collecting results.
+  row_groups <- split(seq_len(nrow(observations)),
+                      (group_ids - 1L) %% task_count)
+  parts <- nipat_parallel_lapply(
+    row_groups,
+    function(rows) aggregate_reads(observations[rows, , drop = FALSE]),
+    label = "snp-qname-groups", workers = workers)
+  result <- do.call(rbind, parts)
+  rownames(result) <- NULL
+  result
+}
 
 cat(">> snpscall started\n")
 cat(">> pileup file : ", pileup_file,  "\n", sep = "")
@@ -84,7 +118,7 @@ if (direct_observations) {
   # A joined string of single bases is longer than four characters exactly when
   # at least three observations exist; its third character is the second base.
   # Retain the complete coordinate path because downstream counting uses it.
-  read_features <- df3 %>%
+  read_features <- nipat_snp_group_reads(df3, function(observations) observations %>%
     group_by(df.V7) %>%
     summarise(
       df.V5.1 = {
@@ -95,7 +129,7 @@ if (direct_observations) {
       df.chr = paste(df.chr, collapse = "|"),
       .groups = "drop"
     ) %>%
-    as.data.frame()
+    as.data.frame())
   rm(df3)
   read_features <- read_features[order(read_features$df.V7), , drop = FALSE]
   # Missing features mark short reads; @ marks indels anywhere in the read,
@@ -120,14 +154,14 @@ if (direct_observations) {
   df3 <- df2 %>% separate_rows(df.V5, df.V7, sep = " ")
   rm(df2)
   df3 <- df3[is.na(df3$df.V7) | nchar(df3$df.V7) > 0, ]
-  df_merged <- df3 %>%
+  df_merged <- nipat_snp_group_reads(df3, function(observations) observations %>%
     group_by(df.V7) %>%
     summarise(
       df.V5 = paste(df.V5, collapse = "|"),
       df.chr = paste(df.chr, collapse = "|"),
       .groups = "drop"
     ) %>%
-    as.data.frame()
+    as.data.frame())
   rm(df3)
   df_merged <- df_merged[order(df_merged$df.V7), , drop = FALSE]
   rownames(df_merged) <- NULL

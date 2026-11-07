@@ -15,6 +15,10 @@ python scripts/verify_r_equivalence.py \
 The output directory must be new. Docker and Poppler's `pdftoppm` are required.
 Containers have no network and mount sources and inputs read-only. Inputs are
 generated from public synthetic fixtures; no personal sequencing data are used.
+Qualification containers are limited to four CPUs and 8 GiB; the production
+scheduler must also respect the actual available CPU and memory. Insufficient
+resources to exercise real parallelism fail qualification rather than silently
+turning a serial run into a parallel pass.
 
 The comparisons require:
 
@@ -27,7 +31,23 @@ The comparisons require:
 arguments. It retains unrounded DNP tables, SNP tables, Contamination summaries
 and every distinct CPI calculation's inputs and threshold results. Repeated CPI
 calls in the reference are collapsed only after confirming identical results.
+Forked CPI calculations write separate process-local audit records. Their
+invocation list is canonicalized by complete inputs for the value comparison;
+the result data and scientific file order remain subject to exact comparison.
 The production scripts need no diagnostic flags or test-specific branches.
+
+Every case compares the frozen reference with the explicitly serial candidate.
+Representative DNP, SNP and Contamination cases and three CPI scheduling paths
+(pairs, cutoffs, threshold intervals) also run automatic scheduling, maximum
+two processes, maximum four processes and a repeated maximum-four run. Each
+candidate independently equals the same oracle. The four main workflow cases
+must show at least two actual child PIDs with overlapping task intervals.
+The two supplemental CPI cases require distinct actual child PIDs and report
+observed overlap without requiring it: their tiny threshold tasks can finish
+before the next worker starts. Requested pool sizes alone do not qualify.
+CPU, memory and manual process
+limits are checked against each recorded plan. The requested maximum need not
+be reached when the effective resource budget is smaller.
 
 Cases include neighboring DNPs, insertion/deletion reads, forward/reverse reads,
 mixed-case read names, uncovered sites, one/two samples and parallel execution;

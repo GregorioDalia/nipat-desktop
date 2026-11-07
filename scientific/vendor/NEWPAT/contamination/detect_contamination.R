@@ -1,10 +1,14 @@
 # Modified by NIPAT contributors, 2026-11-06 (0.8.9): collect sample summary
 # rows once; scientific formulas, filters and output columns unchanged.
+# NIPAT 0.8.12: bounded sample/row parallelism with ordered final reductions.
 
 suppressPackageStartupMessages({
   library(dplyr)
   library(tools)
 })
+
+source(Sys.getenv("NIPAT_PARALLEL_HELPER",
+                  unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
 
 # load arguments
 args <- commandArgs(trailingOnly = TRUE)
@@ -197,50 +201,69 @@ process_df <- function(file_path) {
       )
   }
 
-  # remove positions without REF or ALT reads
-  df <- df %>%
-    filter(
-      !is.na(chr),
-      !is.na(pos1),
-      !is.na(pos2),
-      !is.na(N_REF),
-      !is.na(N_ALT),
-      !is.na(N_Other),
-      !is.na(ratio_REF_ALT),
-      (N_REF + N_ALT) > 0
+  # Row transforms are independent. Numeric conversion is done once above,
+  # before partitioning; mean and sd below always see the original row order.
+  informative_rows <- function(df) {
+    # remove positions without REF or ALT reads
+    df <- df %>%
+      filter(
+        !is.na(chr),
+        !is.na(pos1),
+        !is.na(pos2),
+        !is.na(N_REF),
+        !is.na(N_ALT),
+        !is.na(N_Other),
+        !is.na(ratio_REF_ALT),
+        (N_REF + N_ALT) > 0
+      )
+
+    # keep only DNP panel positions
+    df <- semi_join(
+      df,
+      dnplist,
+      by = c("chr", "pos1", "pos2")
     )
 
-  # keep only DNP panel positions
-  df <- semi_join(
-    df,
-    dnplist,
-    by = c("chr", "pos1", "pos2")
-  )
+    # filter out positions with high N_Other
+    df <- df %>%
+      mutate(
+        ratio_Other = N_Other / (N_REF + N_ALT)
+      ) %>%
+      filter(
+        !is.na(ratio_Other),
+        ratio_Other <= 0.1
+      )
 
-  # filter out positions with high N_Other
-  df <- df %>%
-    mutate(
-      ratio_Other = N_Other / (N_REF + N_ALT)
-    ) %>%
-    filter(
-      !is.na(ratio_Other),
-      ratio_Other <= 0.1
-    )
+    # keep informative positions and compute contamination per site
+    df %>%
+      filter(
+        ratio_REF_ALT >= 0.9 |
+          ratio_REF_ALT <= 0.1
+      ) %>%
+      mutate(
+        N_unexpected = ifelse(
+          ratio_REF_ALT >= 0.9,
+          N_ALT,
+          N_REF
+        ),
+        contamination = N_unexpected / (N_REF + N_ALT)
+      )
+  }
 
-  # keep informative positions and compute contamination per site
-  filtered_df <- df %>%
-    filter(
-      ratio_REF_ALT >= 0.9 |
-        ratio_REF_ALT <= 0.1
-    ) %>%
-    mutate(
-      N_unexpected = ifelse(
-        ratio_REF_ALT >= 0.9,
-        N_ALT,
-        N_REF
-      ),
-      contamination = N_unexpected / (N_REF + N_ALT)
-    )
+  # Small samples keep the vectorized path. For one large sample, split into
+  # contiguous chunks; a sample already running in a worker remains serial.
+  row_tasks <- max(1L, ceiling(nrow(df) / 50000L))
+  row_workers <- nipat_parallel_workers(row_tasks)
+  if (row_workers > 1L) {
+    boundaries <- floor(seq(0, nrow(df), length.out = row_workers + 1L))
+    chunks <- nipat_parallel_lapply(seq_len(row_workers), function(index) {
+      rows <- seq.int(boundaries[index] + 1L, boundaries[index + 1L])
+      informative_rows(df[rows, , drop = FALSE])
+    }, label = "contamination-rows", workers = row_workers)
+    filtered_df <- dplyr::bind_rows(chunks)
+  } else {
+    filtered_df <- informative_rows(df)
+  }
 
   # compute mean contamination
   if (nrow(filtered_df) > 0) {
@@ -282,8 +305,15 @@ process_df <- function(file_path) {
   summary_row
 }
 
-# process all files
-summary_rows <- lapply(chip_files, process_df)
+# Distinct files normally have distinct output aliases. Native recursive
+# input directories can contain equal basenames (also on case-insensitive
+# host mounts): retain their historical
+# sequential overwrite order instead of permitting concurrent writes.
+sample_names <- file_path_sans_ext(basename(chip_files))
+sample_workers <- if (anyDuplicated(tolower(sample_names))) 1L else NULL
+summary_rows <- nipat_parallel_lapply(chip_files, process_df,
+                                     label = "contamination-samples",
+                                     workers = sample_workers)
 if (length(summary_rows) > 0) {
   contamination_summary <- do.call(rbind, summary_rows)
 }

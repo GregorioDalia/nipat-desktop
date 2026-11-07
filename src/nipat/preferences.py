@@ -165,7 +165,8 @@ class Preferences:
         if type(self.check_updates_on_startup) is not bool:
             raise ValidationError("Il controllo aggiornamenti all'avvio deve essere attivo o disattivo.")
         if (not isinstance(self.execution, dict)
-                or self.execution.keys() - {"input_hashes", "cpus", "memory_mb", "pids_limit"}):
+                or self.execution.keys() - {"input_hashes", "cpus", "memory_mb", "pids_limit",
+                                            "execution_mode", "max_workers", "dnp_block_mib", "dnp_block_loci"}):
             raise ValidationError("Opzioni di esecuzione non riconosciute.")
         normalized_execution = asdict(ExecutionOptions(**self.execution))
         object.__setattr__(self, "execution", {
@@ -190,7 +191,8 @@ class Preferences:
         """Saved guided defaults, with explicit command-line overrides applied last."""
         values = dict(self.execution)
         values.update(overrides or {})
-        if values.keys() - {"input_hashes", "cpus", "memory_mb", "pids_limit"}:
+        if values.keys() - {"input_hashes", "cpus", "memory_mb", "pids_limit",
+                           "execution_mode", "max_workers", "dnp_block_mib", "dnp_block_loci"}:
             raise ValidationError("Opzioni di esecuzione non riconosciute.")
         return ExecutionOptions(**values)
 

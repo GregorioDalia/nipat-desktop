@@ -62,7 +62,7 @@ class WizardGuidanceTests(unittest.TestCase):
 
     def test_empty_enter_keeps_first_bam_prompt_and_does_not_finish_list(self):
         form, ui = self.collect("1", ["1", "", "", f'"{self.bam}"', "",
-                                       self.reference, self.panel, "1", ""])
+                                       self.reference, self.panel, ""])
         self.assertEqual(form.arguments()["bams"], [self.bam])
         self.assert_no_errors(ui)
         prompts = [text for kind, text in ui.events if kind == "prompt"]
@@ -78,7 +78,7 @@ class WizardGuidanceTests(unittest.TestCase):
     def test_empty_required_inputs_are_neutral_in_all_workflows_and_modes(self):
         bamlist = self.file("bams.txt", '"sample one.bam"\n')
         cases = [
-            ("1", ["2", "", bamlist, "", self.reference, "", self.panel, "1", ""], "bamlist", bamlist),
+            ("1", ["2", "", bamlist, "", self.reference, "", self.panel, ""], "bamlist", bamlist),
             ("2", ["1", "", self.bam, "", self.reference, "", self.snp, ""], "bam", self.bam),
             ("2", ["2", "", self.pileup, "", self.snp, ""], "pileup", self.pileup),
             ("3", ["1", "", self.table, "", "", self.panel, ""], "inputs", [self.table]),
@@ -105,7 +105,7 @@ class WizardGuidanceTests(unittest.TestCase):
 
     def test_invalid_files_still_fail_validation_and_keep_previous_items(self):
         form, ui = self.collect("1", ["1", self.root / "missing.bam", "", self.bam,
-                                       self.bam, "", self.reference, self.panel, "1", ""])
+                                       self.bam, "", self.reference, self.panel, ""])
         self.assertEqual(form.arguments()["bams"], [self.bam])
         errors = [text for kind, text in ui.events if kind == "error"]
         self.assertEqual(len(errors), 2)

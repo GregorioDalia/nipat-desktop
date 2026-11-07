@@ -14,11 +14,13 @@ from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences, PreferencesStore
 from nipat.terminal import Terminal
 from nipat.validation.files import require_file
-from nipat.wizard_forms import Back, Cancelled, Field, WorkflowForm, navigation, unquote
+from nipat.wizard_forms import (
+    Back, Cancelled, Field, WorkflowForm, edit_parallel_options, navigation, parallel_summary, unquote,
+)
 
 
 _DEFAULT_KEYS = {
-    "1": {"mode", "reference", "panel", "parallel"},
+    "1": {"mode", "reference", "panel"},
     "2": {"mode", "reference", "panel"},
     "3": {"mode", "panel"},
     "4": {"mother_prefix", "father_prefix", "popfreq", "cutoff_mode", "panel",
@@ -133,7 +135,7 @@ class GuidedSettings:
                               for key in self.directory_overrides)
             ui.message(f"Cartelle {names}: in questa sessione prevalgono le opzioni esplicite di avvio. Le preferenze salvate saranno utilizzate alla riapertura senza tali opzioni.", kind="muted")
         if self.execution_overrides:
-            ui.message("Esecuzione e provenienza: in questa sessione prevalgono le opzioni esplicite di avvio. Le preferenze salvate valgono alla riapertura senza tali opzioni.", kind="muted")
+            ui.message("Esecuzione e provenienza: le opzioni esplicite di avvio prevalgono sulle preferenze salvate. Il riepilogo permette ulteriori modifiche a parallelismo e blocchi per la singola analisi.", kind="muted")
 
     def execution_options(self) -> ExecutionOptions:
         return self.preferences.execution_options(self.execution_overrides)
@@ -235,6 +237,7 @@ class GuidedSettings:
         ui.message("Canale aggiornamenti: " + ("Testing" if self.preferences.update_channel == "testing" else "Stabile"))
         ui.message("Verifica aggiornamenti all'avvio: " + ("attivata" if self.preferences.check_updates_on_startup else "disattivata"))
         options = self.execution_options()
+        ui.message(parallel_summary(options))
         ui.message("Checksum input: " + ("completi" if options.input_hashes == "full" else "automatici fino a 16 MiB"))
         for label, value in (("Quota CPU", options.cpus), ("Memoria MiB", options.memory_mb),
                              ("Numero processi", options.pids_limit)):
@@ -311,17 +314,19 @@ class GuidedSettings:
         values = {key: value for key, value in asdict(self.preferences.execution_options()).items()
                   if key != "performance_diagnostics"}
         labels = {"cpus": "Quota CPU per analisi", "memory_mb": "Limite RAM per analisi (MiB)",
-                  "pids_limit": "Numero massimo di processi"}
+                  "pids_limit": "Limite processi del container"}
         while True:
-            ui.message("Le opzioni regolano le risorse del container e la provenienza dei file, senza modificare i parametri scientifici R.", kind="muted")
+            ui.message("Le opzioni regolano risorse, distribuzione del calcolo e provenienza dei file. I criteri scientifici restano invariati.", kind="muted")
             ui.message("Il limite RAM dell'analisi non aumenta la RAM di Lima o WSL. Scegliere 5 per vedere le risorse disponibili e configurare l'ambiente di calcolo.", kind="muted")
-            ui.message("SHA-256 completo legge tutti i BAM e FASTA: puo' richiedere tempo. Ctrl+C annulla. La quota CPU non limita direttamente i worker di DNPcall; mantenere seriale se le risorse sono limitate.", kind="muted")
+            ui.message("SHA-256 completo legge tutti i BAM e FASTA: puo' richiedere tempo. Ctrl+C annulla. Il parallelismo automatico rispetta la quota CPU e adatta il numero di processi R di calcolo alla memoria disponibile.", kind="muted")
+            ui.message("Il limite processi del container include coordinatore e altri programmi. Il massimo processi R di calcolo si modifica in 6 - Parallelismo e blocchi.", kind="muted")
             ui.message("Un limite insufficiente di memoria o processi puo' interrompere un'analisi. :vuoto rimuove un limite; 9 salva, 0 scarta le modifiche.", kind="muted")
             action = _menu(ui, "Configura / Risorse e provenienza", [
                 ("1", "Checksum degli input", "Completi" if values["input_hashes"] == "full" else "Automatici fino a 16 MiB"),
                 *[(str(index), labels[key], str(values[key]) if values[key] is not None else "Nessun limite NIPAT")
                   for index, key in enumerate(("cpus", "memory_mb", "pids_limit"), 2)],
                 ("5", "Risorse dell'ambiente di calcolo", "RAM e CPU del computer, Lima o WSL e limiti per analisi"),
+                ("6", "Parallelismo e blocchi", parallel_summary(ExecutionOptions(**values))),
                 ("9", "Salva modifiche", "Per le prossime analisi guidate"),
                 ("0", "Annulla modifiche", "Torna a Configura"),
             ], default="0")
@@ -343,6 +348,11 @@ class GuidedSettings:
             if action == "5":
                 from nipat.resource_ui import configure_resources
                 configure_resources(ui, self.layout, ExecutionOptions(**values))
+                continue
+            if action == "6":
+                edited = edit_parallel_options(ui, ExecutionOptions(**values))
+                values = {key: value for key, value in asdict(edited).items()
+                          if key != "performance_diagnostics"}
                 continue
             key = {"2": "cpus", "3": "memory_mb", "4": "pids_limit"}.get(action)
             if key is None:
@@ -370,14 +380,14 @@ class GuidedSettings:
             self.explain(ui)
             action = _menu(ui, "Configura", [
                 ("1", "Cartelle dati e risultati", "Destinazioni delle analisi guidate"),
-                ("2", "DNPcall", "Input, riferimento, pannello ed esecuzione"),
+                ("2", "DNPcall", "Input, riferimento e pannello"),
                 ("3", "SNPcall", "Input, riferimento e pannello"),
                 ("4", "Contamination", "Input e pannello"),
                 ("5", "CPI", "Prefissi, frequenze, siti e costante di errore"),
                 ("6", "Riepilogo impostazioni", "Valori in uso e file delle preferenze"),
                 ("7", "Ripristina impostazioni", "Conferma richiesta; dati conservati"),
                 ("8", "Aggiornamenti", "Canale e verifica all'avvio"),
-                ("9", "Risorse e provenienza", "RAM, CPU, ambiente di calcolo e checksum degli input"),
+                ("9", "Risorse, prestazioni e provenienza", "Parallelismo, blocchi, RAM, CPU e checksum degli input"),
                 ("0", "Torna al menu", ""),
             ], default="0")
             if action in {"0", ":indietro"}:

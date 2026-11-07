@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import csv
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable
 
 from nipat.adapters.panels import read_dnp_list, read_position_panel, read_snp_positions
 from nipat.errors import Cancelled, ValidationError
+from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout, _SAFE_RUN_NAME
 from nipat.validation.files import (
     require_columns, require_contamination_input, require_directory, require_file,
@@ -45,6 +46,74 @@ def navigation(value: str) -> str:
     if value.casefold() == ":indietro":
         raise Back
     return value
+
+
+def parallel_summary(options: ExecutionOptions) -> str:
+    mode = "Seriale (un processo R di calcolo)" if options.execution_mode == "serial" else "Automatico"
+    limit = str(options.max_workers) if options.max_workers is not None else "automatico"
+    return (f"Calcolo R: {mode}; massimo processi R di calcolo: {limit}; "
+            f"blocchi DNP: {options.dnp_block_mib} MiB / {options.dnp_block_loci} loci.")
+
+
+def edit_parallel_options(ui: Any, options: ExecutionOptions) -> ExecutionOptions:
+    """Edit a reviewed copy; cancelling leaves the caller's options untouched."""
+    candidate = options
+    while True:
+        ui.message("Il numero di processi R di calcolo e' un limite complessivo condiviso da campioni e blocchi. "
+                   "La scelta automatica tiene conto di CPU, memoria e lavoro disponibile.", kind="muted")
+        ui.message("Il coordinatore R in attesa puo' aggiungersi ai processi di calcolo. "
+                   "Questo massimo e' distinto dal limite dei processi del container, che include tutti i processi.", kind="muted")
+        ui.message("I MiB dei blocchi misurano l'input grezzo, non la RAM occupata da R. "
+                   "I gruppi indivisibili possono superare gli obiettivi di dimensione e loci.", kind="muted")
+        ui.message("La modalita' seriale usa un solo processo R di calcolo anche se e' salvato un massimo maggiore.", kind="muted")
+        action = ui.menu("Parallelismo e blocchi", [
+            ("1", "Modalita' di calcolo R", "Automatica" if candidate.execution_mode == "auto" else "Seriale"),
+            ("2", "Massimo processi R di calcolo", str(candidate.max_workers) if candidate.max_workers is not None else "Automatico"),
+            ("3", "Dimensione obiettivo blocchi DNP (MiB)", str(candidate.dnp_block_mib)),
+            ("4", "Massimo obiettivo loci per blocco DNP", str(candidate.dnp_block_loci)),
+            ("9", "Applica questi valori", "Torna al riepilogo precedente"),
+            ("0", "Annulla modifiche", "Conserva i valori precedenti"),
+        ], default="0").strip().casefold()
+        if action == ":annulla":
+            raise Cancelled
+        if action in {"0", ":indietro"}:
+            return options
+        if action == "9":
+            return candidate
+        if action == "1":
+            selected = ui.menu("Modalita' di calcolo R", [
+                ("1", "Automatica", "Parallelismo entro CPU, RAM e massimo processi di calcolo"),
+                ("2", "Seriale", "Un solo processo R di calcolo"),
+                ("0", "Indietro", "Mantiene la scelta"),
+            ], default="1" if candidate.execution_mode == "auto" else "2").strip().casefold()
+            if selected == ":annulla":
+                raise Cancelled
+            if selected in {"1", "2"}:
+                candidate = replace(candidate, execution_mode="auto" if selected == "1" else "serial")
+            continue
+        fields = {"2": ("max_workers", "Massimo processi R di calcolo"),
+                  "3": ("dnp_block_mib", "Dimensione blocchi DNP (MiB)"),
+                  "4": ("dnp_block_loci", "Massimo loci per blocco DNP")}
+        if action not in fields:
+            ui.message("Scegliere una delle opzioni indicate.", kind="error")
+            continue
+        key, label = fields[action]
+        if key == "max_workers":
+            ui.message(":vuoto ripristina la scelta automatica del massimo di processi di calcolo.", kind="muted")
+        current = getattr(candidate, key)
+        try:
+            answer = navigation(ui.prompt(label, default=str(current) if current is not None else ""))
+            if answer == ":vuoto" and key == "max_workers":
+                value = None
+            elif not answer:
+                continue
+            else:
+                value = int(answer)
+            candidate = replace(candidate, **{key: value})
+        except Back:
+            continue
+        except (ValueError, ValidationError) as exc:
+            ui.message(f"Valore non valido: {exc}", kind="error")
 
 
 def check_reference(path: Path) -> None:
@@ -106,6 +175,7 @@ class WorkflowForm:
         self.choice, self.ui, self.layout, self.err_const = choice, ui, layout, err_const
         # Saved defaults are proposed and validated again when each field is read.
         self.values: dict[str, Any] = dict(defaults or {})
+        self.execution_options = ExecutionOptions()
 
     @property
     def title(self) -> str:
@@ -121,10 +191,7 @@ class WorkflowForm:
             result += ([Field("bamlist", "File bamlist", "file", check=check_bamlist)]
                        if values.get("mode") == "2" else [Field("bams", "BAM", "files")])
             result += [Field("reference", "File FASTA di riferimento", "file", check=check_reference),
-                       Field("panel", "Pannello DNP", "file", check=read_dnp_list),
-                       Field("parallel", "Modalita' di esecuzione", "choice", "1", options=(
-                           ("1", "Seriale", "Impostazione predefinita"),
-                           ("2", "Parallela", "Piu' campioni contemporaneamente")))]
+                       Field("panel", "Pannello DNP", "file", check=read_dnp_list)]
         elif self.choice == "2":
             result = [Field("mode", "Input SNPcall", "choice", "1", options=(
                 ("1", "BAM e riferimento", "Preparazione automatica del pileup"),
@@ -185,7 +252,6 @@ class WorkflowForm:
             "cutoff_map": "Inserire etichetta=percorso, separando i gruppi con una virgola. Esempio: pannello_A=panels/a.txt,pannello_B=panels/b.txt. I file devono contenere le coordinate DNP.",
             "err_const": "Parametro del modello CPI: mantenere il valore proposto, salvo una scelta motivata per l'analisi. Per modificarlo usare un numero maggiore o uguale a zero, con il punto decimale.",
             "run_name": "Il nome identifica una nuova cartella di esecuzione. Le cartelle gia' esistenti non vengono sovrascritte.",
-            "parallel": "Seriale elabora un campione alla volta; parallela elabora piu' campioni contemporaneamente e puo' richiedere piu' memoria.",
             "cutoff_mode": "Scegliere se usare tutti i siti disponibili o limitare l'analisi a uno o piu' gruppi di coordinate. Ogni modalita' richiedera' solo i propri input.",
         }
         if field.key == "mode":
@@ -439,6 +505,7 @@ class WorkflowForm:
             self._show_sample_names()
             destination = self.layout.runs_dir / (self.values.get("run_name") or "<nome automatico>")
             self.ui.message(f"Destinazione: {destination}")
+            self.ui.message(parallel_summary(self.execution_options))
             self.ui.message("Controllare gli input. 'Modifica un campo' permette di correggerli conservando gli altri valori.", kind="muted")
             self.ui.message("La conferma preparera' file e comandi, senza eseguire il calcolo scientifico." if dry_run else
                             "Il calcolo scientifico iniziera' solo confermando 'Avvia analisi'.", kind="muted")
@@ -456,6 +523,7 @@ class WorkflowForm:
                 ("2", "Modifica un campo", "Gli altri valori vengono conservati"),
                 ("3", start_label + (" senza diagnostica" if performance_diagnostics else " con diagnostica prestazioni"),
                  "Solo per questa esecuzione"),
+                ("4", "Parallelismo e blocchi", "Modifica solo questa analisi; le preferenze salvate restano invariate"),
                 ("0", "Annulla", "Torna al menu senza avviare"),
             ], default="0")
             if choice in {"0", ":annulla", ":indietro"}:
@@ -463,6 +531,9 @@ class WorkflowForm:
             if choice in {"1", "3"}:
                 self.performance_diagnostics = performance_diagnostics if choice == "1" else not performance_diagnostics
                 return True
+            if choice == "4":
+                self.execution_options = edit_parallel_options(self.ui, self.execution_options)
+                continue
             if choice != "2":
                 self.ui.message("Scegliere una delle opzioni indicate.", kind="error")
                 continue
@@ -527,7 +598,7 @@ class WorkflowForm:
         if self.choice == "1":
             return {**common, "bams": v["bams"] if v["mode"] == "1" else None,
                     "bamlist": v["bamlist"] if v["mode"] == "2" else None,
-                    "reference": v["reference"], "panel": v["panel"], "parallel": v["parallel"] == "2"}
+                    "reference": v["reference"], "panel": v["panel"], "parallel": False}
         if self.choice == "2":
             bam_mode = v["mode"] == "1"
             return {**common, "bam": v["bam"] if bam_mode else None,

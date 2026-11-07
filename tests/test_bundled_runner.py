@@ -24,6 +24,11 @@ IMAGE_ID = "sha256:" + "a" * 64
 def engine_metadata():
     return {
         "schema_version": 1, "interface": "native-r-v1",
+        "parallel_execution": {
+            "interface": "nipat-parallel-v1", "schema_version": 1,
+            "default_mode": "auto", "modes": ["auto", "serial"], "max_workers": True,
+            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+        },
         "scientific_validation": {
             "interface": "scientific-validation-v1",
             "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
@@ -46,6 +51,7 @@ def engine_metadata():
                 "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
                 "lib/nipat_scientific/cpi.py", "lib/nipat_scientific/outputs.py",
                 "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
+                "lib/nipat_scientific/parallel.py", "lib/nipat_scientific/parallel.R",
             )},
         },
     }

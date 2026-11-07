@@ -36,6 +36,7 @@ from nipat_scientific.snp import prepare_snp
 from nipat_scientific import progress
 from nipat_scientific.progress import observed_phase as phase
 from nipat_scientific.scratch import dnp_environment
+from nipat_scientific.parallel import execution_environment
 from nipat_scientific.presentation import (
     step_presentation, prepare_presentation, finish_presentation, finish_plan_presentation,
 )
@@ -396,6 +397,7 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
                 _atomic_json(root / "workflow-state.json", state)
                 print(f"Workflow step {step['id']}: {step['workflow']} (log: {record['log']})", file=sys.stderr, flush=True)
                 with dnp_environment(step["workflow"], work), \
+                        execution_environment(work), \
                         phase("r-execution", workflow=step["workflow"], step=step["id"]) as progress_state:
                     code = (run_process(command, cwd, directory / "command.log") if run_process is not None
                             else _run_process(command, cwd, directory / "command.log", cancellation))

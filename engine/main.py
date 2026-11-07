@@ -29,6 +29,7 @@ PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
     "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
     "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R",
+    "parallel.py", "parallel.R",
 )
 CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
@@ -149,6 +150,14 @@ def verify_bundle(bundle_root: Path) -> dict:
             "interface": "nipat-progress-v1", "schema_version": 1,
             "independent_of_diagnostics": True, "transport": "per-process-jsonl",
         },
+        "parallel_execution": {
+            "interface": "nipat-parallel-v1", "schema_version": 1,
+            "workflows": list(SCRIPT_PATHS), "default_mode": "auto",
+            "modes": ["auto", "serial"], "max_workers": True,
+            "budget_scope": "one scientific analysis; nested pools disabled",
+            "memory_budget": "conservative estimate; not a hard memory guarantee",
+            "diagnostics": "work/parallel/*.jsonl",
+        },
         "performance_diagnostics": {
             "interface": "performance-diagnostics-v1", "schema_version": 1,
             "interval_seconds": 1.0, "sources": ["linux-cgroup", "linux-proc"],
@@ -235,6 +244,7 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
     from nipat_scientific.presentation import prepare_presentation, finish_presentation
     from nipat_scientific.progress import observed_phase as phase
     from nipat_scientific.scratch import dnp_environment
+    from nipat_scientific.parallel import execution_environment
 
     cancellation = _Cancellation()
     previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
@@ -244,6 +254,7 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
         with phase("presentation-preparation", workflow=request["workflow"]):
             command = prepare_presentation(request, script, native_arguments)
         with dnp_environment(request["workflow"], Path(request["work_dir"])), \
+                execution_environment(Path(request["work_dir"])), \
                 phase("r-execution", workflow=request["workflow"]) as progress_state:
             code = _run_process(command, Path.cwd(), None, cancellation)
             if cancellation.signum is not None:

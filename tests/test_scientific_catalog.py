@@ -85,7 +85,19 @@ class ScientificCatalogTests(unittest.TestCase):
                 self.assertEqual(names, declared)
             elif workflow == "dnp-call":
                 declared = set(re.findall(r'"(--[A-Za-z]+)\*?"', source[:source.index("# read the df")]))
-                self.assertEqual(names, declared)
+                # --parallel is retained as an accepted compatibility argument;
+                # the common execution policy now controls R process counts.
+                self.assertEqual(names - {"--parallel"}, declared)
+                legacy = next(item for item in document["public_parameters"]
+                              if item["id"] == "parallel")
+                self.assertEqual(legacy["r_names"], ["--parallel"])
+                self.assertEqual(legacy["nipat"]["mapping"], "managed")
+                parsed = build_parser().parse_args([
+                    "--execution-mode", "serial", "dnp-call", "--bam", "sample.bam",
+                    "--reference", "reference.fa", "--panel", "panel.txt", "--parallel",
+                ])
+                self.assertTrue(parsed.parallel)
+                self.assertEqual(parsed.execution_mode, "serial")
             elif workflow == "snp-call":
                 self.assertTrue({"--pileup", "--snplist", "--out"}.issubset(names))
                 for name in ("--pileup", "--snplist", "--out"):

@@ -88,7 +88,7 @@ nipat_dnp_index <- function(path) {
 
 nipat_dnp_plan <- function(index, labels, ref_alt,
                            max_loci = nipat_dnp_number("NIPAT_DNP_BLOCK_LOCI", 64),
-                           max_bytes = nipat_dnp_number("NIPAT_DNP_BLOCK_BYTES", 8 * 1024^2)) {
+                           max_bytes = nipat_dnp_number("NIPAT_DNP_BLOCK_BYTES", 32 * 1024^2)) {
   keys <- paste(index$chromosomes[index$chromosome], index$positions, sep = ":")
   by_coordinate <- split(seq_along(keys), keys)
   unmatched <- sum(!keys %in% labels$df.chr)
@@ -151,6 +151,51 @@ nipat_dnp_read <- function(index, rows, connection) {
   read.csv(text = paste0(lines, collapse = ""), quote = "", row.names = NULL,
            stringsAsFactors = FALSE, header = FALSE, sep = "\t",
            colClasses = index$classes)
+}
+
+# Scheduling estimate, not an allocation limit: expanded observations, joins
+# and R's own heap are larger than the raw pileup. Account for indivisible
+# oversize/compatibility blocks instead of assuming the configured target held.
+nipat_dnp_worker_memory_mib <- function(plan) {
+  largest <- max(c(0, vapply(plan$blocks, function(block) block$raw_bytes, numeric(1))))
+  ceiling(512 + 48 * largest / 1024^2)
+}
+
+nipat_dnp_process_blocks <- function(index, plan, labels, ref_alt, compute,
+                                     progress = function(...) invisible(NULL),
+                                     workers = NULL) {
+  started <- proc.time()[["elapsed"]]
+  run_block <- function(number) {
+    block <- plan$blocks[[number]]
+    block_started <- proc.time()[["elapsed"]]
+    # Open after the fork. Children must never share an inherited descriptor:
+    # nipat_dnp_read seeks independently for every block's original row order.
+    connection <- file(index$path, open = "rb")
+    on.exit(close(connection), add = TRUE)
+    pileup <- nipat_dnp_read(index, block$row_ids, connection)
+    result <- compute(pileup, labels[labels$uniq %in% block$locus_ids, , drop = FALSE],
+                      ref_alt[block$locus_ids, , drop = FALSE])
+    rm(pileup)
+    metric <- list(loci = length(block$locus_ids), raw_rows = length(block$row_ids),
+                   raw_bytes = block$raw_bytes,
+                   elapsed_seconds = unname(proc.time()[["elapsed"]] - block_started))
+    gc(verbose = FALSE)
+    list(result = result, metric = metric)
+  }
+  # Scientific values and metrics retain the plan's order regardless of which
+  # worker completed first. Only this coordinating process publishes progress.
+  completed <- 0L
+  values <- nipat_parallel_lapply(seq_along(plan$blocks), run_block,
+    label = "dnp-blocks", workers = workers,
+    memory_mib = nipat_dnp_worker_memory_mib(plan),
+    on_result = function(number, value) {
+      completed <<- completed + value$metric$loci
+      progress(completed, nrow(ref_alt))
+    })
+  list(results = lapply(values, function(value) value$result),
+       metrics = lapply(values, function(value) value$metric),
+       workers = attr(values, "workers"),
+       elapsed_seconds = unname(proc.time()[["elapsed"]] - started))
 }
 
 nipat_dnp_combine <- function(values) {

@@ -186,6 +186,19 @@ class DockerComposeRunner:
                             "LC_ALL": "C.UTF-8", "TZ": "Europe/Rome",
                             "NIPAT_SCRATCH_ROOT": "/scratch"},
         }
+        service["environment"].update({
+            "NIPAT_EXECUTION_MODE": self.options.execution_mode,
+            "NIPAT_DNP_BLOCK_BYTES": str(self.options.dnp_block_mib * 1024 * 1024),
+            "NIPAT_DNP_BLOCK_LOCI": str(self.options.dnp_block_loci),
+            "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
+            "VECLIB_MAXIMUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1", "BLIS_NUM_THREADS": "1",
+        })
+        if self.options.max_workers is not None:
+            service["environment"]["NIPAT_MAX_WORKERS"] = str(self.options.max_workers)
+        if self.options.cpus is not None:
+            service["environment"]["NIPAT_CPU_LIMIT"] = str(self.options.cpus)
+        if self.options.memory_mb is not None:
+            service["environment"]["NIPAT_MEMORY_LIMIT_MIB"] = str(self.options.memory_mb)
         if self._transport.backend == "lima":
             # The experimental macOS clients share the validated AMD64 engine.
             service["platform"] = "linux/amd64"
@@ -252,6 +265,7 @@ class DockerComposeRunner:
             "lib/nipat_scientific/cpi.py",
             "lib/nipat_scientific/outputs.py",
             "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
+            "lib/nipat_scientific/parallel.py", "lib/nipat_scientific/parallel.R",
         }
 
         def has_digest(value: Any) -> bool:
@@ -279,6 +293,7 @@ class DockerComposeRunner:
             interfaces = description.get("workflow_interfaces")
             preparation = description.get("preparation")
             validation = description.get("scientific_validation")
+            parallel = description.get("parallel_execution")
             valid = (
                 type(description.get("schema_version")) is int
                 and description.get("schema_version") == 1
@@ -298,6 +313,16 @@ class DockerComposeRunner:
                 and preparation.get("interface") == "workflow-preparation-v1"
                 and isinstance(preparation.get("file_sha256"), dict)
                 and isinstance(validation, dict)
+                and isinstance(parallel, dict)
+                and parallel.get("interface") == "nipat-parallel-v1"
+                and type(parallel.get("schema_version")) is int
+                and parallel.get("schema_version") == 1
+                and parallel.get("default_mode") == "auto"
+                and parallel.get("modes") == ["auto", "serial"]
+                and parallel.get("max_workers") is True
+                and isinstance(parallel.get("workflows"), list)
+                and required_workflows.issubset(
+                    name for name in parallel["workflows"] if isinstance(name, str))
                 and validation.get("interface") == "scientific-validation-v1"
                 and validation.get("snp_alleles") == "uppercase-working-copy"
                 and all(isinstance(validation.get(key), list)
@@ -337,6 +362,7 @@ class DockerComposeRunner:
                 "Usare un runtime costruito per questa versione di NIPAT."
                 " Sono richiesti i controlli scientific-validation-v1 sugli input e sugli output."
                 " Il runtime deve includere il supporto ai nomi originali nei risultati."
+                " E' richiesto il parallelismo configurabile nipat-parallel-v1."
             )
         return description
 

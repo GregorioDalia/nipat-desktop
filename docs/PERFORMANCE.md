@@ -1,12 +1,20 @@
 # Diagnostica delle prestazioni
 
-Guida per **NIPAT Desktop 0.8.9**. La diagnostica è disponibile dalla 0.8.5.
-Installare il pacchetto del proprio sistema dalla [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9);
-il banner dell'applicazione deve riportare `NIPAT 0.8.9`.
+La diagnostica è disponibile dalla 0.8.5. Le istruzioni ordinarie valgono per
+la stabile **0.8.9**; il [collaudo 0.8.12](#collaudo-del-parallelismo-0812)
+aggiunge il confronto delle modalità di parallelismo. Per la stabile usare
+la [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9);
+per un candidato verificare versione, commit e build effettivamente installati.
 
 Per il candidato **0.8.10**, seguire anche la [guida al prototipo](PROTOTYPE_0.8.10.md):
 gli indicatori di avanzamento sono indipendenti dalla diagnostica e il confronto
 può riutilizzare run di riferimento già archiviati.
+
+Il candidato **0.8.12** espone [modalità, massimo di processi R di calcolo e
+blocchi DNP](PARALLELISMO_0.8.12.md) nel menu e nella CLI. I valori iniziali
+sono automatico, 32 MiB e 64 loci; i MiB misurano input grezzo, non RAM.
+Gli eventi `work/parallel/*.jsonl` descrivono la distribuzione effettiva del
+calcolo anche senza la diagnostica facoltativa descritta qui.
 
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri
@@ -118,6 +126,7 @@ e collegamenti ai file:
 | `performance/engine/summary.json` | Riepilogo del monitor interno, limiti e disponibilità. |
 | `performance/engine/samples.jsonl` | Campioni cgroup e dei processi. |
 | `performance/engine/phases.jsonl` | Eventi di inizio/fine delle fasi. |
+| `work/parallel/*.jsonl` (0.8.12) | Budget e attività dei processi R; disponibili anche senza monitoraggio delle prestazioni. Nei workflow composti sono nella cartella del singolo passaggio. |
 
 I file sono scritti progressivamente e hanno limiti di dimensione. Un limite
 raggiunto o un errore di monitoraggio non trasforma un calcolo riuscito in un
@@ -170,6 +179,86 @@ file nel filesystem Linux, misurare anche il tempo della copia.
 La CI verifica la raccolta su casi sintetici, l'invarianza dei risultati e la
 gestione degli errori. Non impone soglie di velocità sui runner condivisi.
 I benchmark grandi restano controllati e separati dai test automatici rapidi.
+
+## Collaudo del parallelismo 0.8.12
+
+Il confronto scientifico resta contro **NIPAT v0.8.5**, commit
+`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, comprese le modifiche di
+compatibilità già distribuite. Le copie e i checksum sono congelati in
+[`tests/reference_r/0.8.5`](../tests/reference_r/0.8.5/README.md).
+I run 0.8.10 già conservati servono al confronto delle prestazioni precedenti;
+non sostituiscono l'oracolo 0.8.5 e non vanno ripetuti se identità degli input,
+parametri e risultati sono già documentate e confrontabili.
+
+Per ciascuno dei quattro moduli usare gli stessi input e parametri scientifici
+nelle condizioni seguenti. Blocchi DNP da **32 MiB / 64 loci** e limiti di VM
+e container rimangono fissi in questa prima matrice:
+
+| Condizione | Opzioni globali prima del sottocomando | Attesa |
+| --- | --- | --- |
+| Seriale | `--execution-mode serial` | Un processo R di calcolo. |
+| Automatica | `--execution-mode auto` | Numero scelto in base a risorse e lavoro disponibili. |
+| Massimo 2 | `--execution-mode auto --max-workers 2` | Al più due processi R di calcolo contemporanei. |
+| Massimo 4 | `--execution-mode auto --max-workers 4` | Al più quattro processi R di calcolo contemporanei. |
+
+Un massimo non è un numero garantito: se la memoria o le CPU disponibili
+consentono meno processi, annotare il numero effettivo. Il coordinatore R
+in attesa può aggiungersi ai processi di calcolo. Per qualificare una prova
+come parallela verificare in `work/parallel/*.jsonl` attività temporalmente
+sovrapposte di almeno due processi figli; la sola opzione richiesta non basta.
+Nei workflow composti consultare `steps/<id>/work/parallel/`.
+
+Esempio DNPcall in PowerShell, dalla cartella applicativa 0.8.12 contenente
+`nipat.cmd`. Modificare soltanto i percorsi iniziali per usare gli stessi
+file; assegnare nuovi nomi nelle ripetizioni. I comandi non rimuovono run
+precedenti.
+
+```powershell
+.\nipat.cmd --version
+$Opzioni = @("--runs-dir", "C:\Risultati\NIPAT-0.8.12", "--dnp-block-mib", "32", "--dnp-block-loci", "64")
+$InputDnp = @("--bam", "C:\Dati\campione.bam", "--reference", "C:\Dati\genome.fa", "--panel", "C:\Dati\DNP_list.txt")
+.\nipat.cmd @Opzioni --execution-mode serial dnp-call @InputDnp --run-name dnp-seriale-01
+.\nipat.cmd @Opzioni --execution-mode auto dnp-call @InputDnp --run-name dnp-auto-01
+.\nipat.cmd @Opzioni --execution-mode auto --max-workers 2 dnp-call @InputDnp --run-name dnp-max2-01
+.\nipat.cmd @Opzioni --execution-mode auto --max-workers 4 dnp-call @InputDnp --run-name dnp-max4-01
+```
+
+Dal menu, impostare i valori comuni in **5 — Configura → 9 — Risorse,
+prestazioni e provenienza → 6 — Parallelismo e blocchi**, applicare e
+salvare. Per cambiare soltanto la condizione del run corrente usare
+**4 — Parallelismo e blocchi** nel riepilogo dell'analisi. La
+[guida 0.8.12](PARALLELISMO_0.8.12.md#menu-e-preferenze) descrive precedenza
+e persistenza delle impostazioni.
+
+Procedere così per separare correttezza e prestazioni:
+
+1. Verificare ogni condizione contro il medesimo riferimento 0.8.5: tabelle
+   complete e ordine, quantità R non arrotondate e pagine dei PDF. I soli
+   valori visualizzati o arrotondati non sono una prova sufficiente.
+   Ripetere le condizioni parallele anche per verificare il determinismo.
+2. Usare i [test differenziali](../tests/r_optimization/README.md) nel medesimo
+   runtime per la verifica automatica sui casi sintetici. Il confronto sul
+   dataset reale concordato è una verifica aggiuntiva; un riepilogo positivo
+   dei test sintetici non lo sostituisce.
+3. Per tempi e memoria ripetere, se sostenibile, almeno tre volte ogni
+   condizione alternandone l'ordine. Conservare hardware, risorse effettive,
+   politica dei checksum, stato della cache, versione e build; non cambiare
+   le dimensioni dei blocchi durante questa matrice.
+4. Usare prove ordinarie per stimare la durata senza monitoraggio e prove
+   corrispondenti con **Avvia analisi con diagnostica prestazioni** (CLI:
+   `--performance-diagnostics` prima del sottocomando) per spiegare CPU,
+   I/O e picco RAM. Confrontare sempre picchi dalla stessa fonte, preferendo
+   il contatore cgroup dell'intero container quando disponibile.
+5. Solo dopo questa matrice confrontare altre dimensioni dei blocchi, con
+   lo stesso budget di parallelismo. Scegliere in base a tempi e memoria
+   misurati; blocchi più grandi o più processi non garantiscono un beneficio.
+
+Conservare `run.json`, `execution.log`, `run-report.html`, `work/parallel`,
+`work/dnp-blocks.json` quando presente, diagnostica e risultati scientifici.
+Non pubblicare BAM, pileup, tabelle identificative o archivi dei run nel
+repository. Condividere soltanto evidenze concordate e controllate, senza
+percorsi o nomi dei campioni non necessari. Il completamento dei test di
+sviluppo non dichiara concluso il collaudo dei dati reali o degli installer.
 
 ## Riferimenti tecnici
 

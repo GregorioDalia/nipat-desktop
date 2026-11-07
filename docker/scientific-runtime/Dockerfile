@@ -86,6 +86,7 @@ COPY engine/main.py /opt/nipat/engine/main.py
 COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py src/nipat_scientific/catalog.py src/nipat_scientific/plan.py src/nipat_scientific/executor.py src/nipat_scientific/outputs.py src/nipat_scientific/presentation.py src/nipat_scientific/presentation.R src/nipat_scientific/performance.py /opt/nipat/lib/nipat_scientific/
 COPY src/nipat_scientific/catalog_data/ /opt/nipat/lib/nipat_scientific/catalog_data/
 COPY src/nipat_scientific/scratch.py src/nipat_scientific/dnp_pileup.py src/nipat_scientific/dnp_blocks.R src/nipat_scientific/progress.py src/nipat_scientific/progress.R /opt/nipat/lib/nipat_scientific/
+COPY src/nipat_scientific/parallel.py src/nipat_scientific/parallel.R /opt/nipat/lib/nipat_scientific/
 RUN python3 /opt/nipat/engine/main.py verify \
     && python3 /opt/nipat/engine/main.py catalog --json > /tmp/nipat-catalog-check.json \
     && rm /tmp/nipat-catalog-check.json

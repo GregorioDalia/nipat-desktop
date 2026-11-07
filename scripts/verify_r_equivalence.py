@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -42,8 +43,17 @@ SCRIPTS = dict(zip(("dnp-call", "cpi", "snp-call", "contamination"), (
     "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
 )))
 SUPPORTING_SOURCES = tuple(f"src/nipat_scientific/{name}" for name in (
-    "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R",
+    "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R", "parallel.R", "parallel.py",
 ))
+PARALLEL_CASES = {"dnp-blocks-1", "snp-edge", "cpi-shared-parents",
+                  "cpi-single-intervals", "cpi-single-cutoffs", "contamination-batch"}
+CONCURRENT_CASES = {"dnp-blocks-1", "snp-edge", "cpi-shared-parents", "contamination-batch"}
+PARALLEL_VARIANTS = {
+    "auto": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": ""},
+    "manual-2": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": "2"},
+    "manual-4": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": "4"},
+    "manual-4-repeat": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": "4"},
+}
 
 
 def digest(path: Path) -> str:
@@ -101,6 +111,7 @@ def immutable_image(reference: str) -> str:
 def run(image: str, arguments: list[str], *, inputs: Path, results: Path,
         environment: dict[str, str] | None = None, log: Path | None = None) -> str:
     arguments_prefix = ["docker", "run", "--rm", "--pull", "never", "--network", "none",
+                        "--cpus", "4", "--memory", "8g",
                         "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=256m",
                         "--env", "HOME=/tmp", "--env", "TMPDIR=/tmp",
                         "--env", "LANG=C.UTF-8", "--env", "LC_ALL=C.UTF-8"]
@@ -187,15 +198,96 @@ class Case:
     expected_compatibility_reason: str | None = None
 
 
-def case_environment(case: Case, variant: str, script: Path) -> dict[str, str]:
+def case_environment(case: Case, variant: str, script: Path,
+                     execution: dict[str, str] | None = None) -> dict[str, str]:
     environment = {"NIPAT_EQ_SCRIPT": f"/repo/{script.as_posix()}", "NIPAT_EQ_WORKFLOW": case.workflow}
     if case.compare_pileup:
         environment["NIPAT_EQ_KEEP_PILEUP"] = "1"
     if variant == "candidate":
+        environment.update({"NIPAT_EXECUTION_MODE": "serial", "NIPAT_MAX_WORKERS": "",
+                            "NIPAT_PARALLEL_LOG_DIR": "/results/parallel-log"})
         environment.update(case.candidate_environment)
+        environment.update(execution or {})
         if case.compare_pileup:
             environment["NIPAT_DNP_KEEP_PILEUP"] = "1"
     return environment
+
+
+def verify_parallel_execution(directory: Path, *, mode: str, cap: int | None,
+                              require_parallel: bool, require_overlap: bool = True) -> dict:
+    """Require real scientific worker events, concurrency and respected limits.
+
+    A requested pool size alone is not evidence that a workflow used it. Each
+    process writes its own events; only matching actual child task intervals
+    establish simultaneous execution. Scientific output equality is checked
+    independently of these nondeterministically ordered diagnostic records.
+    """
+    events = []
+    files = sorted(directory.glob("worker-*.jsonl"))
+    if not files:
+        raise ValueError("Parallel qualification has no actual scientific worker events")
+    for path in files:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            value = json.loads(line)
+            if value.get("interface") != "nipat-parallel-v1" or value.get("schema_version") != 1:
+                raise ValueError("Invalid scientific worker event schema")
+            events.append(value)
+    plans = [event for event in events if event.get("event") == "plan"]
+    if not plans:
+        raise ValueError("Parallel qualification has no worker plans")
+    for plan in plans:
+        workers, tasks = plan.get("workers"), plan.get("tasks")
+        if (not isinstance(workers, int) or not isinstance(tasks, int) or tasks < 0
+                or not 1 <= workers <= max(1, tasks) or plan.get("mode") != mode):
+            raise ValueError("Invalid effective scientific worker count")
+        cpu, memory = plan.get("cpu_limit"), plan.get("memory_worker_limit")
+        if (not isinstance(cpu, (int, float)) or not math.isfinite(cpu) or cpu <= 0
+                or not isinstance(memory, (int, float)) or memory < 1
+                or workers > math.ceil(cpu) or workers > memory
+                or (cap is not None and workers > cap)):
+            raise ValueError("Scientific worker plan exceeded CPU, memory or requested process budget")
+        if mode == "serial" and workers != 1:
+            raise ValueError("Serial scientific execution created a parallel plan")
+    pending = {}
+    intervals = []
+    for event in sorted(events, key=lambda item: item.get("observed_at_unix", -1)):
+        if event.get("event") not in {"task-start", "task-end"}:
+            continue
+        pid, coordinator = event.get("pid"), event.get("coordinator_pid")
+        stamp, index = event.get("observed_at_unix"), event.get("task_index")
+        if (not isinstance(pid, int) or not isinstance(coordinator, int)
+                or not isinstance(stamp, (int, float)) or not math.isfinite(stamp)
+                or not isinstance(index, int)):
+            raise ValueError("Invalid observed scientific task identity or time")
+        key = (coordinator, pid, event.get("label"), index)
+        if event["event"] == "task-start":
+            if key in pending:
+                raise ValueError("Scientific worker task starts twice without ending")
+            pending[key] = stamp
+        else:
+            if key not in pending or stamp < pending[key]:
+                raise ValueError("Scientific worker task has no matching start")
+            started = pending.pop(key)
+            if pid != coordinator:
+                intervals.append((started, stamp, pid, coordinator))
+    if pending:
+        raise ValueError("Scientific worker tasks did not finish")
+    child_pids = sorted({value[2] for value in intervals})
+    overlap = any(left[2] != right[2] and left[3] == right[3]
+                  and max(left[0], right[0]) < min(left[1], right[1])
+                  for number, left in enumerate(intervals) for right in intervals[number + 1:])
+    if mode == "serial" and child_pids:
+        raise ValueError("Serial scientific execution used child workers")
+    if require_parallel and len(child_pids) < 2:
+        raise ValueError("Scientific parallel qualification did not observe two actual child workers")
+    if require_parallel and require_overlap and not overlap:
+        raise ValueError("Scientific parallel qualification did not observe two simultaneous child workers")
+    return {"event_sha256": {path.name: digest(path) for path in files},
+            "observed_child_pids": child_pids, "simultaneous_child_workers": overlap,
+            "maximum_planned_workers": max(plan["workers"] for plan in plans),
+            "requested_mode": mode, "requested_max_workers": cap,
+            "overlapping_workers_required": require_parallel and require_overlap,
+            "plans": plans}
 
 
 def compare_pileup(reference: Path, candidate: Path) -> dict:
@@ -441,6 +533,8 @@ def cases() -> list[Case]:
         "Deep:Deep,Deep:Informative,Informative:Informative,"
         "NoSites:Informative,Informative:Deep"
     )
+    single_pair = list(cpi)
+    single_pair[single_pair.index("--pairs") + 1] = "Informative:Informative"
     original = [
         Case("dnp-single", "dnp-call", dnp, ("/inputs/dnp/A.bam",)),
         Case("dnp-multi", "dnp-call", dnp, ("/inputs/dnp/A.bam", "/inputs/dnp/B.bam")),
@@ -452,6 +546,9 @@ def cases() -> list[Case]:
         Case("cpi-panels", "cpi", (*cpi, "--cutoff_map", "Full=/inputs/cpi/full.tsv,Subset=/inputs/cpi/subset.tsv")),
         Case("cpi-zero-error", "cpi", (*cpi, "--err_const", "0")),
         Case("cpi-shared-parents", "cpi", tuple(shared_parents)),
+        Case("cpi-single-intervals", "cpi", tuple(single_pair)),
+        Case("cpi-single-cutoffs", "cpi", (*single_pair, "--cutoff_map",
+                                           "Full=/inputs/cpi/full.tsv,Subset=/inputs/cpi/subset.tsv")),
         Case("contamination-batch", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples", "output")),
         Case("contamination-single", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples/single.txt", "output")),
         Case("contamination-panel-only", "contamination", ("/inputs/panel-only/panel.txt", "/inputs/panel-only", "output")),
@@ -473,6 +570,60 @@ def cases() -> list[Case]:
     return [*original, *blocks, numeric, duplicate]
 
 
+def verify_case(root: Path, image: str, inputs: Path, case: Case) -> dict:
+    """Run one immutable oracle, the serial candidate and selected pool variants."""
+    case_dir = root / case.name
+    timings = {}
+    executions = {"reference": None, "candidate": None}
+    if case.name in PARALLEL_CASES:
+        executions.update(PARALLEL_VARIANTS)
+    comparisons = {}
+    for variant, execution in executions.items():
+        destination = case_dir / variant
+        (destination / "output").mkdir(parents=True)
+        if case.bamlist:
+            (destination / "bamlist.txt").write_text("\n".join(case.bamlist) + "\n", encoding="utf-8")
+        path = Path(SCRIPTS[case.workflow])
+        kind = "reference" if variant == "reference" else "candidate"
+        if kind == "reference":
+            path = BASELINE / path
+        started = time.monotonic()
+        run(image, ["Rscript", "/repo/tests/r_optimization/capture.R", *case.arguments],
+            inputs=inputs, results=destination,
+            environment=case_environment(case, kind, path, execution),
+            log=destination / "execution.log")
+        timings[variant] = round(time.monotonic() - started, 6)
+        if variant == "reference":
+            continue
+        table_hashes = compare_tables(case_dir / "reference/output", destination / "output")
+        run(image, ["Rscript", "/repo/tests/r_optimization/compare.R",
+                    "/inputs/reference/scientific-values.rds", f"/inputs/{variant}/scientific-values.rds"],
+            inputs=case_dir, results=case_dir, log=case_dir / f"{variant}-unrounded-comparison.log")
+        plots = compare_pdfs(case_dir / "reference/output", destination / "output", case_dir / f"rendered-{variant}")
+        comparison = {"status": "passed", "table_sha256": table_hashes,
+                      "unrounded_r_values": "identical", "plots": plots}
+        if case.compare_pileup:
+            comparison.update({"candidate_environment": dict(case.candidate_environment),
+                "pileup": compare_pileup(case_dir / "reference/mpileup.txt", destination / "mpileup.txt"),
+                "block_execution": verify_block_execution(destination / "work/dnp-blocks.json",
+                    int(dict(case.candidate_environment)["NIPAT_DNP_BLOCK_LOCI"]), case.expected_compatibility_reason)})
+        if case.name in PARALLEL_CASES:
+            configured = execution or {"NIPAT_EXECUTION_MODE": "serial", "NIPAT_MAX_WORKERS": ""}
+            cap = configured.get("NIPAT_MAX_WORKERS")
+            comparison["parallel_execution"] = verify_parallel_execution(destination / "parallel-log",
+                mode=configured["NIPAT_EXECUTION_MODE"], cap=int(cap) if cap else None,
+                require_parallel=variant != "candidate", require_overlap=case.name in CONCURRENT_CASES)
+        if variant == "manual-4-repeat":
+            # Both independent runs equal the same exact oracle, including
+            # output order and unrounded values; equivalence is transitive.
+            comparison["deterministic_repeat_of"] = "manual-4"
+        comparisons[variant] = comparison
+        print(f"PASS: {case.name}/{variant}; exact tables, unrounded R values and {len(plots)} PDF(s)", flush=True)
+    return {"case": case.name, "workflow": case.workflow, **comparisons["candidate"],
+            "elapsed_seconds_including_container": timings,
+            "execution_variants": comparisons}
+
+
 def verify(root: Path, image: str) -> dict:
     reference = verify_reference()
     if shutil.which("pdftoppm") is None:
@@ -481,38 +632,10 @@ def verify(root: Path, image: str) -> dict:
     supporting_hashes = verify_supporting_sources(image, root)
     inputs = make_inputs(root, image)
     input_hashes = {p.relative_to(inputs).as_posix(): digest(p) for p in inputs.rglob("*") if p.is_file()}
-    results = []
-    for case in cases():
-        case_dir = root / case.name
-        timings = {}
-        for variant in ("reference", "candidate"):
-            destination = case_dir / variant
-            (destination / "output").mkdir(parents=True)
-            if case.bamlist:
-                (destination / "bamlist.txt").write_text("\n".join(case.bamlist) + "\n", encoding="utf-8")
-            path = Path(SCRIPTS[case.workflow])
-            if variant == "reference":
-                path = BASELINE / path
-            started = time.monotonic()
-            run(image, ["Rscript", "/repo/tests/r_optimization/capture.R", *case.arguments],
-                inputs=inputs, results=destination,
-                environment=case_environment(case, variant, path),
-                log=destination / "execution.log")
-            timings[variant] = round(time.monotonic() - started, 6)
-        table_hashes = compare_tables(case_dir / "reference/output", case_dir / "candidate/output")
-        run(image, ["Rscript", "/repo/tests/r_optimization/compare.R",
-                    "/inputs/reference/scientific-values.rds", "/inputs/candidate/scientific-values.rds"],
-            inputs=case_dir, results=case_dir, log=case_dir / "unrounded-comparison.log")
-        plots = compare_pdfs(case_dir / "reference/output", case_dir / "candidate/output", case_dir / "rendered")
-        results.append({"case": case.name, "workflow": case.workflow, "status": "passed",
-                        "table_sha256": table_hashes, "unrounded_r_values": "identical",
-                        "plots": plots, "elapsed_seconds_including_container": timings,
-                        **({"candidate_environment": dict(case.candidate_environment),
-                            "pileup": compare_pileup(case_dir / "reference/mpileup.txt", case_dir / "candidate/mpileup.txt"),
-                            "block_execution": verify_block_execution(case_dir / "candidate/work/dnp-blocks.json",
-                                int(dict(case.candidate_environment)["NIPAT_DNP_BLOCK_LOCI"]), case.expected_compatibility_reason)}
-                           if case.compare_pileup else {})})
-        print(f"PASS: {case.name}; exact tables, unrounded R values and {len(plots)} PDF(s)", flush=True)
+    results = [verify_case(root, image, inputs, case) for case in cases()]
+    qualified = {result["workflow"] for result in results if result["case"] in PARALLEL_CASES}
+    if qualified != set(SCRIPTS):
+        raise ValueError("All four scientific workflows must pass real parallel qualification")
     helpers = []
     for helper in sorted((PROJECT / "tests/r_optimization").glob("*/check_*.R")):
         relative = helper.relative_to(PROJECT)
@@ -545,6 +668,11 @@ def verify(root: Path, image: str) -> dict:
     return {"schema_version": 1, "status": "passed", "reference": reference,
             "candidate_r_sha256": candidate_hashes, "supporting_source_sha256": supporting_hashes,
             "runtime_image": image,
+            "parallel_qualification": {"workflows": sorted(qualified),
+                                       "variants": ["serial", *PARALLEL_VARIANTS],
+                                       "concurrent_worker_cases": sorted(CONCURRENT_CASES),
+                                       "distinct_worker_cases": sorted(PARALLEL_CASES - CONCURRENT_CASES),
+                                       "container_limits": {"cpus": 4, "memory_gib": 8}},
             "comparison": {"table_bytes": "exact", "unrounded_r": "identical",
                            "pdf_pixels": "exact", "pdf_metadata": "excluded"},
             "timing_scope": "single observations; includes capture instrumentation and container startup; no speed claim",

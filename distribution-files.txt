@@ -368,3 +368,10 @@ tests/test_engine_progress.py
 tests/test_scientific_scratch.py
 src/nipat/execution/progress.py
 tests/test_execution_progress.py
+
+# Shared scientific process budget and 0.8.12 controls.
+docs/PARALLELISMO_0.8.12.md
+src/nipat_scientific/parallel.R
+src/nipat_scientific/parallel.py
+tests/test_parallel_client.py
+tests/test_parallel_runtime.py

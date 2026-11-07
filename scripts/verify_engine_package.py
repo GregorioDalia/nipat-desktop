@@ -183,7 +183,7 @@ def check_metadata(identifier: str) -> dict:
     for name in (
         "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
         "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
-        "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "catalog_data/dnp-call.json",
+        "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "parallel.py", "parallel.R", "catalog_data/dnp-call.json",
         "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
     ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name

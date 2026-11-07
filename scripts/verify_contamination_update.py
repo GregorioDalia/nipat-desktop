@@ -121,9 +121,10 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
     required = {"engine/main.py", *(f"lib/nipat_scientific/{name}.py" for name in (
         "__init__", "errors", "panels", "files", "contamination", "snp", "dnp", "cpi",
         "catalog", "plan", "executor", "outputs", "presentation", "performance",
-        "scratch", "dnp_pileup", "progress",
+        "scratch", "dnp_pileup", "progress", "parallel",
     )), "lib/nipat_scientific/presentation.R", "lib/nipat_scientific/progress.R",
-        "lib/nipat_scientific/dnp_blocks.R", *(f"lib/nipat_scientific/catalog_data/{name}.json" for name in (
+        "lib/nipat_scientific/dnp_blocks.R", "lib/nipat_scientific/parallel.R",
+        *(f"lib/nipat_scientific/catalog_data/{name}.json" for name in (
         "dnp-call", "snp-call", "contamination", "cpi",
     ))}
     if set(hashes) != required or any(not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in hashes.values()):

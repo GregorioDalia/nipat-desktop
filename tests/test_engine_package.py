@@ -80,9 +80,9 @@ class EnginePackageTests(unittest.TestCase):
             "snp_alleles": "uppercase-working-copy",
         })
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 25)
+        self.assertEqual(len(hashes), 27)
         self.assertIn("lib/nipat_scientific/performance.py", hashes)
-        for name in ("scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R"):
+        for name in ("scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "parallel.py", "parallel.R"):
             self.assertIn(f"lib/nipat_scientific/{name}", hashes)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
@@ -838,7 +838,7 @@ class EnginePackageTests(unittest.TestCase):
         commands = self.snp_events()
         self.assertEqual([Path(command[0]).name for command in commands], ["Rscript"])
         self.assertEqual(commands[0][commands[0].index("--pileup") + 1], request["pileup"])
-        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json"})
+        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json", "parallel"})
 
     @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
     def test_standalone_zero_exit_without_output_is_a_failure(self):

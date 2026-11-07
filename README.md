@@ -5,10 +5,14 @@
 
 # NIPAT Desktop
 
-**Branch di sviluppo: prototipo integrato 0.8.10.** La release ufficiale resta
-**0.8.9**. I candidati 0.8.10 sono identificati da commit e build e si installano
-manualmente; non vengono proposti dal canale stabile. La
-[guida al prototipo](docs/PROTOTYPE_0.8.10.md) descrive download, modifiche e prove.
+**Branch di sviluppo: candidato 0.8.12.** La release ufficiale resta **0.8.9**.
+La [guida al parallelismo 0.8.12](docs/PARALLELISMO_0.8.12.md) descrive modalità
+automatica o seriale, massimo complessivo di processi R di calcolo e blocchi
+DNP configurabili, inizialmente 32 MiB / 64 loci. I candidati sono identificati
+da commit e build e si installano manualmente; non vengono proposti dal canale
+stabile. La [guida al prototipo 0.8.10](docs/PROTOTYPE_0.8.10.md) conserva il
+contesto delle prove precedenti. Il collaudo finale della 0.8.12 resta distinto
+dai test di sviluppo e dalla distribuzione di una release.
 
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python

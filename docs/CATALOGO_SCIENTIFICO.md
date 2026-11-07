@@ -52,6 +52,24 @@ non cambia il modello scientifico e non autorizza automaticamente a modificarlo.
 I pannelli CPI chiamati *cutoff* selezionano coordinate; i loro nomi non
 applicano soglie numeriche ai campioni.
 
+La policy di esecuzione comune ai quattro moduli R è invece configurabile:
+`--execution-mode auto` è il default, `serial` impone un solo processo di
+calcolo e `--max-workers` pone un tetto al pool automatico. Nella CLI queste
+opzioni globali precedono il sottocomando dell'analisi. Il numero effettivo
+dipende anche dalle attività disponibili e dai limiti CPU, RAM e processi
+dell'ambiente. I pool interni a un worker restano seriali. L'opzione DNP storica
+`--parallel` resta accettata per compatibilità; la sua assenza non disattiva
+la modalità automatica e non prevale sulla scelta `serial`.
+
+Per DNP, `--dnp-block-mib` e `--dnp-block-loci` hanno default rispettivamente
+32 MiB e 64 loci. Sono obiettivi di dimensionamento dei blocchi: finestre
+complete e gruppi indivisibili possono superarli, e i byte del pileup non
+sono un limite alla RAM residente di R. Un singolo BAM può usare il pool dei
+blocchi; quando sono attivi più worker campione, i loro blocchi restano seriali.
+Le opzioni effettive sono registrate in `run.json`, mentre `work/dnp-blocks.json`
+documenta blocchi e worker DNP. La policy cambia l'organizzazione del calcolo,
+non le formule, i filtri o le soglie scientifiche descritti nel catalogo.
+
 I [controlli degli input e dei risultati](INPUT_VALIDATION.md) sono applicati
 dagli adattatori Python. Il catalogo distingue questi controlli dalle
 assunzioni e dalle formule R: una normalizzazione del pannello o un errore

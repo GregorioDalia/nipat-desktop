@@ -15,8 +15,22 @@ class ExecutionOptions:
     memory_mb: int | None = None
     pids_limit: int | None = None
     performance_diagnostics: bool = False
+    execution_mode: str = "auto"
+    max_workers: int | None = None
+    dnp_block_mib: int = 32
+    dnp_block_loci: int = 64
 
     def __post_init__(self) -> None:
+        if not isinstance(self.execution_mode, str) or self.execution_mode not in {"auto", "serial"}:
+            raise ValidationError("La modalita' di esecuzione deve essere auto oppure serial.")
+        if self.max_workers is not None and (
+            type(self.max_workers) is not int or not 1 <= self.max_workers <= 1024
+        ):
+            raise ValidationError("Il massimo di processi R di calcolo deve essere un intero fra 1 e 1024.")
+        if type(self.dnp_block_mib) is not int or not 1 <= self.dnp_block_mib <= 4096:
+            raise ValidationError("La dimensione dei blocchi DNP deve essere un intero fra 1 e 4096 MiB.")
+        if type(self.dnp_block_loci) is not int or not 1 <= self.dnp_block_loci <= 1_000_000:
+            raise ValidationError("Il massimo di loci per blocco DNP deve essere un intero fra 1 e 1000000.")
         if type(self.performance_diagnostics) is not bool:
             raise ValidationError("La diagnostica delle prestazioni deve essere attiva o disattiva.")
         if not isinstance(self.input_hashes, str) or self.input_hashes not in {"auto", "full"}:

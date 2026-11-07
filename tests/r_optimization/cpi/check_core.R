@@ -9,6 +9,7 @@ suppressPackageStartupMessages({
 arguments <- commandArgs(trailingOnly=TRUE)
 if (length(arguments) != 1L) stop("Expected one repository root argument")
 repository <- normalizePath(arguments[[1]], mustWork=TRUE)
+source(file.path(repository, "src/nipat_scientific/parallel.R"))
 relative_script <- "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R"
 
 load_core <- function(path) {
