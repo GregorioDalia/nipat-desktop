@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.executor import PlanExecutionError, execute_plan
@@ -88,6 +89,20 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
         self.assertEqual((self.run / "steps/snp/preparation.log").read_text(), "samtools output\n")
         self.assertEqual((self.run / "steps/snp/command.log").read_text(), "R output\n")
         self.assertEqual(before, {path.name: path.read_bytes() for path in self.inputs.iterdir()})
+
+    def test_snp_progress_has_measured_boundaries_and_original_plan_identity(self):
+        events_dir = self.root / "progress"
+        with patch.dict(os.environ, {"NIPAT_PROGRESS_DIR": str(events_dir), "NIPAT_PERFORMANCE_DIR": ""}):
+            result = self.execute()
+        self.assertEqual(result["status"], "succeeded")
+        events = [json.loads(line) for path in events_dir.glob("*.jsonl")
+                  for line in path.read_text().splitlines()]
+        actual = [row for row in events if row["step_id"] == "snp"]
+        self.assertEqual({row["phase"] for row in actual}, {
+            "preparation", "pileup", "presentation-preparation", "r-execution", "output-validation",
+            "presentation-finalization"})
+        self.assertTrue(all(row["sample_ids"] == ["donor"] for row in actual))
+        self.assertFalse(any("total" in row for row in actual))
 
     def test_imported_pileup_calls_only_r_and_does_not_claim_generation(self):
         self.imported_pileup()

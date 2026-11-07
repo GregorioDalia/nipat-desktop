@@ -4,6 +4,10 @@ Guida per **NIPAT Desktop 0.8.9**. La diagnostica è disponibile dalla 0.8.5.
 Installare il pacchetto del proprio sistema dalla [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9);
 il banner dell'applicazione deve riportare `NIPAT 0.8.9`.
 
+Per il candidato **0.8.10**, seguire anche la [guida al prototipo](PROTOTYPE_0.8.10.md):
+gli indicatori di avanzamento sono indipendenti dalla diagnostica e il confronto
+può riutilizzare run di riferimento già archiviati.
+
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri
 scientifici, gli input o gli script R e non invia dati a servizi esterni.

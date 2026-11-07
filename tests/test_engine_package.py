@@ -80,8 +80,10 @@ class EnginePackageTests(unittest.TestCase):
             "snp_alleles": "uppercase-working-copy",
         })
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 20)
+        self.assertEqual(len(hashes), 25)
         self.assertIn("lib/nipat_scientific/performance.py", hashes)
+        for name in ("scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R"):
+            self.assertIn(f"lib/nipat_scientific/{name}", hashes)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)
@@ -120,7 +122,7 @@ class EnginePackageTests(unittest.TestCase):
             "read_only": True, "network_mode": "none", "volumes": [{
                 "type": "bind", "source": str(run), "target": str(layout.container_path(run)),
                 "bind": {"create_host_path": False},
-            }],
+            }, {"type": "volume", "target": "/scratch", "read_only": False}],
         }}}), encoding="utf-8")
         record = {"status": "succeeded", "workflow": "contamination", "source": {"role": "client"},
                   "input_mounts": [], "runtime": {"engine": metadata, "image_id": "sha256:" + "a" * 64},

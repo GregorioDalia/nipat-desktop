@@ -63,6 +63,57 @@ def image_id(reference: str) -> str:
     return identifier
 
 
+def check_scratch_volume(identifier: str) -> None:
+    """Exercise Docker's anonymous-volume ownership and real disk permissions.
+
+    This is a real-image check: a mocked compose command cannot establish that
+    copy-up preserves a writable /scratch for a non-root scientific process.
+    Only the container created here and its own anonymous volume are removed.
+    """
+    probe = """import json, os, pathlib
+root = pathlib.Path('/scratch')
+mounts = [line.split(' - ', 1) for line in pathlib.Path('/proc/self/mountinfo').read_text().splitlines()]
+filesystem = next(right.split()[0] for left, right in mounts if left.split()[4] == '/scratch')
+assert filesystem not in ('tmpfs', 'ramfs'), filesystem
+assert os.getuid() == 65534
+path = root / 'nipat-volume-probe'
+with path.open('xb') as handle:
+    handle.write(b'X' * 65536)
+    handle.flush()
+    os.fsync(handle.fileno())
+assert path.stat().st_size == 65536
+path.unlink()
+print(json.dumps({'uid': os.getuid(), 'filesystem': filesystem, 'written_bytes': 65536}))
+"""
+    container = docker([
+        "create", "--pull", "never", "--network", "none", "--read-only",
+        "--user", "65534:65534", "--mount", "type=volume,target=/scratch",
+        "--label", "org.nipat.validation=scratch-volume", identifier, "python3", "-c", probe,
+    ]).strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", container):
+        raise ValueError("Docker did not return the new scratch probe's immutable container ID.")
+    volume = None
+    try:
+        inspected = json.loads(docker(["inspect", container]))
+        if len(inspected) != 1 or inspected[0].get("Id") != container:
+            raise ValueError("Scratch probe container identity changed.")
+        mounts = [item for item in inspected[0]["Mounts"] if item["Destination"] == "/scratch"]
+        if len(mounts) != 1 or mounts[0]["Type"] != "volume" or mounts[0].get("RW") is not True:
+            raise ValueError("Scratch is not a writable Docker volume.")
+        volume = mounts[0]["Name"]
+        report = json.loads(docker(["start", "--attach", container]))
+        if report.get("uid") != 65534 or report.get("written_bytes") != 65536:
+            raise ValueError("Non-root scratch write probe did not complete.")
+    finally:
+        # Production retains stopped containers for OOM inspection, then uses
+        # this same volume-removal operation on the verified container ID.
+        docker(["rm", "--force", "--volumes", container])
+    if volume in docker(["volume", "ls", "--format", "{{.Name}}"]).splitlines():
+        raise ValueError("The scratch probe left its anonymous volume behind.")
+    print("PASS: non-root write/fsync on a disk-backed anonymous scratch volume, "
+          "read-only container root and owned-volume cleanup.", flush=True)
+
+
 def run_container(identifier: str, arguments: list[str], *, inputs: Path | None = None,
                   results: Path | None = None, expected_returncode: int = 0,
                   working_dir: str | None = None) -> str:
@@ -131,7 +182,8 @@ def check_metadata(identifier: str) -> dict:
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
     for name in (
         "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
-        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py", "catalog_data/dnp-call.json",
+        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
+        "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "catalog_data/dnp-call.json",
         "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
     ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
@@ -556,6 +608,7 @@ def main() -> int:
         identifier = image_id(args.image)
         check_metadata(identifier)
         check_catalog(identifier)
+        check_scratch_volume(identifier)
         print(f"PASS: bundled code integrity, image {identifier}", flush=True)
         root = Path(tempfile.mkdtemp(prefix="nipat engine package ")).resolve()
         check_plan_contract(identifier, root)

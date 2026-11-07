@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from nipat.errors import Cancelled
+from nipat.execution.recovery import RECOVERABLE_STATES
 from nipat.i18n import translate
 
 
@@ -61,15 +62,16 @@ def show_incomplete_runs(ui, runner, *, dry_run: bool = False) -> None:
             continue
         for line in recovery_lines(selected):
             ui.message(line)
-        stoppable = selected.get("backend_matches") is True and any(
-            item.get("owned") is True and item.get("state") in {"running", "restarting", "paused"}
-            for item in selected.get("containers", [])
+        recoverable = [item for item in selected.get("containers", [])
+                       if item.get("state") in RECOVERABLE_STATES]
+        stoppable = selected.get("backend_matches") is True and bool(recoverable) and all(
+            item.get("owned") is True for item in recoverable
         )
         if not stoppable:
-            ui.message("Nessun container attivo con proprieta' verificata da arrestare.", kind="muted")
+            ui.message("Nessun container con proprieta' verificata da arrestare o pulire.", kind="muted")
             continue
-        stop = ui.menu("Arrestare questa esecuzione?", [
-            ("1", "Arresta i container verificati", "Conserva risultati e log; non riprende il calcolo"),
+        stop = ui.menu("Arrestare e pulire questa esecuzione?", [
+            ("1", "Arresta e rimuovi i container verificati", "Conserva risultati e log; libera i file temporanei"),
             ("0", "Indietro", "Non invia richieste di arresto"),
         ], default="0").strip().casefold()
         if stop == ":annulla":

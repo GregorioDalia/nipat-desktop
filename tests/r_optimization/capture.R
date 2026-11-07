@@ -1,6 +1,15 @@
 # Execute the complete CLI script unchanged, retaining unrounded scientific data.
 # Paths come from the environment so commandArgs() remains the native interface.
 .nipat_eq_records <- list()
+# Retain the already computed pileup only for the differential audit. Intercept
+# exactly the historical final cleanup command; all samtools execution and R
+# computation still use the original source and arguments.
+if (identical(Sys.getenv("NIPAT_EQ_KEEP_PILEUP"), "1")) {
+  system <- function(command, ...) {
+    if (identical(command, "rm mpileup.txt")) return(invisible(0L))
+    base::system(command, ...)
+  }
+}
 .nipat_eq_wrap_cpi <- function(original) {
   force(original)
   function(madre_df, padre_df, dnp_list, cutoff_label, err_const) {

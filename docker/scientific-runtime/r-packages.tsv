@@ -3,6 +3,7 @@ argparse	2.2.5
 ComplexUpset	1.3.3
 dplyr	1.1.4
 ggplot2	3.5.1
+jsonlite	1.9.0
 openxlsx	4.2.8
 optparse	1.7.5
 patchwork	1.3.0

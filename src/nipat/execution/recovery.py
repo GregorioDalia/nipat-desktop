@@ -20,6 +20,7 @@ from nipat.execution.tracking import utc_now
 CONTAINER_NAME = re.compile(r"nipat-run-[0-9a-f]{32}\Z")
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 CONTAINER_ID = re.compile(r"[0-9a-f]{64}\Z")
+RECOVERABLE_STATES = frozenset({"created", "running", "restarting", "paused", "exited", "dead"})
 
 
 def ownership_labels(run_dir: Path, run_id: str) -> dict[str, str]:
@@ -130,10 +131,12 @@ def reconcile_run(runner, run_dir: Path, *, stop: bool = False) -> dict[str, Any
         return report
     if runner.dry_run:
         raise ValidationError("L'arresto richiede una verifica reale; rimuovere --dry-run.")
-    active = [item for item in report["containers"]
-              if item["state"] in {"running", "restarting", "paused"}]
-    if not active or any(not item["owned"] for item in active):
-        raise ValidationError("Nessun container attivo identificato in modo sicuro per questo run.")
+    # A client/VM interruption can leave an exited container and its anonymous
+    # scratch volume behind. The same identity checks govern its removal.
+    recoverable = [item for item in report["containers"]
+                   if item["state"] in RECOVERABLE_STATES]
+    if not recoverable or any(not item["owned"] for item in recoverable):
+        raise ValidationError("Nessun container identificato in modo sicuro per la pulizia di questo run.")
     destination = run_dir / "recovery.json"
     if destination.is_symlink():
         raise ValidationError("recovery.json non deve essere un collegamento simbolico.")
@@ -150,7 +153,7 @@ def reconcile_run(runner, run_dir: Path, *, stop: bool = False) -> dict[str, Any
     try:
         workflow = record.get("bundled_workflow")
         runner._bundled_workflow = workflow if isinstance(workflow, str) else None
-        for item in active:
+        for item in recoverable:
             # Use the immutable container ID verified above, never a reusable name.
             item["cleanup"] = runner._stop_container(item["container_id"])
     finally:
@@ -175,7 +178,12 @@ def incomplete_runs(runner) -> list[dict[str, Any]]:
     for path in sorted(runner.layout.runs_dir.glob("*/run.json")):
         try:
             run_dir, record = _load_record(runner, path.parent)
-            if record.get("status") in {"preparing", "running", "interrupted", "failed"}:
+            cleanup_pending = any(
+                isinstance(command, dict) and isinstance(command.get("container_cleanup"), dict)
+                and command["container_cleanup"].get("status") in {"stopped", "not_confirmed"}
+                for command in record["commands"]
+            )
+            if record.get("status") in {"preparing", "running", "interrupted", "failed"} or cleanup_pending:
                 reports.append(reconcile_run(runner, run_dir))
         except ValidationError as exc:
             reports.append({"run_dir": str(path.parent), "run_name": path.parent.name,

@@ -68,6 +68,17 @@ class RunRecoveryTests(unittest.TestCase):
         self.assertEqual(len(json.loads((self.run / "recovery.json").read_text())["observations"]), 1)
         self.assertIsNone(self.runner._bundled_workflow)
 
+    def test_owned_stopped_container_can_release_scratch_after_client_interruption(self):
+        for state in ("created", "exited", "dead"):
+            with self.subTest(state=state):
+                self.observed["state"] = state
+                with patch("nipat.execution.recovery.subprocess.run", return_value=self.answer()), patch.object(
+                    self.runner, "_stop_container", return_value={"status": "removed"},
+                ) as stop:
+                    report = self.runner.reconcile_run(self.run, stop=True)
+                stop.assert_called_once_with(self.container_id)
+                self.assertEqual(report["containers"][0]["cleanup"]["status"], "removed")
+
     def test_foreign_labels_or_image_refuse_stop(self):
         for changed in ("labels", "image", "name"):
             with self.subTest(changed=changed):
@@ -115,6 +126,17 @@ class RunRecoveryTests(unittest.TestCase):
             self.record["status"] = "succeeded"
             self.save_record()
             self.assertEqual(self.runner.incomplete_runs(), [])
+
+    def test_successful_run_with_unfinished_cleanup_remains_recoverable(self):
+        self.record["status"] = "succeeded"
+        self.record["commands"][0]["container_cleanup"] = {"status": "stopped"}
+        self.save_record()
+        self.observed["state"] = "exited"
+        with patch("nipat.execution.recovery.subprocess.run", return_value=self.answer()):
+            reports = self.runner.incomplete_runs()
+        self.assertEqual(len(reports), 1)
+        self.assertEqual(reports[0]["recorded_status"], "succeeded")
+        self.assertEqual(reports[0]["containers"][0]["state"], "exited")
 
     def test_run_outside_current_results_is_rejected(self):
         with self.assertRaises(ValidationError):

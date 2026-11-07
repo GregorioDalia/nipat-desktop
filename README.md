@@ -5,6 +5,11 @@
 
 # NIPAT Desktop
 
+**Branch di sviluppo: prototipo integrato 0.8.10.** La release ufficiale resta
+**0.8.9**. I candidati 0.8.10 sono identificati da commit e build e si installano
+manualmente; non vengono proposti dal canale stabile. La
+[guida al prototipo](docs/PROTOTYPE_0.8.10.md) descrive download, modifiche e prove.
+
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma

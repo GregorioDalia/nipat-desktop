@@ -88,7 +88,7 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
                 value = payload(argv[3], labels, oom=oom, code=code,
                                 status="running" if interrupt else "exited")
                 return subprocess.CompletedProcess(argv, 0, json.dumps(value), "")
-            self.assertEqual(argv, ["docker", "rm", "--force", CONTAINER])
+            self.assertEqual(argv, ["docker", "rm", "--force", "--volumes", CONTAINER])
             if cleanup_failure:
                 return subprocess.CompletedProcess(argv, 1, "", "runtime unavailable during cleanup")
             return subprocess.CompletedProcess(argv, 0, CONTAINER, "")
@@ -116,7 +116,7 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(stage["container_diagnostics"]["diagnosis"]["kind"], "completed")
         self.assertEqual(stage["container_cleanup"]["status"], "removed")
         self.assertEqual(operations[0][:3], ["docker", "container", "inspect"])
-        self.assertEqual(operations[-1], ["docker", "rm", "--force", CONTAINER])
+        self.assertEqual(operations[-1], ["docker", "rm", "--force", "--volumes", CONTAINER])
         self.assertTrue((run / "run-report.html").is_file())
         self.assertEqual(record["resource_snapshot"]["runtime"]["effective"]["memory_mib"], 4096)
 
@@ -143,7 +143,7 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(stage["returncode"], 137)
         self.assertEqual(stage["container_diagnostics"]["diagnosis"]["kind"], "oom_confirmed")
         self.assertEqual(stage["container_cleanup"]["status"], "not_confirmed")
-        self.assertEqual(operations[-1], ["docker", "rm", "--force", CONTAINER])
+        self.assertEqual(operations[-1], ["docker", "rm", "--force", "--volumes", CONTAINER])
 
     def test_missing_container_records_unknown_cause_without_reusing_its_name(self):
         _, record, error, operations = self.run_case(137, missing=True)
@@ -167,7 +167,7 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
         stage = record["commands"][0]
         self.assertEqual(stage["container_diagnostics"]["diagnosis"]["kind"], "interrupted")
         self.assertEqual(stage["container_diagnostics"]["state"]["status"], "running")
-        self.assertEqual(operations[-1], ["docker", "rm", "--force", CONTAINER])
+        self.assertEqual(operations[-1], ["docker", "rm", "--force", "--volumes", CONTAINER])
 
     def test_inspection_rejects_untrusted_or_incomplete_data(self):
         name, labels = "nipat-run-" + "c" * 32, {"org.nipat.execution-token": "d" * 32}

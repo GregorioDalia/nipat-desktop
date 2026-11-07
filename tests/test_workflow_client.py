@@ -175,9 +175,11 @@ class WorkflowClientTests(unittest.TestCase):
         compose = json.loads((run / "work" / "engine-compose.json").read_text(encoding="utf-8"))
         volumes = compose["services"]["scientific"]["volumes"]
         writable = [item for item in volumes if not item["read_only"]]
-        self.assertEqual(len(writable), 1)
-        self.assertEqual(writable[0]["target"], str(self.layout.container_path(run)))
-        self.assertFalse(any(item["source"] == str(self.layout.project_dir) for item in volumes))
+        self.assertEqual({item["target"] for item in writable},
+                         {str(self.layout.container_path(run)), "/scratch"})
+        self.assertEqual([item for item in writable if item["type"] == "volume"],
+                         [{"type": "volume", "target": "/scratch", "read_only": False}])
+        self.assertFalse(any(item.get("source") == str(self.layout.project_dir) for item in volumes))
 
     def test_failure_keeps_parent_failed_and_does_not_launch_second_container(self):
         runner = DockerComposeRunner(self.layout, transport=DockerTransport())

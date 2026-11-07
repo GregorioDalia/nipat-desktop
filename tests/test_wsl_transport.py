@@ -321,7 +321,7 @@ class WslRunnerTests(unittest.TestCase):
         self.assertEqual(record["status"], "interrupted")
         cleanup = stage["container_cleanup"]
         self.assertEqual(cleanup["status"], "removed")
-        self.assertEqual(cleanup["argv"][-4:], ["docker", "rm", "--force", "b" * 64])
+        self.assertEqual(cleanup["argv"][-5:], ["docker", "rm", "--force", "--volumes", "b" * 64])
         self.assertEqual(cleanup["argv"][:4], ["wsl.exe", "--distribution", "NIPAT-Test", "--user"])
 
     def test_timed_out_probe_cleans_up_its_exact_container(self):
@@ -336,7 +336,7 @@ class WslRunnerTests(unittest.TestCase):
             "nipat.execution.runner.subprocess.run", side_effect=timeout_probe
         ), self.assertRaisesRegex(RuntimeExecutionError, "90 secondi"):
             self.runner._capture(["docker", "run", "--name", name, "image", "Rscript"], container_name=name)
-        self.assertEqual(self.calls[-1][0][-4:], ["docker", "rm", "--force", name])
+        self.assertEqual(self.calls[-1][0][-5:], ["docker", "rm", "--force", "--volumes", name])
 
     def test_dry_run_writes_planned_evidence_without_starting_any_process(self):
         runner = DockerComposeRunner(self.layout, dry_run=True)

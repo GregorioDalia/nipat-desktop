@@ -11,7 +11,7 @@ import threading
 import uuid
 from contextlib import ExitStack, contextmanager
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable, Iterator, TextIO
+from typing import Any, Callable, Iterable, Iterator, TextIO
 
 from nipat import __version__
 from nipat.errors import RuntimeExecutionError, ValidationError
@@ -19,6 +19,7 @@ from nipat.execution.diagnostics import diagnose, inspect_container
 from nipat.execution.mounts import InputMounts
 from nipat.execution.options import ExecutionOptions
 from nipat.execution.performance import ContainerPerformanceObserver
+from nipat.execution.progress import ProgressObserver, ProgressRenderer, ProgressSnapshot
 from nipat.execution.recovery import incomplete_runs, ownership_labels, reconcile_run
 from nipat.execution.tracking import (
     RunRecord, file_evidence, project_evidence, utc_now, verify_input_evidence,
@@ -69,8 +70,11 @@ class DockerComposeRunner:
         self, layout: ProjectLayout, dry_run: bool = False, *,
         transport: DockerTransport | None = None,
         options: ExecutionOptions | None = None,
+        progress_callback: Callable[[ProgressSnapshot], None] | None = None,
     ) -> None:
         self.layout = layout
+        self._progress_callback = progress_callback
+        self._write_lock = threading.RLock()
         self.dry_run = dry_run
         self.options = options if options is not None else ExecutionOptions()
         self._record: RunRecord | None = None
@@ -168,6 +172,9 @@ class DockerComposeRunner:
             "target": str(self.layout.container_path(run_dir)).replace("$", "$$"),
             "read_only": False, "bind": {"create_host_path": False},
         })
+        # No source means an isolated anonymous volume in this Docker daemon.
+        # It is removed with the owned container after diagnostics are retained.
+        volumes.append({"type": "volume", "target": "/scratch", "read_only": False})
         service = {
             "image": image,
             "user": "${NIPAT_UID:-0}:${NIPAT_GID:-0}",
@@ -176,7 +183,8 @@ class DockerComposeRunner:
             "working_dir": str(self.layout.container_path(run_dir / "work")),
             "volumes": volumes,
             "environment": {"HOME": "/tmp", "TMPDIR": "/tmp", "LANG": "C.UTF-8",
-                            "LC_ALL": "C.UTF-8", "TZ": "Europe/Rome"},
+                            "LC_ALL": "C.UTF-8", "TZ": "Europe/Rome",
+                            "NIPAT_SCRATCH_ROOT": "/scratch"},
         }
         if self._transport.backend == "lima":
             # The experimental macOS clients share the validated AMD64 engine.
@@ -383,21 +391,22 @@ class DockerComposeRunner:
             environment["NIPAT_GID"] = str(os.getgid())
         return environment
 
-    def _write(self, text: str, *, terminal: bool = True) -> None:
-        if self._log is not None:
-            self._log.write(text)
-            self._log.flush()
-        if not terminal:
-            return
-        try:
-            sys.stdout.write(text)
-            sys.stdout.flush()
-        except UnicodeEncodeError:
-            safe = text.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
-                sys.stdout.encoding or "utf-8"
-            )
-            sys.stdout.write(safe)
-            sys.stdout.flush()
+    def _write(self, text: str, *, terminal: bool = True, log: bool = True) -> None:
+        with self._write_lock:
+            if log and self._log is not None:
+                self._log.write(text)
+                self._log.flush()
+            if not terminal:
+                return
+            try:
+                sys.stdout.write(text)
+                sys.stdout.flush()
+            except UnicodeEncodeError:
+                safe = text.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
+                    sys.stdout.encoding or "utf-8"
+                )
+                sys.stdout.write(safe)
+                sys.stdout.flush()
 
     def _capture(self, command: list[str], *, container_name: str | None = None) -> str:
         self._ensure_backend()
@@ -638,6 +647,15 @@ class DockerComposeRunner:
             docker_command.extend(["--label", f"{key}={value}"])
         if working_dir is not None:
             docker_command.extend(["--workdir", str(working_dir)])
+        progress_directory = None
+        if self._record is not None and self._bundled_workflow is not None:
+            number = len(self._record.data["commands"]) + 1
+            progress_directory = self._record.run_dir / "progress"
+            if number > 1:
+                progress_directory = progress_directory / f"command-{number:03d}"
+            docker_command.extend([
+                "--env", "NIPAT_PROGRESS_DIR=" + str(self.layout.container_path(progress_directory)),
+            ])
         performance_directory = None
         if self.options.performance_diagnostics and self._record is not None:
             number = len(self._record.data["commands"]) + 1
@@ -657,6 +675,9 @@ class DockerComposeRunner:
             "finished_at": None, "returncode": None,
             "status": "planned" if self.dry_run else "running",
         }
+        if progress_directory is not None:
+            stage["progress"] = {"interface": "nipat-progress-v1", "directory":
+                                 progress_directory.relative_to(self._record.run_dir).as_posix()}
         if self._record:
             self._record.data["commands"].append(stage)
             self._record.save()
@@ -668,6 +689,7 @@ class DockerComposeRunner:
             return
         process = None
         observer = None
+        progress_observer = None
         interrupted = False
         try:
             process = subprocess.Popen(
@@ -675,6 +697,20 @@ class DockerComposeRunner:
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
                 text=True, encoding="utf-8", errors="replace", bufsize=1,
             )
+            if progress_directory is not None:
+                try:
+                    from nipat.run_report import sample_rows
+                    progress_directory.mkdir(parents=True, exist_ok=True)
+                    callback = self._progress_callback or ProgressRenderer(
+                        lambda text: self._write(text, log=False),
+                        sample_names={row["sample_id"]: row["original_name"]
+                                      for row in sample_rows(self._record.data)},
+                        is_tty=bool(getattr(sys.stdout, "isatty", lambda: False)()),
+                    )
+                    progress_observer = ProgressObserver(progress_directory, callback)
+                    progress_observer.start()
+                except Exception as exc:
+                    stage["progress"]["unavailable_reason"] = type(exc).__name__
             if performance_directory is not None:
                 try:
                     observer = ContainerPerformanceObserver(
@@ -720,54 +756,61 @@ class DockerComposeRunner:
             raise
         finally:
             with _finish_cleanup():
-                if observer is not None:
-                    try:
-                        summary = observer.stop()
-                        stage["performance_diagnostics"] = {
-                            "enabled": True, "status": summary["status"],
-                            "reason": summary.get("reason"),
-                            "sample_count": summary.get("sample_count", 0),
-                            "directory": performance_directory.relative_to(self._record.run_dir).as_posix(),
-                            "summary": ((performance_directory / "summary.json").relative_to(
-                                self._record.run_dir).as_posix()
-                                if summary.get("summary", "summary.json") is not None else None),
-                        }
-                    except Exception as exc:
-                        stage["performance_diagnostics"] = {
-                            "enabled": True, "status": "partial", "reason": type(exc).__name__,
-                        }
-                        self._write("Diagnostica prestazioni incompleta; consultare i file gia salvati.\n")
-                if process is not None:
-                    if "container_diagnostics" not in stage:
-                        stage["container_diagnostics"] = inspect_container(self, container_name, expected_labels)
-                    observed = stage["container_diagnostics"]
-                    observed["diagnosis"] = diagnose(observed, stage["returncode"], interrupted=interrupted)
-                    if observed.get("owned") is True:
-                        # Never pass a reusable name after an inspection. A
-                        # concurrent replacement cannot redirect our cleanup.
-                        stage["container_cleanup"] = self._stop_container(observed["container_id"])
-                    else:
-                        stage["container_cleanup"] = {
-                            "status": "absent" if observed.get("availability") == "absent" else "not_confirmed",
-                            "reason": observed.get("reason", "ownership_not_verified"),
-                        }
-                        if stage["container_cleanup"]["status"] == "not_confirmed":
-                            self._write("Identita del container non verificabile: arresto automatico non eseguito. "
-                                        "Consultare la verifica delle esecuzioni prima di modificare le risorse.\n")
-                    if process.poll() is None:
+                try:
+                    if observer is not None:
                         try:
-                            process.terminate()
+                            summary = observer.stop()
+                            stage["performance_diagnostics"] = {
+                                "enabled": True, "status": summary["status"],
+                                "reason": summary.get("reason"),
+                                "sample_count": summary.get("sample_count", 0),
+                                "directory": performance_directory.relative_to(self._record.run_dir).as_posix(),
+                                "summary": ((performance_directory / "summary.json").relative_to(
+                                    self._record.run_dir).as_posix()
+                                    if summary.get("summary", "summary.json") is not None else None),
+                            }
+                        except Exception as exc:
+                            stage["performance_diagnostics"] = {
+                                "enabled": True, "status": "partial", "reason": type(exc).__name__,
+                            }
+                            self._write("Diagnostica prestazioni incompleta; consultare i file gia salvati.\n")
+                    if process is not None:
+                        if "container_diagnostics" not in stage:
+                            stage["container_diagnostics"] = inspect_container(self, container_name, expected_labels)
+                        observed = stage["container_diagnostics"]
+                        observed["diagnosis"] = diagnose(observed, stage["returncode"], interrupted=interrupted)
+                        if observed.get("owned") is True:
+                            # Never pass a reusable name after an inspection. A
+                            # concurrent replacement cannot redirect our cleanup.
+                            stage["container_cleanup"] = self._stop_container(observed["container_id"])
+                        else:
+                            stage["container_cleanup"] = {
+                                "status": "absent" if observed.get("availability") == "absent" else "not_confirmed",
+                                "reason": observed.get("reason", "ownership_not_verified"),
+                            }
+                            if stage["container_cleanup"]["status"] == "not_confirmed":
+                                self._write("Identita del container non verificabile: arresto automatico non eseguito. "
+                                            "Consultare la verifica delle esecuzioni prima di modificare le risorse.\n")
+                        if process.poll() is None:
                             try:
-                                process.wait(timeout=10)
-                            except subprocess.TimeoutExpired:
-                                process.kill()
-                                process.wait(timeout=5)
-                        except (OSError, subprocess.SubprocessError) as cleanup_error:
-                            stage["client_cleanup_error"] = str(cleanup_error)
-                            self._write("Arresto del processo di collegamento al runtime non confermato; consultare execution.log.\n")
-                stage["finished_at"] = utc_now()
-                if self._record:
-                    self._record.save()
+                                process.terminate()
+                                try:
+                                    process.wait(timeout=10)
+                                except subprocess.TimeoutExpired:
+                                    process.kill()
+                                    process.wait(timeout=5)
+                            except (OSError, subprocess.SubprocessError) as cleanup_error:
+                                stage["client_cleanup_error"] = str(cleanup_error)
+                                self._write("Arresto del processo di collegamento al runtime non confermato; consultare execution.log.\n")
+                    stage["finished_at"] = utc_now()
+                    if self._record:
+                        self._record.save()
+                finally:
+                    if progress_observer is not None:
+                        try:
+                            progress_observer.stop("cancelled" if interrupted else stage["status"])
+                        except Exception as exc:
+                            stage["progress"]["unavailable_reason"] = type(exc).__name__
 
     def _stop_container(self, container_name: str) -> dict[str, Any]:
         with _finish_cleanup():
@@ -794,7 +837,7 @@ class DockerComposeRunner:
                 graceful = {"returncode": None, "message": str(exc)}
         try:
             command = self._transport.command(
-                ["docker", "rm", "--force", container_name], self._environment(),
+                ["docker", "rm", "--force", "--volumes", container_name], self._environment(),
             )
             result = subprocess.run(
                 command, env=self._environment(),

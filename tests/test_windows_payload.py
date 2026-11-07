@@ -128,10 +128,33 @@ class WindowsPayloadTests(unittest.TestCase):
         record_path.write_text(json.dumps(record), encoding="utf-8")
         compose_path = run / "work/engine-compose.json"
         compose = check.read_json(compose_path)
+        original_compose = json.dumps(compose)
         for mount in compose["services"]["scientific"]["volumes"]:
             if mount["target"].startswith("/workspace/inputs/"):
                 mount["read_only"] = False
                 break
+        compose_path.write_text(json.dumps(compose), encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "Unexpected writable mount"):
+            check.verify_plan(run, **arguments)
+        # The extra writable area must be an anonymous daemon-owned volume;
+        # a host bind, named/shared volume or duplicate is never accepted.
+        for replacement in (
+            {"type": "bind", "target": "/scratch", "source": "/host", "read_only": False},
+            {"type": "volume", "target": "/scratch", "source": "shared", "read_only": False},
+            {"type": "volume", "target": "/other", "read_only": False},
+            {"type": "volume", "target": "/scratch", "read_only": True},
+        ):
+            with self.subTest(scratch=replacement):
+                compose = json.loads(original_compose)
+                volumes = compose["services"]["scientific"]["volumes"]
+                index = next(i for i, mount in enumerate(volumes) if mount["target"] == "/scratch")
+                volumes[index] = replacement
+                compose_path.write_text(json.dumps(compose), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "Unexpected writable mount"):
+                    check.verify_plan(run, **arguments)
+        compose = json.loads(original_compose)
+        compose["services"]["scientific"]["volumes"].append(
+            {"type": "volume", "target": "/scratch", "read_only": False})
         compose_path.write_text(json.dumps(compose), encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "Unexpected writable mount"):
             check.verify_plan(run, **arguments)

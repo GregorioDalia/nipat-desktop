@@ -41,6 +41,9 @@ SCRIPTS = dict(zip(("dnp-call", "cpi", "snp-call", "contamination"), (
     "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
     "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
 )))
+SUPPORTING_SOURCES = tuple(f"src/nipat_scientific/{name}" for name in (
+    "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R",
+))
 
 
 def digest(path: Path) -> str:
@@ -122,6 +125,17 @@ def verify_image_sources(image: str, root: Path) -> dict[str, str]:
     return actual
 
 
+def verify_supporting_sources(image: str, root: Path) -> dict[str, str]:
+    bundled = {path: f"/opt/nipat/lib/nipat_scientific/{Path(path).name}" for path in SUPPORTING_SOURCES}
+    code = ("import hashlib,json; p=" + repr(bundled) + "; "
+            "print(json.dumps({k:hashlib.sha256(open(v,'rb').read()).hexdigest() for k,v in p.items()}))")
+    actual = json.loads(run(image, ["python3", "-c", code], inputs=root, results=root))
+    wanted = {path: digest(PROJECT / path) for path in SUPPORTING_SOURCES}
+    if actual != wanted:
+        raise ValueError("The image does not contain this checkout's scientific supporting sources; rebuild it")
+    return actual
+
+
 def compare_tables(reference: Path, candidate: Path) -> dict[str, str]:
     def files(root: Path) -> dict[str, Path]:
         return {p.relative_to(root).as_posix(): p for p in root.rglob("*")
@@ -168,6 +182,54 @@ class Case:
     workflow: str
     arguments: tuple[str, ...]
     bamlist: tuple[str, ...] = ()
+    candidate_environment: tuple[tuple[str, str], ...] = ()
+    compare_pileup: bool = False
+    expected_compatibility_reason: str | None = None
+
+
+def case_environment(case: Case, variant: str, script: Path) -> dict[str, str]:
+    environment = {"NIPAT_EQ_SCRIPT": f"/repo/{script.as_posix()}", "NIPAT_EQ_WORKFLOW": case.workflow}
+    if case.compare_pileup:
+        environment["NIPAT_EQ_KEEP_PILEUP"] = "1"
+    if variant == "candidate":
+        environment.update(case.candidate_environment)
+        if case.compare_pileup:
+            environment["NIPAT_DNP_KEEP_PILEUP"] = "1"
+    return environment
+
+
+def compare_pileup(reference: Path, candidate: Path) -> dict:
+    if not reference.is_file() or not candidate.is_file():
+        raise ValueError("A retained reference or candidate pileup is missing")
+    original = reference.read_bytes()
+    if not original or original != candidate.read_bytes():
+        raise ValueError("Indexed pileup differs from the sequential 0.8.5 pileup")
+    return {"comparison": "exact-bytes", "sha256": hashlib.sha256(original).hexdigest(),
+            "size_bytes": len(original), "rows": len(original.splitlines())}
+
+
+def verify_block_execution(path: Path, expected_limit: int, compatibility_reason: str | None = None) -> dict:
+    """Confirm the forced partitions were actually used, not just requested."""
+    metadata = json.loads(path.read_text(encoding="utf-8"))
+    if (metadata.get("status") != "succeeded" or metadata.get("block_loci_limit") != expected_limit
+            or not metadata.get("samples")):
+        raise ValueError("The candidate did not use the requested DNP block limit")
+    samples = {}
+    reasons = metadata.get("compatibility_reasons", [])
+    if not isinstance(reasons, list) or reasons != ([compatibility_reason] if compatibility_reason else []):
+        raise ValueError("The DNP compatibility path differs from the intended synthetic scenario")
+    for name, sample in metadata["samples"].items():
+        blocks = sample.get("blocks", [])
+        invalid = (len(blocks) != 1 if compatibility_reason else
+                   len(blocks) < 2 or any(not 0 < block.get("loci", 0) <= expected_limit for block in blocks)
+                   or (expected_limit == 1 and not any(block.get("raw_rows") == 0 for block in blocks)))
+        if invalid:
+            raise ValueError("The synthetic DNP block boundaries or uncovered windows were not exercised")
+        samples[name] = {"blocks": len(blocks), "loci": sum(block["loci"] for block in blocks),
+                         "maximum_block_loci": max(block["loci"] for block in blocks),
+                         "uncovered_blocks": sum(block["raw_rows"] == 0 for block in blocks)}
+    return {"metadata_sha256": digest(path), "block_loci_limit": expected_limit,
+            "compatibility_reasons": reasons, "samples": samples}
 
 
 def write_tsv(path: Path, fields: tuple[str, ...], rows: list[tuple]) -> None:
@@ -175,6 +237,84 @@ def write_tsv(path: Path, fields: tuple[str, ...], rows: list[tuple]) -> None:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(fields)
         writer.writerows(rows)
+
+
+def make_dnp_block_inputs(inputs: Path, image: str) -> None:
+    """Small full-script cases exercise window boundaries without large BAMs."""
+    source_sequence = "".join(line for line in (PROJECT / "tests/fixtures/dnp_engine/reference.fa").read_text().splitlines()
+                              if not line.startswith(">"))
+    # Integer coordinates at 100000 must keep their decimal key. R formats a
+    # numeric/double 100000 as 1e+05 in some contexts, unlike integer positions.
+    sequence = source_sequence * 400
+    for fixture_name, contigs, panel in (
+        ("dnp-blocks", ("1", "X"),
+         (("X", 620), ("1", 60), ("1", 62), ("X", 250), ("1", 250),
+          ("1", 440), ("X", 60), ("1", 800), ("X", 440), ("1", 1000), ("1", 100000), ("X", 1000))),
+        # read.table converts the numeric-looking panel chromosome column to
+        # integer, collapsing 01 and 1 into the same effective DNP key.
+        ("dnp-numeric", ("01", "1", "100000"),
+         (("01", 250), ("1", 60), ("01", 62), ("1", 440), ("01", 800), ("100000", 100000), ("1", 1000))),
+    ):
+        directory = inputs / fixture_name
+        directory.mkdir()
+        reference = directory / "reference.fa"
+        reference.write_text("".join(f">{chromosome}\n{sequence}\n" for chromosome in contigs), encoding="utf-8")
+        panel_rows = []
+        for chromosome, position in panel:
+            bases = sequence[position - 1:position + 1]
+            alt = bases.translate(str.maketrans("ACGT", "TGCA"))
+            panel_rows.append(f"{chromosome}\t{position}\t{position + 1}\t{bases}\t{alt}\n")
+        (directory / "panel.txt").write_text("".join(panel_rows), encoding="utf-8")
+        records = ["@HD\tVN:1.6\tSO:coordinate", *(f"@SQ\tSN:{chromosome}\tLN:{len(sequence)}" for chromosome in contigs)]
+
+        def add(name: str, chromosome: str, start: int, length: int = 90,
+                *, flag: int = 0, cigar: str | None = None, bases: str | None = None,
+                quality: str = "I", mate: str = "*", mate_position: int = 0, template_length: int = 0):
+            bases = sequence[start - 1:start - 1 + length] if bases is None else bases
+            records.append("\t".join(map(str, (name, flag, chromosome, start, 60,
+                cigar or f"{length}M", mate, mate_position, template_length, bases, quality * len(bases)))))
+
+        effective_contigs = ("1", "100000") if fixture_name == "dnp-numeric" else contigs
+        for chromosome in effective_contigs:
+            # The first covered windows have one numeric QNAME and a digit
+            # quality character; later windows force global character types.
+            add("0001", chromosome, 30, quality="5")
+            add("large-coordinate", chromosome, 99970)
+            for start in (220, 410, 590):
+                for number, name in enumerate(("shared", "shared2", "001", "1", "z", "A", "r_12", "r@excluded")):
+                    bases = list(sequence[start - 1:start + 89])
+                    if number % 3 == 1:
+                        position = start + 30
+                        bases[30:32] = list(sequence[position - 1:position + 1].translate(str.maketrans("ACGT", "TGCA")))
+                    add(name, chromosome, start, bases="".join(bases), flag=16 if number % 2 else 0)
+            # One alignment intersects two disjoint windows. An indexed
+            # multi-region iterator must emit it once, in original BAM order.
+            add("spanning", chromosome, 220, length=260)
+            add("deletion", chromosome, 220, cigar="30M1D59M",
+                bases=sequence[219:249] + sequence[250:309])
+            add("insertion", chromosome, 220, cigar="30M1I60M",
+                bases=sequence[219:249] + "A" + sequence[249:309])
+            add("skip", chromosome, 410, cigar="30M2N58M",
+                bases=sequence[409:439] + sequence[441:499])
+            add("softclip", chromosome, 590, cigar="4S90M", bases="ACGT" + sequence[589:679])
+            add("paired", chromosome, 220, flag=99, mate="=", mate_position=240, template_length=110)
+            add("paired", chromosome, 240, flag=147, mate="=", mate_position=220, template_length=-110)
+            # 800 and 1000 remain uncovered, including the final block.
+        sam = directory / "Boundary.sam"
+        sam.write_text("\n".join(records) + "\n", encoding="utf-8")
+        run(image, ["samtools", "sort", "-O", "BAM", "-o", "/results/Boundary.bam", "/inputs/Boundary.sam"],
+            inputs=directory, results=directory)
+        run(image, ["samtools", "index", "/results/Boundary.bam"], inputs=directory, results=directory)
+        run(image, ["samtools", "faidx", "/results/reference.fa"], inputs=directory, results=directory)
+        if fixture_name == "dnp-blocks":
+            # Duplicate names at one position retain a legacy cross-window
+            # grouping dependency and explicitly exercise its compatibility path.
+            duplicate = ["shared\t" + record.split("\t", 1)[1] if record.startswith("shared2\t") else record
+                         for record in records]
+            (directory / "Duplicate.sam").write_text("\n".join(duplicate) + "\n", encoding="utf-8")
+            run(image, ["samtools", "sort", "-O", "BAM", "-o", "/results/Duplicate.bam", "/inputs/Duplicate.sam"],
+                inputs=directory, results=directory)
+            run(image, ["samtools", "index", "/results/Duplicate.bam"], inputs=directory, results=directory)
 
 
 def make_inputs(root: Path, image: str) -> Path:
@@ -285,6 +425,7 @@ def make_inputs(root: Path, image: str) -> Path:
     for number in range(12):
         shutil.copyfile(contamination / "samples/single.txt", contamination / "samples" / f"batch{number:02}.txt")
     shutil.copyfile(contamination / "panel.txt", inputs / "panel-only/panel.txt")
+    make_dnp_block_inputs(inputs, image)
     return inputs
 
 
@@ -300,7 +441,7 @@ def cases() -> list[Case]:
         "Deep:Deep,Deep:Informative,Informative:Informative,"
         "NoSites:Informative,Informative:Deep"
     )
-    return [
+    original = [
         Case("dnp-single", "dnp-call", dnp, ("/inputs/dnp/A.bam",)),
         Case("dnp-multi", "dnp-call", dnp, ("/inputs/dnp/A.bam", "/inputs/dnp/B.bam")),
         Case("dnp-parallel", "dnp-call", (*dnp, "--parallel"), ("/inputs/dnp/A.bam", "/inputs/dnp/B.bam")),
@@ -315,6 +456,21 @@ def cases() -> list[Case]:
         Case("contamination-single", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples/single.txt", "output")),
         Case("contamination-panel-only", "contamination", ("/inputs/panel-only/panel.txt", "/inputs/panel-only", "output")),
     ]
+    blocks = []
+    for count in (1, 2, 3):
+        arguments = ("--bamlist=bamlist.txt", "--DNPs=/inputs/dnp-blocks/panel.txt",
+                     "--reference=/inputs/dnp-blocks/reference.fa", "--out=output")
+        blocks.append(Case(f"dnp-blocks-{count}", "dnp-call", arguments,
+                           ("/inputs/dnp-blocks/Boundary.bam",),
+                           (("NIPAT_DNP_BLOCK_LOCI", str(count)),), True))
+    numeric = Case("dnp-numeric-blocks", "dnp-call",
+                   ("--bamlist=bamlist.txt", "--DNPs=/inputs/dnp-numeric/panel.txt",
+                    "--reference=/inputs/dnp-numeric/reference.fa", "--out=output"),
+                   ("/inputs/dnp-numeric/Boundary.bam",), (("NIPAT_DNP_BLOCK_LOCI", "1"),), True)
+    duplicate = Case("dnp-repeated-qname-compatibility", "dnp-call", blocks[0].arguments,
+                     ("/inputs/dnp-blocks/Duplicate.bam",), (("NIPAT_DNP_BLOCK_LOCI", "1"),), True,
+                     "legacy-repeated-qname-within-position")
+    return [*original, *blocks, numeric, duplicate]
 
 
 def verify(root: Path, image: str) -> dict:
@@ -322,6 +478,7 @@ def verify(root: Path, image: str) -> dict:
     if shutil.which("pdftoppm") is None:
         raise ValueError("pdftoppm (Poppler) is required for exact PDF rendering comparisons")
     candidate_hashes = verify_image_sources(image, root)
+    supporting_hashes = verify_supporting_sources(image, root)
     inputs = make_inputs(root, image)
     input_hashes = {p.relative_to(inputs).as_posix(): digest(p) for p in inputs.rglob("*") if p.is_file()}
     results = []
@@ -339,7 +496,7 @@ def verify(root: Path, image: str) -> dict:
             started = time.monotonic()
             run(image, ["Rscript", "/repo/tests/r_optimization/capture.R", *case.arguments],
                 inputs=inputs, results=destination,
-                environment={"NIPAT_EQ_SCRIPT": f"/repo/{path.as_posix()}", "NIPAT_EQ_WORKFLOW": case.workflow},
+                environment=case_environment(case, variant, path),
                 log=destination / "execution.log")
             timings[variant] = round(time.monotonic() - started, 6)
         table_hashes = compare_tables(case_dir / "reference/output", case_dir / "candidate/output")
@@ -349,7 +506,12 @@ def verify(root: Path, image: str) -> dict:
         plots = compare_pdfs(case_dir / "reference/output", case_dir / "candidate/output", case_dir / "rendered")
         results.append({"case": case.name, "workflow": case.workflow, "status": "passed",
                         "table_sha256": table_hashes, "unrounded_r_values": "identical",
-                        "plots": plots, "elapsed_seconds_including_container": timings})
+                        "plots": plots, "elapsed_seconds_including_container": timings,
+                        **({"candidate_environment": dict(case.candidate_environment),
+                            "pileup": compare_pileup(case_dir / "reference/mpileup.txt", case_dir / "candidate/mpileup.txt"),
+                            "block_execution": verify_block_execution(case_dir / "candidate/work/dnp-blocks.json",
+                                int(dict(case.candidate_environment)["NIPAT_DNP_BLOCK_LOCI"]), case.expected_compatibility_reason)}
+                           if case.compare_pileup else {})})
         print(f"PASS: {case.name}; exact tables, unrounded R values and {len(plots)} PDF(s)", flush=True)
     helpers = []
     for helper in sorted((PROJECT / "tests/r_optimization").glob("*/check_*.R")):
@@ -358,6 +520,22 @@ def verify(root: Path, image: str) -> dict:
         run(image, ["Rscript", f"/repo/{relative.as_posix()}", "/repo"],
             inputs=inputs, results=root, log=log)
         helpers.append({"path": relative.as_posix(), "sha256": digest(helper), "status": "passed"})
+    indexed_helper = "tests/r_optimization/verify_indexed_pileup.py"
+    run(image, ["python3", f"/repo/{indexed_helper}", "--project", "/repo",
+                "--output-dir", "/results/indexed-pileup"],
+        inputs=inputs, results=root, log=root / "indexed-pileup.log")
+    indexed_report = root / "indexed-pileup/indexed-pileup.json"
+    indexed_evidence = json.loads(indexed_report.read_text(encoding="utf-8"))
+    if indexed_evidence.get("status") != "passed":
+        raise ValueError("Indexed pileup audit did not pass")
+    cancellation_helper = "tests/r_optimization/verify_dnp_cancellation.py"
+    run(image, ["python3", f"/repo/{cancellation_helper}", "--bundle", "/opt/nipat",
+                "--output-dir", "/results/dnp-cancellation"],
+        inputs=inputs, results=root, log=root / "dnp-cancellation.log")
+    cancellation_report = root / "dnp-cancellation/dnp-cancellation.json"
+    cancellation_evidence = json.loads(cancellation_report.read_text(encoding="utf-8"))
+    if cancellation_evidence.get("status") != "passed":
+        raise ValueError("DNP R block cancellation audit did not pass")
     current_inputs = {p.relative_to(inputs).as_posix(): digest(p) for p in inputs.rglob("*") if p.is_file()}
     if current_inputs != input_hashes:
         raise ValueError("A reference or candidate execution modified fixture inputs")
@@ -365,11 +543,19 @@ def verify(root: Path, image: str) -> dict:
     if not performance.is_file():
         raise ValueError("Synthetic performance observations are missing")
     return {"schema_version": 1, "status": "passed", "reference": reference,
-            "candidate_r_sha256": candidate_hashes, "runtime_image": image,
+            "candidate_r_sha256": candidate_hashes, "supporting_source_sha256": supporting_hashes,
+            "runtime_image": image,
             "comparison": {"table_bytes": "exact", "unrounded_r": "identical",
                            "pdf_pixels": "exact", "pdf_metadata": "excluded"},
             "timing_scope": "single observations; includes capture instrumentation and container startup; no speed claim",
             "inputs_unchanged": True, "input_sha256": input_hashes, "cases": results, "helpers": helpers,
+            "indexed_pileup": {"file": indexed_report.relative_to(root).as_posix(),
+                               "sha256": digest(indexed_report), "test_source_sha256": digest(PROJECT / indexed_helper),
+                               "status": "passed", "cases": indexed_evidence["cases"]},
+            "dnp_cancellation": {"file": cancellation_report.relative_to(root).as_posix(),
+                                 "sha256": digest(cancellation_report),
+                                 "test_source_sha256": digest(PROJECT / cancellation_helper),
+                                 "status": "passed", "observed_r_progress": cancellation_evidence["observed_r_progress"]},
             "synthetic_performance": {
                 "file": performance.name, "sha256": digest(performance),
                 "scope": "source transformations and CPI core; three timing observations per variant",

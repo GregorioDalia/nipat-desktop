@@ -134,8 +134,12 @@ def verify_plan(run: Path, *, workflows: list[str], mode: str, originals: list[P
     require(service.get("read_only") is True and service.get("network_mode") == "none", "Unsafe service configuration.")
     volumes = service["volumes"]
     writable = [mount for mount in volumes if mount.get("read_only") is not True]
-    require(len(writable) == 1 and writable[0].get("read_only") is False and
-            writable[0]["target"] == f"/workspace/runs/{run.name}", "Unexpected writable mount.")
+    run_mounts = [mount for mount in writable if mount.get("target") == f"/workspace/runs/{run.name}"]
+    scratch = [mount for mount in writable if mount.get("target") == "/scratch"]
+    require(len(writable) == 2 and len(run_mounts) == 1 and
+            run_mounts[0].get("type") == "bind" and run_mounts[0].get("read_only") is False and
+            scratch == [{"type": "volume", "target": "/scratch", "read_only": False}],
+            "Unexpected writable mount.")
     require(all(any(mount["target"] == sample["path"] and mount.get("read_only") is True
                     for mount in volumes) for sample in plan["samples"]), "Samples are not read-only mounts.")
     require(not any((run / "output").iterdir()), "Dry-run produced scientific output.")

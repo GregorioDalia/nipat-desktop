@@ -355,3 +355,16 @@ tests/test_engine_performance.py
 tests/test_performance_observer.py
 tests/test_performance_options.py
 tests/test_performance_verification.py
+
+# Integrated 0.8.10 development candidate.
+docs/PROTOTYPE_0.8.10.md
+src/nipat_scientific/dnp_blocks.R
+src/nipat_scientific/dnp_pileup.py
+src/nipat_scientific/progress.R
+src/nipat_scientific/progress.py
+src/nipat_scientific/scratch.py
+tests/test_dnp_pileup.py
+tests/test_engine_progress.py
+tests/test_scientific_scratch.py
+src/nipat/execution/progress.py
+tests/test_execution_progress.py
