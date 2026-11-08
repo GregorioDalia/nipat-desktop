@@ -380,3 +380,8 @@ docs/validation/0.8.12-rootless.json
 # Shared-budget chromosome pileup and 0.8.13 qualification.
 docs/PILEUP_0.8.13.md
 docs/validation/0.8.13-rootless.json
+
+# Targeted serial, CPI and DNP reader changes for 0.8.14.
+docs/OPTIMIZATIONS_0.8.14.md
+docs/validation/0.8.14-microbenchmarks.json
+docs/validation/0.8.14-rootless.json

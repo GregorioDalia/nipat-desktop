@@ -70,7 +70,7 @@ cat(">> output file : ", out_file,     "\n\n", sep = "")
 
 # read snplist file
 cat(">> reading snp list...\n")
-fake_DNP <- readr::read_tsv(snplist_file, show_col_types = FALSE)
+fake_DNP <- readr::read_tsv(snplist_file, show_col_types = FALSE, num_threads = 1L)
 
 # Probe up to five records, matching read.table() column-width inference.
 # Reuse the same parser and type conversion for the complete selective read;

@@ -25,6 +25,37 @@ group_definition <- Filter(function(expression) {
 stopifnot(length(group_definition) == 1L)
 eval(group_definition[[1L]], globalenv())
 
+# readr uses its own thread pool, independent of the BLAS/OpenMP limits. Check
+# the real panel-reading call with a conflicting user option, then compare its
+# parsed values and row order against the frozen reference.
+local({
+  settings <- options(readr.num_threads=8L)
+  on.exit(options(settings), add=TRUE)
+  path <- tempfile(fileext=".tsv")
+  on.exit(unlink(path), add=TRUE)
+  writeLines(c("chr\tpos1\tpos2", "chr2\t120\t120", "chr1\t50\t50"), path)
+  panel_assignment <- function(path) {
+    expressions <- Filter(function(expression) {
+      is.call(expression) && identical(expression[[1L]], as.name("<-")) &&
+        identical(expression[[2L]], as.name("fake_DNP"))
+    }, parse(file=path))
+    stopifnot(length(expressions) == 1L)
+    expressions[[1L]]
+  }
+  evaluate_panel <- function(expression) {
+    values <- new.env(parent=globalenv())
+    values$snplist_file <- path
+    eval(expression, values)
+    as.data.frame(values$fake_DNP)
+  }
+  reference <- evaluate_panel(panel_assignment(paths[["reference"]]))
+  trace("read_tsv", where=asNamespace("readr"), print=FALSE,
+        tracer=quote(stopifnot(identical(num_threads, 1L))))
+  on.exit(untrace("read_tsv", where=asNamespace("readr")), add=TRUE)
+  candidate <- evaluate_panel(panel_assignment(paths[["candidate"]]))
+  stopifnot(identical(reference, candidate))
+})
+
 row <- function(position, bases, names, chromosome="chr1", extra=NULL) {
   paste(c(chromosome, position, "A", nchar(bases), bases,
           paste(rep("I", nchar(bases)), collapse=""), names, extra), collapse="\t")

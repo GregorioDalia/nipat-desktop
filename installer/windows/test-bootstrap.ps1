@@ -16,14 +16,14 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
 function New-TestManifest {
     $assets = [ordered]@{}
     foreach ($name in @('rootfs', 'scientific_image')) {
-        $file = $name + '-0.8.13.tar.gz'
+        $file = $name + '-0.8.14.tar.gz'
         $assets[$name] = [ordered]@{
             file = $file; sha256 = ('b' * 64); size = 123
-            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.13/' + $file)
+            url = ('https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/' + $file)
         }
     }
     return [ordered]@{
-        schema_version = 1; version = '0.8.13'; release_tag = 'v0.8.13'
+        schema_version = 1; version = '0.8.14'; release_tag = 'v0.8.14'
         installation_profile = (Get-NipatInstallationProfile)
         source_commit = ('a' * 40); runtime_image = ('sha256:' + ('c' * 64)); assets = $assets
     }
@@ -33,7 +33,7 @@ try {
     $manifest = New-TestManifest
     Write-NipatJsonAtomic $manifestPath $manifest
     $parsed = Read-NipatInstallerManifest $manifestPath
-    Assert-Test ($parsed.release_tag -eq 'v0.8.13') 'accept valid release manifest'
+    Assert-Test ($parsed.release_tag -eq 'v0.8.14') 'accept valid release manifest'
     $profile = Get-NipatInstallationProfile
     Assert-Test ($profile.channel -ceq 'desktop' -and $profile.app_dir_name -ceq 'NIPAT-Desktop' -and
         $profile.app_id -ceq '6B1702B6-F75C-4F8C-956F-86626C60AF45') 'official identity preserves supported Desktop upgrades'
@@ -105,15 +105,15 @@ try {
         $manifest.version = $unsupportedVersion
         $manifest.release_tag = 'v' + $unsupportedVersion
         foreach ($name in @('rootfs', 'scientific_image')) {
-            $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.8.13', $unsupportedVersion)
-            $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.8.13', $unsupportedVersion)
+            $manifest.assets[$name].file = $manifest.assets[$name].file.Replace('0.8.14', $unsupportedVersion)
+            $manifest.assets[$name].url = $manifest.assets[$name].url.Replace('0.8.14', $unsupportedVersion)
         }
         Write-NipatJsonAtomic $manifestPath $manifest
         Assert-Rejected { Read-NipatInstallerManifest $manifestPath } 'reject unsupported version even with consistent tag and asset URLs'
     }
     foreach ($url in @('https://example.org/rootfs.tar.gz',
-        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.13/rootfs-0.8.13.tar.gz?redirect=1',
-        'https://github.com/other/repo/releases/download/v0.8.13/rootfs-0.8.13.tar.gz')) {
+        'https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/rootfs-0.8.14.tar.gz?redirect=1',
+        'https://github.com/other/repo/releases/download/v0.8.14/rootfs-0.8.14.tar.gz')) {
         $manifest = New-TestManifest
         $manifest.assets.rootfs.url = $url
         Write-NipatJsonAtomic $manifestPath $manifest

@@ -59,8 +59,9 @@ class ParallelRuntimeTests(unittest.TestCase):
                     DockerComposeRunner._validate_engine_description(metadata)
 
     def test_scoped_thread_limits_and_diagnostics_survive_error_without_environment_leak(self):
+        inherited = {name: "16" for name in THREAD_LIMITS}
         with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {
-            "NIPAT_PARALLEL_LOG_DIR": "old", "OPENBLAS_NUM_THREADS": "16",
+            "NIPAT_PARALLEL_LOG_DIR": "old", **inherited,
         }):
             work = Path(temporary) / "work"
             with self.assertRaisesRegex(ValueError, "test"):
@@ -70,7 +71,16 @@ class ParallelRuntimeTests(unittest.TestCase):
                     self.assertTrue(all(os.environ[name] == "1" for name in THREAD_LIMITS))
                     raise ValueError("test")
             self.assertEqual(os.environ["NIPAT_PARALLEL_LOG_DIR"], "old")
-            self.assertEqual(os.environ["OPENBLAS_NUM_THREADS"], "16")
+            self.assertTrue(all(os.environ[name] == value for name, value in inherited.items()))
+
+    def test_native_thread_limits_need_no_work_directory_and_preserve_diagnostics(self):
+        with patch.dict(os.environ, {"NIPAT_PARALLEL_LOG_DIR": "existing", "VROOM_THREADS": "8"}):
+            with execution_environment() as directory:
+                self.assertIsNone(directory)
+                self.assertEqual(os.environ["NIPAT_PARALLEL_LOG_DIR"], "existing")
+                self.assertTrue(all(os.environ[name] == "1" for name in THREAD_LIMITS))
+            self.assertEqual(os.environ["VROOM_THREADS"], "8")
+            self.assertEqual(os.environ["NIPAT_PARALLEL_LOG_DIR"], "existing")
 
 
 if __name__ == "__main__":

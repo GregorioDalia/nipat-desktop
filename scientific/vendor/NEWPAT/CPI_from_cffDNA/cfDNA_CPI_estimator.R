@@ -414,8 +414,10 @@ process_pair <- function(i) {
 
     cfDNA_percent <- median_fetal_fraction * 100
 
-    ## Reuse the pair/panel CPI result for the CSV summary.
-    madre_cutoff <- if (!is.null(dnp_list)) madre %>% semi_join(dnp_list, by=c("chr","pos1","pos2")) else madre
+    ## The core has already selected this panel and the informative maternal
+    ## rows. Every row admitted by the summary below is in madre_info; retain
+    ## its original summary formula and positivity filter, including NA/Inf.
+    madre_cutoff <- out$madre_info
 
     madre_cutoff <- madre_cutoff %>%
       mutate(
@@ -429,14 +431,10 @@ process_pair <- function(i) {
 
     n_sites_mother <- nrow(madre_cutoff)
 
-    ## recalc father informative count after merge
-    if (!is.null(dnp_list)) {
-      padre_cut_tmp <- padre %>% semi_join(dnp_list, by=c("chr","pos1","pos2"))
-    } else {
-      padre_cut_tmp <- padre
-    }
-
-    df_merge_tmp <- inner_join(madre_cutoff, padre_cut_tmp, by=c("chr","pos1","pos2")) %>%
+    ## Maternal keys are already limited to the panel. Joining the original
+    ## father table therefore selects the same paternal rows (and duplicates)
+    ## in the same order, without applying that panel a second time.
+    df_merge_tmp <- inner_join(madre_cutoff, padre, by=c("chr","pos1","pos2")) %>%
       mutate(threshold = case_when(
         ratio_Ref_mother >= 0.9 & Alt_father >= 0 ~ "informative",
         ratio_Ref_mother <= 0.1 & Ref_father >= 0 ~ "informative",

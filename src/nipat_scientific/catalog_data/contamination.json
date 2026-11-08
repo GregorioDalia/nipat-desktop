@@ -786,13 +786,15 @@
         "result_order": "input task order",
         "memory_estimate_minimum_mib": 2048,
         "available_memory_fraction": 0.8,
-        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit"
+        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit",
+        "internal_library_threads": 1,
+        "thread_limit_scope": "managed requests, workflow steps and native engine run"
       },
       "applies_to": "contamination",
       "origin": "NIPAT scientific engine and client",
       "description": {
-        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling.",
-        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate."
+        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. I thread interni delle librerie numeriche e di vroom sono limitati a uno nei percorsi gestiti e nell’avvio nativo del motore; client e coordinatori restano distinti dai processi di calcolo.",
+        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. Numeric-library and vroom internal threads are limited to one in managed execution paths and native engine runs; clients and coordinators remain separate from calculation workers."
       },
       "evidence": {
         "path": "src/nipat_scientific/parallel.R",
@@ -822,9 +824,25 @@
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
               190,
-              197
+              198
             ],
-            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
+          },
+          {
+            "path": "src/nipat_scientific/parallel.py",
+            "source_lines": [
+              8,
+              43
+            ],
+            "sha256": "5583abb381fcd43ccc90895210f776e97b476ef652a9bb070aa69d81d0b491a8"
+          },
+          {
+            "path": "engine/main.py",
+            "source_lines": [
+              407,
+              414
+            ],
+            "sha256": "8f66d87dbc38481c4f1d4aff2f191f0a4b1742ed0972159e1e8f39d54d7b4de8"
           }
         ]
       }

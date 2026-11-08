@@ -5,15 +5,17 @@
 
 # NIPAT Desktop
 
-**Branch di sviluppo: candidato 0.8.13.** La release ufficiale resta **0.8.9**.
-La [guida al pileup parallelo 0.8.13](docs/PILEUP_0.8.13.md) descrive la
-preparazione DNP per cromosoma, il budget condiviso con il calcolo R e il
-protocollo di collaudo. Rimangono automatico, 32 MiB e 64 loci come valori
-iniziali. La [guida 0.8.12](docs/PARALLELISMO_0.8.12.md) conserva il contesto
-del parallelismo nei quattro moduli R. I candidati sono identificati da commit
-e build e si installano manualmente; non vengono proposti dal canale stabile.
-Le misure della 0.8.12 non dimostrano le prestazioni della 0.8.13: il collaudo
-sui dati reali e sugli installer resta distinto dai test di sviluppo.
+**Branch di sviluppo: candidato 0.8.14.** La release ufficiale resta **0.8.9**.
+La [guida alle ottimizzazioni 0.8.14](docs/OPTIMIZATIONS_0.8.14.md) descrive
+il controllo dei thread interni, il riuso dei risultati CPI e la lettura dei
+blocchi DNP. La build 0.8.13 già qualificata viene conservata per i confronti.
+Il [pileup parallelo 0.8.13](docs/PILEUP_0.8.13.md) e il
+[parallelismo nei quattro moduli R 0.8.12](docs/PARALLELISMO_0.8.12.md)
+rimangono la base: automatico, 32 MiB e 64 loci sono i valori iniziali.
+I candidati sono identificati da commit e build e si installano manualmente;
+non vengono proposti dal canale stabile. Le misure di versioni precedenti
+non dimostrano le prestazioni della 0.8.14: il collaudo sui dati reali e sugli
+installer resta distinto dai test di sviluppo.
 
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python

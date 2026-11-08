@@ -3,7 +3,7 @@
   "workflow": "snp-call",
   "source": {
     "path": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
-    "sha256": "66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64",
+    "sha256": "8e92ec718cafd5f8c12fc3d2c1d39c086a2219cf023150fea9a842748640dc8e",
     "line_count": 236
   },
   "public_parameters": [
@@ -755,13 +755,16 @@
         "result_order": "input task order",
         "memory_estimate_minimum_mib": 2048,
         "available_memory_fraction": 0.8,
-        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit"
+        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit",
+        "internal_library_threads": 1,
+        "thread_limit_scope": "managed requests, workflow steps and native engine run",
+        "panel_reader_threads": 1
       },
       "applies_to": "snp-call",
       "origin": "NIPAT scientific engine and client",
       "description": {
-        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling.",
-        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate."
+        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. I thread interni delle librerie numeriche e di vroom sono limitati a uno nei percorsi gestiti e nell’avvio nativo del motore; client e coordinatori restano distinti dai processi di calcolo. La lettura del pannello SNP specifica anche num_threads = 1L, indipendentemente dall’opzione readr dell’ambiente.",
+        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. Numeric-library and vroom internal threads are limited to one in managed execution paths and native engine runs; clients and coordinators remain separate from calculation workers. SNP panel reading also explicitly sets num_threads = 1L, independently of the environment readr option."
       },
       "evidence": {
         "path": "src/nipat_scientific/parallel.R",
@@ -777,7 +780,7 @@
               33,
               33
             ],
-            "sha256": "66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64"
+            "sha256": "8e92ec718cafd5f8c12fc3d2c1d39c086a2219cf023150fea9a842748640dc8e"
           },
           {
             "path": "src/nipat/execution/options.py",
@@ -791,9 +794,33 @@
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
               190,
-              197
+              198
             ],
-            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
+          },
+          {
+            "path": "src/nipat_scientific/parallel.py",
+            "source_lines": [
+              8,
+              43
+            ],
+            "sha256": "5583abb381fcd43ccc90895210f776e97b476ef652a9bb070aa69d81d0b491a8"
+          },
+          {
+            "path": "engine/main.py",
+            "source_lines": [
+              407,
+              414
+            ],
+            "sha256": "8f66d87dbc38481c4f1d4aff2f191f0a4b1742ed0972159e1e8f39d54d7b4de8"
+          },
+          {
+            "path": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
+            "source_lines": [
+              73,
+              73
+            ],
+            "sha256": "8e92ec718cafd5f8c12fc3d2c1d39c086a2219cf023150fea9a842748640dc8e"
           }
         ]
       }
@@ -820,8 +847,8 @@
       "start": 33,
       "end": 90,
       "summary": {
-        "it": "Policy comune, partizionamento per QNAME completo, messaggi iniziali e lettura selettiva delle colonne.",
-        "en": "Shared policy, complete-QNAME partitioning, startup messages and selective column reading."
+        "it": "Policy comune, partizionamento per QNAME completo, messaggi iniziali e lettura selettiva delle colonne. Il pannello readr usa esplicitamente un solo thread.",
+        "en": "Shared policy, complete-QNAME partitioning, startup messages and selective column reading. The readr panel reader explicitly uses one thread."
       }
     },
     {

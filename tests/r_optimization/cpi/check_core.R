@@ -14,7 +14,7 @@ relative_script <- "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator
 
 load_core <- function(path) {
   environment <- new.env(parent=globalenv())
-  wanted <- c("compute_madre_info", "run_CPI_iteration")
+  wanted <- c("compute_madre_info", "run_CPI_iteration", "closest_logCPI")
   found <- character()
   for (expression in parse(path)) {
     if (is.call(expression) && identical(expression[[1]], as.name("<-")) &&
@@ -126,8 +126,80 @@ cases$overflow_then_finite$population$Alt_f.pop <- rep(.5, 1102)
 cases$underflow_then_finite <- make_case(c(rep(2, 1100), 7, 9), father_ratio=.5,
                                        maternal_high=rep(TRUE, 1102))
 cases$underflow_then_finite$population$Alt_f.pop <- rep(1, 1102)
+cases$missing_coordinate_keys <- make_case()
+for (field in c("mother", "father", "population")) {
+  cases$missing_coordinate_keys[[field]]$chr[c(1, 4)] <- NA_character_
+  cases$missing_coordinate_keys[[field]]$pos1[c(2, 4)] <- NA_integer_
+}
+cases$negative_and_nonfinite_counts <- make_case()
+cases$negative_and_nonfinite_counts$mother$Ref_mother[c(1, 3, 5, 7)] <-
+  c(-100, Inf, -Inf, NaN)
+cases$negative_and_nonfinite_counts$mother$Alt_mother[c(2, 4, 6)] <-
+  c(-100, Inf, NaN)
+
+# Evaluate the actual candidate cutoff task and the frozen 0.8.5 summary loop.
+# This also tests the summary's stricter positive-fraction filter, which must
+# remain separate from the core's informative-maternal selection.
+is_assignment <- function(expression, name) {
+  is.call(expression) && identical(expression[[1L]], as.name("<-")) &&
+    identical(expression[[2L]], as.name(name))
+}
+is_loop <- function(expression, variable) {
+  is.call(expression) && identical(expression[[1L]], as.name("for")) &&
+    identical(expression[[2L]], as.name(variable))
+}
+candidate_source <- parse(file.path(repository, relative_script))
+pair_definition <- Filter(function(expression) is_assignment(expression, "process_pair"),
+                          candidate_source)
+stopifnot(length(pair_definition) == 1L)
+cutoff_assignment <- Filter(function(expression) is_assignment(expression, "cutoff_results"),
+                            as.list(pair_definition[[1L]][[3L]][[3L]]))
+stopifnot(length(cutoff_assignment) == 1L)
+cutoff_function <- cutoff_assignment[[1L]][[3L]][[3L]]
+reference_source <- parse(file.path(repository, "tests/reference_r/0.8.5", relative_script))
+reference_pairs <- Filter(function(expression) is_loop(expression, "i"), reference_source)
+reference_summary <- tail(reference_pairs, 1L)[[1L]]
+reference_cutoffs <- Filter(function(expression) is_loop(expression, "k"),
+                            as.list(reference_summary[[4L]]))
+stopifnot(length(reference_cutoffs) == 1L)
+
+compare_cutoff <- function(case, panel, panel_name, has_cutoffs) {
+  reference$PopFreqDNPs <- case$population
+  candidate$PopFreqDNPs <- case$population
+  setup <- function(parent) {
+    values <- new.env(parent=parent)
+    values$madre <- case$mother
+    values$padre <- case$father
+    values$err_const <- case$err_const
+    values$cutoff_df <- data.frame(Cutoff=panel_name,
+                                   Path=if (is.null(panel)) NA_character_ else "fixture")
+    values$cutoff_panels <- list(panel)
+    values$has_cutoffs <- has_cutoffs
+    values$pair_name <- "MotherFixture-FatherFixture_DNPs"
+    values
+  }
+  expected_env <- setup(reference)
+  expected_env$fetal_fraction_summary <- data.frame()
+  expected_env$read.table <- function(...) panel
+  suppressWarnings(eval(reference_cutoffs[[1L]], expected_env))
+  informative <- expected_env$out$madre_info
+  expected <- list(
+    label=panel_name, plot_data=expected_env$res, summary=expected_env$fetal_fraction_summary,
+    cfDNA_percent=stats::median(2*informative$fetal_reads /
+      (informative$Ref_mother+informative$Alt_mother), na.rm=TRUE)*100,
+    cpi_at_med=expected_env$cpi_at_med
+  )
+  candidate_env <- setup(candidate)
+  actual <- suppressWarnings(eval(cutoff_function, candidate_env)(1L))
+  if (!identical(expected, actual)) {
+    difference <- paste(capture.output(all.equal(expected, actual)), collapse="\n")
+    stop("CPI cutoff mismatch: ", panel_name, " / has_cutoffs=", has_cutoffs,
+         "\n", difference)
+  }
+}
 
 comparisons <- 0L
+cutoff_comparisons <- 0L
 for (case_name in names(cases)) {
   case <- cases[[case_name]]
   reference$PopFreqDNPs <- case$population
@@ -145,7 +217,17 @@ for (case_name in names(cases)) {
       stop("CPI core mismatch: ", case_name, " / ", panel_name, "\n", difference)
     }
     comparisons <- comparisons + 1L
+    for (has_cutoffs in c(FALSE, TRUE)) {
+      compare_cutoff(case, panels[[panel_name]], panel_name, has_cutoffs)
+      cutoff_comparisons <- cutoff_comparisons + 1L
+    }
   }
   cat("PASS CPI core:", case_name, "(ALL, subset, empty)\n")
 }
+duplicated_case <- cases$duplicate_rows_and_order
+duplicated_panel <- duplicated_case$mother[, c("chr", "pos1", "pos2"), drop=FALSE]
+compare_cutoff(duplicated_case, rbind(duplicated_panel, duplicated_panel), "duplicate-keys", TRUE)
+cutoff_comparisons <- cutoff_comparisons + 1L
 cat("PASS CPI core:", comparisons, "strict comparisons including every threshold and madre_info\n")
+cat("PASS CPI cutoff:", cutoff_comparisons,
+    "strict legacy comparisons including summary, plot data and unrounded plot labels\n")

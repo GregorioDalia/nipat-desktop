@@ -4,7 +4,9 @@ La diagnostica è disponibile dalla 0.8.5. Le istruzioni ordinarie valgono per
 la stabile **0.8.9**; il [collaudo 0.8.12](#collaudo-del-parallelismo-0812)
 aggiunge il confronto delle modalità di parallelismo. Il
 [collaudo 0.8.13](#collaudo-del-pileup-parallelo-0813) riguarda anche la
-preparazione del pileup DNP. Per la stabile usare
+preparazione del pileup DNP. Il
+[collaudo 0.8.14](#collaudo-delle-ottimizzazioni-0814) verifica anche thread
+interni, riepilogo CPI e lettura dei blocchi. Per la stabile usare
 la [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9);
 per un candidato verificare versione, commit e build effettivamente installati.
 
@@ -23,6 +25,12 @@ cromosoma e conserva la diagnostica in `work/dnp-pileup.json`. Preparazione
 e calcolo R sono fasi successive: i rispettivi processi non si moltiplicano.
 La [guida dedicata](PILEUP_0.8.13.md) descrive le condizioni per il percorso
 parallelo e il comportamento seriale di ripiego.
+
+Il candidato **0.8.14** aggiunge i [controlli dei thread e le ottimizzazioni
+mirate](OPTIMIZATIONS_0.8.14.md). In modalità seriale rimane un solo processo
+di calcolo per fase; i processi di coordinamento non equivalgono a ulteriori
+worker. I thread interni delle librerie devono essere distinti dai processi
+del pool quando si interpreta l'uso delle CPU.
 
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri
@@ -301,6 +309,27 @@ Le evidenze locali della 0.8.12 in
 [`validation/0.8.12-rootless.json`](validation/0.8.12-rootless.json) restano
 storiche. Non attestano la nuova acquisizione della 0.8.13 né sostituiscono
 il collaudo del dataset reale o della piattaforma finale.
+
+## Collaudo delle ottimizzazioni 0.8.14
+
+La [guida 0.8.14](OPTIMIZATIONS_0.8.14.md#collaudo-sugli-input-reali) conserva
+come base il pileup e il parallelismo già presenti nella 0.8.13. Le nuove
+modifiche riguardano il controllo dei thread, il lavoro del riepilogo CPI e
+la lettura dei blocchi DNP. Usare la build 0.8.13 già conservata come confronto
+diretto delle prestazioni e la 0.8.5 come riferimento dei risultati.
+
+Iniziare con 0.8.14 seriale e automatica, **32 MiB / 64 loci**, mantenendo
+input, risorse e diagnostica confrontabili. Riutilizzare i run precedenti
+verificabili; i nuovi devono avere nomi distinti. Separare acquisizione,
+indice e calcolo dei blocchi nei resoconti DNP. Il nuovo lettore interviene
+nella fase dei blocchi: un eventuale beneficio non va attribuito all'indice.
+Per CPI misurare l'intero run con le stesse coppie, pannelli e cutoff.
+
+Le equivalenze sintetiche, i microbenchmark dei singoli helper e i tempi
+sul dataset reale sono evidenze diverse. Nessuno di questi elementi, da
+solo, qualifica gli installer Windows/WSL o dimostra un'accelerazione in
+ogni condizione. Lo stato delle verifiche della nuova versione è riportato
+nella [guida del candidato](OPTIMIZATIONS_0.8.14.md#stato-delle-verifiche).
 
 ## Riferimenti tecnici
 

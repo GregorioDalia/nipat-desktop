@@ -3,8 +3,8 @@
   "workflow": "cpi",
   "source": {
     "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
-    "sha256": "d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1",
-    "line_count": 533
+    "sha256": "5df16d3dd54693f076480945939deb46861920a2e0155f078a6a42444a440c4f",
+    "line_count": 531
   },
   "public_parameters": [
     {
@@ -527,12 +527,12 @@
         "minimum_fetal_reads": 2
       },
       "description": {
-        "it": "Nel riepilogo finale vengono ricostruite le fetal_reads con i limiti materni inclusivi 0.1/0.9 e sono mantenuti i siti con frazione fetale non mancante, strettamente positiva e almeno 2 fetal_reads.",
-        "en": "The final summary recomputes fetal reads using inclusive maternal boundaries 0.1/0.9 and retains sites with a non-missing, strictly positive fetal fraction and at least 2 fetal reads."
+        "it": "Nel riepilogo finale vengono ricostruite le fetal_reads con i limiti materni inclusivi 0.1/0.9 e sono mantenuti i siti con frazione fetale non mancante, strettamente positiva e almeno 2 fetal_reads. Riusa madre_info del calcolo per lo stesso pannello, poi applica nuovamente la formula e i filtri propri del riepilogo.",
+        "en": "The final summary recomputes fetal reads using inclusive maternal boundaries 0.1/0.9 and retains sites with a non-missing, strictly positive fetal fraction and at least 2 fetal reads. It reuses madre_info from calculation on the same panel, then reapplies the summary-specific formula and filters."
       },
       "source_lines": [
-        420,
-        428
+        417,
+        430
       ]
     },
     {
@@ -543,12 +543,12 @@
         "N_sites_father": "informative mother-father joined rows before population-frequency join"
       },
       "description": {
-        "it": "N_sites_mother conta le righe materne selezionate. N_sites_father conta le righe informative dopo il join madre-padre e prima del join con le frequenze e della selezione dei PI validi. Non è quindi, in generale, il numero dei siti moltiplicati nel CPI.",
-        "en": "N_sites_mother counts selected maternal rows. N_sites_father counts informative rows after the mother-father join, before the population-frequency join and valid-PI selection. It is therefore not generally the number of sites multiplied into CPI."
+        "it": "N_sites_mother conta le righe materne selezionate. N_sites_father conta le righe informative dopo il join madre-padre e prima del join con le frequenze e della selezione dei PI validi. Non è quindi, in generale, il numero dei siti moltiplicati nel CPI. Le chiavi materne già selezionate sul pannello sono unite direttamente al padre, conservando ordine e duplicati senza un secondo filtro paterno.",
+        "en": "N_sites_mother counts selected maternal rows. N_sites_father counts informative rows after the mother-father join, before the population-frequency join and valid-PI selection. It is therefore not generally the number of sites multiplied into CPI. Maternal keys already selected on the panel are joined directly to the father table, preserving order and duplicates without a second paternal filter."
       },
       "source_lines": [
-        430,
-        446
+        432,
+        444
       ]
     },
     {
@@ -565,8 +565,8 @@
         "en": "Max_logCPI, Min_logCPI, Median_logCPI and Mean_logCPI summarize non-NA log_CPI values across all fetal-read thresholds for the pair and panel. With no values these statistics are NA. CPI_medianFF is selected separately using the median-read target."
       },
       "source_lines": [
-        449,
-        456
+        447,
+        454
       ]
     },
     {
@@ -582,8 +582,8 @@
         "en": "The CSV rounds raw fetal fraction to 4 decimal places, percentage to 2, and log10(CPI) statistics including CPI_medianFF to 3. These are presentation settings rather than PI calculation parameters."
       },
       "source_lines": [
-        458,
-        484
+        456,
+        482
       ]
     },
     {
@@ -599,8 +599,8 @@
         "en": "The persisted summary is Summary_FetalFraction_CPI.csv, with one row per pair and coordinate subset. Cutoff appears only when panels are selected; ALL mode omits it. Per-iteration series are not exported to a dedicated table."
       },
       "source_lines": [
-        458,
-        531
+        456,
+        529
       ]
     },
     {
@@ -679,8 +679,8 @@
         "en": "One PDF per pair places panels side by side, and a combined PDF stacks pairs vertically. Dimensions passed to ggsave are at least 12 in width and 4 per row; the script exposes no format or size option."
       },
       "source_lines": [
-        508,
-        523
+        506,
+        521
       ]
     },
     {
@@ -729,8 +729,8 @@
         "en": "The shared budget applies to pairs, cutoff panels and equivalent-threshold intervals. The first level using multiple workers occupies the pool; levels inside those workers remain serial. Threshold intervals form contiguous tasks, at most four per selected worker. Every PI product and sum retains its original order. The coordinator collects pairs and panels in order and builds/writes plots and the summary."
       },
       "source_lines": [
-        492,
-        505
+        490,
+        503
       ]
     }
   ],
@@ -1035,13 +1035,15 @@
         "result_order": "input task order",
         "memory_estimate_minimum_mib": 2048,
         "available_memory_fraction": 0.8,
-        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit"
+        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit",
+        "internal_library_threads": 1,
+        "thread_limit_scope": "managed requests, workflow steps and native engine run"
       },
       "applies_to": "cpi",
       "origin": "NIPAT scientific engine and client",
       "description": {
-        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling.",
-        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate."
+        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. I thread interni delle librerie numeriche e di vroom sono limitati a uno nei percorsi gestiti e nell’avvio nativo del motore; client e coordinatori restano distinti dai processi di calcolo.",
+        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. Numeric-library and vroom internal threads are limited to one in managed execution paths and native engine runs; clients and coordinators remain separate from calculation workers."
       },
       "evidence": {
         "path": "src/nipat_scientific/parallel.R",
@@ -1057,7 +1059,7 @@
               17,
               17
             ],
-            "sha256": "d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1"
+            "sha256": "5df16d3dd54693f076480945939deb46861920a2e0155f078a6a42444a440c4f"
           },
           {
             "path": "src/nipat/execution/options.py",
@@ -1071,9 +1073,25 @@
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
               190,
-              197
+              198
             ],
-            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
+          },
+          {
+            "path": "src/nipat_scientific/parallel.py",
+            "source_lines": [
+              8,
+              43
+            ],
+            "sha256": "5583abb381fcd43ccc90895210f776e97b476ef652a9bb070aa69d81d0b491a8"
+          },
+          {
+            "path": "engine/main.py",
+            "source_lines": [
+              407,
+              414
+            ],
+            "sha256": "8f66d87dbc38481c4f1d4aff2f191f0a4b1742ed0972159e1e8f39d54d7b4de8"
           }
         ]
       }
@@ -1258,55 +1276,55 @@
     },
     {
       "start": 417,
-      "end": 431,
+      "end": 433,
       "summary": {
-        "it": "Selezione dei siti materni per il riepilogo CSV e frazione fetale per sito.",
-        "en": "Maternal site selection for the CSV summary and per-site fetal fraction."
+        "it": "Riuso delle righe materne già selezionate, formula originale della frazione fetale e filtri del riepilogo CSV.",
+        "en": "Reuse of selected maternal rows, original fetal-fraction formula and CSV summary filters."
       }
     },
     {
-      "start": 432,
-      "end": 448,
+      "start": 434,
+      "end": 446,
       "summary": {
-        "it": "Conteggio paterno prima dell’associazione alle frequenze di popolazione.",
-        "en": "Paternal counting before population-frequency association."
+        "it": "Join diretto con la tabella paterna e conteggio informativo prima delle frequenze di popolazione.",
+        "en": "Direct join to the father table and informative count before population frequencies."
       }
     },
     {
-      "start": 449,
-      "end": 457,
+      "start": 447,
+      "end": 455,
       "summary": {
         "it": "Statistiche delle frazioni fetali e dei logCPI usando i risultati già calcolati per i grafici.",
         "en": "Fetal-fraction and logCPI statistics reusing results already calculated for plots."
       }
     },
     {
-      "start": 458,
-      "end": 507,
+      "start": 456,
+      "end": 505,
       "summary": {
         "it": "Righe riepilogative con arrotondamenti e Cutoff condizionale; pool coppie e ricomposizione ordinata dei dati e dei grafici.",
         "en": "Summary rows with rounding and conditional Cutoff; pair pool and ordered reconstruction of data and plots."
       }
     },
     {
-      "start": 508,
-      "end": 518,
+      "start": 506,
+      "end": 516,
       "summary": {
         "it": "Salvataggio del PDF per coppia e raccolta dei grafici.",
         "en": "Per-pair PDF output and plot collection."
       }
     },
     {
-      "start": 519,
-      "end": 525,
+      "start": 517,
+      "end": 523,
       "summary": {
         "it": "Salvataggio del PDF aggregato per tutte le coppie.",
         "en": "Combined PDF output for all pairs."
       }
     },
     {
-      "start": 526,
-      "end": 533,
+      "start": 524,
+      "end": 531,
       "summary": {
         "it": "Unione delle righe riepilogative, esportazione CSV e messaggio di completamento.",
         "en": "Summary row assembly, CSV export and completion message."

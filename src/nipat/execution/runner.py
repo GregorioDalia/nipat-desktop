@@ -192,6 +192,7 @@ class DockerComposeRunner:
             "NIPAT_DNP_BLOCK_LOCI": str(self.options.dnp_block_loci),
             "OMP_NUM_THREADS": "1", "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
             "VECLIB_MAXIMUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1", "BLIS_NUM_THREADS": "1",
+            "VROOM_THREADS": "1",
         })
         if self.options.max_workers is not None:
             service["environment"]["NIPAT_MAX_WORKERS"] = str(self.options.max_workers)

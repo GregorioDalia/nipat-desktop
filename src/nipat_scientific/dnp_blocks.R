@@ -136,6 +136,35 @@ nipat_dnp_plan <- function(index, labels, ref_alt,
        compatibility_reasons = character(), unmatched_rows = 0L)
 }
 
+nipat_dnp_read_ranges <- function(index, rows, max_bytes = 8 * 1024^2) {
+  # Merge only byte-adjacent rows in the REQUESTED order. Sorting or unique()
+  # here would change callers that repeat or reverse rows. Keep each temporary
+  # read bounded, except for an indivisible line already larger than the target.
+  max_bytes <- min(max_bytes, .Machine$integer.max - 1)
+  count <- length(rows)
+  offsets <- lengths <- numeric(count)
+  first <- last <- integer(count)
+  ranges <- 0L
+  for (number in seq_along(rows)) {
+    row <- rows[[number]]
+    offset <- index$offsets[[row]]
+    size <- index$lengths[[row]]
+    if (ranges > 0L && offset == offsets[[ranges]] + lengths[[ranges]] &&
+        lengths[[ranges]] + size <= max_bytes) {
+      lengths[[ranges]] <- lengths[[ranges]] + size
+      last[[ranges]] <- number
+    } else {
+      ranges <- ranges + 1L
+      offsets[[ranges]] <- offset
+      lengths[[ranges]] <- size
+      first[[ranges]] <- last[[ranges]] <- number
+    }
+  }
+  selected <- seq_len(ranges)
+  list(offsets = offsets[selected], lengths = lengths[selected],
+       first = first[selected], last = last[selected])
+}
+
 nipat_dnp_read <- function(index, rows, connection) {
   if (!length(rows)) {
     empty <- lapply(index$classes, function(kind) switch(kind,
@@ -144,10 +173,42 @@ nipat_dnp_read <- function(index, rows, connection) {
     names(empty) <- paste0("V", seq_along(empty))
     return(as.data.frame(empty, stringsAsFactors = FALSE))
   }
-  lines <- vapply(rows, function(row) {
+  read_row <- function(row) {
     seek(connection, where = index$offsets[[row]], origin = "start")
     readChar(connection, nchars = index$lengths[[row]], useBytes = TRUE)
-  }, character(1), USE.NAMES = FALSE)
+  }
+  offsets <- index$offsets[rows]
+  adjacent <- length(rows) > 1L && any(
+    head(offsets, -1L) + head(index$lengths[rows], -1L) == tail(offsets, -1L))
+  if (!adjacent) {
+    # Sparse/reversed requests cannot benefit from merging. Keep their old
+    # direct path instead of allocating one range descriptor for every row.
+    lines <- vapply(rows, read_row, character(1), USE.NAMES = FALSE)
+  } else {
+    ranges <- nipat_dnp_read_ranges(index, rows)
+    lines <- vapply(seq_along(ranges$offsets), function(number) {
+      first <- ranges$first[[number]]
+      last <- ranges$last[[number]]
+      if (first == last) return(read_row(rows[[first]]))
+      seek(connection, where = ranges$offsets[[number]], origin = "start")
+      warned <- FALSE
+      value <- withCallingHandlers(
+        readChar(connection, nchars = ranges$lengths[[number]], useBytes = TRUE),
+        warning = function(warning) {
+          warned <<- TRUE
+          invokeRestart("muffleWarning")
+        })
+      # readChar can truncate at an embedded NUL. Preserve the former per-row
+      # parsing and warnings on unusual bytes or a short read rather than losing
+      # every following row in a combined interval. Normal samtools text is LF.
+      if (warned || length(value) != 1L ||
+          nchar(value, type = "bytes") != ranges$lengths[[number]]) {
+        return(paste0(vapply(rows[seq.int(first, last)], read_row, character(1),
+                            USE.NAMES = FALSE), collapse = ""))
+      }
+      value
+    }, character(1), USE.NAMES = FALSE)
+  }
   read.csv(text = paste0(lines, collapse = ""), quote = "", row.names = NULL,
            stringsAsFactors = FALSE, header = FALSE, sep = "\t",
            colClasses = index$classes)

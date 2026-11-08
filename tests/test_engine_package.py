@@ -329,6 +329,8 @@ class EnginePackageTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "POSIX executable fixture exercises container process replacement.")
     def test_process_replacement_preserves_rscript_exit_status_and_arguments(self):
+        from nipat_scientific.parallel import THREAD_LIMITS
+
         fake_bin = self.root / "bin"
         fake_bin.mkdir()
         fake_rscript = fake_bin / "Rscript"
@@ -337,11 +339,18 @@ class EnginePackageTests(unittest.TestCase):
             '[ "$#" -eq 3 ] || exit 99\n'
             '[ "$2" = "argument with spaces" ] || exit 98\n'
             '[ "$3" = "literal;value" ] || exit 97\n'
-            "exit 37\n",
+            + "".join(f'[ "${name}" = "1" ] || exit 96\n' for name in THREAD_LIMITS)
+            + "exit 37\n",
             encoding="utf-8",
         )
         fake_rscript.chmod(0o755)
         environment = os.environ.copy()
+        environment.update({name: "8" for name in THREAD_LIMITS})
+        environment["NIPAT_EXECUTION_MODE"] = "serial"
+        environment["NIPAT_MAX_WORKERS"] = "8"
+        # The native engine must use its own bundled helper when no desktop
+        # installation is available on the import path.
+        environment["PYTHONPATH"] = str(self.root / "absent application")
         environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
         result = subprocess.run(
             [sys.executable, str(self.root / "engine" / "main.py"), "run", "cpi", "--",

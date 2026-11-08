@@ -404,9 +404,14 @@ def main(argv: list[str] | None = None) -> int:
             if native_arguments[:1] == ["--"]:
                 native_arguments = native_arguments[1:]
         script = BUNDLE_ROOT / description["workflows"][arguments.workflow]["script"]
+        library = preparation_root(BUNDLE_ROOT).resolve()
+        sys.path.insert(0, str(library))
+        from nipat_scientific.parallel import execution_environment
+
         # Replace this process so R receives the container's signals and its exit
         # code is reported directly, without an extra shell or Python supervisor.
-        os.execvp("Rscript", ["Rscript", str(script), *native_arguments])
+        with execution_environment():
+            os.execvp("Rscript", ["Rscript", str(script), *native_arguments])
         raise BundleError("Rscript execution unexpectedly returned.")
     except (BundleError, OSError) as exc:
         print(f"NIPAT scientific engine: {exc}", file=sys.stderr)

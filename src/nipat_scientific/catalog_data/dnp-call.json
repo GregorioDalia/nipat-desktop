@@ -1185,21 +1185,24 @@
             "NIPAT_DNP_BLOCK_LOCI",
             "NIPAT_DNP_BLOCK_BYTES"
           ]
-        }
+        },
+        "read_ranges": "byte-contiguous rows in requested order, without sorting or deduplication",
+        "read_range_target_bytes": 8388608,
+        "read_range_oversize": "a single indivisible row can exceed the target"
       },
       "applies_to": "dnp-call",
       "origin": "NIPAT scientific engine",
       "description": {
-        "it": "Un primo passaggio sul pileup inferisce i tipi delle colonne e conserva coordinate, offset e lunghezze delle righe. Ogni blocco legge finestre complete nell’ordine del file e mantiene gli identificativi globali del pannello; posizioni effettive uguali restano nello stesso blocco. I limiti ordinari di 64 loci e 32 MiB riguardano i byte grezzi, non la RAM di R: una finestra o un gruppo indivisibile può superarli. I risultati dei blocchi vengono riuniti e ordinati per chiave di coordinate prima degli output. Coordinate non associabili alle finestre o QNAME ripetuti nella stessa riga attivano un unico blocco per campione, preservando i raggruppamenti del codice precedente. Le finestre prive di righe pileup restano nei risultati; un campione senza likelihood REF/ALT conservate termina con errore. L’ordinamento riutilizza le stringhe DNP originali, evitando differenze dovute alla notazione scientifica delle coordinate. Dimensione e numero di loci sono configurabili. Ogni task apre una connessione pileup separata; metriche e avanzamento sono raccolti dal coordinatore. La stima per worker considera il blocco effettivo più grande, inclusi i gruppi indivisibili.",
-        "en": "A first pileup pass infers column types and retains coordinates, row offsets and lengths. Each block reads complete windows in file order and keeps global panel identifiers; equal effective positions remain in one block. The default limits of 64 loci and 32 MiB concern raw input bytes, not R memory: an indivisible window or group can exceed them. Block results are combined and sorted by coordinate key before output. Coordinates that cannot be assigned to windows or repeated QNAMEs within one row select a single block per sample, preserving legacy grouping. Windows without pileup rows remain in the results; a sample without retained REF/ALT likelihoods fails. Sorting reuses original DNP strings, avoiding differences caused by scientific notation of numeric coordinates. Block size and locus count are configurable. Each task opens a separate pileup connection; the coordinator collects metrics and progress. The per-worker estimate accounts for the largest actual block, including indivisible groups."
+        "it": "Un primo passaggio sul pileup inferisce i tipi delle colonne e conserva coordinate, offset e lunghezze delle righe. Ogni blocco legge finestre complete nell’ordine del file e mantiene gli identificativi globali del pannello; posizioni effettive uguali restano nello stesso blocco. I limiti ordinari di 64 loci e 32 MiB riguardano i byte grezzi, non la RAM di R: una finestra o un gruppo indivisibile può superarli. I risultati dei blocchi vengono riuniti e ordinati per chiave di coordinate prima degli output. Coordinate non associabili alle finestre o QNAME ripetuti nella stessa riga attivano un unico blocco per campione, preservando i raggruppamenti del codice precedente. Le finestre prive di righe pileup restano nei risultati; un campione senza likelihood REF/ALT conservate termina con errore. L’ordinamento riutilizza le stringhe DNP originali, evitando differenze dovute alla notazione scientifica delle coordinate. Dimensione e numero di loci sono configurabili. Ogni task apre una connessione pileup separata; metriche e avanzamento sono raccolti dal coordinatore. La stima per worker considera il blocco effettivo più grande, inclusi i gruppi indivisibili. La lettura combina righe contigue nei byte e nell’ordine richiesto in intervalli temporanei fino a 8 MiB, salvo righe singole più grandi. Non ordina né deduplica le richieste; avvisi o letture tronche ripristinano il percorso per singola riga. Questo intervallo di lettura è distinto dal blocco di calcolo.",
+        "en": "A first pileup pass infers column types and retains coordinates, row offsets and lengths. Each block reads complete windows in file order and keeps global panel identifiers; equal effective positions remain in one block. The default limits of 64 loci and 32 MiB concern raw input bytes, not R memory: an indivisible window or group can exceed them. Block results are combined and sorted by coordinate key before output. Coordinates that cannot be assigned to windows or repeated QNAMEs within one row select a single block per sample, preserving legacy grouping. Windows without pileup rows remain in the results; a sample without retained REF/ALT likelihoods fails. Sorting reuses original DNP strings, avoiding differences caused by scientific notation of numeric coordinates. Block size and locus count are configurable. Each task opens a separate pileup connection; the coordinator collects metrics and progress. The per-worker estimate accounts for the largest actual block, including indivisible groups. Reads combine byte-contiguous rows in requested order into temporary ranges up to 8 MiB, except for larger individual rows. Requests are neither sorted nor deduplicated; warnings or truncated reads restore the per-row path. This read range is separate from the calculation block."
       },
       "evidence": {
         "path": "src/nipat_scientific/dnp_blocks.R",
         "source_lines": [
           1,
-          220
+          281
         ],
-        "sha256": "723a18bac069d35b6e6e7c9c0d0b469d2fedb38e27eea635c43ea930accd7dbc",
+        "sha256": "f9dddb7d035ff22ee333d774940ba001aa5291ba3a43683141d22f047e326f5c",
         "dependencies": [
           {
             "path": "scientific/vendor/DNPcall/DNPcall.R",
@@ -1247,17 +1250,17 @@
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
               160,
-              202
+              203
             ],
-            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
           },
           {
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
-              804,
-              867
+              805,
+              868
             ],
-            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
           }
         ]
       }
@@ -1325,10 +1328,10 @@
           {
             "path": "src/nipat_scientific/dnp_blocks.R",
             "source_lines": [
-              212,
-              220
+              273,
+              281
             ],
-            "sha256": "723a18bac069d35b6e6e7c9c0d0b469d2fedb38e27eea635c43ea930accd7dbc"
+            "sha256": "f9dddb7d035ff22ee333d774940ba001aa5291ba3a43683141d22f047e326f5c"
           },
           {
             "path": "scientific/vendor/DNPcall/DNPcall.R",
@@ -1409,13 +1412,15 @@
         "memory_estimate": "conservative scheduling estimate, not a hard allocation limit",
         "acquisition_phase": "same R-owned budget passed as JSON to the DNP Python helper",
         "stage_overlap": false,
-        "accounting": "one samtools process per acquisition task; waiting coordinators excluded"
+        "accounting": "one samtools process per acquisition task; waiting coordinators excluded",
+        "internal_library_threads": 1,
+        "thread_limit_scope": "managed requests, workflow steps and native engine run"
       },
       "applies_to": "dnp-call",
       "origin": "NIPAT scientific engine and client",
       "description": {
-        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. Per DNP lo stesso budget è esportato al generatore del pileup: ogni task di acquisizione usa un processo samtools, e l’acquisizione termina prima del pool R. Le due fasi non moltiplicano i processi; i coordinatori in attesa restano distinti dai processi di calcolo.",
-        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. For DNP the same budget is exported to pileup generation: each acquisition task uses one samtools process, and acquisition finishes before the R pool starts. The two phases do not multiply processes; waiting coordinators remain separate from calculation processes."
+        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. Per DNP lo stesso budget è esportato al generatore del pileup: ogni task di acquisizione usa un processo samtools, e l’acquisizione termina prima del pool R. Le due fasi non moltiplicano i processi; i coordinatori in attesa restano distinti dai processi di calcolo. I thread interni delle librerie numeriche e di vroom sono limitati a uno nei percorsi gestiti e nell’avvio nativo del motore; client e coordinatori restano distinti dai processi di calcolo.",
+        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. For DNP the same budget is exported to pileup generation: each acquisition task uses one samtools process, and acquisition finishes before the R pool starts. The two phases do not multiply processes; waiting coordinators remain separate from calculation processes. Numeric-library and vroom internal threads are limited to one in managed execution paths and native engine runs; clients and coordinators remain separate from calculation workers."
       },
       "evidence": {
         "path": "src/nipat_scientific/parallel.R",
@@ -1445,9 +1450,9 @@
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
               190,
-              197
+              198
             ],
-            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
           },
           {
             "path": "scientific/vendor/DNPcall/DNPcall.R",
@@ -1472,6 +1477,22 @@
               361
             ],
             "sha256": "12d17b2169bc5239db67d1c49a8af0f18cd5d1dbf5115fcacf963c9a78a08619"
+          },
+          {
+            "path": "src/nipat_scientific/parallel.py",
+            "source_lines": [
+              8,
+              43
+            ],
+            "sha256": "5583abb381fcd43ccc90895210f776e97b476ef652a9bb070aa69d81d0b491a8"
+          },
+          {
+            "path": "engine/main.py",
+            "source_lines": [
+              407,
+              414
+            ],
+            "sha256": "8f66d87dbc38481c4f1d4aff2f191f0a4b1742ed0972159e1e8f39d54d7b4de8"
           }
         ]
       }

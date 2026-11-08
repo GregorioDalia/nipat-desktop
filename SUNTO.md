@@ -6,12 +6,13 @@ singolarmente oppure collegate in un workflow automatico con una sola conferma.
 La 0.8.9 riduce allocazioni e calcoli ripetuti nei programmi R, con confronti
 differenziali rispetto ai sorgenti congelati della 0.8.5.
 
-Il **candidato di sviluppo 0.8.13** estende alla preparazione del pileup DNP
-la scelta automatica o seriale già disponibile per il calcolo R. Le fasi
-usano lo stesso limite di processi e i blocchi restano inizialmente da
-32 MiB / 64 loci. La [guida del candidato](docs/PILEUP_0.8.13.md) distingue
-funzionamento, prove di equivalenza e misure ancora da raccogliere sui dati
-reali. La versione stabile distribuita rimane 0.8.9.
+Il **candidato di sviluppo 0.8.14** completa il controllo dei thread interni
+in modalità seriale e riduce lavoro ripetuto in CPI e nella lettura dei
+blocchi DNP. Conserva il pileup parallelo della 0.8.13 e il parallelismo
+nei quattro programmi R della 0.8.12, con un budget comune e blocchi iniziali
+da 32 MiB / 64 loci. La [guida del candidato](docs/OPTIMIZATIONS_0.8.14.md)
+distingue modifiche, prove di equivalenza e misure ancora da raccogliere.
+La build 0.8.13 resta disponibile per i confronti; la stabile rimane 0.8.9.
 
 | Analisi | Funzione |
 | --- | --- |

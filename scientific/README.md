@@ -28,15 +28,20 @@ Contamination è `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
 SNPcall e DNPcall sono identificati dai byte conservati nel repository e dal
 manifest seguente.
 
-La revisione di sviluppo **0.8.13** estende alla preparazione del pileup DNP
-il budget comune introdotto dalla **0.8.12** per i quattro programmi R.
-L'acquisizione può distribuire cromosomi completi fra processi samtools,
-prima di avviare il calcolo R; le due fasi condividono il limite dei processi.
-I blocchi R conservano i valori iniziali di 32 MiB e 64 loci. La
-[guida al prototipo](../docs/PILEUP_0.8.13.md) descrive i percorsi di acquisizione
-e il collaudo; la [guida al parallelismo R](../docs/PARALLELISMO_0.8.12.md)
-documenta la base 0.8.12. I file conservano attribuzioni e licenze e indicano
-le modifiche NIPAT.
+La revisione di sviluppo **0.8.14** limita esplicitamente a un thread il
+lettore readr di SNPcall, applica i limiti dei thread anche all'avvio nativo
+del motore e riduce operazioni duplicate nel riepilogo CPI e nella lettura
+dei blocchi DNP. La [guida 0.8.14](../docs/OPTIMIZATIONS_0.8.14.md) descrive
+il perimetro e lo stato delle verifiche.
+
+La **0.8.13** ha esteso alla preparazione del pileup DNP il budget comune
+introdotto dalla **0.8.12** per i quattro programmi R. L'acquisizione può
+distribuire cromosomi completi fra processi samtools, prima di avviare il
+calcolo R; le due fasi condividono il limite dei processi. I blocchi R
+conservano i valori iniziali di 32 MiB e 64 loci. La
+[guida al pileup](../docs/PILEUP_0.8.13.md) e la
+[guida al parallelismo R](../docs/PARALLELISMO_0.8.12.md) documentano queste
+basi. I file conservano attribuzioni e licenze e indicano le modifiche NIPAT.
 
 Il riferimento per l'equivalenza rimane **NIPAT v0.8.5**, commit
 `eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copie congelate in
@@ -51,9 +56,9 @@ copertura, controlli di equivalenza e limiti delle evidenze.
 | Componente | SHA-256 |
 | --- | --- |
 | DNPcall | `12c45aa28bfe7ed83084a5b76d6618e3f1a9ed66b4ba30180d6c33ffa0737948` |
-| SNPcall | `66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64` |
+| SNPcall | `8e92ec718cafd5f8c12fc3d2c1d39c086a2219cf023150fea9a842748640dc8e` |
 | Contamination | `d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26` |
-| CPI | `d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1` |
+| CPI | `5df16d3dd54693f076480945939deb46861920a2e0155f078a6a42444a440c4f` |
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate
@@ -106,13 +111,20 @@ BED e pileup sono rimossi al termine, mentre il client gestisce la pulizia
 del volume dell'esecuzione. La verifica degli output resta parte del
 completamento del workflow.
 
+La lettura dei blocchi 0.8.14 riunisce in un'unica operazione le righe
+richieste adiacenti nei byte del file. Conserva ordine, ripetizioni e salti
+della richiesta; non ordina né deduplica le righe. L'indice globale e
+l'inferenza dei tipi restano comuni all'intero pileup.
+
 ### SNPcall
 
 SNPcall riceve un pileup con colonna QNAME e un pannello SNP. Il client può
 accettare un pileup già disponibile oppure un BAM e il riferimento FASTA.
 In quest'ultimo caso il motore genera finestre BED di tre basi ed esegue
 samtools prima di R; un errore di samtools interrompe il workflow.
-Il risultato è `output/SNPcall_output.txt`.
+Il risultato è `output/SNPcall_output.txt`. Dalla 0.8.14 la lettura del
+pannello specifica `num_threads = 1L`: il lettore non sceglie autonomamente
+un numero di thread aggiuntivi rispetto al budget di calcolo.
 
 ### Contamination
 
@@ -136,6 +148,13 @@ richiesti dai prefissi e prepara ogni campione condiviso una sola volta.
 
 Il riepilogo esclude i siti con meno di due letture fetali. CSV e grafici
 riportano le stime previste dallo script, comprese frazione fetale e CPI.
+La 0.8.14 riusa le righe materne già selezionate dal calcolo CPI per
+preparare il riepilogo, applicando ancora la formula e i filtri originali
+del riepilogo. Le chiavi materne già limitate al pannello selezionano le
+righe paterne nella join: non serve filtrare nuovamente il padre sullo
+stesso pannello. Ordine, duplicati, formule e prodotto dei contributi CPI
+rimangono parte del contratto di equivalenza.
+
 Un risultato mancante (`NA`) non equivale a una stima nulla. Parametri e
 formati di input sono descritti nella [guida per l'utilizzo](../docs/GUIDA_UTILIZZO.md).
 
