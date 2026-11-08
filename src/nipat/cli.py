@@ -53,9 +53,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--memory-mb", type=int, help="limite memoria del container in MiB")
     parser.add_argument("--pids-limit", type=int, help="limite dei processi nel container")
     parser.add_argument("--execution-mode", choices=("auto", "serial"),
-                        help="auto distribuisce il calcolo R entro le risorse disponibili; serial usa un solo processo R di calcolo")
+                        help="auto distribuisce preparazione pileup DNP e calcolo R entro le risorse disponibili; serial usa un processo di calcolo alla volta")
     parser.add_argument("--max-workers", type=int,
-                        help="massimo complessivo di processi R di calcolo, escluso il coordinatore in attesa; rispetta anche CPU, RAM e lavoro disponibile")
+                        help="massimo di processi di calcolo condiviso dalle fasi di preparazione DNP e R, esclusi i coordinatori; rispetta anche CPU, RAM e lavoro disponibile")
     parser.add_argument("--dnp-block-mib", type=int,
                         help="dimensione obiettivo dei blocchi DNP in MiB di input grezzo (default 32), non un limite RAM")
     parser.add_argument("--dnp-block-loci", type=int,

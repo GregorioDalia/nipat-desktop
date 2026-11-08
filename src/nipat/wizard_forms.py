@@ -49,9 +49,9 @@ def navigation(value: str) -> str:
 
 
 def parallel_summary(options: ExecutionOptions) -> str:
-    mode = "Seriale (un processo R di calcolo)" if options.execution_mode == "serial" else "Automatico"
+    mode = "Seriale (un processo di calcolo)" if options.execution_mode == "serial" else "Automatico"
     limit = str(options.max_workers) if options.max_workers is not None else "automatico"
-    return (f"Calcolo R: {mode}; massimo processi R di calcolo: {limit}; "
+    return (f"Calcolo: {mode}; massimo processi di calcolo: {limit}; "
             f"blocchi DNP: {options.dnp_block_mib} MiB / {options.dnp_block_loci} loci.")
 
 
@@ -59,16 +59,16 @@ def edit_parallel_options(ui: Any, options: ExecutionOptions) -> ExecutionOption
     """Edit a reviewed copy; cancelling leaves the caller's options untouched."""
     candidate = options
     while True:
-        ui.message("Il numero di processi R di calcolo e' un limite complessivo condiviso da campioni e blocchi. "
-                   "La scelta automatica tiene conto di CPU, memoria e lavoro disponibile.", kind="muted")
-        ui.message("Il coordinatore R in attesa puo' aggiungersi ai processi di calcolo. "
+        ui.message("Il massimo di processi di calcolo vale per la preparazione del pileup DNP e per il successivo calcolo R. "
+                   "Campioni e blocchi condividono il limite; la scelta automatica considera CPU, memoria e lavoro disponibile.", kind="muted")
+        ui.message("I processi di coordinamento possono aggiungersi ai processi di calcolo. "
                    "Questo massimo e' distinto dal limite dei processi del container, che include tutti i processi.", kind="muted")
         ui.message("I MiB dei blocchi misurano l'input grezzo, non la RAM occupata da R. "
                    "I gruppi indivisibili possono superare gli obiettivi di dimensione e loci.", kind="muted")
-        ui.message("La modalita' seriale usa un solo processo R di calcolo anche se e' salvato un massimo maggiore.", kind="muted")
+        ui.message("La modalita' seriale usa un solo processo di calcolo alla volta anche se e' salvato un massimo maggiore.", kind="muted")
         action = ui.menu("Parallelismo e blocchi", [
-            ("1", "Modalita' di calcolo R", "Automatica" if candidate.execution_mode == "auto" else "Seriale"),
-            ("2", "Massimo processi R di calcolo", str(candidate.max_workers) if candidate.max_workers is not None else "Automatico"),
+            ("1", "Modalita' di esecuzione", "Automatica" if candidate.execution_mode == "auto" else "Seriale"),
+            ("2", "Massimo processi di calcolo", str(candidate.max_workers) if candidate.max_workers is not None else "Automatico"),
             ("3", "Dimensione obiettivo blocchi DNP (MiB)", str(candidate.dnp_block_mib)),
             ("4", "Massimo obiettivo loci per blocco DNP", str(candidate.dnp_block_loci)),
             ("9", "Applica questi valori", "Torna al riepilogo precedente"),
@@ -81,9 +81,9 @@ def edit_parallel_options(ui: Any, options: ExecutionOptions) -> ExecutionOption
         if action == "9":
             return candidate
         if action == "1":
-            selected = ui.menu("Modalita' di calcolo R", [
+            selected = ui.menu("Modalita' di esecuzione", [
                 ("1", "Automatica", "Parallelismo entro CPU, RAM e massimo processi di calcolo"),
-                ("2", "Seriale", "Un solo processo R di calcolo"),
+                ("2", "Seriale", "Un solo processo di calcolo alla volta"),
                 ("0", "Indietro", "Mantiene la scelta"),
             ], default="1" if candidate.execution_mode == "auto" else "2").strip().casefold()
             if selected == ":annulla":
@@ -91,7 +91,7 @@ def edit_parallel_options(ui: Any, options: ExecutionOptions) -> ExecutionOption
             if selected in {"1", "2"}:
                 candidate = replace(candidate, execution_mode="auto" if selected == "1" else "serial")
             continue
-        fields = {"2": ("max_workers", "Massimo processi R di calcolo"),
+        fields = {"2": ("max_workers", "Massimo processi di calcolo"),
                   "3": ("dnp_block_mib", "Dimensione blocchi DNP (MiB)"),
                   "4": ("dnp_block_loci", "Massimo loci per blocco DNP")}
         if action not in fields:

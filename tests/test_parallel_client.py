@@ -119,7 +119,7 @@ class ParallelWizardTests(unittest.TestCase):
                                                         dnp_block_mib=64, dnp_block_loci=128))
         self.assertEqual(observed[1][0], ExecutionOptions(max_workers=4, dnp_block_mib=16))
         self.assertEqual(store.path.read_bytes(), original)
-        self.assertIn("Seriale (un processo R di calcolo)", messages)
+        self.assertIn("Seriale (un processo di calcolo)", messages)
         self.assertIn("non la RAM occupata", messages)
         self.assertNotIn("execution_mode", observed[0][1])
 
@@ -146,7 +146,7 @@ class ParallelWizardTests(unittest.TestCase):
         status, messages = self.invoke(["1", "1", self.bam, "", self.reference,
                                        self.panel, "automatic", "1", "0", "0"], preferences_store=store)
         self.assertEqual(status, 0)
-        self.assertIn("Calcolo R: Automatico", messages)
+        self.assertIn("Calcolo: Automatico", messages)
         self.assertNotIn("Modalita' di esecuzione", messages)
 
 

@@ -1,10 +1,11 @@
-"""Acquire the unchanged DNP pileup with optional indexed BAM preselection.
+"""Acquire the unchanged DNP pileup within the shared scientific process budget.
 
 The BED and all mpileup scientific options come from DNPcall. Indexed view only
 selects alignments overlapping the same BED; no reads are deduplicated by name,
 no quality/filter/depth options are changed, and original BAMs remain read-only.
-Single indexed BAMs stream through an uncompressed pipe. Multiple BAMs retain
-one file per input, in the original order, on the supplied disk scratch.
+An explicit R-owned budget enables whole-chromosome indexed tasks, with exactly
+one samtools process per task. Output is reassembled in BAM dictionary order.
+The unbudgeted API retains the 0.8.12 acquisition path for regression comparison.
 """
 
 from __future__ import annotations
@@ -12,8 +13,10 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import json
+import math
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -160,8 +163,249 @@ def _write_json(path, document):
         temporary.unlink(missing_ok=True)
 
 
-def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, samtools="samtools"):
+def _budget(value):
+    """Consume the source-verified R policy; do not independently invent a pool."""
+    if value is None:
+        return None
+    if isinstance(value, (str, os.PathLike)):
+        with Path(value).open("r", encoding="utf-8") as handle:
+            text = handle.read(65537)
+        if len(text) > 65536:
+            raise PileupError("Acquisition budget is too large")
+        value = json.loads(text)
+    if (not isinstance(value, dict) or not isinstance(value.get("mode"), str)
+            or value["mode"] not in {"auto", "serial"}
+            or type(value.get("workers")) is not int or value["workers"] < 1):
+        raise PileupError("Acquisition budget requires a mode and positive whole worker count")
+    workers = value["workers"]
+    for key in ("max_workers", "memory_worker_limit", "cpu_limit"):
+        limit = value.get(key)
+        if limit is None:
+            continue
+        if (type(limit) not in {int, float} or not math.isfinite(limit) or limit <= 0
+                or key != "cpu_limit" and int(limit) != limit):
+            raise PileupError(f"Invalid acquisition budget {key}")
+        workers = min(workers, max(1, math.floor(limit)))
+    if value["mode"] == "serial":
+        workers = 1
+    return {"budget": value.copy(), "workers": workers, "tasks": 0,
+            "observed_max_processes": 0, "reason": "planning"}
+
+
+def _finish_record(record, process, started, cancellation):
+    code = process.poll()
+    record.update(returncode=code, finished_at_unix=time.time(),
+                  elapsed_seconds=time.monotonic() - started,
+                  outcome=("cancelled" if cancellation.signum is not None else
+                           "succeeded" if code == 0 else "failed"))
+
+
+def _tracked_execute(command, output, cancellation, document, record):
+    """Run one planning/fallback child with the same cancellation and evidence."""
+    process = None
+    started = time.monotonic()
+    record.update(pid=None, started_at_unix=time.time(), finished_at_unix=None,
+                  elapsed_seconds=None, returncode=None, outcome="running")
+    document["processes"].append(record)
+    try:
+        cancellation.check()
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output)
+        record["pid"] = process.pid
+        document["parallel"]["observed_max_processes"] = max(
+            1, document["parallel"]["observed_max_processes"])
+        _wait([(process, started)], cancellation)
+    finally:
+        if process is not None:
+            _stop_processes([(process, started)])
+            _finish_record(record, process, started, cancellation)
+        else:
+            record.update(outcome="cancelled" if cancellation.signum else "failed",
+                          finished_at_unix=time.time(), elapsed_seconds=time.monotonic() - started)
+
+
+def _chromosomes(bams, samples, bed, staging, samtools, cancellation, document):
+    """Prove an unambiguous partition; unsupported shapes use the original stream.
+
+    Header/command failures propagate. They are never interpreted as permission
+    to silently ignore an existing but broken BAM/index.
+    """
+    if not all(sample["indexed"] for sample in samples):
+        return [], "missing-index"
+    dictionary = None
+    for number, bam in enumerate(bams, 1):
+        header = staging / f"header-{number:04d}.sam"
+        with header.open("xb") as handle:
+            _tracked_execute([samtools, "view", "--no-PG", "-H", str(bam)], handle,
+                             cancellation, document, {"stage": "header", "sample_id": samples[number - 1]["sample_id"]})
+        # Huge/non-text headers remain supported by serial samtools without
+        # requiring an unbounded Python allocation merely to choose a strategy.
+        if header.stat().st_size > 16 * 1024 * 1024:
+            return [], "unsupported-header"
+        try:
+            lines = header.read_text(encoding="utf-8").splitlines()
+        except UnicodeError:
+            return [], "unsupported-header"
+        order, coordinate = [], False
+        for line in lines:
+            fields = line.split("\t")
+            if fields[0] == "@HD":
+                coordinate = "SO:coordinate" in fields[1:]
+            if fields[0] != "@SQ":
+                continue
+            tags = dict(field.split(":", 1) for field in fields[1:] if ":" in field)
+            name, length = tags.get("SN"), tags.get("LN")
+            if not name or not length or not length.isdecimal() or int(length) <= 0:
+                return [], "unsupported-header"
+            order.append((name, int(length)))
+        if not coordinate:
+            return [], "non-coordinate-header"
+        if not order or len(order) != len({name for name, _ in order}):
+            return [], "unsupported-header"
+        if dictionary is not None and order != dictionary:
+            return [], "incompatible-dictionaries"
+        dictionary = order
+    targets = set()
+    with bed.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            cancellation.check()
+            if not line.strip() or line.startswith("#"):
+                continue
+            fields = line.split()
+            if (len(fields) < 3 or not fields[1].isdecimal() or not fields[2].isdecimal()
+                    or int(fields[2]) <= int(fields[1])):
+                return [], "unsupported-bed"
+            targets.add(fields[0])
+    selected = [name for name, _ in dictionary if name in targets]
+    if not selected:
+        return [], "no-panel-contigs"
+    # ':' and region metacharacters can change -r interpretation. Exotic but
+    # valid BAM names still work through the unpartitioned fallback.
+    if any(name == "." or not re.fullmatch(r"[A-Za-z0-9_.-]+", name) for name in selected):
+        return [], "ambiguous-contig"
+    return selected, "indexed-chromosomes"
+
+
+def _parallel_chromosomes(contigs, command, staging, output, cancellation, document, metadata):
+    """Bound actual samtools processes, then concatenate complete chromosomes."""
+    workers = document["parallel"]["workers"]
+    active = {}
+    paths = []
+    next_index = 0
+    try:
+        while next_index < len(contigs) or active:
+            cancellation.check()
+            while next_index < len(contigs) and len(active) < workers:
+                cancellation.check()
+                index, contig = next_index, contigs[next_index]
+                path = staging / f"chromosome-{index:06d}.pileup"
+                paths.append(path)
+                record = {"stage": "mpileup-chromosome", "task_index": index + 1,
+                          "contig": contig, "pid": None, "started_at_unix": time.time(),
+                          "finished_at_unix": None, "elapsed_seconds": None,
+                          "returncode": None, "outcome": "running"}
+                document["processes"].append(record)
+                started = time.monotonic()
+                try:
+                    with path.open("xb") as handle:
+                        process = subprocess.Popen([*command, "-r", contig], stdin=subprocess.DEVNULL, stdout=handle)
+                except BaseException:
+                    record.update(outcome="failed", finished_at_unix=time.time(),
+                                  elapsed_seconds=time.monotonic() - started)
+                    raise
+                record["pid"] = process.pid
+                # Key by task, not PID: polling may reap a short-lived child
+                # before its record is collected, allowing its PID to be reused.
+                active[index] = (process, started, record)
+                document["parallel"]["observed_max_processes"] = max(
+                    document["parallel"]["observed_max_processes"],
+                    sum(child.poll() is None for child, _, _ in active.values()))
+                next_index += 1
+                _write_json(metadata, document)
+            completed = []
+            failed = None
+            for index, (process, started, record) in active.items():
+                code = process.poll()
+                if code is None:
+                    continue
+                process.wait()
+                _finish_record(record, process, started, cancellation)
+                completed.append(index)
+                if code and failed is None:
+                    failed = record
+            for index in completed:
+                del active[index]
+            if completed:
+                _write_json(metadata, document)
+            if failed is not None:
+                cancellation.check()
+                raise PileupError(f"samtools chromosome {failed['contig']} failed with exit code {failed['returncode']}; see stderr")
+            if active and not completed:
+                time.sleep(0.05)
+        # Concatenate in BAM dictionary order, never completion or lexical order.
+        # Read fixed-size chunks, including when a high-depth pileup line is huge.
+        for path in paths:
+            cancellation.check()
+            with path.open("rb") as source:
+                while True:
+                    cancellation.check()
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+            path.unlink()
+    finally:
+        _stop_processes([(process, started) for process, started, _ in active.values()])
+        for process, started, record in active.values():
+            _finish_record(record, process, started, cancellation)
+            if cancellation.signum is None:
+                record["outcome"] = "aborted"
+
+
+def _budgeted_acquisition(bams, samples, bed, reference, staging, output, cancellation, document, metadata, samtools):
+    contigs, reason = _chromosomes(bams, samples, bed, staging, samtools, cancellation, document)
+    selected_list = staging / "original-bamlist.txt"
+    parallel = document["parallel"]
+    parallel.update(tasks=len(contigs) or 1, workers=min(parallel["workers"], len(contigs)) if contigs else 1,
+                    reason=reason)
+    document["strategy"] = "indexed-chromosomes" if contigs else "sequential-budgeted"
+    selected = []
+    for number, (bam, sample) in enumerate(zip(bams, samples), 1):
+        cancellation.check()
+        if contigs or not sample["indexed"]:
+            sample["strategy"] = "indexed-chromosomes" if contigs else "sequential-no-index"
+            selected.append(str(bam))
+            continue
+        # Preserve the established fallback's validation of every PRESENT index.
+        # Ignoring one because another BAM lacks an index would hide corruption.
+        # Stage sequentially (one samtools at a time), as in 0.8.12 multi-BAM.
+        directory = staging / f"sample-{number:04d}"
+        directory.mkdir()
+        destination = directory / bam.name
+        record = {"stage": "indexed-selection", "sample_id": sample["sample_id"]}
+        with progress.phase("dnp-indexed-selection", workflow="dnp-call", sample_ids=[sample["sample_id"]]):
+            with destination.open("xb") as handle:
+                _tracked_execute([samtools, "view", "--no-PG", "-u", "-M", "-L", str(bed), str(bam)],
+                                 handle, cancellation, document, record)
+        size = destination.stat().st_size
+        sample.update(strategy="indexed-disk", elapsed_seconds=record["elapsed_seconds"],
+                      selected_bytes=size, staged_bytes=size)
+        selected.append(str(destination))
+    selected_list.write_text("".join(name + "\n" for name in selected), encoding="utf-8")
+    command = [samtools, "mpileup", "-l", str(bed), "-f", str(reference),
+               *MPILEUP_OPTIONS, "-b", str(selected_list)]
+    _write_json(metadata, document)
+    sample_ids = [sample["sample_id"] for sample in samples]
+    with progress.phase("dnp-indexed-pileup" if contigs else "dnp-pileup",
+                        workflow="dnp-call", sample_ids=sample_ids):
+        if contigs:
+            _parallel_chromosomes(contigs, command, staging, output, cancellation, document, metadata)
+        else:
+            _tracked_execute(command, output, cancellation, document, {"stage": "mpileup"})
+
+
+def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, samtools="samtools", budget=None):
     """Return acquisition metadata only after both processes and output succeed."""
+    parallel = _budget(budget)
     bamlist, bed, reference = (Path(value).resolve() for value in (bamlist, bed, reference))
     scratch_dir = Path(scratch_dir)
     if not scratch_dir.is_absolute() or scratch_dir.is_symlink() or not scratch_dir.is_dir():
@@ -204,6 +448,8 @@ def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, s
         "timing_scope": "all acquisition work, including indexed selection and disk staging; pipeline stages overlap",
         "byte_scope": "input file sizes and disk intermediates; pipe transfer bytes are not measured",
     }
+    if parallel is not None:
+        document.update(strategy="planning", parallel=parallel)
     # Claim only the explicitly supplied new metadata destination. Subsequent
     # atomic replacements update this invocation's own record.
     with metadata.open("x", encoding="utf-8") as handle:
@@ -215,6 +461,17 @@ def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, s
         with cancellation_handlers(cancellation), tempfile.TemporaryDirectory(
                 prefix="indexed-", dir=scratch_dir) as temporary:
             staging = Path(temporary)
+            if parallel is not None:
+                descriptor, name = tempfile.mkstemp(prefix=".pileup-", suffix=".partial", dir=output.parent)
+                partial = Path(name)
+                with os.fdopen(descriptor, "wb") as handle:
+                    _budgeted_acquisition(bams, samples, bed, reference, staging, handle,
+                                          cancellation, document, metadata, samtools)
+                cancellation.check()
+                os.replace(partial, output)
+                partial = None
+                document.update(status="succeeded", output_bytes=output.stat().st_size)
+                return document
             selected_list = staging / "bamlist.txt"
             selected = []
             if strategy == "indexed-pipe":
@@ -286,9 +543,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     for option in ("bamlist", "bed", "reference", "output", "scratch-dir", "metadata"):
         parser.add_argument("--" + option, type=Path, required=True)
+    parser.add_argument("--budget", type=Path, help="Shared process budget generated by the R coordinator")
     args = parser.parse_args(argv)
     try:
-        generate_pileup(args.bamlist, args.bed, args.reference, args.output, args.scratch_dir, args.metadata)
+        generate_pileup(args.bamlist, args.bed, args.reference, args.output, args.scratch_dir, args.metadata,
+                        budget=args.budget)
     except Cancelled as error:
         print(str(error), file=sys.stderr)
         return 128 + error.signum

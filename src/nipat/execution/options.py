@@ -26,7 +26,7 @@ class ExecutionOptions:
         if self.max_workers is not None and (
             type(self.max_workers) is not int or not 1 <= self.max_workers <= 1024
         ):
-            raise ValidationError("Il massimo di processi R di calcolo deve essere un intero fra 1 e 1024.")
+            raise ValidationError("Il massimo di processi di calcolo deve essere un intero fra 1 e 1024.")
         if type(self.dnp_block_mib) is not int or not 1 <= self.dnp_block_mib <= 4096:
             raise ValidationError("La dimensione dei blocchi DNP deve essere un intero fra 1 e 4096 MiB.")
         if type(self.dnp_block_loci) is not int or not 1 <= self.dnp_block_loci <= 1_000_000:

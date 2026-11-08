@@ -28,11 +28,15 @@ Contamination è `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
 SNPcall e DNPcall sono identificati dai byte conservati nel repository e dal
 manifest seguente.
 
-La revisione di sviluppo **0.8.12** aggiunge un budget comune per il
-parallelismo dei quattro programmi R alle ottimizzazioni introdotte dalla
-0.8.9 e all'elaborazione DNP per blocchi. Modalità, limiti e unità di lavoro
-sono descritti nella [guida al parallelismo](../docs/PARALLELISMO_0.8.12.md).
-I file conservano attribuzioni e licenze e indicano le modifiche NIPAT.
+La revisione di sviluppo **0.8.13** estende alla preparazione del pileup DNP
+il budget comune introdotto dalla **0.8.12** per i quattro programmi R.
+L'acquisizione può distribuire cromosomi completi fra processi samtools,
+prima di avviare il calcolo R; le due fasi condividono il limite dei processi.
+I blocchi R conservano i valori iniziali di 32 MiB e 64 loci. La
+[guida al prototipo](../docs/PILEUP_0.8.13.md) descrive i percorsi di acquisizione
+e il collaudo; la [guida al parallelismo R](../docs/PARALLELISMO_0.8.12.md)
+documenta la base 0.8.12. I file conservano attribuzioni e licenze e indicano
+le modifiche NIPAT.
 
 Il riferimento per l'equivalenza rimane **NIPAT v0.8.5**, commit
 `eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copie congelate in
@@ -46,7 +50,7 @@ copertura, controlli di equivalenza e limiti delle evidenze.
 
 | Componente | SHA-256 |
 | --- | --- |
-| DNPcall | `e9725291a572a3c7dc832905fee3b4d665cf6767cb914088788a9d0c6401423b` |
+| DNPcall | `12c45aa28bfe7ed83084a5b76d6618e3f1a9ed66b4ba30180d6c33ffa0737948` |
 | SNPcall | `66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64` |
 | Contamination | `d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26` |
 | CPI | `d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1` |
@@ -73,13 +77,34 @@ UpSet richiede almeno due campioni: un run con un solo campione non produce
 `DNPs_covered_UpSet_plot.pdf`. Questi adattamenti riguardano i riepiloghi e
 non la logica di chiamata del genotipo.
 
-DNPcall acquisisce il pileup tramite l'helper Python incluso nel motore e
-interrompe l'analisi se l'acquisizione fallisce. Gli indici BAM disponibili
-consentono la selezione delle letture nelle regioni richieste; in loro assenza
-si usa la scansione sequenziale. Gli intermedi grandi vengono scritti sul
-disco Linux temporaneo del runtime. BED e pileup sono rimossi al termine,
-mentre il client gestisce la pulizia del volume dell'esecuzione. La verifica
-degli output resta parte del completamento del workflow.
+DNPcall esporta il budget comune in `work/dnp-acquisition-budget.json` e lo
+passa all'helper Python incluso nel motore. Quando tutti i BAM sono indicizzati,
+i dizionari delle sequenze sono compatibili e la partizione è non ambigua,
+ciascun task esegue un solo `samtools mpileup -r` su un cromosoma completo.
+Restano gli input originali, il BED e le opzioni scientifiche. Le porzioni
+sono concatenate nell'ordine `@SQ` del BAM, indipendentemente dall'ordine di
+completamento; solo dopo iniziano indice globale e calcolo R.
+L'indice seleziona il cromosoma e il BED filtra le posizioni durante la
+scansione: questo percorso può leggere più allineamenti della preselezione
+multi-regione `view -M -L` della 0.8.12, soprattutto con pannelli sparsi su BAM
+genomici. Il beneficio prestazionale deve quindi essere misurato sugli input
+reali, non dedotto dal solo numero di processi.
+
+Il percorso non partizionabile esegue un processo samtools alla volta:
+seleziona su disco gli input con indice e li passa, insieme agli input senza
+indice e nell'ordine originale, a un unico mpileup. Un indice presente ma
+danneggiato continua a interrompere l'analisi. L'API interna dell'helper senza
+budget conserva il percorso 0.8.12 per i confronti di regressione; il programma
+R distribuito passa sempre il budget. La modalità seriale limita anche
+l'acquisizione a un processo di calcolo alla volta.
+
+Gli intermedi grandi restano sul disco Linux temporaneo del runtime.
+`work/dnp-pileup.json` registra strategia, budget, task, processi osservati e
+relativi esiti. Il massimo RSS osservato di un singolo processo R è distinto
+dal picco complessivo del container, misurato dalla diagnostica prestazioni.
+BED e pileup sono rimossi al termine, mentre il client gestisce la pulizia
+del volume dell'esecuzione. La verifica degli output resta parte del
+completamento del workflow.
 
 ### SNPcall
 

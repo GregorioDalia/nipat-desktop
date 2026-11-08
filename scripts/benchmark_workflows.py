@@ -27,7 +27,8 @@ from nipat.execution.workflows import _select_bams
 
 def _reported_ram(log: str) -> list[float]:
     return [float(value) for value in re.findall(
-        r"Peak RAM(?: usage)? \(MB\):\s*([0-9]+(?:\.[0-9]+)?)", log)]
+        r"^(?:Peak RAM(?: usage)? \(MB\)|Maximum observed R-process RSS \(MiB\)):\s*([0-9]+(?:\.[0-9]+)?)",
+        log, flags=re.MULTILINE)]
 
 
 def _run_file(run_dir: Path, relative: str) -> Path:
@@ -203,12 +204,18 @@ def main(argv=None) -> int:
     parser.add_argument("--cpus", type=float)
     parser.add_argument("--memory-mb", type=int)
     parser.add_argument("--pids-limit", type=int)
+    parser.add_argument("--execution-mode", choices=["auto", "serial"], default="auto")
+    parser.add_argument("--max-workers", type=int)
+    parser.add_argument("--dnp-block-mib", type=int, default=32)
+    parser.add_argument("--dnp-block-loci", type=int, default=64)
     parser.add_argument("--performance-diagnostics", action="store_true",
                         help="Collect local resource samples and engine phase times (adds overhead)")
     args = parser.parse_args(argv)
     try:
         options = ExecutionOptions(args.input_hashes, args.cpus, args.memory_mb, args.pids_limit,
-                                   performance_diagnostics=args.performance_diagnostics)
+                                   performance_diagnostics=args.performance_diagnostics,
+                                   execution_mode=args.execution_mode, max_workers=args.max_workers,
+                                   dnp_block_mib=args.dnp_block_mib, dnp_block_loci=args.dnp_block_loci)
         bams, _ = _select_bams(bam=None, bams=None, bamlist=args.bamlist.resolve())
         if (args.repeats < 1 or args.repeats > 100 or not args.sample_counts
                 or any(count < 1 or count > len(bams) for count in args.sample_counts)):
@@ -233,9 +240,12 @@ def main(argv=None) -> int:
                            "import runpy,sys;sys.path.insert(0,sys.argv.pop(1));"
                            "runpy.run_module('nipat',run_name='__main__')",
                            str(Path(__file__).resolve().parents[1] / "src"), "--runs-dir", str(runs),
-                           "--input-hashes", args.input_hashes]
+                           "--input-hashes", args.input_hashes,
+                           "--execution-mode", options.execution_mode,
+                           "--dnp-block-mib", str(options.dnp_block_mib),
+                           "--dnp-block-loci", str(options.dnp_block_loci)]
                 for flag, value in (("--cpus", args.cpus), ("--memory-mb", args.memory_mb),
-                                    ("--pids-limit", args.pids_limit)):
+                                    ("--pids-limit", args.pids_limit), ("--max-workers", options.max_workers)):
                     if value is not None:
                         command.extend([flag, str(value)])
                 if args.performance_diagnostics:

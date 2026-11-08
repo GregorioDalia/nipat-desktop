@@ -576,9 +576,9 @@ class DockerComposeRunner:
                     )
                     if parameters.get("parallel"):
                         self._write(
-                            "DNPcall parallelo usa i core rilevati da R. I limiti del container "
-                            "non impostano il numero dei worker R; un limite insufficiente puo "
-                            "interrompere il calcolo.\n"
+                            "Il parametro DNPcall --parallel e' mantenuto per compatibilita'. "
+                            "Modalita' e massimo di processi sono definiti dalle opzioni di esecuzione; "
+                            "il budget automatico rispetta le risorse CPU e RAM disponibili.\n"
                         )
                     record.data["source"] = project_evidence(self.layout.project_dir)
                     if bundled_workflow is not None:

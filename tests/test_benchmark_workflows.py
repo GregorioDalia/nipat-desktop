@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "benchmark_workflows.py"
@@ -13,6 +14,49 @@ spec.loader.exec_module(benchmark)
 
 
 class BenchmarkReportTests(unittest.TestCase):
+    def test_new_rss_label_preserves_old_logs_and_does_not_mistake_mean_for_maximum(self):
+        log = ("Peak RAM (MB): 12.5\nPeak RAM usage (MB): 20.25\n"
+               "Maximum observed R-process RSS (MiB): 30.75\n"
+               "Average per-sample maximum observed R-process RSS (MiB): 999.0\n")
+        self.assertEqual(benchmark._reported_ram(log), [12.5, 20.25, 30.75])
+
+    def test_benchmark_passes_recorded_parallel_and_block_settings_to_each_run(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / "benchmark"
+            with mock.patch.object(benchmark, "_select_bams", return_value=([root / "one.bam"], None)), \
+                    mock.patch.object(benchmark, "run_case", return_value={
+                        "returncode": 0, "interrupted": False, "status": "succeeded"}) as run:
+                code = benchmark.main(["--bamlist", str(root / "bams.txt"),
+                    "--reference", str(root / "ref.fa"), "--panel", str(root / "panel.txt"),
+                    "--output-dir", str(output), "--sample-counts", "1", "--repeats", "2",
+                    "--execution-mode", "serial", "--max-workers", "3",
+                    "--dnp-block-mib", "16", "--dnp-block-loci", "32", "--performance-diagnostics"])
+            self.assertEqual(code, 0)
+            self.assertEqual(run.call_count, 2)
+            for call in run.call_args_list:
+                command = call.args[0]
+                for flag, expected in (("--execution-mode", "serial"), ("--max-workers", "3"),
+                                       ("--dnp-block-mib", "16"), ("--dnp-block-loci", "32")):
+                    self.assertEqual(command[command.index(flag) + 1], expected)
+                    self.assertLess(command.index(flag), command.index("workflow"))
+                self.assertIn("--performance-diagnostics", command)
+            options = json.loads((output / "benchmark.json").read_text())["options"]
+            self.assertEqual(options["execution_mode"], "serial")
+            self.assertEqual(options["max_workers"], 3)
+            self.assertEqual(options["dnp_block_mib"], 16)
+            self.assertEqual(options["dnp_block_loci"], 32)
+
+    def test_invalid_parallel_limit_does_not_create_benchmark_outputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            output = root / "benchmark"
+            code = benchmark.main(["--bamlist", str(root / "bams.txt"),
+                "--reference", str(root / "ref.fa"), "--panel", str(root / "panel.txt"),
+                "--output-dir", str(output), "--max-workers", "0"])
+            self.assertEqual(code, 2)
+            self.assertFalse(output.exists())
+
     def test_performance_requested_but_missing_is_not_zero_usage(self):
         with tempfile.TemporaryDirectory() as folder:
             value = benchmark._performance_evidence(Path(folder), requested=True)

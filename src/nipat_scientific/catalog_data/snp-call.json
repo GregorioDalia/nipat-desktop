@@ -785,7 +785,7 @@
               12,
               34
             ],
-            "sha256": "142a94d97d65594d0e2428512d40e27ffaf59eaac79f07ae6363c7feb2a068e8"
+            "sha256": "0a53d636dc26461b15807f5f8ec54f1719367ddc4d76412eaa137428ff4ae972"
           },
           {
             "path": "src/nipat/execution/runner.py",
@@ -793,7 +793,7 @@
               190,
               197
             ],
-            "sha256": "4255341982b451799489eefe1afb30cf8434297daf5ed3497d4fcc32e28d2a02"
+            "sha256": "bba0943bcf84ce0fba4483f187bd265d65e944b65425eae4f7d27595e12e8998"
           }
         ]
       }

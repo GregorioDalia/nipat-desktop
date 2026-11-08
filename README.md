@@ -5,14 +5,15 @@
 
 # NIPAT Desktop
 
-**Branch di sviluppo: candidato 0.8.12.** La release ufficiale resta **0.8.9**.
-La [guida al parallelismo 0.8.12](docs/PARALLELISMO_0.8.12.md) descrive modalità
-automatica o seriale, massimo complessivo di processi R di calcolo e blocchi
-DNP configurabili, inizialmente 32 MiB / 64 loci. I candidati sono identificati
-da commit e build e si installano manualmente; non vengono proposti dal canale
-stabile. La [guida al prototipo 0.8.10](docs/PROTOTYPE_0.8.10.md) conserva il
-contesto delle prove precedenti. Il collaudo finale della 0.8.12 resta distinto
-dai test di sviluppo e dalla distribuzione di una release.
+**Branch di sviluppo: candidato 0.8.13.** La release ufficiale resta **0.8.9**.
+La [guida al pileup parallelo 0.8.13](docs/PILEUP_0.8.13.md) descrive la
+preparazione DNP per cromosoma, il budget condiviso con il calcolo R e il
+protocollo di collaudo. Rimangono automatico, 32 MiB e 64 loci come valori
+iniziali. La [guida 0.8.12](docs/PARALLELISMO_0.8.12.md) conserva il contesto
+del parallelismo nei quattro moduli R. I candidati sono identificati da commit
+e build e si installano manualmente; non vengono proposti dal canale stabile.
+Le misure della 0.8.12 non dimostrano le prestazioni della 0.8.13: il collaudo
+sui dati reali e sugli installer resta distinto dai test di sviluppo.
 
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python
@@ -194,8 +195,11 @@ Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
 
 `--bam` è ripetibile; `--bamlist` accetta un elenco di BAM. Contamination usa
 il pannello DNP selezionato, oppure quello indicato con `--contamination-panel`.
-`--parallel` riguarda soltanto il calcolo DNPcall sui campioni: le analisi
-successive iniziano dopo il completamento e la verifica degli output DNPcall.
+Nella stabile 0.8.9, `--parallel` riguarda il calcolo DNPcall sui campioni.
+Nei candidati dalla 0.8.12, il parallelismo è regolato dalle opzioni globali
+`--execution-mode auto|serial` e `--max-workers`; non occorre aggiungere
+`--parallel`. Le analisi successive iniziano dopo il completamento e la
+verifica degli output DNPcall.
 
 Per calcolare CPI dopo DNPcall, assegnare esplicitamente il BAM cfDNA materno
 e quello paterno a ogni coppia:
@@ -303,6 +307,7 @@ indipendenti e problemi riproducibili.
 - [Sintesi del prodotto](SUNTO.md)
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
+- [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
 - [Note della versione stabile 0.8.9](docs/RELEASE_0.8.9.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)

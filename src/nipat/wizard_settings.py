@@ -318,8 +318,8 @@ class GuidedSettings:
         while True:
             ui.message("Le opzioni regolano risorse, distribuzione del calcolo e provenienza dei file. I criteri scientifici restano invariati.", kind="muted")
             ui.message("Il limite RAM dell'analisi non aumenta la RAM di Lima o WSL. Scegliere 5 per vedere le risorse disponibili e configurare l'ambiente di calcolo.", kind="muted")
-            ui.message("SHA-256 completo legge tutti i BAM e FASTA: puo' richiedere tempo. Ctrl+C annulla. Il parallelismo automatico rispetta la quota CPU e adatta il numero di processi R di calcolo alla memoria disponibile.", kind="muted")
-            ui.message("Il limite processi del container include coordinatore e altri programmi. Il massimo processi R di calcolo si modifica in 6 - Parallelismo e blocchi.", kind="muted")
+            ui.message("SHA-256 completo legge tutti i BAM e FASTA: puo' richiedere tempo. Ctrl+C annulla. Il parallelismo automatico rispetta la quota CPU e adatta il numero di processi di calcolo alla memoria disponibile.", kind="muted")
+            ui.message("Il limite processi del container include coordinatori e altri programmi. Il massimo processi di calcolo si modifica in 6 - Parallelismo e blocchi.", kind="muted")
             ui.message("Un limite insufficiente di memoria o processi puo' interrompere un'analisi. :vuoto rimuove un limite; 9 salva, 0 scarta le modifiche.", kind="muted")
             action = _menu(ui, "Configura / Risorse e provenienza", [
                 ("1", "Checksum degli input", "Completi" if values["input_hashes"] == "full" else "Automatici fino a 16 MiB"),

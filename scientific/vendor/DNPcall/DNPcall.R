@@ -1,4 +1,4 @@
-# NIPAT 0.8.12: resource-bounded sample or complete-window parallel processing.
+# NIPAT 0.8.13: one resource budget for pileup acquisition and R processing.
 # Scientific formulas and within-locus observation order remain unchanged.
 cat("\n###### DNPcall ######\n\n\n\n")
 
@@ -157,11 +157,22 @@ dir.create(dnp_scratch, recursive = TRUE, showWarnings = FALSE)
 dnp_scratch <- normalizePath(dnp_scratch, mustWork = TRUE)
 pileup_path <- file.path(dnp_scratch, "mpileup.txt")
 pileup_helper <- Sys.getenv("NIPAT_DNP_PILEUP_HELPER", unset = "/opt/nipat/lib/nipat_scientific/dnp_pileup.py")
+# Acquisition finishes before the R block pool starts. Export the same resource
+# policy to the Python scheduler instead of creating a second independent pool
+# or interpreting the legacy --parallel flag. The helper caps this upper bound
+# by the actual number of chromosome tasks and counts each samtools process.
+acquisition_budget <- nipat_parallel_budget(.Machine$integer.max)
+acquisition_budget_path <- file.path("work", "dnp-acquisition-budget.json")
+dir.create(dirname(acquisition_budget_path), recursive = TRUE, showWarnings = FALSE)
+jsonlite::write_json(c(list(schema_version = 1L, interface = "nipat-parallel-v1"),
+                       acquisition_budget), acquisition_budget_path,
+                     auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
 acquisition_started <- proc.time()[["elapsed"]]
 acquisition_status <- system2("python3", c(shQuote(pileup_helper),
   "--bamlist", shQuote(bamlist), "--bed", "bedfile_for_mpileup.bed",
   "--reference", shQuote(reference), "--output", shQuote(pileup_path),
-  "--scratch-dir", shQuote(dnp_scratch), "--metadata", "work/dnp-pileup.json"))
+  "--scratch-dir", shQuote(dnp_scratch), "--metadata", "work/dnp-pileup.json",
+  "--budget", shQuote(acquisition_budget_path)))
 if (acquisition_status != 0L) stop("DNP pileup acquisition failed")
 acquisition_seconds <- unname(proc.time()[["elapsed"]] - acquisition_started)
 if (identical(Sys.getenv("NIPAT_DNP_KEEP_PILEUP"), "1")) {
@@ -845,7 +856,7 @@ process_individual <- function(i) {
 
   cat(paste0("\n>>> Summary for ", i, ":\n"))
   cat(paste0("Execution Time (seconds): ", ind_exec_time, "\n"))
-  cat(paste0("Peak RAM (MB): ", peak_ind_mem, "\n"))
+  cat(paste0("Maximum observed R-process RSS (MiB): ", peak_ind_mem, "\n"))
   nipat_progress("end", "plots", sample_ids = i, outcome = "succeeded")
   return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem,
               block_metrics = block_metrics, block_workers = block_workers,
@@ -872,7 +883,8 @@ final_merged_data <- Reduce(function(x, y) merge(x, y,
                                                  all = TRUE),
                             lapply(results, function(res) res$indiv_final))
 
-# collect all peak RAM values
+# These are discrete observations of individual R-process RSS, not the peak
+# concurrent memory of all workers. The container observer records that measure.
 all_peak_mems <- sapply(results, function(x) x$peak_mem)
 global_peak <- max(all_peak_mems, na.rm = TRUE)
 mean_peak <- round(mean(all_peak_mems, na.rm = TRUE), 2)
@@ -885,12 +897,13 @@ write.table(final_merged_data_formatted,
             sep = "\t", row.names = FALSE, quote = FALSE)
 
 
-# Print peak memory usage and time
+# Print observed per-process memory and time without implying a container peak.
 end_time <- Sys.time()
 total_time <- round(difftime(end_time, start_time, units = "mins"), 2)
 cat(paste0("\nTotal execution time: ", total_time, " minutes\n"))
-cat(paste0("Peak RAM usage: ", global_peak, " MB\n"))
-cat(paste0("Average per-sample Peak RAM usage (MB): ", mean_peak, "\n"))
+cat(paste0("Maximum observed R-process RSS (MiB): ", global_peak, "\n"))
+cat(paste0("Average per-sample maximum observed R-process RSS (MiB): ", mean_peak, "\n"))
+cat("Per-process RSS observations are not the combined memory peak; see the container performance diagnostics.\n")
 cat(paste0("Number of individuals processed: ", length(samplelist), "\n"))
 
 
