@@ -1,0 +1,95 @@
+{
+  "schema_version": 6,
+  "version": "0.8.14",
+  "source_commit": "b3ee5598d86e75884ead424e6c2ad4cbd137d2a1",
+  "installer_manifest_sha256": "e852186b53d1055ed241fbb03cc5806e0e45f8c36f7fc1ca6fd8a2276c02cec8",
+  "scientific_archive_sha256": "47034e39faeba37492038064efd559e9daced7c034a0c9c34466bbcd87650270",
+  "windows_installer_sha256": "d412fcfc1bffb0e074ceb005fe24e3abf90725c4d6dbfc184926f4a7b7f6ec0d",
+  "linux_installer_sha256": "6bc0e30d53772c1d5c2fc6dea1cac8e5226f6558ba806c6adda9ee85b8d9e193",
+  "macos_arm64_installer_sha256": "4ba402befe9700945a9fe1b910679d1b9437b72137c73d4e4bd3331b294a4a81",
+  "macos_x86_64_installer_sha256": "e6c11a9cb335cee35df09598df047e09889ed99f325192bdc6862b13506cd229",
+  "build_run_id": 42609557403,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "GregorioDalia",
+    "reviewed_at": "2026-11-09T11:58:20Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/42609557403",
+      "https://github.com/GregorioDalia/nipat-desktop/blob/b3ee5598d86e75884ead424e6c2ad4cbd137d2a1/docs/validation/0.8.14-observed-benchmarks.json",
+      "https://github.com/GregorioDalia/nipat-desktop/pull/22"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "e04ff883fc6417748174d2a7c3b49cadad989308",
+    "observations": [
+      "installation_ready",
+      "runtime_diagnostics",
+      "dnp_sample_analysis"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/b3ee5598d86e75884ead424e6c2ad4cbd137d2a1/docs/validation/0.8.14-observed-benchmarks.json"
+    ],
+    "role": "historical-platform-evidence",
+    "source_comparison_scope": "reviewed-operative-changes-with-tested-r-equivalence-v1"
+  },
+  "reviewed_source_changes": [
+    {
+      "path": "scientific/SHA256SUMS",
+      "before_sha256": "4982fe6341da024490db6197f0add36de878a71d75217f70085ea11860716e93",
+      "after_sha256": "5f75b57524f42affbb82656337dfb56f3c4cc0228796b43d3568e4c43b3c10af"
+    },
+    {
+      "path": "scientific/vendor/DNPcall/DNPcall.R",
+      "before_sha256": "12c45aa28bfe7ed83084a5b76d6618e3f1a9ed66b4ba30180d6c33ffa0737948",
+      "after_sha256": "b2d8a819130ec08815129b582f2239742e5e228cccad5e2419f73fa68e858f8f"
+    },
+    {
+      "path": "src/nipat/execution/performance.py",
+      "before_sha256": "e01fb97f2e290637a1182a96294e66008cc3af522bb1ae01f0c15a481c9b44c2",
+      "after_sha256": "7d4ed41360a242de4942f782eeb00246518ed29d866aac3686c95044736b2e59"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/dnp-call.json",
+      "before_sha256": "728a5efebefe6ffab730dfbf064be7a8465fefa295780891fde85dae1028d8bb",
+      "after_sha256": "3ce8900b3ba8bfc8d4202d5cf7faec76e1c37a97fb1df20146bd76f258aebe04"
+    },
+    {
+      "path": "src/nipat_scientific/dnp_blocks.R",
+      "before_sha256": "f9dddb7d035ff22ee333d774940ba001aa5291ba3a43683141d22f047e326f5c",
+      "after_sha256": "8f26a73dc79b9f1ab78742f6dd151623e202154ef82560fe2388cec8cc4243da"
+    },
+    {
+      "path": "tests/test_performance_observer.py",
+      "before_sha256": "fa42a0e7e37d4dbadd5d525a73b9b466d1e06e75b5586b31eb60627c49efc85e",
+      "after_sha256": "ad388846bac9092e3b70981ed54ef5d31aad552d4e794906ec1b530ac4f5bbda"
+    }
+  ],
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "pending-domain-researchers",
+  "qualification_evidence_sha256": "fdbc1796ded345054049cadaa0c72ff0ab270860772fc322b5b55bb97eeb0a92",
+  "linux_upgrade_check_sha256": "3345b0823bbe7254650f7dbdf16bc795bfb8afb5c6e574da10783008044199c3",
+  "macos_validation": {
+    "arm64": {
+      "status": "not-performed",
+      "evidence": []
+    },
+    "x86_64": {
+      "status": "not-performed",
+      "evidence": []
+    }
+  },
+  "scientific_equivalence": {
+    "reference_source_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+    "report_path": "scientific/_temp/nipat-r-equivalence-check/artifacts/r-equivalence.json",
+    "report_sha256": "0562933fee521dc209779401e82cccab659bd9859b8b8780395b1b1715b38378",
+    "runtime_image": "sha256:a10471cf05bdebf7eb600fe5097e059d58dbb64dadb765c7da4bb1c0ad3651aa"
+  }
+}
