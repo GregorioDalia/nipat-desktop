@@ -205,17 +205,16 @@ nipat_dnp_write_metrics("work/dnp-blocks.json", list(
   memory_limit_scope = "raw input proxy; complete windows and legacy compatibility groups are never split or truncated"
 ))
 nipat_progress("end", "pileup-index", outcome = "succeeded")
-# Multiple samples use the outer pool; one sample can use all eligible block
-# workers. The common helper forces nested calls to serial execution.
-ncores <- nipat_parallel_workers(length(samplelist),
-                                 memory_mib = nipat_dnp_worker_memory_mib(block_plan))
+# Every sample/block pair shares one bounded pool. Complete global index and
+# compatibility groups are constructed once before any worker is started.
 common_columns <- 3
 final_merged_data <- NULL
 
 update_peak()
 
 # calling processing for each sample
-process_individual <- function(i) {
+prepare_individual <- function(i) {
+  force(i)
   cat(paste0("\nProcessing sample: ", i, "\n"))
 
   start_ind_time <- Sys.time()
@@ -742,18 +741,14 @@ process_individual <- function(i) {
   result
   }
 
-  processed <- nipat_dnp_process_blocks(pileup_index, block_plan, ForUniqReads,
-    RefAltDNP, compute_block, workers = if (ncores > 1L) 1L else NULL,
-    progress = function(completed, total) {
-      nipat_progress("progress", "dnp-processing", sample_ids = i,
-                     completed = completed, total = total, unit = "loci")
-    })
+  finish_individual <- function(processed) {
   block_results <- processed$results
   block_metrics <- processed$metrics
   block_workers <- processed$workers
+  observed_block_workers <- processed$observed_workers
   processing_seconds <- processed$elapsed_seconds
-  peak_ind_mem <- max(peak_ind_mem,
-                      vapply(block_results, function(value) value$peak_mem, numeric(1)))
+  peak_ind_mem <<- max(peak_ind_mem,
+                       vapply(block_results, function(value) value$peak_mem, numeric(1)))
   rm(processed)
   # The legacy whole-sample calculation fails when no ref/alt likelihood can
   # be formed anywhere. Empty blocks must not turn that failure into a result.
@@ -860,21 +855,41 @@ process_individual <- function(i) {
   nipat_progress("end", "plots", sample_ids = i, outcome = "succeeded")
   return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem,
               block_metrics = block_metrics, block_workers = block_workers,
+              observed_block_workers = observed_block_workers,
               processing_seconds = processing_seconds))
+  }
+  list(compute = compute_block, finish = finish_individual)
 }
 
 update_peak()
 
-# A serial outer call must not mark the current process as a nested worker:
-# the one-sample case needs to fan out its independent blocks below.
-cat(paste0("\nRunning with ", ncores, " sample worker(s); block workers follow the execution budget\n"))
-if (ncores > 1L) {
-  results <- nipat_parallel_lapply(samplelist, process_individual, label = "dnp-samples",
-    workers = ncores, memory_mib = nipat_dnp_worker_memory_mib(block_plan))
-  ncores <- attr(results, "workers")
-} else {
-  results <- lapply(samplelist, process_individual)
+processors <- lapply(samplelist, prepare_individual)
+# Parsing retains common fields and only the current sample's four columns.
+# It uses the full index's classes and original column names for every block.
+sample_columns <- lapply(seq_along(samplelist), function(number) {
+  c(seq_len(common_columns), common_columns + (number - 1L) * 4L + seq_len(4L))
+})
+processed_samples <- nipat_dnp_process_samples(pileup_index, block_plan, ForUniqReads,
+  RefAltDNP, lapply(processors, function(processor) processor$compute), columns = sample_columns,
+  progress = function(sample_number, completed, total) {
+    nipat_progress("progress", "dnp-processing", sample_ids = samplelist[[sample_number]],
+                   completed = completed, total = total, unit = "loci")
+  })
+ncores <- processed_samples$workers
+observed_workers <- processed_samples$observed_workers
+observed_sample_workers <- processed_samples$observed_samples
+processing_seconds <- processed_samples$elapsed_seconds
+processing_tasks <- processed_samples$task_count
+cat(paste0("\nDNP shared sample/block pool: ", ncores, " worker(s), ",
+           processing_tasks, " task(s) across ", length(samplelist), " sample(s)\n"))
+results <- vector("list", length(samplelist))
+for (number in seq_along(samplelist)) {
+  results[[number]] <- processors[[number]]$finish(processed_samples$samples[[number]])
+  # Scientific tables are retained for the final merge; release intermediate
+  # block objects before formatting and plotting the following sample.
+  processed_samples$samples[number] <- list(NULL)
 }
+rm(processed_samples, processors)
 
 
 # combine GT columns from all individuals into a single dataframe
@@ -975,12 +990,17 @@ nipat_dnp_write_metrics("work/dnp-blocks.json", list(
   compatibility_reasons = I(block_plan$compatibility_reasons),
   unmatched_coordinate_rows = block_plan$unmatched_rows,
   repeated_qname_rows = pileup_index$repeated_qname_rows,
-  sample_workers = ncores,
-  block_workers = max(vapply(results, function(result) result$block_workers, integer(1))),
+  scheduling_strategy = "global-sample-blocks",
+  worker_scope = "one shared pool across all samples and blocks; no nested pools",
+  workers = ncores, observed_workers = observed_workers, task_count = processing_tasks,
+  processing_seconds = processing_seconds,
+  sample_processing_seconds_scope = "first block start to last block finish; sample intervals may overlap",
+  sample_workers = observed_sample_workers,
+  block_workers = max(vapply(results, function(result) result$observed_block_workers, integer(1))),
   estimated_worker_memory_mib = nipat_dnp_worker_memory_mib(block_plan),
   samples = setNames(lapply(results, function(result) list(
     processing_seconds = result$processing_seconds, block_workers = result$block_workers,
-    blocks = result$block_metrics)), samplelist),
+    observed_block_workers = result$observed_block_workers, blocks = result$block_metrics)), samplelist),
   elapsed_seconds_including_acquisition_and_index = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
 ))
 

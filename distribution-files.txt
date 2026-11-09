@@ -385,3 +385,6 @@ docs/validation/0.8.13-rootless.json
 docs/OPTIMIZATIONS_0.8.14.md
 docs/validation/0.8.14-microbenchmarks.json
 docs/validation/0.8.14-rootless.json
+
+# Official 0.8.14 release notes. Historical benchmark JSON remains repository-only.
+docs/RELEASE_0.8.14.md

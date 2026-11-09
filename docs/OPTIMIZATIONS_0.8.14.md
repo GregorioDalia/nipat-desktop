@@ -1,10 +1,45 @@
-# Controllo dei thread e ottimizzazioni mirate — candidato 0.8.14
+# Ottimizzazioni della 0.8.14
 
-La 0.8.14 prosegue il lavoro della 0.8.13 senza sostituirne la build già
-qualificata. La release stabile rimane **0.8.9**. Il riferimento scientifico
+## Coda comune per più BAM e diagnostica finale
+
+La versione finale usa una coda di attività campione/blocco condivisa da tutti
+i BAM. Con due campioni e un budget di cinque processi, il calcolo non si ferma
+a due worker: i blocchi possono occupare fino a cinque slot complessivi. Con
+più campioni del budget, la stessa coda distribuisce il lavoro nei processi
+disponibili. Non vengono creati pool annidati; ordine dei campioni e dei loci
+viene ricostruito prima della scrittura delle tabelle e dei grafici.
+
+Il budget conserva i limiti CPU, memoria, massimo configurato e modalità
+seriale. Le finestre o i gruppi richiesti dalla compatibilità non vengono
+spezzati per aumentare artificialmente il numero di attività. La preparazione
+del pileup resta una fase precedente al calcolo R, con il proprio uso dello
+stesso limite complessivo.
+
+La raccolta esterna distingue una risposta Docker vuota durante la chiusura
+da un errore su un container attivo. La terminazione deve essere confermata
+sullo stesso ID e con proprietà verificata; gli altri errori restano nei
+rapporti con codici diagnostici fissi. L'assenza di campioni nei run brevi non
+diventa una misura di memoria zero. La diagnostica interna rimane distinta.
+
+Nel JSON DNP, `processing_seconds` globale misura la fase della coda comune;
+i tempi per campione coprono il primo e l’ultimo blocco e possono sovrapporsi.
+Il tempo stampato nel registro individuale decorre dalla preparazione del
+campione e comprende attesa nella coda e produzione dei grafici: non va
+sommato agli altri tempi individuali per stimare la durata complessiva.
+
+Le [note di versione](RELEASE_0.8.14.md) descrivono distribuzione e limiti.
+Le [42 osservazioni Windows/WSL](https://github.com/GregorioDalia/nipat-desktop/blob/main/docs/validation/0.8.14-observed-benchmarks.json)
+riguardano il candidato `e04ff883fc6417748174d2a7c3b49cadad989308`, precedente
+a queste modifiche. Hanno guidato la revisione del budget con più BAM;
+non misurano le prestazioni del nuovo installer.
+
+## Primo ciclo del candidato: evidenza storica
+
+Le sezioni seguenti conservano interventi e misure del primo candidato
+0.8.14, successivo alla 0.8.13. I rapporti locali collegati sono storici e non
+vengono riscritti per attribuirli alla nuova build. Il riferimento scientifico
 resta **NIPAT 0.8.5**, commit
-`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`: la baseline congelata non viene
-modificata per adeguarla ai nuovi risultati.
+`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`.
 
 ## Punto di partenza
 

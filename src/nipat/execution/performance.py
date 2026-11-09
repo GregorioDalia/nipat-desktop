@@ -33,9 +33,18 @@ _FACTORS = {"B": 1, "kB": 1000, "KB": 1000, "MB": 1000**2, "GB": 1000**3,
 _MAX_RESPONSE = 16 * 1024
 _MAX_LOG_BYTES = 32 * 1024 * 1024
 _QUERY_TIMEOUT = 5
-# inspect_container has a 15-second bounded subprocess. A pending inspection
-# can therefore take longer than a stats request when the engine disappears.
-_JOIN_TIMEOUT = 17
+# A pending stats query may be followed by a bounded 15-second inspection to
+# distinguish container shutdown from a collection error.
+_JOIN_TIMEOUT = _QUERY_TIMEOUT + 17
+_STARTUP_POLL_INTERVAL = 0.25
+
+
+class _StatsError(ValueError):
+    """A fixed diagnostic code, never arbitrary Docker output or input paths."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
 
 
 def _utc() -> str:
@@ -55,10 +64,13 @@ def _bytes(value: str) -> int:
 def parse_stats(raw: str, identifier: str) -> dict:
     """Allowlist and normalize one CLI row without retaining arbitrary metadata."""
     if len(raw) > _MAX_RESPONSE:
-        raise ValueError("oversized Docker stats response")
-    value = json.loads(raw)
+        raise _StatsError("oversized_stats_response")
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        raise _StatsError("invalid_stats_json") from None
     if not isinstance(value, dict) or value.get("id") != identifier:
-        raise ValueError("Docker stats identity mismatch")
+        raise _StatsError("stats_identity_mismatch")
     result = {}
     cpu = value.get("cpu_percent")
     if isinstance(cpu, str) and re.fullmatch(r"[0-9]+(?:\.[0-9]+)?%", cpu):
@@ -82,7 +94,7 @@ def parse_stats(raw: str, identifier: str) -> dict:
     if isinstance(pids, str) and re.fullmatch(r"[0-9]{1,9}", pids):
         result["pids"] = int(pids)
     if not result:
-        raise ValueError("Docker stats metrics unavailable")
+        raise _StatsError("stats_metrics_unavailable")
     result["unavailable_metrics"] = sorted({
         "cpu_percent", "memory_cache_adjusted_bytes", "memory_limit_bytes",
         "block_io_read_bytes", "block_io_write_bytes", "pids",
@@ -116,6 +128,7 @@ class ContainerPerformanceObserver:
         self._started = time.monotonic()
         self._identifier = None
         self._failures = Counter()
+        self._failure_reasons = Counter()
         self._count, self._bytes_written = 0, 0
         self._maxima = {}
         self._first, self._last = None, None
@@ -124,6 +137,7 @@ class ContainerPerformanceObserver:
             "schema_version": 1, "enabled": True, "source": "docker-cli-stats",
             "status": "collecting", "started_at": _utc(),
             "requested_interval_seconds": interval, "query_timeout_seconds": _QUERY_TIMEOUT,
+            "startup_poll_interval_seconds": min(interval, _STARTUP_POLL_INTERVAL),
             "max_output_bytes": max_bytes,
             "measurement_notes": [
                 "Periodic samples; actual timestamps and query durations describe the observed interval.",
@@ -162,12 +176,12 @@ class ContainerPerformanceObserver:
             stdin=subprocess.DEVNULL, **cleanup_process_options(),
         )
         if result.returncode:
-            raise ValueError("stats_failed")
+            raise _StatsError("stats_command_failed")
         sample = parse_stats(result.stdout.strip(), self._identifier)
         if sample.get("pids") == 0 and sample.get("memory_cache_adjusted_bytes") == 0:
             # Docker can return an all-zero row if the container stopped while
             # its sampling request was pending. That is not measured live RAM.
-            raise ValueError("container_not_running_during_sample")
+            raise _StatsError("container_not_running_during_sample")
         sample.update(observed_at=_utc(), elapsed_seconds=round(time.monotonic() - self._started, 6),
                       query_seconds=round(time.monotonic() - started, 6))
         return sample
@@ -188,6 +202,38 @@ class ContainerPerformanceObserver:
             if key in sample:
                 self._maxima[key] = max(self._maxima.get(key, 0), sample[key])
         return True
+
+    def _record_failure(self, exc: Exception, *, reason: str | None = None) -> None:
+        # Retain the original exception-type counter for report compatibility,
+        # adding fixed reason codes so future failures can actually be diagnosed.
+        kind = "ValueError" if isinstance(exc, _StatsError) else type(exc).__name__
+        self._failures[kind] += 1
+        self._failure_reasons[reason or (exc.reason if isinstance(exc, _StatsError) else kind)] += 1
+
+    def _handle_sample_failure(self, exc: Exception) -> bool:
+        """Record a failed query or confirmed shutdown; return whether to stop."""
+        if not isinstance(exc, _StatsError) or exc.reason != "container_not_running_during_sample":
+            self._record_failure(exc)
+            return False
+        # An all-zero row alone is not evidence of an exit. Verify ownership,
+        # immutable ID and terminal state before treating it as a normal end.
+        observed = inspect_container(self._inspection, self._name, self._labels)
+        if observed.get("availability") == "identity_mismatch" or (
+            observed.get("owned") is True and observed.get("container_id") != self._identifier
+        ):
+            self._record_failure(exc, reason="ownership_not_verified")
+            self._reason = "ownership_not_verified"
+            return True
+        if observed.get("owned") is True and observed.get("container_id") == self._identifier:
+            state = observed.get("state", {}).get("status")
+            if state in {"exited", "dead", "removing"}:
+                self._reason = "container_stopped_during_sample"
+                return True
+            if state == "running":
+                self._record_failure(exc, reason="zero_metrics_while_running")
+                return False
+        self._record_failure(exc, reason="terminal_state_not_confirmed")
+        return False
 
     def _collect(self) -> None:
         try:
@@ -214,7 +260,9 @@ class ContainerPerformanceObserver:
                 if time.monotonic() >= deadline:
                     self._reason = "container_not_observed_before_deadline"
                     return
-                if self._stop.wait(self._interval):
+                # The first running observation must not wait a whole sampling
+                # interval: a short scientific task may already have finished.
+                if self._stop.wait(min(self._interval, _STARTUP_POLL_INTERVAL)):
                     return
             if self._stop.is_set():
                 return
@@ -225,7 +273,8 @@ class ContainerPerformanceObserver:
                         sample = self._stats()
                     except (OSError, subprocess.SubprocessError, ValueError, TypeError,
                             RecursionError) as exc:
-                        self._failures[type(exc).__name__] += 1
+                        if self._handle_sample_failure(exc):
+                            return
                         consecutive += 1
                         if consecutive >= 3:
                             self._reason = "repeated_observation_failures"
@@ -239,7 +288,7 @@ class ContainerPerformanceObserver:
         except Exception as exc:
             # Diagnostic errors are reported by type, without leaking paths,
             # environment or arbitrary Docker stderr into a sharing report.
-            self._failures[type(exc).__name__] += 1
+            self._record_failure(exc)
             self._reason = "observer_failed"
 
     def stop(self) -> dict:
@@ -252,7 +301,8 @@ class ContainerPerformanceObserver:
                 return {"schema_version": 1, "enabled": True, "status": "partial",
                         "reason": "observer_stop_not_confirmed", "summary": None}
         reason = self._reason or ("observation_finished" if self._count else "no_samples_collected")
-        status = "partial" if self._count and (self._reason or self._failures) else (
+        interrupted = self._reason not in {None, "container_stopped_during_sample"}
+        status = "partial" if self._count and (interrupted or self._failures) else (
             "completed" if self._count else "unavailable")
         summary = {**self._summary, "status": status, "reason": reason,
                    "finished_at": _utc(), "elapsed_seconds": round(time.monotonic() - self._started, 6),
@@ -260,6 +310,7 @@ class ContainerPerformanceObserver:
                    "sample_bytes": self._bytes_written, "first_sample_at": self._first,
                    "last_sample_at": self._last, "sampled_maxima": self._maxima,
                    "observation_failures": dict(self._failures),
+                   "failure_reasons": dict(self._failure_reasons),
                    "files": {"samples": "container-samples.jsonl", "summary": "summary.json"}}
         temporary = self.directory / "summary.tmp"
         with temporary.open("x", encoding="utf-8") as handle:

@@ -5,31 +5,19 @@
 
 # NIPAT Desktop
 
-**Branch di sviluppo: candidato 0.8.14.** La release ufficiale resta **0.8.9**.
-La [guida alle ottimizzazioni 0.8.14](docs/OPTIMIZATIONS_0.8.14.md) descrive
-il controllo dei thread interni, il riuso dei risultati CPI e la lettura dei
-blocchi DNP. La build 0.8.13 già qualificata viene conservata per i confronti.
-Il [pileup parallelo 0.8.13](docs/PILEUP_0.8.13.md) e il
-[parallelismo nei quattro moduli R 0.8.12](docs/PARALLELISMO_0.8.12.md)
-rimangono la base: automatico, 32 MiB e 64 loci sono i valori iniziali.
-I candidati sono identificati da commit e build e si installano manualmente;
-non vengono proposti dal canale stabile. Le misure di versioni precedenti
-non dimostrano le prestazioni della 0.8.14: il collaudo sui dati reali e sugli
-installer resta distinto dai test di sviluppo.
-
 NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.9.** Questa versione riduce allocazioni e calcoli
-ripetuti nei quattro programmi R e chiarisce la configurazione delle risorse.
-I confronti differenziali usano i sorgenti congelati della 0.8.5 e verificano
-tabelle, quantità intermedie non arrotondate e PDF nei casi coperti.
-Le [note della 0.8.9](docs/RELEASE_0.8.9.md) e il
-[contratto di equivalenza](docs/OPTIMIZATION_0.8.9.md) descrivono modifiche,
-verifiche e limiti. La diagnostica delle prestazioni resta facoltativa e
-disattivata normalmente: **Avvia analisi** esegue il workflow ordinario.
+**Versione stabile: 0.8.14.** La versione offre esecuzione seriale o automatica,
+un massimo configurabile di processi e pileup DNP parallelo per cromosoma.
+Il calcolo DNP distribuisce i blocchi di tutti i campioni in una coda comune,
+anche con più BAM dei processi disponibili. SNPcall, Contamination e CPI
+condividono lo stesso modello di budget; la diagnostica resta facoltativa.
+Le [note della 0.8.14](docs/RELEASE_0.8.14.md) descrivono modifiche,
+aggiornamento e limiti delle prove. I confronti scientifici mantengono
+il [riferimento congelato 0.8.5](docs/OPTIMIZATION_0.8.9.md).
 
 ## Download
 
@@ -37,14 +25,14 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.9 |
+| Sistema | Versione stabile 0.8.14 |
 | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/NIPAT-0.8.9-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/NIPAT-0.8.9-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/nipat-desktop_0.8.9_amd64.deb) |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-0.8.14-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-0.8.14-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/nipat-desktop_0.8.14_amd64.deb) |
 
-La pagina della [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9)
+La pagina della [release 0.8.14](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.14)
 riporta note, checksum e verifiche dei pacchetti. Le
 [release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
 restano disponibili. La
@@ -197,8 +185,7 @@ Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
 
 `--bam` è ripetibile; `--bamlist` accetta un elenco di BAM. Contamination usa
 il pannello DNP selezionato, oppure quello indicato con `--contamination-panel`.
-Nella stabile 0.8.9, `--parallel` riguarda il calcolo DNPcall sui campioni.
-Nei candidati dalla 0.8.12, il parallelismo è regolato dalle opzioni globali
+Il parallelismo è regolato dalle opzioni globali
 `--execution-mode auto|serial` e `--max-workers`; non occorre aggiungere
 `--parallel`. Le analisi successive iniziano dopo il completamento e la
 verifica degli output DNPcall.
@@ -310,7 +297,7 @@ indipendenti e problemi riproducibili.
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
 - [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
-- [Note della versione stabile 0.8.9](docs/RELEASE_0.8.9.md)
+- [Note della versione stabile 0.8.14](docs/RELEASE_0.8.14.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)

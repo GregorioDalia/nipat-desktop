@@ -165,12 +165,25 @@ nipat_dnp_read_ranges <- function(index, rows, max_bytes = 8 * 1024^2) {
        first = first[selected], last = last[selected])
 }
 
-nipat_dnp_read <- function(index, rows, connection) {
+nipat_dnp_read <- function(index, rows, connection, columns = NULL) {
+  classes <- index$classes
+  column_names <- paste0("V", seq_along(classes))
+  if (!is.null(columns)) {
+    if (!length(columns) || anyNA(columns) || any(columns != as.integer(columns)) ||
+        any(columns < 1L | columns > length(classes)) || anyDuplicated(columns)) {
+      stop("Invalid DNP selected columns")
+    }
+    # Retain original pileup order and names, rather than renumbering a sample's
+    # columns. Types still come from the complete global index, not this block.
+    columns <- sort(as.integer(columns))
+    classes[-columns] <- "NULL"
+  }
   if (!length(rows)) {
-    empty <- lapply(index$classes, function(kind) switch(kind,
+    selected <- which(classes != "NULL")
+    empty <- lapply(classes[selected], function(kind) switch(kind,
       logical = logical(), integer = integer(), numeric = numeric(),
       complex = complex(), character = character()))
-    names(empty) <- paste0("V", seq_along(empty))
+    names(empty) <- column_names[selected]
     return(as.data.frame(empty, stringsAsFactors = FALSE))
   }
   read_row <- function(row) {
@@ -211,7 +224,7 @@ nipat_dnp_read <- function(index, rows, connection) {
   }
   read.csv(text = paste0(lines, collapse = ""), quote = "", row.names = NULL,
            stringsAsFactors = FALSE, header = FALSE, sep = "\t",
-           colClasses = index$classes)
+           colClasses = classes)
 }
 
 # Scheduling estimate, not an allocation limit: expanded observations, joins
@@ -222,18 +235,14 @@ nipat_dnp_worker_memory_mib <- function(plan) {
   ceiling(512 + 48 * largest / 1024^2)
 }
 
-nipat_dnp_process_blocks <- function(index, plan, labels, ref_alt, compute,
-                                     progress = function(...) invisible(NULL),
-                                     workers = NULL) {
-  started <- proc.time()[["elapsed"]]
-  run_block <- function(number) {
-    block <- plan$blocks[[number]]
+nipat_dnp_run_block <- function(index, block, labels, ref_alt, compute, columns = NULL) {
     block_started <- proc.time()[["elapsed"]]
+    started_at <- as.numeric(Sys.time())
     # Open after the fork. Children must never share an inherited descriptor:
     # nipat_dnp_read seeks independently for every block's original row order.
     connection <- file(index$path, open = "rb")
     on.exit(close(connection), add = TRUE)
-    pileup <- nipat_dnp_read(index, block$row_ids, connection)
+    pileup <- nipat_dnp_read(index, block$row_ids, connection, columns)
     result <- compute(pileup, labels[labels$uniq %in% block$locus_ids, , drop = FALSE],
                       ref_alt[block$locus_ids, , drop = FALSE])
     rm(pileup)
@@ -241,7 +250,16 @@ nipat_dnp_process_blocks <- function(index, plan, labels, ref_alt, compute,
                    raw_bytes = block$raw_bytes,
                    elapsed_seconds = unname(proc.time()[["elapsed"]] - block_started))
     gc(verbose = FALSE)
-    list(result = result, metric = metric)
+    list(result = result, metric = metric, started_at = started_at,
+         finished_at = as.numeric(Sys.time()))
+}
+
+nipat_dnp_process_blocks <- function(index, plan, labels, ref_alt, compute,
+                                     progress = function(...) invisible(NULL),
+                                     workers = NULL) {
+  started <- proc.time()[["elapsed"]]
+  run_block <- function(number) {
+    nipat_dnp_run_block(index, plan$blocks[[number]], labels, ref_alt, compute)
   }
   # Scientific values and metrics retain the plan's order regardless of which
   # worker completed first. Only this coordinating process publishes progress.
@@ -256,6 +274,79 @@ nipat_dnp_process_blocks <- function(index, plan, labels, ref_alt, compute,
   list(results = lapply(values, function(value) value$result),
        metrics = lapply(values, function(value) value$metric),
        workers = attr(values, "workers"),
+       elapsed_seconds = unname(proc.time()[["elapsed"]] - started))
+}
+
+# One process pool spans every sample and block. A sample does not reserve one
+# worker and serialize all of its blocks: available workers take the next task,
+# including when the sample count is smaller or larger than the shared budget.
+nipat_dnp_process_samples <- function(index, plan, labels, ref_alt, computations,
+                                      progress = function(...) invisible(NULL),
+                                      workers = NULL, columns = NULL) {
+  started <- proc.time()[["elapsed"]]
+  sample_count <- length(computations)
+  block_count <- length(plan$blocks)
+  if (!sample_count || !block_count ||
+      !all(vapply(computations, is.function, logical(1)))) {
+    stop("DNP processing requires samples, blocks and compute functions")
+  }
+  if (!is.null(columns) && length(columns) != sample_count) {
+    stop("DNP column selections must match the sample count")
+  }
+  task_count <- sample_count * block_count
+  completed <- integer(sample_count)
+  # Block-major order interleaves samples without allocating a Cartesian list.
+  # This prevents the first large sample from monopolizing the entire queue.
+  run_task <- function(number) {
+    sample_number <- as.integer((number - 1L) %% sample_count + 1L)
+    block_number <- as.integer((number - 1L) %/% sample_count + 1L)
+    value <- nipat_dnp_run_block(index, plan$blocks[[block_number]], labels, ref_alt,
+      computations[[sample_number]], if (is.null(columns)) NULL else columns[[sample_number]])
+    value$sample_number <- sample_number
+    value$block_number <- block_number
+    value
+  }
+  values <- nipat_parallel_lapply(seq_len(task_count), run_task,
+    label = "dnp-sample-blocks", workers = workers,
+    memory_mib = nipat_dnp_worker_memory_mib(plan),
+    on_result = function(number, value) {
+      sample_number <- value$sample_number
+      completed[[sample_number]] <<- completed[[sample_number]] + value$metric$loci
+      progress(sample_number, completed[[sample_number]], nrow(ref_alt))
+    })
+  # Count observed concurrency separately from the resource-policy upper bound.
+  # End events precede start events at equal timestamps; empty intervals do not
+  # imply overlap. These timestamps describe successful tasks, not predictions.
+  starts <- vapply(values, function(value) value$started_at, numeric(1))
+  ends <- vapply(values, function(value) value$finished_at, numeric(1))
+  sample_numbers <- vapply(values, function(value) value$sample_number, integer(1))
+  active <- peaks <- integer(sample_count)
+  observed_workers <- observed_samples <- 0L
+  times <- c(starts, ends)
+  deltas <- c(rep(1L, task_count), rep(-1L, task_count))
+  samples <- rep(sample_numbers, 2L)
+  nonempty <- rep(ends > starts, 2L)
+  events <- which(nonempty)
+  events <- events[order(times[events], deltas[events])]
+  for (event in events) {
+    sample_number <- samples[[event]]
+    active[[sample_number]] <- active[[sample_number]] + deltas[[event]]
+    peaks[[sample_number]] <- max(peaks[[sample_number]], active[[sample_number]])
+    observed_workers <- max(observed_workers, sum(active))
+    observed_samples <- max(observed_samples, sum(active > 0L))
+  }
+  grouped <- lapply(seq_len(sample_count), function(sample_number) {
+    selected <- values[sample_numbers == sample_number]
+    selected <- selected[order(vapply(selected, function(value) value$block_number, integer(1)))]
+    list(results = lapply(selected, function(value) value$result),
+         metrics = lapply(selected, function(value) value$metric),
+         workers = as.integer(min(block_count, attr(values, "workers"))),
+         observed_workers = as.integer(peaks[[sample_number]]),
+         elapsed_seconds = max(vapply(selected, function(value) value$finished_at, numeric(1))) -
+                           min(vapply(selected, function(value) value$started_at, numeric(1))))
+  })
+  list(samples = grouped, workers = attr(values, "workers"), task_count = task_count,
+       observed_workers = as.integer(observed_workers), observed_samples = as.integer(observed_samples),
        elapsed_seconds = unname(proc.time()[["elapsed"]] - started))
 }
 

@@ -1,13 +1,13 @@
 # Diagnostica delle prestazioni
 
 La diagnostica è disponibile dalla 0.8.5. Le istruzioni ordinarie valgono per
-la stabile **0.8.9**; il [collaudo 0.8.12](#collaudo-del-parallelismo-0812)
+la stabile **0.8.14**; il [collaudo 0.8.12](#collaudo-del-parallelismo-0812)
 aggiunge il confronto delle modalità di parallelismo. Il
 [collaudo 0.8.13](#collaudo-del-pileup-parallelo-0813) riguarda anche la
 preparazione del pileup DNP. Il
 [collaudo 0.8.14](#collaudo-delle-ottimizzazioni-0814) verifica anche thread
 interni, riepilogo CPI e lettura dei blocchi. Per la stabile usare
-la [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9);
+la [release 0.8.14](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.14);
 per un candidato verificare versione, commit e build effettivamente installati.
 
 Per il candidato **0.8.10**, seguire anche la [guida al prototipo](PROTOTYPE_0.8.10.md):
@@ -26,11 +26,17 @@ e calcolo R sono fasi successive: i rispettivi processi non si moltiplicano.
 La [guida dedicata](PILEUP_0.8.13.md) descrive le condizioni per il percorso
 parallelo e il comportamento seriale di ripiego.
 
-Il candidato **0.8.14** aggiunge i [controlli dei thread e le ottimizzazioni
+La **0.8.14** aggiunge i [controlli dei thread e le ottimizzazioni
 mirate](OPTIMIZATIONS_0.8.14.md). In modalità seriale rimane un solo processo
 di calcolo per fase; i processi di coordinamento non equivalgono a ulteriori
 worker. I thread interni delle librerie devono essere distinti dai processi
 del pool quando si interpreta l'uso delle CPU.
+
+La coda DNP della versione finale è comune a campioni e blocchi: con due o più
+BAM il numero di processi R non è limitato al numero di campioni. L'ordine degli
+output è ricostruito al termine del calcolo. Le [note 0.8.14](RELEASE_0.8.14.md)
+e le [misure storiche](https://github.com/GregorioDalia/nipat-desktop/blob/main/docs/validation/0.8.14-observed-benchmarks.json) distinguono
+questa implementazione dal candidato già collaudato su Windows/WSL.
 
 La diagnostica raccoglie misure locali per analizzare tempi, memoria e uso delle
 risorse. È facoltativa e disattivata normalmente. Non modifica i parametri
@@ -50,7 +56,7 @@ Per misurare DNPcall su un singolo BAM, preparare:
 
 Eseguire la prima coppia di prove:
 
-1. Aprire **NIPAT Desktop** e controllare che il banner riporti `0.8.9`.
+1. Aprire **NIPAT Desktop** e controllare che il banner riporti `0.8.14`.
    Eseguire **8 — Verifica ambiente** prima del benchmark.
 2. In **5 — Configura**, controllare la cartella risultati e i limiti delle
    risorse. Mantenerli uguali fra le prove; non aumentare CPU o RAM durante

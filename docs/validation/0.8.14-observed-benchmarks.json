@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "role": "historical-platform-evidence",
+  "observed_source_commit": "e04ff883fc6417748174d2a7c3b49cadad989308",
+  "observed_version": "0.8.14",
+  "status": "observed",
+  "observed_date": "2026-11-09",
+  "platform": "Windows 11 x64, dedicated WSL2 scientific runtime",
+  "source_archives_sha256": [
+    "3b510aff3c25ceb21e684a04f849e7b75c13580e0af324619ba23953601aeca4",
+    "07dacf775ad15c070fa098a7212e055ef0260107789afbc8df35eb6cea2f4fdb"
+  ],
+  "scope": "42 completed analyses on the earlier 0.8.14 candidate. These observations are not execution or performance evidence for subsequently rebuilt installers. No raw genomic data, sample names, user paths or private archive contents are published.",
+  "timing_scope": "Full launcher invocation, including startup and validation; medians of three repetitions. No assertion of statistical significance or general speedup.",
+  "memory_scope": "Median observed kernel cgroup peak, including cache and observer; not total host memory or individual R RSS.",
+  "cases": [
+    {
+      "case": "dnp-sample-a",
+      "input_kind": "real",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 377.649,
+          "elapsed_seconds_min": 372.332,
+          "elapsed_seconds_max": 382.841,
+          "container_kernel_memory_peak_bytes_median": 1666953216,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 122.849,
+          "elapsed_seconds_min": 120.006,
+          "elapsed_seconds_max": 125.395,
+          "container_kernel_memory_peak_bytes_median": 6038581248,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    },
+    {
+      "case": "dnp-sample-b",
+      "input_kind": "real",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 191.161,
+          "elapsed_seconds_min": 189.418,
+          "elapsed_seconds_max": 198.513,
+          "container_kernel_memory_peak_bytes_median": 1089892352,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 68.071,
+          "elapsed_seconds_min": 67.739,
+          "elapsed_seconds_max": 69.195,
+          "container_kernel_memory_peak_bytes_median": 3843256320,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    },
+    {
+      "case": "dnp-two-samples",
+      "input_kind": "real",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 623.327,
+          "elapsed_seconds_min": 618.128,
+          "elapsed_seconds_max": 629.894,
+          "container_kernel_memory_peak_bytes_median": 1624358912,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 291.771,
+          "elapsed_seconds_min": 286.469,
+          "elapsed_seconds_max": 298.0,
+          "container_kernel_memory_peak_bytes_median": 2389594112,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    },
+    {
+      "case": "contamination-two-samples",
+      "input_kind": "real",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 5.629,
+          "elapsed_seconds_min": 5.398,
+          "elapsed_seconds_max": 5.747,
+          "container_kernel_memory_peak_bytes_median": 118255616,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 5.497,
+          "elapsed_seconds_min": 5.276,
+          "elapsed_seconds_max": 5.712,
+          "container_kernel_memory_peak_bytes_median": 161398784,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    },
+    {
+      "case": "snp-bundled-example",
+      "input_kind": "synthetic-or-bundled-example",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 5.824,
+          "elapsed_seconds_min": 5.691,
+          "elapsed_seconds_max": 6.224,
+          "container_kernel_memory_peak_bytes_median": 152051712,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 5.907,
+          "elapsed_seconds_min": 5.89,
+          "elapsed_seconds_max": 6.169,
+          "container_kernel_memory_peak_bytes_median": 303063040,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    },
+    {
+      "case": "cpi-no-information-example",
+      "input_kind": "synthetic-or-bundled-example",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 7.463,
+          "elapsed_seconds_min": 7.46,
+          "elapsed_seconds_max": 7.482,
+          "container_kernel_memory_peak_bytes_median": 141377536,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 7.426,
+          "elapsed_seconds_min": 6.569,
+          "elapsed_seconds_max": 7.581,
+          "container_kernel_memory_peak_bytes_median": 224714752,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    },
+    {
+      "case": "cpi-informative-regression",
+      "input_kind": "synthetic-or-bundled-example",
+      "repetitions_per_mode": 3,
+      "modes": {
+        "serial": {
+          "elapsed_seconds_median": 7.933,
+          "elapsed_seconds_min": 7.579,
+          "elapsed_seconds_max": 8.01,
+          "container_kernel_memory_peak_bytes_median": 141152256,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        },
+        "auto": {
+          "elapsed_seconds_median": 7.656,
+          "elapsed_seconds_min": 7.648,
+          "elapsed_seconds_max": 7.664,
+          "container_kernel_memory_peak_bytes_median": 228241408,
+          "successful_runs": 3,
+          "internal_diagnostics_complete": true
+        }
+      }
+    }
+  ],
+  "output_checks": {
+    "serial_auto": "DNP, SNP and Contamination tables identical across repeats; CPI exported numerical values identical after excluding run-specific cutoff paths.",
+    "dnp_single_vs_joint": "Native individual tables identical for both real BAM inputs.",
+    "cpi_informative": "Six runs match the analytical synthetic fixture: three informative maternal/paternal sites, median fetal fraction 6%, expected rounded log10(CPI) statistics; the no-information pair retains NA values.",
+    "limitations": [
+      "No comparison to a previous release on the real inputs.",
+      "SNP starts from an existing pileup, excluding BAM acquisition.",
+      "Small SNP and CPI examples do not measure large-input scalability.",
+      "Original bundled CPI examples produced only no-information results; a separate informative synthetic fixture was subsequently checked.",
+      "External Docker statistics include ValueError collection failures. Internal cgroup diagnostics are complete; this report does not infer the exact historical exception cause from its type alone.",
+      "PDF appearance and unexported scientific internal values were not compared in this Windows session."
+    ]
+  }
+}

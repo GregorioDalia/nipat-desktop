@@ -45,9 +45,11 @@ SCRIPTS = dict(zip(("dnp-call", "cpi", "snp-call", "contamination"), (
 SUPPORTING_SOURCES = tuple(f"src/nipat_scientific/{name}" for name in (
     "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R", "parallel.R", "parallel.py",
 ))
-PARALLEL_CASES = {"dnp-blocks-1", "snp-edge", "cpi-shared-parents",
+PARALLEL_CASES = {"dnp-blocks-1", "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6",
+                  "snp-edge", "cpi-shared-parents",
                   "cpi-single-intervals", "cpi-single-cutoffs", "contamination-batch"}
-CONCURRENT_CASES = {"dnp-blocks-1", "snp-edge", "cpi-shared-parents", "contamination-batch"}
+CONCURRENT_CASES = {"dnp-blocks-1", "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6",
+                    "snp-edge", "cpi-shared-parents", "contamination-batch"}
 PARALLEL_VARIANTS = {
     "auto": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": ""},
     "manual-2": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": "2"},
@@ -399,6 +401,18 @@ def make_dnp_block_inputs(inputs: Path, image: str) -> None:
         run(image, ["samtools", "index", "/results/Boundary.bam"], inputs=directory, results=directory)
         run(image, ["samtools", "faidx", "/results/reference.fa"], inputs=directory, results=directory)
         if fixture_name == "dnp-blocks":
+            # Distinct sample depths expose column/closure mixups in the global
+            # sample-block queue. Six samples exceed the four-CPU qualification
+            # budget; every sample is still compared with the unchanged oracle.
+            for sample in range(2, 7):
+                subset = [record for number, record in enumerate(records)
+                          if record.startswith("@") or number % sample != 0]
+                (directory / f"Boundary{sample}.sam").write_text(
+                    "\n".join(subset) + "\n", encoding="utf-8")
+                run(image, ["samtools", "sort", "-O", "BAM", "-o", f"/results/Boundary{sample}.bam",
+                            f"/inputs/Boundary{sample}.sam"], inputs=directory, results=directory)
+                run(image, ["samtools", "index", f"/results/Boundary{sample}.bam"],
+                    inputs=directory, results=directory)
             # Duplicate names at one position retain a legacy cross-window
             # grouping dependency and explicitly exercise its compatibility path.
             duplicate = ["shared\t" + record.split("\t", 1)[1] if record.startswith("shared2\t") else record
@@ -567,7 +581,12 @@ def cases() -> list[Case]:
     duplicate = Case("dnp-repeated-qname-compatibility", "dnp-call", blocks[0].arguments,
                      ("/inputs/dnp-blocks/Duplicate.bam",), (("NIPAT_DNP_BLOCK_LOCI", "1"),), True,
                      "legacy-repeated-qname-within-position")
-    return [*original, *blocks, numeric, duplicate]
+    multi_blocks = [Case(f"dnp-multi-blocks-{count}", "dnp-call", blocks[0].arguments,
+                         ("/inputs/dnp-blocks/Boundary.bam", *(
+                             f"/inputs/dnp-blocks/Boundary{number}.bam" for number in range(2, count + 1))),
+                         (("NIPAT_DNP_BLOCK_LOCI", "1"),), True)
+                    for count in (2, 3, 6)]
+    return [*original, *blocks, numeric, duplicate, *multi_blocks]
 
 
 def verify_case(root: Path, image: str, inputs: Path, case: Case) -> dict:
