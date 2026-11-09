@@ -63,6 +63,9 @@ R_AUDIT_HELPERS = {
     "tests/r_optimization/parallel/check_budget.R", "tests/r_optimization/parallel/check_acquisition_budget.R",
     "tests/r_optimization/contamination/check_parallel.R",
 }
+# Frozen multi-BAM fixtures emit four plots per sample plus two shared plots
+# (coverage UpSet and unassigned genotypes), as observed with the 0.8.5 oracle.
+R_MULTIBAM_PDFS = {"dnp-multi-blocks-2": 10, "dnp-multi-blocks-3": 14, "dnp-multi-blocks-6": 26}
 SOURCE_EQUIVALENCE_SCOPE = "distributed-operative-sources-v1"
 REVIEWED_SOURCE_SCOPE = "scientific-runtime-equivalence-with-reviewed-client-changes-v1"
 RELIABILITY_SOURCE_SCOPE = "reviewed-operative-changes-with-unchanged-r-v1"
@@ -558,9 +561,8 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                             for page, value in plot["page_sha256"].items()),
                     "Scientific PDF pixel comparison evidence is incomplete")
             plots_verified += 1
-        if audited_r_contract(record["version"]) and case["case"] in {
-                "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6"}:
-            require(len(plots) >= int(case["case"].rsplit("-", 1)[1]) * 5,
+        if audited_r_contract(record["version"]) and case["case"] in R_MULTIBAM_PDFS:
+            require(len(plots) >= R_MULTIBAM_PDFS[case["case"]],
                     "Multi-BAM PDF comparisons are incomplete")
             verify_multibam_variants(case)
     require(plots_verified > 0, "Scientific equivalence contains no rendered PDF comparisons")
