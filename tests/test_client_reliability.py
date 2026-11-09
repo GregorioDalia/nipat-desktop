@@ -12,6 +12,7 @@ from unittest.mock import Mock, patch
 from nipat.cli import main
 from nipat.errors import RuntimeExecutionError, ValidationError
 from nipat.execution.options import ExecutionOptions
+from nipat.execution.transport import DockerTransport
 from nipat.i18n import MESSAGES, translate
 from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences, PreferencesStore
@@ -133,23 +134,41 @@ class DirectInputErrorsTests(unittest.TestCase):
             pileup.write_text("chr1\t2\tC\t1\t.\tI\tread1\n", encoding="utf-8")
             panel = root / "panel.tsv"
             malformed = [
-                "pos\tref\talt\nchr1:2\tC\tG\n".encode("utf-16"),
-                b"pos\tref\talt\nchr1:2\tC\t\xff\n",
-                ("pos\tref\talt\nchr1:2\t" + "A" * 140000 + "\tG\n").encode(),
+                ("pos\tref\talt\nchr1:2\tC\tG\n".encode("utf-16"), "codifica non valida"),
+                (b"pos\tref\talt\nchr1:2\tC\t\xff\n", "codifica non valida"),
+                (("pos\tref\talt\nchr1:2\t" + "A" * 140000 + "\tG\n").encode(),
+                 "tabella non valida"),
             ]
-            for content in malformed:
+            # A valid dry-run transport lets these cases reach input validation
+            # on every host. An invalid backend would mask every panel error.
+            transport = DockerTransport(dry_run=True)
+            arguments = ["--dry-run", "--data-dir", str(root / "data"),
+                         "--runs-dir", str(root / "runs"), "snp-call",
+                         "--pileup", str(pileup), "--panel", str(panel),
+                         "--run-name", "validation-control"]
+            for content, message in malformed:
                 with self.subTest(size=len(content)):
                     panel.write_bytes(content)
                     stderr = io.StringIO()
                     with redirect_stderr(stderr), redirect_stdout(io.StringIO()), \
-                            patch.dict(os.environ, {"NIPAT_BACKEND": "docker"}):
-                        result = main(["--dry-run", "--data-dir", str(root / "data"),
-                                       "--runs-dir", str(root / "runs"), "snp-call",
-                                       "--pileup", str(pileup), "--panel", str(panel)])
+                            patch("nipat.execution.runner.DockerTransport.from_environment",
+                                  return_value=transport):
+                        result = main(arguments)
                     self.assertEqual(result, 2)
-                    self.assertIn("Errore:", stderr.getvalue())
+                    self.assertIn("panel.tsv: " + message, stderr.getvalue())
                     self.assertNotIn("Traceback", stderr.getvalue())
                     self.assertFalse((root / "runs").exists())
+            # The same invocation must accept a corrected panel and reach plan
+            # creation, proving the negative cases did not fail at an earlier gate.
+            panel.write_text("pos\tref\talt\nchr1:2\tC\tG\n", encoding="utf-8")
+            stderr = io.StringIO()
+            with redirect_stderr(stderr), redirect_stdout(io.StringIO()), \
+                    patch("nipat.execution.runner.DockerTransport.from_environment",
+                          return_value=transport):
+                result = main(arguments)
+            self.assertEqual(result, 0, stderr.getvalue())
+            record = json.loads((root / "runs" / "validation-control" / "run.json").read_text(encoding="utf-8"))
+            self.assertEqual(record["status"], "planned")
 
 
 class ExecutionPreferencesTests(unittest.TestCase):

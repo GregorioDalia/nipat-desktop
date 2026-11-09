@@ -38,7 +38,7 @@ decimale, secondo il formato dello script.
 
 | Input | Controlli applicati |
 | --- | --- |
-| Pannello DNPcall | Cinque colonne; coordinate positive e adiacenti; loci univoci; alleli di due basi A/C/G/T, normalizzati in maiuscolo nella copia di lavoro. |
+| Pannello DNPcall | Cinque colonne; coordinate adiacenti con prima posizione almeno 2, per consentire la finestra precedente al sito; loci univoci; alleli di due basi A/C/G/T, normalizzati in maiuscolo nella copia di lavoro. |
 | Pannello SNPcall | Colonne `pos`, `ref`, `alt`; coordinate univoche; alleli distinti di una base A/C/G/T, normalizzati in maiuscolo. In modalità BAM la posizione deve permettere una finestra di tre basi. |
 | Pileup SNPcall | Almeno sette colonne con QNAME nella settima; cromosoma presente, posizione positiva e profondità non negativa su tutte le righe non vuote. |
 | Tabelle Contamination | Colonne richieste; coordinate positive e ordinate; loci univoci; `N_REF`, `N_ALT` e `N_Other` finiti, interi e non negativi. |

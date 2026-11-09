@@ -7,9 +7,11 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -164,15 +166,81 @@ class LinuxUpdateTests(unittest.TestCase):
                 patch.object(update, "wait_for_parents") as wait, \
                 patch.object(update, "_other_sessions_running", return_value=False), \
                 patch.object(update, "MARKER", self.marker), \
-                patch.object(update.subprocess, "run", return_value=completed) as run:
-            self.assertEqual(update.run_handoff(self.request), 0)
+                patch.object(update.subprocess, "run", return_value=completed) as run, \
+                patch.object(update.os, "execv", side_effect=SystemExit(0)) as reopen:
+            with self.assertRaises(SystemExit) as exited:
+                update.run_handoff(self.request)
+            self.assertEqual(exited.exception.code, 0)
         wait.assert_called_once_with([{"pid": 9876, "start": "1234"}], cancel=self.root / "cancel")
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(commands, [
             [str(update.PKEXEC), str(update.APT), "install", "--", str(self.package)],
-            ["/usr/bin/nipat", "--setup"], ["/usr/bin/nipat"],
+            ["/usr/bin/nipat", "--setup"],
         ])
+        reopen.assert_called_once_with("/usr/bin/nipat", ["/usr/bin/nipat"])
         self.assertEqual(json.loads((self.root / "state.json").read_text())["phase"], "ready")
+
+    def test_reopened_session_keeps_running_and_holds_lease_after_terminal_sigint(self):
+        import fcntl
+
+        # The installed launcher is replaced only with a small foreground client
+        # fixture; the handoff, process replacement and group signals are real.
+        client = self.root / "client.py"
+        client.write_text(
+            "import fcntl, pathlib, signal, time\n"
+            f"root=pathlib.Path({str(self.root)!r})\n"
+            "lease=(root/'activity/activity.lock').open('rb')\n"
+            "fcntl.flock(lease,fcntl.LOCK_SH)\n"
+            "signal.signal(signal.SIGINT,lambda *_: (root/'interrupted').touch())\n"
+            "(root/'client-ready').touch()\n"
+            "while not (root/'finish').exists(): time.sleep(.01)\n"
+        )
+        script = (
+            "import pathlib, subprocess, sys, os; "
+            f"sys.path.insert(0,{str(PROJECT / 'src')!r}); "
+            "from nipat import linux_update as m; "
+            f"root=pathlib.Path({str(self.root)!r}); "
+            "m.require_supported_host=lambda:None; m.wait_for_parents=lambda *a,**k:None; "
+            "m._other_sessions_running=lambda:False; m.MARKER=root/'activity/update-in-progress'; "
+            "realrun=subprocess.run; realexec=os.execv; "
+            "command=[sys.executable,str(root/'client.py')]; "
+            "subprocess.run=lambda args,**kw: realrun(command,**kw) if args==['/usr/bin/nipat'] "
+            "else subprocess.CompletedProcess(args,0); "
+            "os.execv=lambda path,args: realexec(command[0],command) if "
+            "(path,args)==('/usr/bin/nipat',['/usr/bin/nipat']) else realexec(path,args); "
+            "raise SystemExit(m.run_handoff(root/'request.json'))"
+        )
+        process = subprocess.Popen([sys.executable, "-c", script], start_new_session=True,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+        def await_file(name):
+            deadline = time.monotonic() + 10
+            while time.monotonic() < deadline:
+                if (self.root / name).exists():
+                    return
+                if process.poll() is not None:
+                    self.fail(f"Handoff exited before {name}: {process.communicate()[0]}")
+                time.sleep(.01)
+            self.fail(f"Handoff did not produce {name}")
+
+        try:
+            await_file("client-ready")
+            os.killpg(process.pid, signal.SIGINT)
+            await_file("interrupted")
+            time.sleep(.4)
+            self.assertIsNone(process.poll(), "Handoff killed the recovered foreground client")
+            with self.lock.open("rb") as stream:
+                with self.assertRaises(BlockingIOError):
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            (self.root / "finish").touch()
+            output, _ = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 0, output)
+            with self.lock.open("rb") as stream:
+                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+            process.communicate(timeout=10)
 
     def test_other_session_prevents_apt_or_any_process_termination(self):
         with patch.object(update, "require_supported_host"), patch.object(update, "wait_for_parents"), \

@@ -36,6 +36,7 @@ class WindowsPayloadTests(unittest.TestCase):
         self.write(source, '__version__ = "0.7.0a1"\n')
         self.write("NIPAT.exe", "fixture launcher")
         self.write("installer/windows/EnableWsl.exe", "fixture helper")
+        self.write("installer/windows/NipatActivityNative.dll", "fixture activity helper")
         archive = self.write(f".distribution/{check.PYTHON_ARCHIVE}", "fixture archive")
         self.addCleanup(patch.stopall)
         patch.object(check, "PYTHON_SHA256", check.digest(archive)).start()

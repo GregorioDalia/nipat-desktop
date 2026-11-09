@@ -472,10 +472,10 @@
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          184,
-          189
+          191,
+          196
         ],
-        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
+        "sha256": "e06c1cd03d9cc3782d3103563431fff278e64ee2c312a96fbb10ac901b14e065"
       }
     },
     {
@@ -495,10 +495,10 @@
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          96,
-          122
+          103,
+          129
         ],
-        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
+        "sha256": "e06c1cd03d9cc3782d3103563431fff278e64ee2c312a96fbb10ac901b14e065"
       }
     },
     {

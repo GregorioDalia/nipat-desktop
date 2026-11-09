@@ -57,6 +57,11 @@ installer/runtime/nipat-engine
 installer/runtime/write-provenance.py
 installer/runtime/wsl.conf
 installer/windows/EnableWsl.cs
+installer/windows/ActivityNative.cs
+installer/windows/build-compiler.ps1
+installer/windows/build-native.ps1
+installer/windows/build-wsl-helper.ps1
+installer/windows/test-native-build.ps1
 installer/windows/EnableWsl.manifest
 installer/windows/NIPAT.iss
 installer/windows/NipatLauncher.cs
@@ -72,6 +77,7 @@ installer/windows/launch.ps1
 installer/windows/test-bootstrap.ps1
 installer/windows/test-install-layout.ps1
 installer/windows/test-installer-layout.ps1
+installer/windows/test-compiled-installer.ps1
 installer/windows/test-launcher.ps1
 installer/windows/test-migration.ps1
 installer/windows/test-runtime-image.ps1
@@ -388,3 +394,8 @@ docs/validation/0.8.14-rootless.json
 
 # Official 0.8.14 release notes. Historical benchmark JSON remains repository-only.
 docs/RELEASE_0.8.14.md
+
+# Installer, cancellation and qualification audit for 0.8.20.
+docs/RELEASE_0.8.20.md
+docs/AUDIT_0.8.20.md
+installer/windows/collect-windows-security.ps1

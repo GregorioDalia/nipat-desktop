@@ -26,3 +26,4 @@ runs/
 release.json
 /NIPAT.exe
 /NIPAT.pdb
+/installer/windows/NipatActivityNative.dll

@@ -78,6 +78,7 @@ def verify_payload(app: Path) -> tuple[dict, dict]:
         require(digest(path) == entry["sha256"], f"Changed packaged file: {entry['path']}")
         recorded[entry["path"]] = entry["sha256"]
     generated = {"release.json", "NIPAT.exe", "installer/windows/EnableWsl.exe",
+                 "installer/windows/NipatActivityNative.dll",
                  ".distribution/installer-manifest.json", f".distribution/{PYTHON_ARCHIVE}"}
     require(set(recorded) == set(sources) | generated, "Incomplete application inventory.")
     require(all(recorded[path] == value for path, value in sources.items()), "Source digest mismatch.")

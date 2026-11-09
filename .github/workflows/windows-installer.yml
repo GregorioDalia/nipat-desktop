@@ -64,11 +64,19 @@ jobs:
       - name: Run shared Windows unit, installer and launcher checks
         shell: powershell
         run: ./.github/scripts/check_windows.ps1
+      - name: Retain compiled installer fixture results, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-windows-installer-fixture
+          path: build/windows-installer-fixture/
+          retention-days: 14
+          if-no-files-found: error
       - name: Retain the tested shared launcher
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: nipat-tested-launcher
-          path: build/launcher/NIPAT.exe
+          path: build/launcher/
           retention-days: 14
           if-no-files-found: error
 
@@ -287,17 +295,20 @@ jobs:
         with:
           name: nipat-tested-launcher
           path: build/windows-installer/app
+      - name: Download the compiled installer fixture evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nipat-windows-installer-fixture
+          path: build/output
       - name: Compile the narrowly scoped WSL elevation helper
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $compiler = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
-          $source = (Resolve-Path 'installer/windows/EnableWsl.cs').Path
-          $manifest = (Resolve-Path 'installer/windows/EnableWsl.manifest').Path
-          $target = Join-Path (Resolve-Path 'build/windows-installer/app/installer/windows').Path 'EnableWsl.exe'
-          & $compiler /nologo /target:exe /platform:x64 "/win32manifest:$manifest" "/out:$target" $source
+          & installer/windows/build-wsl-helper.ps1 -OutputPath 'build/windows-installer/app/installer/windows/EnableWsl.exe'
           if ($LASTEXITCODE -ne 0) { throw 'WSL helper compilation failed.' }
-          if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'WSL helper was not written into the installer stage.' }
+          if (-not (Test-Path -LiteralPath 'build/windows-installer/app/installer/windows/EnableWsl.exe' -PathType Leaf)) {
+            throw 'WSL helper was not written into the installer stage.'
+          }
       - name: Record the application payload for safe reinstall and repair
         shell: powershell
         run: |
@@ -385,6 +396,14 @@ jobs:
             -WorkDirectory (Join-Path $env:RUNNER_TEMP ('NIPAT packaged client ' + [char]0x00e8))
           if ($LASTEXITCODE -ne 0) { throw 'Packaged Windows client verification failed.' }
           Copy-Item 'build/windows-installer/app/.distribution/application-files.json' 'build/output/application-files.json'
+      - name: Record Authenticode status of final setup, helpers, scripts and embedded Python
+        # Signature observations do not establish Smart App Control acceptance.
+        shell: powershell
+        run: |
+          & installer/windows/write-trust-report.ps1 `
+            -ApplicationDirectory 'build/windows-installer/app' `
+            -InstallerPath 'build/output/NIPAT-Setup.exe' `
+            -OutputPath 'build/output/windows-trust-check.json'
       - name: Retain installer for review (no release publication)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

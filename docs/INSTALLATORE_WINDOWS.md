@@ -5,9 +5,9 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive **NIPAT Desktop 0.8.9**. Scaricare `NIPAT-Setup.exe`
+Questo documento descrive **NIPAT Desktop 0.8.20**. Scaricare `NIPAT-Setup.exe`
 dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-Le [note della versione](RELEASE_0.8.9.md) distinguono controlli automatici,
+Le [note della versione](RELEASE_0.8.20.md) distinguono controlli automatici,
 prove desktop e valutazione di dominio. Il setup aggiorna le installazioni
 NIPAT Desktop riconosciute e conserva i percorsi scelti dall'utente.
 
@@ -54,6 +54,20 @@ Control, SmartScreen e un rilevamento antivirus: richiedono verifiche diverse.
 Il setup non disattiva le protezioni né introduce esclusioni antivirus.
 Il referente del collaudo deve verificare l'errore sul componente indicato
 prima di considerare utilizzabile il pacchetto su quel dispositivo.
+
+La 0.8.20 elimina la compilazione di una DLL temporanea durante la
+preparazione. Questo migliora l'identificazione dei componenti, ma non
+sostituisce la firma del distributore. Il cambio di numero di versione non
+garantisce l'accettazione da parte di Smart App Control; la firma e la
+reputazione riguardano i file effettivi. Il rapporto `windows-trust-check.json`
+della release elenca hash e stato delle firme senza dichiarare un collaudo
+Smart App Control.
+
+Per identificare un blocco aprire **Visualizzatore eventi → Registri
+applicazioni e servizi → Microsoft → Windows → CodeIntegrity → Operational**
+e cercare gli eventi vicini all'orario del tentativo, in particolare 3077
+(blocco) e 3076 (audit). Conservare il percorso del file e il messaggio.
+La raccolta diagnostica non richiede di disattivare la protezione.
 
 ### Procedura
 
@@ -357,6 +371,21 @@ prepara i sorgenti ammessi da `distribution-files.txt` e compila l'EXE con
 Inno Setup. `installer-build.json` lega l'eseguibile a commit, versione,
 manifest, launcher, profilo e archivi incorporati. I dettagli e gli artefatti
 sono descritti in [CI/CD](CI_CD.md).
+
+La compilazione dei componenti C# richiede Roslyn, disponibile con Visual
+Studio Build Tools sulla macchina di build. Il computer destinatario non
+richiede un compilatore. `NipatActivityNative.dll` viene confezionata insieme
+all'applicazione; prima del caricamento il codice verifica l'hash contro
+l'inventario associato al manifest. Le build ripetute del launcher e del
+componente nativo vengono confrontate per SHA-256. Per eseguire dal checkout Windows i test e le funzioni di preparazione
+e manutenzione dell'installatore, compilare prima il componente con:
+
+```powershell
+& .\installer\windows\build-native.ps1
+```
+
+Questo comando appartiene al flusso di sviluppo, non alla procedura ordinaria
+di installazione. Non abilita né aggira Smart App Control.
 
 Per una prova tecnica usare **NIPAT-Setup.exe** della build riuscita identificata
 dal commit. Il riepilogo Actions riporta i download disponibili e il periodo

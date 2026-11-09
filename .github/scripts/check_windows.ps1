@@ -27,10 +27,18 @@ foreach ($file in $files) {
 }
 Write-Host '::endgroup::'
 
+$nativeOutput = Join-Path (Split-Path -Parent $LauncherPath) 'installer/windows/NipatActivityNative.dll'
+Write-Host '::group::Precompiled Windows activity helper'
+Invoke-CheckedProcess 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    'installer/windows/build-native.ps1')
+[IO.Directory]::CreateDirectory((Split-Path -Parent $nativeOutput)) | Out-Null
+Copy-Item -LiteralPath 'installer/windows/NipatActivityNative.dll' -Destination $nativeOutput -Force
+Write-Host '::endgroup::'
+
 $tests = @(
     'test-windows-environment.ps1', 'test-bootstrap.ps1', 'test-scientific-image.ps1', 'test-migration.ps1',
     'test-install-layout.ps1', 'test-uninstall.ps1', 'test-repair-installation.ps1',
-    'test-update-handoff.ps1', 'test-activity-lock.ps1', 'test-maintenance.ps1'
+    'test-update-handoff.ps1', 'test-activity-lock.ps1', 'test-maintenance.ps1', 'test-trust-report.ps1'
 )
 foreach ($test in $tests) {
     Write-Host "::group::$test"
@@ -48,6 +56,8 @@ Invoke-CheckedProcess 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass',
     'installer/windows/build-launcher.ps1', '-OutputPath', $LauncherPath)
 Invoke-CheckedProcess 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
     'installer/windows/test-launcher.ps1', '-LauncherPath', $LauncherPath)
+Invoke-CheckedProcess 'powershell' @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    'installer/windows/test-native-build.ps1', '-LauncherPath', $LauncherPath)
 Write-Host '::endgroup::'
 
 Write-Host '::group::Windows environment decisions in PowerShell 7 (simulated OS states)'

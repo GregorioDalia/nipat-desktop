@@ -271,6 +271,9 @@ def prepare_installer_set(setup, runtime, linux, evidence, output, commit, accep
     if manifest["version"].startswith("0.7.") or requires_macos(manifest["version"]):
         additions.update({"windows-client-check.json": setup / "windows-client-check.json",
                           "application-files.json": setup / "application-files.json"})
+    if reviewer.requires_windows_audit(manifest["version"]):
+        additions["windows-installer-fixture-check.json"] = setup / "windows-installer-fixture-check.json"
+        additions["windows-trust-check.json"] = setup / "windows-trust-check.json"
     if requires_macos(manifest["version"]):
         for architecture in ("arm64", "x86_64"):
             record = actual[f"macos_{architecture}"]

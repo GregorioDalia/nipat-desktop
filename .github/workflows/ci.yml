@@ -120,6 +120,14 @@ jobs:
       - name: Run shared Windows unit, installer and launcher checks
         shell: powershell
         run: ./.github/scripts/check_windows.ps1
+      - name: Retain compiled installer fixture results, including failures
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-windows-installer-fixture
+          path: build/windows-installer-fixture/
+          retention-days: 14
+          if-no-files-found: error
 
   macos-checks:
     name: macOS client (${{ matrix.architecture }})

@@ -118,6 +118,71 @@ class RevisedRAcceptanceTests(unittest.TestCase):
         self.assertEqual(checked["focused_scripts_verified"], 4)
         self.assertFalse(checked["domain_validation_claimed"])
 
+    def audited_report(self):
+        self.record["version"] = self.manifest["version"] = "0.8.20"
+        for name, workflow in acceptance.R_AUDIT_CASES.items():
+            count = int(name.rsplit("-", 1)[1]) if name.startswith("dnp-multi-blocks-") else 1
+            case = {"case": name, "workflow": workflow, "status": "passed", "unrounded_r_values": "identical",
+                    "table_sha256": {"result.tsv": "c" * 64},
+                    "plots": {f"plot{number}.pdf": {"pages": 1, "raster_dpi": 36,
+                              "page_sha256": {"page-1.ppm": "d" * 64}} for number in range(count * 5)}}
+            if name.startswith("dnp-multi-blocks-"):
+                variants = {}
+                for variant, cap in (("candidate", None), ("auto", None), ("manual-2", 2),
+                                     ("manual-4", 4), ("manual-4-repeat", 4)):
+                    serial = variant == "candidate"
+                    variants[variant] = {key: copy.deepcopy(case[key]) for key in
+                                         ("status", "unrounded_r_values", "table_sha256", "plots")}
+                    variants[variant]["parallel_execution"] = {
+                        "requested_mode": "serial" if serial else "auto", "requested_max_workers": cap,
+                        "maximum_planned_workers": 1 if serial else (cap or 4),
+                        "maximum_observed_child_workers": 0 if serial else 2,
+                        "simultaneous_child_workers": not serial, "overlapping_workers_required": not serial,
+                    }
+                    if variant == "manual-4-repeat":
+                        variants[variant]["deterministic_repeat_of"] = "manual-4"
+                case["execution_variants"] = variants
+            self.report["cases"].append(case)
+        for path in sorted(acceptance.R_AUDIT_HELPERS):
+            raw = ("test source " + path).encode()
+            self.sources[COMMIT][path] = raw
+            self.report["helpers"].append({"path": path, "status": "passed", "sha256": digest(raw)})
+        self.write_report()
+
+    def test_0820_requires_all_23_cases_and_11_focused_helpers(self):
+        self.audited_report()
+        checked = self.verify()
+        self.assertEqual((checked["cases_verified"], checked["focused_scripts_verified"]), (23, 11))
+        complete = copy.deepcopy(self.report)
+        for field, identity, names in (("cases", "case", acceptance.R_AUDIT_CASES),
+                                       ("helpers", "path", acceptance.R_AUDIT_HELPERS)):
+            for name in names:
+                self.report = copy.deepcopy(complete)
+                self.report[field] = [item for item in self.report[field] if item[identity] != name]
+                self.write_report()
+                with self.subTest(missing=name), self.assertRaises(ValueError):
+                    self.verify()
+
+    def test_0820_requires_actual_bounded_multibam_parallelism_and_repeat(self):
+        self.audited_report()
+        complete = copy.deepcopy(self.report)
+        mutations = [
+            lambda c: c["execution_variants"].pop("manual-2"),
+            lambda c: c["execution_variants"]["auto"]["parallel_execution"].update(maximum_observed_child_workers=0),
+            lambda c: c["execution_variants"]["manual-2"]["parallel_execution"].update(maximum_observed_child_workers=3),
+            lambda c: c["execution_variants"]["candidate"]["parallel_execution"].update(maximum_observed_child_workers=1),
+            lambda c: c["execution_variants"]["manual-4-repeat"].pop("deterministic_repeat_of"),
+            lambda c: c["execution_variants"]["auto"].update(table_sha256={"result.tsv": "e" * 64}),
+            lambda c: c.update(plots={}),
+        ]
+        for index, mutate in enumerate(mutations):
+            self.report = copy.deepcopy(complete)
+            case = next(item for item in self.report["cases"] if item["case"] == "dnp-multi-blocks-6")
+            mutate(case)
+            self.write_report()
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                self.verify()
+
     def test_old_schema_still_rejects_revised_r_even_with_reviewed_hashes(self):
         record = copy.deepcopy(self.record)
         record.update(schema_version=5)

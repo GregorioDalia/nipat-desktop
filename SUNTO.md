@@ -1,6 +1,6 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.8.14** esegue DNPcall, SNPcall, Contamination e CPI sul computer
+**NIPAT Desktop 0.8.20** esegue DNPcall, SNPcall, Contamination e CPI sul computer
 dell'utente attraverso una CLI guidata. Le analisi possono essere avviate
 singolarmente oppure collegate in un workflow automatico con una sola conferma.
 
@@ -9,8 +9,8 @@ configurabile. DNP prepara il pileup per cromosoma e distribuisce il calcolo
 R su una coda comune di blocchi di tutti i campioni, con un budget unico anche
 per un numero di BAM maggiore dei processi disponibili. I blocchi iniziali
 sono da 32 MiB di input grezzo / 64 loci. La diagnostica delle prestazioni è
-facoltativa. Le [note della versione](docs/RELEASE_0.8.14.md) distinguono
-funzionamento, prove automatiche e misure osservate sul candidato precedente.
+facoltativa. Le [note della versione](docs/RELEASE_0.8.20.md) distinguono
+le correzioni del setup, i controlli delle firme e i limiti delle prove.
 
 | Analisi | Funzione |
 | --- | --- |
@@ -88,4 +88,4 @@ affidata alle persone esperte di dominio.
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Risultati e tracciabilità](docs/ESECUZIONI.md)
 - [Risorse e memoria](docs/RISORSE.md)
-- [Note della versione](docs/RELEASE_0.8.14.md)
+- [Note della versione](docs/RELEASE_0.8.20.md)

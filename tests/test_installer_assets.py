@@ -370,6 +370,7 @@ class InstallerAssetTests(unittest.TestCase):
             app = assets.stage_app(self.project, self.manifest_path, stage, self.python_archive)
         (app / "NIPAT.exe").write_bytes(b"tested launcher fixture")
         (app / "installer/windows/EnableWsl.exe").write_bytes(b"elevation helper fixture")
+        (app / "installer/windows/NipatActivityNative.dll").write_bytes(b"activity helper fixture")
         return stage, app
 
     def test_application_inventory_covers_sources_and_compiled_components(self):

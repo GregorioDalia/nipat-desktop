@@ -168,6 +168,7 @@ class REquivalenceTests(unittest.TestCase):
             start = 1001.0 + index * (0.1 if overlap else 2.0)
             for kind, stamp in (("task-start", start), ("task-end", start + 1.0)):
                 events.append({**budget, "event": kind, "pid": pid, "task_index": index + 1,
+                               "outcome": "succeeded" if kind == "task-end" else None,
                                "observed_at_unix": stamp, "elapsed_seconds": stamp - 900 - index * 10})
         directory = self.root / "parallel-log"
         directory.mkdir(exist_ok=True)
@@ -183,6 +184,76 @@ class REquivalenceTests(unittest.TestCase):
         self.assertTrue(result["simultaneous_child_workers"])
         # Separate per-process elapsed origins must not affect the common clock.
         self.assertEqual(result["maximum_planned_workers"], 2)
+        self.assertEqual(result["maximum_observed_child_workers"], 2)
+
+    def edit_parallel_events(self, directory, transform):
+        for path in directory.glob("worker-*.jsonl"):
+            events = [transform(json.loads(line)) for line in path.read_text().splitlines()]
+            path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
+
+    def test_observed_workers_cannot_exceed_a_valid_declared_pool(self):
+        directory = self.parallel_events(workers=1)
+        with self.assertRaisesRegex(ValueError, "Observed scientific workers exceeded"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=2, require_parallel=True)
+
+    def test_nested_pools_cannot_multiply_the_shared_process_budget(self):
+        directory = self.parallel_events()
+        parent_events = [json.loads(line) for line in (directory / "worker-101.jsonl").read_text().splitlines()]
+        budget = {**parent_events[0], "coordinator_pid": 101, "label": "nested"}
+        self.file("parallel-log/worker-103.jsonl", "".join(json.dumps(event) + "\n" for event in (
+            {**budget, "pid": 101, "event": "plan", "observed_at_unix": 1001.15},
+            {**budget, "pid": 103, "event": "task-start", "observed_at_unix": 1001.2},
+            {**budget, "pid": 103, "event": "task-end", "observed_at_unix": 1001.4,
+             "outcome": "succeeded"},
+        )))
+        with self.assertRaisesRegex(ValueError, "shared process budget"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=None, require_parallel=True)
+        # A later unrelated phase with a larger valid pool must not authorize
+        # this earlier nested pool's three simultaneous processes.
+        path = directory / "worker-100.jsonl"
+        later_plan = json.loads(path.read_text().splitlines()[0])
+        later_plan.update(label="later-phase", workers=4, tasks=4, memory_worker_limit=4,
+                          observed_at_unix=2000.0)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(later_plan) + "\n")
+        with self.assertRaisesRegex(ValueError, "shared process budget"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=None, require_parallel=True)
+
+    def test_larger_pool_in_another_phase_cannot_hide_local_oversubscription(self):
+        directory = self.parallel_events(workers=1)
+        path = directory / "worker-100.jsonl"
+        plan = json.loads(path.read_text().splitlines()[0])
+        plan.update(label="another-phase", workers=3, tasks=3, observed_at_unix=2000.0)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(plan) + "\n")
+        with self.assertRaisesRegex(ValueError, "process budget"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=None, require_parallel=True)
+
+    def test_touching_intervals_do_not_exceed_the_budget(self):
+        directory = self.parallel_events(workers=1, overlap=False)
+        self.edit_parallel_events(directory, lambda event: {
+            **event, "observed_at_unix": event["observed_at_unix"] - (1 if event["pid"] == 102 else 0)
+        })
+        result = verification.verify_parallel_execution(directory, mode="auto", cap=1,
+                                                        require_parallel=False)
+        self.assertEqual(result["maximum_observed_child_workers"], 1)
+        self.assertFalse(result["simultaneous_child_workers"])
+
+    def test_failed_worker_cannot_be_qualified_as_successful(self):
+        directory = self.parallel_events()
+        self.edit_parallel_events(directory, lambda event: {
+            **event, "outcome": "failed" if event["event"] == "task-end" else None
+        })
+        with self.assertRaisesRegex(ValueError, "did not succeed"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=2, require_parallel=True)
+
+    def test_worker_cannot_claim_an_undeclared_larger_budget(self):
+        directory = self.parallel_events()
+        self.edit_parallel_events(directory, lambda event: {
+            **event, "workers": event["workers"] if event["event"] == "plan" else 3
+        })
+        with self.assertRaisesRegex(ValueError, "no matching resource plan"):
+            verification.verify_parallel_execution(directory, mode="auto", cap=4, require_parallel=True)
 
     def test_multiple_pids_without_concurrency_do_not_qualify(self):
         directory = self.parallel_events(overlap=False)
