@@ -55,6 +55,35 @@ def requires_reliability_evidence(version):
     return version.startswith("0.8.") or bool(match and int(match.group(1)) >= 2)
 
 
+def requires_windows_audit(version):
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+    return bool(match and tuple(map(int, match.groups())) >= (0, 8, 20))
+
+
+def verify_windows_installer_fixture(evidence, manifest):
+    """Compiled fixture results are not execution of the shipped setup or SAC."""
+    require(isinstance(evidence, dict) and evidence.get("schema_version") == 1
+            and type(evidence.get("schema_version")) is int
+            and evidence.get("scenario") == "compiled-installer-fixture-on-server-2022"
+            and evidence.get("source_commit") == manifest["source_commit"]
+            and evidence.get("source_definition_sha256") == manifest["source_sha256"]["installer/windows/NIPAT.iss"]
+            and evidence.get("status") == "passed"
+            and evidence.get("production_setup_executed") is False
+            and evidence.get("wsl_execution") is False
+            and evidence.get("smart_app_control") == "not-performed",
+            "Windows compiled installer fixture identity or execution scope mismatch")
+    for key in ("fixture_definition_sha256", "uninstaller_sha256"):
+        require(isinstance(evidence.get(key), str) and re.fullmatch(r"[a-f0-9]{64}", evidence[key]),
+                "Missing compiled installer fixture byte identity")
+    require(evidence.get("substitutions") == ["Windows workstation/elevation setup gate",
+            "uninstaller elevation gate", "synthetic runtime bootstrap and payload"],
+            "Windows fixture substitutions are not explicit")
+    require(evidence.get("checks") == dict.fromkeys(("installed_0.0.1", "installed_0.0.2",
+            "upgrade_backup", "silent_removal_preserves_data"), True)
+            and all(value is True for value in evidence["checks"].values()),
+            "Windows compiled installer fixture is incomplete or failed")
+
+
 def verify_upgrade_check(evidence, manifest, manifest_bytes, package_record):
     """A real released baseline and a distinct installed candidate, not reinstall."""
     checker = load_module("nipat_review_upgrade", PROJECT / "scripts/verify_linux_upgrade.py")
@@ -176,6 +205,8 @@ def verify_windows_client_check(evidence, manifest, manifest_bytes, *, installer
     bundle = load_module("nipat_review_distribution", PROJECT / "scripts/distribution_support.py")
     generated = {"release.json", "NIPAT.exe", "installer/windows/EnableWsl.exe",
                  ".distribution/installer-manifest.json", f".distribution/{bundle.PYTHON_NAME}"}
+    if requires_windows_audit(manifest["version"]):
+        generated.add("installer/windows/NipatActivityNative.dll")
     require(set(hashes) == set(sources) | generated
             and all(hashes.get(path) == digest for path, digest in sources.items())
             and hashes["NIPAT.exe"] == launcher_sha256
@@ -226,6 +257,16 @@ def verify_set(windows, linux, assets, output, commit, project=PROJECT):
             inventory_bytes=inventory_path.read_bytes(),
         )
         windows_record["client_check"] = client_check
+    if requires_windows_audit(manifest["version"]):
+        fixture_path = windows / "windows-installer-fixture-check.json"
+        fixture_check = read_json(fixture_path)
+        verify_windows_installer_fixture(fixture_check, manifest)
+        windows_record["installer_fixture_check_sha256"] = publisher.sha256(fixture_path)
+        trust = load_module("nipat_windows_trust", PROJECT / ".github/scripts/windows_trust.py")
+        windows_record["trust_check"] = trust.verify(
+            windows / "windows-trust-check.json", manifest, windows_record["sha256"],
+            (windows / "application-files.json").read_bytes(),
+        )
     result = {
         "schema_version": 1, "version": manifest["version"], "source_commit": commit,
         "installer_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),

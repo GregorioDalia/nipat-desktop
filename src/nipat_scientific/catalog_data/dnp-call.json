@@ -824,7 +824,7 @@
           "ALT"
         ],
         "adjacency": "pos2 = pos1 + 1",
-        "minimum_pos1": 1,
+        "minimum_pos1": 2,
         "allele_length": 2,
         "allele_alphabet": "ACGT",
         "duplicate_coordinates": "rejected"
@@ -832,16 +832,16 @@
       "applies_to": "dnp-call",
       "origin": "NIPAT",
       "description": {
-        "it": "NIPAT richiede coordinate adiacenti positive, dinucleotidi A/C/G/T e coordinate non duplicate; normalizza gli alleli in maiuscolo e scrive una copia TSV senza intestazione. Il controllo minimo è pos1≥1: non garantisce che l’offset BED pos1−2 sia non negativo.",
-        "en": "NIPAT requires positive adjacent coordinates, A/C/G/T dinucleotides and no duplicate coordinates; it uppercases alleles and writes a headerless TSV copy. The minimum check is pos1≥1, which does not guarantee that BED offset pos1−2 is nonnegative."
+        "it": "NIPAT richiede coordinate adiacenti con pos1≥2, dinucleotidi A/C/G/T e coordinate non duplicate; normalizza gli alleli in maiuscolo e scrive una copia TSV senza intestazione. La posizione minima include la base precedente e garantisce che l’offset BED pos1−2 sia non negativo.",
+        "en": "NIPAT requires adjacent coordinates with pos1≥2, A/C/G/T dinucleotides and no duplicate coordinates; it uppercases alleles and writes a headerless TSV copy. The minimum position includes the preceding base and ensures that BED offset pos1−2 is nonnegative."
       },
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
           29,
-          73
+          80
         ],
-        "sha256": "ddf749d54a3dc52b4724efb5cf8e86e8611a8b848e507983eadbe986ff6b86ae"
+        "sha256": "e06c1cd03d9cc3782d3103563431fff278e64ee2c312a96fbb10ac901b14e065"
       }
     },
     {

@@ -4,6 +4,11 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $download = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
 Invoke-WebRequest -UseBasicParsing 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $download
+if ((Get-Item -LiteralPath $download).Length -ne 10592232 -or
+    (Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash.ToLowerInvariant() -cne
+        '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') {
+    throw 'Inno Setup compiler download differs from the pinned 6.7.3 release bytes.'
+}
 $signature = Get-AuthenticodeSignature -LiteralPath $download
 if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|,\s*)CN=Pyrsys B\.V\.(?:,|$)') {
     throw 'Inno Setup Authenticode signature or publisher is invalid.'

@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string] $CompilerPath
 )
 
-# Compile the actual installer definition using a tiny payload. Never execute the generated setup.
+# Compile the actual definition, then exercise a separate CI-only executable fixture.
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $CompilerPath -PathType Leaf)) {
@@ -199,6 +199,8 @@ public static class NipatInstallerActivityContract {
         throw 'Il compilatore non ha prodotto il file setup atteso.'
     }
     Write-Host 'PASS: real installer definition compiled with spaces and Unicode paths; fixture EXE not executed.'
+    & (Join-Path $PSScriptRoot 'test-compiled-installer.ps1') -CompilerPath $CompilerPath `
+        -StageDirectory $stage -AssetDirectory $assets -WorkDirectory (Join-Path $temporary 'executed fixture')
 } finally {
     $env:LOCALAPPDATA = $originalLocalAppData
     if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary -Recurse -Force }

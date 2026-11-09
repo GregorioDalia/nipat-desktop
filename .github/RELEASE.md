@@ -65,6 +65,15 @@ complessi. Lo scenario `staged-embedded-python-client` non esegue il setup
 Inno, la preparazione WSL o una prova su Windows 10 reale. Tali osservazioni
 vanno registrate separatamente.
 
+Dalla 0.8.20, `windows-installer-fixture-check.json` registra anche installazione,
+aggiornamento e rimozione di una fixture compilata dalla definizione Inno
+della candidata. Il rapporto identifica la definizione per SHA-256 e dichiara
+che setup di produzione, WSL e Smart App Control non sono stati eseguiti.
+`windows-trust-check.json` collega setup e inventario applicativo agli stati
+Authenticode osservati, includendo i componenti del Python incorporato.
+La verifica del publisher richiede questi rapporti e rifiuta identità
+differenti o dichiarazioni improprie di collaudo Smart App Control.
+
 ### Ubuntu
 
 Il DEB incorpora lo stesso archivio scientifico. Le verifiche eseguono APT,

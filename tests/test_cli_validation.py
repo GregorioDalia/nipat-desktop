@@ -31,7 +31,7 @@ class WizardTests(unittest.TestCase):
         self.other_bam = self.file('sample two.bam', '')
         self.reference = self.file('ref.fa', '>chr1\nACGT\n')
         self.file('ref.fa.fai', 'chr1\t4\t6\t4\t5\n')
-        self.panel = self.file('DNP.txt', 'chr1\t1\t2\tAC\tGT\n')
+        self.panel = self.file('DNP.txt', 'chr1\t2\t3\tAC\tGT\n')
         self.snp_panel = self.file('SNP.txt', 'pos\tref\talt\nchr1:2\tC\tG\n')
         self.pileup = self.file('pileup.txt', 'chr1\t2\tC\t1\t.\tI\tread1\n')
         self.table = self.file('counts.tsv', 'chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\nchr1\t1\t2\t5\t0\t0\n')

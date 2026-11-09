@@ -38,6 +38,18 @@ class PanelTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationError, "pos2"):
                 read_dnp_list(source)
 
+    def test_dnp_panel_requires_the_preceding_base_but_accepts_position_two(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "DNP_list.txt"
+            for position in (-1, 0, 1):
+                with self.subTest(position=position):
+                    source.write_text(f"chr1\t{position}\t{position + 1}\tAC\tGT\n", encoding="utf-8")
+                    with self.assertRaisesRegex(ValidationError, "pos1 deve essere almeno 2"):
+                        read_dnp_list(source)
+            source.write_text("chr1\t2\t3\tAC\tGT\n", encoding="utf-8")
+            record = read_dnp_list(source)[0]
+            self.assertEqual((record.pos1, record.pos2), (2, 3))
+
     def test_snp_panel_generates_three_base_windows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             tmp_path = Path(directory)

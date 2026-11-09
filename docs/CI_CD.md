@@ -1,7 +1,7 @@
 # Integrazione continua e distribuzione
 
 NIPAT verifica separatamente il client, il motore scientifico, gli installatori
-e il funzionamento sui dispositivi reali. La versione 0.8.9 distribuisce
+e il funzionamento sui dispositivi reali. La versione 0.8.20 distribuisce
 Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
@@ -71,22 +71,42 @@ trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 Avviare **Installers (review build)** sul commit da distribuire, su `main`,
 `release/VERSIONE` o `release/VERSIONE-...`, con la stessa versione dichiarata
-dai sorgenti, ad esempio `release/0.8.9`. Il controllo
+dai sorgenti, ad esempio `release/0.8.20`. Il controllo
 `installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
 comune ai quattro pacchetti. La build produce:
 
 | Artefatto Actions | Pacchetto |
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`. |
-| `nipat-linux-setup` | `nipat-desktop_0.8.9_amd64.deb`. |
-| `nipat-macos-setup-arm64` | `NIPAT-0.8.9-macos-arm64.pkg`. |
-| `nipat-macos-setup-x86_64` | `NIPAT-0.8.9-macos-x86_64.pkg`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.20_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.20-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.20-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
 La release espone direttamente il file da installare per ciascuna piattaforma.
 I pacchetti **Source code** non contengono l'ambiente pronto all'uso. Gli archivi
 del runtime e i rapporti servono a verifica e recupero, non richiedono operazioni
 manuali durante l'installazione ordinaria.
+
+## Audit Windows e concorrenza dalla 0.8.20
+
+La build Windows compila preventivamente il componente di coordinamento e
+verifica la ripetibilità dei binari C# interessati. Una fixture derivata dalla
+definizione Inno esercita installazione, aggiornamento e rimozione sul runner:
+solo nella fixture vengono sostituiti il bootstrap e i requisiti desktop.
+Il rapporto dichiara `production_setup_executed: false`; il setup distribuito
+non acquisisce opzioni per saltare i propri controlli.
+
+Il rapporto Authenticode distingue componenti firmati, privi di firma e
+fallimenti di verifica. Le firme non valide non vengono convertite in un
+esito positivo. La presenza del rapporto non attesta l'esecuzione su Windows
+11 con Smart App Control, che resta una prova separata.
+
+Il publisher richiede esplicitamente anche i casi differenziali DNP con
+2, 3 e 6 BAM e i controlli helper della coda comune. Il verificatore misura
+la concorrenza effettiva globale e per coordinatore e rifiuta budget superati
+o attività fallite. Questi controlli verificano correttezza e rispetto delle
+risorse; non impongono soglie di velocità sui runner condivisi.
 
 ## Verifiche Lima su runner dedicati
 

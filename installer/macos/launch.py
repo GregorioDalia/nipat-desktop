@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import platform
 import re
+import signal
 import subprocess
 import sys
 
@@ -80,6 +81,20 @@ def installation_session(state: Path = STATE, *, exclusive: bool = False):
         yield
 
 
+def run_foreground(command: list[str], *, env: dict[str, str], cwd: Path | None = None) -> int:
+    """Let the foreground client handle Ctrl+C while retaining our install lease."""
+    # Terminal sends SIGINT to the entire foreground process group. The CLI can
+    # recover to its menu; subprocess.call would kill it when the supervisor
+    # receives the same signal. A caught handler resets across exec, so the
+    # client still receives SIGINT normally (unlike inheriting SIG_IGN).
+    previous = signal.signal(signal.SIGINT, lambda _number, _frame: None)
+    try:
+        with subprocess.Popen(command, env=env, cwd=cwd) as process:
+            return process.wait()
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
 def launch(arguments: list[str], app: Path) -> int:
     if sys.platform != "darwin" or os.geteuid() == 0:
         raise ValueError("Avviare NIPAT su macOS con il proprio utente, senza sudo.")
@@ -98,8 +113,8 @@ def launch(arguments: list[str], app: Path) -> int:
     maintenance = len(arguments) >= 2 and arguments[0] == "--runtime" and arguments[1] in {"stop", "remove-runtime"}
     with installation_session(exclusive=maintenance):
         if arguments and arguments[0] == "--runtime":
-            return subprocess.call([*runtime, *arguments[1:]], env=env)
-        prepared = subprocess.call([*runtime, "prepare"], env=env)
+            return run_foreground([*runtime, *arguments[1:]], env=env)
+        prepared = run_foreground([*runtime, "prepare"], env=env)
         if prepared:
             return prepared
         state = json.loads((workspace / ".runtime/macos/runtime.json").read_text())
@@ -107,9 +122,9 @@ def launch(arguments: list[str], app: Path) -> int:
         if not re.fullmatch(r"sha256:[a-f0-9]{64}", identifier):
             raise ValueError("Identita del runtime preparato non valida.")
         env["NIPAT_RUNTIME_IMAGE"] = identifier
-        return subprocess.call([str(python), "-I", "-B", "-c", CLI_CODE,
-                                str(app / "src"), *(arguments or ["wizard"])],
-                               env=env, cwd=workspace / "data")
+        return run_foreground([str(python), "-I", "-B", "-c", CLI_CODE,
+                               str(app / "src"), *(arguments or ["wizard"])],
+                              env=env, cwd=workspace / "data")
 
 
 def main(arguments: list[str] | None = None) -> int:

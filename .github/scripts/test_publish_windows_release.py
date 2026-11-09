@@ -216,7 +216,8 @@ class ReleaseGuards(unittest.TestCase):
             if path.name == "release_acceptance.py":
                 return validator
             if path.name == "verify_installer_set.py":
-                return SimpleNamespace(verify_set=verify_set)
+                return SimpleNamespace(verify_set=verify_set,
+                    requires_windows_audit=original_load(name, path).requires_windows_audit)
             return original_load(name, path)
         with patch.object(publisher, "load_module", side_effect=load), \
                 patch.object(publisher, "prepare_assets", side_effect=prepare):

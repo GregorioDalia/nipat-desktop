@@ -7,10 +7,8 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $project 'NIPAT.exe'
 }
 $target = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
-$compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
-    throw 'La compilazione richiede il compilatore .NET Framework x64 di Windows.'
-}
+. (Join-Path $PSScriptRoot 'build-compiler.ps1')
+$compiler = Get-NipatCSharpCompiler
 $metadata = Get-Content -LiteralPath (Join-Path $project 'pyproject.toml') -Raw -Encoding UTF8
 $versionMatch = [regex]::Match($metadata, '(?m)^version\s*=\s*"(\d+\.\d+\.\d+(?:(?:a|b|rc)\d+)?)"\s*$')
 if (-not $versionMatch.Success) { throw 'Versione NIPAT non riconosciuta in pyproject.toml.' }
@@ -34,7 +32,7 @@ using System.Reflection;
     $manifest = Join-Path $PSScriptRoot 'NipatLauncher.manifest'
     $icon = Join-Path $project 'assets\branding\nipat-icon.ico'
     if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) { throw 'Icona NIPAT mancante.' }
-    & $compiler /nologo /target:exe /platform:x64 /optimize+ "/win32manifest:$manifest" "/win32icon:$icon" "/out:$target" $source $assemblyInfo
+    & $compiler /nologo /target:exe /platform:x64 /optimize+ /deterministic+ /debug- "/pathmap:$temporary=/_/generated,$project=/_/src" "/win32manifest:$manifest" "/win32icon:$icon" "/out:$target" $source $assemblyInfo
     if ($LASTEXITCODE -ne 0) { throw 'Compilazione di NIPAT.exe fallita.' }
     if (-not (Test-Path -LiteralPath $target -PathType Leaf)) { throw 'NIPAT.exe non e stato prodotto.' }
     Write-Host "Launcher NIPAT $version compilato: $target"

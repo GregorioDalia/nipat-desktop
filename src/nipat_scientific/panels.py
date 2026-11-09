@@ -49,7 +49,14 @@ def read_dnp_list(path: Path) -> list[DnpRecord]:
                 raise ValidationError(
                     f"DNP_list: coordinate non numeriche alla riga {line_number}."
                 ) from exc
-            if pos1 < 1 or pos2 != pos1 + 1:
+            # DNPcall includes the base preceding pos1 in its four-base
+            # window. Its zero-based BED start is pos1 - 2, so position 1
+            # cannot produce a valid interval and must fail before execution.
+            if pos1 < 2:
+                raise ValidationError(
+                    f"DNP_list: pos1 deve essere almeno 2 per includere la base precedente alla riga {line_number}."
+                )
+            if pos2 != pos1 + 1:
                 raise ValidationError(
                     f"DNP_list: pos2 deve essere pos1 + 1 alla riga {line_number}."
                 )

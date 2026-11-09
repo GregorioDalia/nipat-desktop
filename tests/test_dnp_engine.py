@@ -78,6 +78,14 @@ class DnpEngineTests(unittest.TestCase):
         self.assertEqual((self.run / "work/bamlist.txt").read_text().splitlines(),
                          [Path(sample["path"]).as_posix() for sample in samples])
 
+    def test_panel_at_first_base_fails_before_staging_or_output_creation(self):
+        self.panel.write_text("chr1\t1\t2\tAC\tGT\n", encoding="utf-8")
+        before = self.snapshot()
+        with self.assertRaisesRegex(ValidationError, "pos1 deve essere almeno 2"):
+            prepare_dnp(self.request)
+        self.assertEqual(self.snapshot(), before)
+        self.assertFalse(self.run.exists())
+
     def test_safe_reference_alias_cannot_change_native_option_selection(self):
         # These are the actual unanchored regular expressions in upstream R.
         # Its parser takes the first matching argument, even for a partial flag.

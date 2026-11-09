@@ -10,12 +10,13 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.14.** La versione offre esecuzione seriale o automatica,
+**Versione stabile: 0.8.20.** La versione rafforza installazione e verifiche di
+pubblicazione. Offre esecuzione seriale o automatica,
 un massimo configurabile di processi e pileup DNP parallelo per cromosoma.
 Il calcolo DNP distribuisce i blocchi di tutti i campioni in una coda comune,
 anche con più BAM dei processi disponibili. SNPcall, Contamination e CPI
 condividono lo stesso modello di budget; la diagnostica resta facoltativa.
-Le [note della 0.8.14](docs/RELEASE_0.8.14.md) descrivono modifiche,
+Le [note della 0.8.20](docs/RELEASE_0.8.20.md) descrivono modifiche,
 aggiornamento e limiti delle prove. I confronti scientifici mantengono
 il [riferimento congelato 0.8.5](docs/OPTIMIZATION_0.8.9.md).
 
@@ -25,14 +26,14 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.14 |
+| Sistema | Versione stabile 0.8.20 |
 | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-0.8.14-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-0.8.14-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/nipat-desktop_0.8.14_amd64.deb) |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.20/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.20/NIPAT-0.8.20-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.20/NIPAT-0.8.20-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.20/nipat-desktop_0.8.20_amd64.deb) |
 
-La pagina della [release 0.8.14](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.14)
+La pagina della [release 0.8.20](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.20)
 riporta note, checksum e verifiche dei pacchetti. Le
 [release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
 restano disponibili. La
@@ -102,7 +103,9 @@ Le guide [Windows](docs/INSTALLATORE_WINDOWS.md), [macOS](docs/INSTALLATORE_MACO
 e [Ubuntu](docs/INSTALLATORE_LINUX.md) descrivono requisiti, aggiornamento e rimozione.
 I pacchetti non hanno una firma NIPAT riconosciuta dai sistemi; macOS non dispone
 di notarizzazione Apple. La guida Mac spiega l'autorizzazione specifica in
-Privacy e sicurezza. Il setup non disattiva le protezioni del dispositivo.
+Privacy e sicurezza. Smart App Control può bloccare i componenti Windows non firmati: la nuova
+versione non garantisce l'accettazione da parte di questa protezione. Il setup
+non modifica le impostazioni di sicurezza del dispositivo.
 
 ## Utilizzo
 
@@ -297,7 +300,7 @@ indipendenti e problemi riproducibili.
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
 - [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
-- [Note della versione stabile 0.8.14](docs/RELEASE_0.8.14.md)
+- [Note della versione stabile 0.8.20](docs/RELEASE_0.8.20.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)

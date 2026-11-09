@@ -194,6 +194,18 @@ class WindowsClientEvidenceTests(unittest.TestCase):
     def test_accepts_exact_client_checks_bound_to_compiled_installer_and_sources(self):
         self.verify(self.evidence)
 
+    def test_0820_requires_compiled_activity_helper_but_keeps_historical_inventory(self):
+        self.manifest["version"] = self.evidence["version"] = "0.8.20"
+        with self.assertRaisesRegex(ValueError, "Windows application inventory differs"):
+            self.verify(self.evidence)
+        self.inventory["files"].append({"path": "installer/windows/NipatActivityNative.dll", "sha256": "7" * 64})
+        self.inventory_bytes = json.dumps(self.inventory).encode()
+        self.evidence["application_inventory_sha256"] = hashlib.sha256(self.inventory_bytes).hexdigest()
+        self.verify(self.evidence)
+        self.manifest["version"] = self.evidence["version"] = "0.8.14"
+        with self.assertRaisesRegex(ValueError, "Windows application inventory differs"):
+            self.verify(self.evidence)
+
     def test_rejects_replaced_build_identity_or_overstated_execution_scope(self):
         mutations = [
             ("schema_version", True), ("platform", "windows-arm64"),
@@ -257,6 +269,29 @@ class WindowsClientEvidenceTests(unittest.TestCase):
             evidence["application_inventory_sha256"] = hashlib.sha256(inventory_bytes).hexdigest()
             with self.subTest(mutation=label), self.assertRaises(ValueError):
                 self.verify(evidence, inventory_bytes)
+
+
+class WindowsInstallerFixtureTests(unittest.TestCase):
+    def test_fixture_is_bound_to_source_and_cannot_claim_production_installation(self):
+        manifest = {"source_commit": "a" * 40, "source_sha256": {"installer/windows/NIPAT.iss": "b" * 64}}
+        evidence = {
+            "schema_version": 1, "scenario": "compiled-installer-fixture-on-server-2022",
+            "source_commit": "a" * 40, "source_definition_sha256": "b" * 64,
+            "fixture_definition_sha256": "c" * 64, "uninstaller_sha256": "d" * 64,
+            "status": "passed", "production_setup_executed": False, "wsl_execution": False,
+            "smart_app_control": "not-performed",
+            "substitutions": ["Windows workstation/elevation setup gate", "uninstaller elevation gate",
+                              "synthetic runtime bootstrap and payload"],
+            "checks": dict.fromkeys(("installed_0.0.1", "installed_0.0.2", "upgrade_backup",
+                                    "silent_removal_preserves_data"), True),
+        }
+        VERIFY.verify_windows_installer_fixture(evidence, manifest)
+        for field, replacement in (("source_commit", "e" * 40), ("source_definition_sha256", "f" * 64),
+                                   ("production_setup_executed", True), ("wsl_execution", True),
+                                   ("smart_app_control", "passed"), ("status", "failed"),
+                                   ("checks", {"installed_0.0.1": True}), ("substitutions", [])):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                VERIFY.verify_windows_installer_fixture({**evidence, field: replacement}, manifest)
 
 
 class VersionedInstallerSetTests(unittest.TestCase):

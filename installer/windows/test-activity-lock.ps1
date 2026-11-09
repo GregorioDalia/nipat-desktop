@@ -17,6 +17,32 @@ function Assert-Rejected([scriptblock] $Action, [string] $Message) {
 }
 try {
     [IO.Directory]::CreateDirectory($temporary) | Out-Null
+    $fixture = Join-Path $temporary 'installed package'
+    $helperDirectory = Join-Path $fixture 'installer\windows'
+    $distribution = Join-Path $fixture '.distribution'
+    [IO.Directory]::CreateDirectory($helperDirectory) | Out-Null
+    [IO.Directory]::CreateDirectory($distribution) | Out-Null
+    $assembly = Join-Path $helperDirectory 'NipatActivityNative.dll'
+    Assert-Rejected { Get-NipatActivityAssemblyPath $helperDirectory } 'missing helper never triggers local compilation'
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'NipatActivityNative.dll') -Destination $assembly
+    $manifestPath = Join-Path $distribution 'installer-manifest.json'
+    $inventoryPath = Join-Path $distribution 'application-files.json'
+    [IO.File]::WriteAllText($manifestPath, ('{"source_commit":"' + ('a' * 40) + '"}'))
+    Assert-Rejected { Get-NipatActivityAssemblyPath $helperDirectory } 'installed helper requires its package inventory'
+    $record = [ordered]@{
+        schema_version = 1; installation_channel = 'desktop'; source_commit = 'a' * 40
+        files = @([ordered]@{ path = 'installer/windows/NipatActivityNative.dll'
+            sha256 = (Get-FileHash -LiteralPath $assembly -Algorithm SHA256).Hash.ToLowerInvariant() })
+    }
+    $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
+    Assert-Test ((Get-NipatActivityAssemblyPath $helperDirectory) -ceq $assembly) 'exact packaged helper accepted'
+    $record.source_commit = 'b' * 40
+    $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
+    Assert-Rejected { Get-NipatActivityAssemblyPath $helperDirectory } 'helper inventory from another build rejected'
+    $record.source_commit = 'a' * 40
+    $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
+    [IO.File]::AppendAllText($assembly, 'changed')
+    Assert-Rejected { Get-NipatActivityAssemblyPath $helperDirectory } 'changed helper rejected before loading'
     $env:LOCALAPPDATA = Join-Path $temporary 'local data with spaces'
     [Environment]::SetEnvironmentVariable('NIPAT_SETUP_ACTIVITY_TOKEN', $null, 'Process')
     Initialize-NipatActivityNative

@@ -408,7 +408,7 @@ def stage_app(project: Path, manifest_path: Path, stage: Path, python_zip: Path)
 
 
 def application_payload(stage: Path) -> dict:
-    """Identify the complete Windows payload after compiling both executables."""
+    """Identify the complete Windows payload after compiling native components."""
     app = stage / "app"
     if app.is_symlink():
         raise ValueError("La cartella applicativa non puo essere un collegamento.")
@@ -419,6 +419,7 @@ def application_payload(stage: Path) -> dict:
     if not isinstance(source_hashes, dict) or not source_hashes:
         raise ValueError("Inventario dei sorgenti mancante.")
     generated = {"release.json", "NIPAT.exe", "installer/windows/EnableWsl.exe",
+                 "installer/windows/NipatActivityNative.dll",
                  f".distribution/{MANIFEST_NAME}", f".distribution/{bundle.PYTHON_NAME}"}
     inventory_path = f".distribution/{APPLICATION_FILES_NAME}"
     files = []

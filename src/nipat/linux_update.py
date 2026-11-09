@@ -285,7 +285,10 @@ def run_handoff(request_path: Path) -> int:
             raise LinuxUpdateError("Pacchetto installato; preparazione dell'ambiente non completata. "
                                    "Avviare NIPAT per riprendere la preparazione.")
         _write_json(state, {"phase": "ready", "package": str(package)})
-        return subprocess.run(["/usr/bin/nipat"], check=False).returncode
+        # The transaction is finished. Replace this helper with the installed
+        # launcher so a terminal Ctrl+C cannot make subprocess.run kill that
+        # launcher while its CLI is recovering to the menu with a live lease.
+        os.execv("/usr/bin/nipat", ["/usr/bin/nipat"])
     except (LinuxUpdateError, OSError, KeyboardInterrupt) as exc:
         message = str(exc) or "Aggiornamento interrotto."
         _write_json(state, {"phase": "failed", "error": message})

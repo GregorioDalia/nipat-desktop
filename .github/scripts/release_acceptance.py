@@ -51,6 +51,18 @@ R_HELPERS = {
     "tests/r_optimization/cpi/check_core.R", "tests/r_optimization/dnp/check_blocks.R",
     "tests/r_optimization/snp/check_reads.R", "tests/r_optimization/performance/check_costs.R",
 }
+R_AUDIT_CASES = {
+    **dict.fromkeys(("dnp-blocks-1", "dnp-blocks-2", "dnp-blocks-3", "dnp-numeric-blocks",
+                    "dnp-repeated-qname-compatibility", "dnp-multi-blocks-2", "dnp-multi-blocks-3",
+                    "dnp-multi-blocks-6"), "dnp-call"),
+    **dict.fromkeys(("cpi-single-intervals", "cpi-single-cutoffs"), "cpi"),
+}
+R_AUDIT_HELPERS = {
+    "tests/r_optimization/dnp/check_parallel_samples.R", "tests/r_optimization/dnp/check_parallel_blocks.R",
+    "tests/r_optimization/dnp/check_reader.R", "tests/r_optimization/dnp/check_reader_ranges.R",
+    "tests/r_optimization/parallel/check_budget.R", "tests/r_optimization/parallel/check_acquisition_budget.R",
+    "tests/r_optimization/contamination/check_parallel.R",
+}
 SOURCE_EQUIVALENCE_SCOPE = "distributed-operative-sources-v1"
 REVIEWED_SOURCE_SCOPE = "scientific-runtime-equivalence-with-reviewed-client-changes-v1"
 RELIABILITY_SOURCE_SCOPE = "reviewed-operative-changes-with-unchanged-r-v1"
@@ -94,6 +106,44 @@ def multiplatform_contract(version):
 def revised_r_contract(version):
     match = re.fullmatch(r"0\.8\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
     return bool(match and int(match[1]) >= 9)
+
+
+def audited_r_contract(version):
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version or "")
+    return bool(match and tuple(map(int, match.groups())) >= (0, 8, 20))
+
+
+def verify_multibam_variants(case):
+    variants = case.get("execution_variants")
+    expected = {"candidate": ("serial", None), "auto": ("auto", None),
+                "manual-2": ("auto", 2), "manual-4": ("auto", 4), "manual-4-repeat": ("auto", 4)}
+    require(isinstance(variants, dict) and set(variants) == set(expected),
+            "Multi-BAM serial/auto/manual/repeat comparisons are missing")
+    for name, (mode, cap) in expected.items():
+        comparison = variants[name]
+        require(isinstance(comparison, dict) and comparison.get("status") == "passed"
+                and comparison.get("unrounded_r_values") == "identical"
+                and comparison.get("table_sha256") == case["table_sha256"]
+                and comparison.get("plots") == case["plots"],
+                "Multi-BAM variant does not preserve exact scientific results")
+        parallel = comparison.get("parallel_execution")
+        require(isinstance(parallel, dict) and parallel.get("requested_mode") == mode
+                and parallel.get("requested_max_workers") == cap,
+                "Multi-BAM variant has different execution settings")
+        planned = parallel.get("maximum_planned_workers")
+        observed = parallel.get("maximum_observed_child_workers")
+        require(type(planned) is int and planned >= 1 and type(observed) is int and 0 <= observed <= planned
+                and (cap is None or planned <= cap), "Multi-BAM observed concurrency exceeds its budget")
+        if name == "candidate":
+            require(planned == 1 and observed == 0 and parallel.get("simultaneous_child_workers") is False,
+                    "Serial Multi-BAM evidence contains child concurrency")
+        else:
+            require(observed >= 2 and parallel.get("simultaneous_child_workers") is True
+                    and parallel.get("overlapping_workers_required") is True,
+                    "Parallel Multi-BAM evidence has no observed concurrent workers")
+        if name == "manual-4-repeat":
+            require(comparison.get("deterministic_repeat_of") == "manual-4",
+                    "Multi-BAM deterministic repeat is missing")
 
 
 def reviewable_path(path, *, reliability=False, multiplatform=False, revised_r=False):
@@ -481,13 +531,14 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
     require(isinstance(cases, list) and all(isinstance(case, dict) for case in cases),
             "Scientific differential cases are missing")
     names = [case.get("case") for case in cases]
+    required_cases = {**R_CASES, **(R_AUDIT_CASES if audited_r_contract(record["version"]) else {})}
     require(all(isinstance(name, str) and name for name in names) and len(set(names)) == len(names)
-            and set(R_CASES) <= set(names), "Required scientific differential cases are missing or duplicated")
+            and set(required_cases) <= set(names), "Required scientific differential cases are missing or duplicated")
     plots_verified = 0
     for case in cases:
         require(case.get("status") == "passed" and case.get("unrounded_r_values") == "identical"
                 and case.get("workflow") in set(R_WORKFLOWS.values())
-                and (case["case"] not in R_CASES or case["workflow"] == R_CASES[case["case"]]),
+                and (case["case"] not in required_cases or case["workflow"] == required_cases[case["case"]]),
                 "A scientific differential case failed or has a different workflow")
         tables = case.get("table_sha256")
         require(isinstance(tables, dict) and tables
@@ -507,13 +558,19 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                             for page, value in plot["page_sha256"].items()),
                     "Scientific PDF pixel comparison evidence is incomplete")
             plots_verified += 1
+        if audited_r_contract(record["version"]) and case["case"] in {
+                "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6"}:
+            require(len(plots) >= int(case["case"].rsplit("-", 1)[1]) * 5,
+                    "Multi-BAM PDF comparisons are incomplete")
+            verify_multibam_variants(case)
     require(plots_verified > 0, "Scientific equivalence contains no rendered PDF comparisons")
     helpers = report.get("helpers")
     require(isinstance(helpers, list) and all(isinstance(item, dict) for item in helpers),
             "Scientific focused comparisons are missing")
     paths = [item.get("path") for item in helpers]
+    required_helpers = R_HELPERS | (R_AUDIT_HELPERS if audited_r_contract(record["version"]) else set())
     require(all(safe_evidence_path(path) and path.startswith("tests/r_optimization/") for path in paths)
-            and len(set(paths)) == len(paths) and R_HELPERS <= set(paths),
+            and len(set(paths)) == len(paths) and required_helpers <= set(paths),
             "Required scientific focused comparisons are missing or duplicated")
     for helper in helpers:
         require(helper.get("status") == "passed" and helper.get("sha256") ==
