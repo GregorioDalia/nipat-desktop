@@ -47,10 +47,14 @@ try {
 
     # The collector reads bounded event fields only; unrelated XML/command
     # lines and private profile names must not leak into the diagnostic JSON.
-    $script:queryLimit = 0
+    # Mutate a shared observation object. A scalar assigned through $script:
+    # inside the mock belongs to the invoked collector's script scope.
+    $queryObservation = [pscustomobject]@{ Limit = 0; Calls = 0; Filter = $null }
     function Get-WinEvent {
         param($FilterHashtable, [int]$MaxEvents, $ErrorAction)
-        $script:queryLimit = $MaxEvents
+        $queryObservation.Limit = $MaxEvents
+        $queryObservation.Calls++
+        $queryObservation.Filter = $FilterHashtable
         $event = [pscustomobject]@{ Id = 3077; RecordId = 42; TimeCreated = [DateTime]::UtcNow }
         $event | Add-Member -MemberType ScriptMethod -Name ToXml -Value {
             $path = [Security.SecurityElement]::Escape((Join-Path $env:USERPROFILE 'Downloads\NIPAT-Setup.exe'))
@@ -66,7 +70,12 @@ try {
     & (Join-Path $PSScriptRoot 'collect-windows-security.ps1') -Hours 2 -MaxEvents 3 -OutputPath $diagnosticPath
     $diagnosticsText = Get-Content -LiteralPath $diagnosticPath -Raw
     $diagnostics = $diagnosticsText | ConvertFrom-Json
-    Assert-Trust ($script:queryLimit -eq 3 -and $diagnostics.events.Count -eq 1) 'collector applies a bounded event query'
+    Assert-Trust ($queryObservation.Calls -eq 1 -and $queryObservation.Limit -eq 3) 'collector applies one bounded event query'
+    Assert-Trust ($queryObservation.Filter.LogName -ceq 'Microsoft-Windows-CodeIntegrity/Operational' -and
+        (@($queryObservation.Filter.Id) -join ',') -ceq '3076,3077' -and
+        $queryObservation.Filter.StartTime -gt (Get-Date).AddHours(-3)) 'collector queries only recent CodeIntegrity audit and block events'
+    Assert-Trust ($diagnostics.event_query_status -ceq 'available') ("collector retains a successful query: " + $diagnostics.event_query_error)
+    Assert-Trust ($diagnostics.events.Count -eq 1) 'collector retains the returned event'
     Assert-Trust ($diagnosticsText -notmatch 'private argument|CommandLine|private-user' -and
         $diagnostics.events[0].fields.FileName.StartsWith('%USERPROFILE%')) 'collector excludes command lines and redacts profile path'
     Assert-Trust ($diagnostics.scope -ceq 'read-only-code-integrity-diagnostics') 'collector identifies its limited scope'
