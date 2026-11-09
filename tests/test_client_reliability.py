@@ -224,12 +224,21 @@ class RecoveryPresentationTests(unittest.TestCase):
         show_incomplete_runs(ui, runner)
         runner.reconcile_run.assert_not_called()
 
+    def test_mixed_owned_and_foreign_containers_do_not_offer_cleanup(self):
+        report = self.report()
+        report["containers"].append({"state": "exited", "owned": False})
+        runner = Mock()
+        runner.incomplete_runs.return_value = [report]
+        ui = Terminal(read=Mock(side_effect=["1", "0"]), write=Mock(), cancel_to_menu=True)
+        show_incomplete_runs(ui, runner)
+        runner.reconcile_run.assert_not_called()
+
     def test_unreadable_record_diagnostic_is_visible(self):
         report = {**self.report(), "containers": [], "error": "Invalid run.json"}
         self.assertIn("Invalid run.json", "\n".join(recovery_lines(report)))
 
-    def test_restarting_and_paused_owned_containers_can_be_stopped(self):
-        for state in ("restarting", "paused"):
+    def test_owned_active_and_stopped_containers_can_be_cleaned(self):
+        for state in ("restarting", "paused", "created", "exited", "dead"):
             with self.subTest(state=state):
                 report = self.report()
                 report["containers"][0]["state"] = state

@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import urllib.parse
@@ -37,6 +38,16 @@ def fetch_json(url):
     require(allowed_url(url), "Invalid release metadata URL")
     request = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json",
                                                  "User-Agent": "nipat-ci-evidence"})
+    parsed = urllib.parse.urlsplit(url)
+    token = os.environ.get("GH_TOKEN", "")
+    if (token and parsed.scheme == "https" and parsed.netloc == "api.github.com"
+            and not parsed.query and not parsed.fragment
+            and re.fullmatch(
+                rf"/repos/{re.escape(REPOSITORY)}/releases/(?:latest|tags/v[0-9]+\.[0-9]+\.[0-9]+(?:(?:a|b|rc)[0-9]+)?)",
+                parsed.path)):
+        # Authenticate only this repository's metadata request. urllib excludes
+        # unredirected headers when following even an approved-host redirect.
+        request.add_unredirected_header("Authorization", f"Bearer {token}")
     with urllib.request.build_opener(RestrictedRedirect()).open(request, timeout=60) as response:
         data = response.read(4 * 1024 * 1024 + 1)
     require(len(data) <= 4 * 1024 * 1024, "Release metadata is too large")

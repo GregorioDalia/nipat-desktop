@@ -4,6 +4,7 @@ suppressPackageStartupMessages({library(dplyr); library(tidyr); library(stringr)
 arguments <- commandArgs(trailingOnly=TRUE)
 if (length(arguments) != 1L) stop("Expected one repository root argument")
 repository <- normalizePath(arguments[[1]], mustWork=TRUE)
+source(file.path(repository, "src/nipat_scientific/parallel.R"))
 variants <- c(reference=file.path(repository, "tests/reference_r/0.8.5"),
               candidate=repository)
 

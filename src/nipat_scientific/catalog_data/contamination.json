@@ -3,8 +3,8 @@
   "workflow": "contamination",
   "source": {
     "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
-    "sha256": "152c74cc91b0bd441e673ecf52a756604ec47e9a04c0e31fc0965c097e3437e1",
-    "line_count": 298
+    "sha256": "d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26",
+    "line_count": 328
   },
   "public_parameters": [
     {
@@ -31,8 +31,8 @@
         "en": "DNP coordinate panel. Selectable in the CLI and menu; NIPAT prepares a normalized copy without changing the original."
       },
       "source_lines": [
-        12,
-        18
+        16,
+        22
       ]
     },
     {
@@ -60,8 +60,8 @@
         "en": "R accepts a file or directory. NIPAT accepts repeated files or a recursive directory and passes a directory of .txt copies to R."
       },
       "source_lines": [
-        12,
-        18
+        16,
+        22
       ]
     },
     {
@@ -89,8 +89,8 @@
         "en": "NIPAT creates a new run directory and uses its output subdirectory as the R destination; scientific table names remain defined by the script."
       },
       "source_lines": [
-        12,
-        20
+        16,
+        24
       ]
     }
   ],
@@ -111,8 +111,8 @@
         "en": "The panel header is recognized by normalizing column names; chr, pos1 and pos2 must be identifiable."
       },
       "source_lines": [
-        22,
-        58
+        26,
+        62
       ]
     },
     {
@@ -134,8 +134,8 @@
         "en": "Without a header, the first three columns contain coordinates; the fourth and fifth, if present, are named REF and ALT."
       },
       "source_lines": [
-        60,
-        98
+        64,
+        102
       ]
     },
     {
@@ -151,8 +151,8 @@
         "en": "R recursively selects names ending in .txt, with case-sensitive matching, and excludes the panel path. A directly supplied file is not selected through this pattern."
       },
       "source_lines": [
-        100,
-        127
+        104,
+        131
       ]
     },
     {
@@ -176,8 +176,8 @@
         "en": "Tables require coordinates and three counts under these exact names. REF, ALT, GT and ratio_REF_ALT are not required columns."
       },
       "source_lines": [
-        138,
-        170
+        142,
+        174
       ]
     },
     {
@@ -195,8 +195,8 @@
         "en": "Coordinates and counts are converted to numbers; rows with missing values after conversion are subsequently filtered."
       },
       "source_lines": [
-        172,
-        181
+        176,
+        185
       ]
     },
     {
@@ -211,8 +211,8 @@
         "en": "If ratio_REF_ALT is present, R uses that value after numeric conversion and does not check agreement with the counts. The table must keep them consistent."
       },
       "source_lines": [
-        183,
-        198
+        187,
+        202
       ]
     },
     {
@@ -228,8 +228,8 @@
         "en": "When the column is absent, the REF ratio is calculated from REF and ALT counts alone; a nonpositive sum produces NA."
       },
       "source_lines": [
-        188,
-        198
+        192,
+        202
       ]
     },
     {
@@ -252,8 +252,8 @@
         "en": "Missing values in the listed fields and sites without a positive REF+ALT sum are excluded. This filter does not add integer or nonnegativity checks for each individual count."
       },
       "source_lines": [
-        200,
-        211
+        207,
+        218
       ]
     },
     {
@@ -272,8 +272,8 @@
         "en": "Only rows whose coordinates occur in the panel are retained. Matching does not use REF or ALT and does not remove repeated sample rows."
       },
       "source_lines": [
-        213,
-        218
+        220,
+        225
       ]
     },
     {
@@ -285,8 +285,8 @@
         "en": "The other-read ratio uses REF+ALT as its denominator, not total depth."
       },
       "source_lines": [
-        220,
-        224
+        227,
+        231
       ]
     },
     {
@@ -302,8 +302,8 @@
         "en": "Other-read ratios at or below 0.1, equal to 10% of REF+ALT, are retained."
       },
       "source_lines": [
-        225,
-        228
+        232,
+        235
       ]
     },
     {
@@ -319,8 +319,8 @@
         "en": "A site is informative when ratio_REF_ALT is at least 0.9 or at most 0.1; both limits are inclusive."
       },
       "source_lines": [
-        230,
-        235
+        237,
+        242
       ]
     },
     {
@@ -336,8 +336,8 @@
         "en": "At REF-dominated sites, unexpected reads are ALT; at the other informative sites they are REF."
       },
       "source_lines": [
-        236,
-        241
+        243,
+        248
       ]
     },
     {
@@ -349,8 +349,8 @@
         "en": "Per-site contamination is a fraction, not a percentage, and excludes N_Other from the denominator."
       },
       "source_lines": [
-        242,
-        243
+        249,
+        250
       ]
     },
     {
@@ -367,8 +367,8 @@
         "en": "The mean gives each informative row equal weight regardless of depth; with no sites it is NA."
       },
       "source_lines": [
-        245,
-        250
+        268,
+        273
       ]
     },
     {
@@ -386,8 +386,8 @@
         "en": "The sample standard deviation is calculated only with at least two informative rows; otherwise it is NA."
       },
       "source_lines": [
-        252,
-        257
+        275,
+        280
       ]
     },
     {
@@ -399,8 +399,8 @@
         "en": "The sample name in summaries and filenames comes from the input basename without its extension."
       },
       "source_lines": [
-        259,
-        259
+        282,
+        282
       ]
     },
     {
@@ -412,8 +412,8 @@
         "en": "informative_DNPs counts retained rows; it does not count distinct coordinates."
       },
       "source_lines": [
-        261,
-        268
+        284,
+        291
       ]
     },
     {
@@ -431,21 +431,27 @@
         "en": "Each table contains only retained rows, input columns and fields derived by the calculation."
       },
       "source_lines": [
-        270,
-        280
+        293,
+        303
       ]
     },
     {
       "id": "sample_execution",
       "kind": "execution",
-      "value": "sequential lapply",
+      "value": {
+        "sample_pool": "shared resource budget",
+        "duplicate_output_basenames": "case-insensitive comparison; serial sample processing in original order",
+        "row_tasks": "ceil(sample_rows / 50000)",
+        "row_partition": "contiguous and ordered",
+        "nested_worker_pools": false
+      },
       "description": {
-        "it": "I campioni vengono elaborati in sequenza; lo script non espone un’opzione di parallelismo. Le righe del riepilogo vengono raccolte e unite una sola volta dopo l’elaborazione.",
-        "en": "Samples are processed sequentially; the script exposes no parallelism option. Summary rows are collected and combined once after processing."
+        "it": "I campioni usano il pool comune. Basename di output ripetuti, anche con sole differenze di maiuscole/minuscole, forzano l’ordine seriale dei campioni, preservando le sovrascritture storiche. Se il budget consente più worker, un campione grande può ripartire le trasformazioni indipendenti in intervalli contigui di righe; dentro un worker campione questo pool resta seriale. Media e deviazione standard sono calcolate sul vettore completo nell’ordine originale, senza combinare statistiche parziali.",
+        "en": "Samples use the shared pool. Repeated output basenames, including names differing only in case, force serial sample order, preserving historical overwrites. When the budget allows multiple workers, a large sample can partition independent transformations into contiguous row ranges; inside a sample worker this pool remains serial. Mean and standard deviation use the complete vector in original order, without combining partial statistics."
       },
       "source_lines": [
-        285,
-        289
+        308,
+        316
       ]
     },
     {
@@ -468,8 +474,25 @@
         "en": "The summary contains the identifier, informative-row count, mean and standard deviation for each sample."
       },
       "source_lines": [
-        291,
-        298
+        321,
+        328
+      ]
+    },
+    {
+      "id": "row_execution",
+      "kind": "execution",
+      "value": {
+        "row_task_target": 50000,
+        "partition": "contiguous",
+        "reductions": "mean and sd on original-order combined rows"
+      },
+      "description": {
+        "it": "La partizione avviene dopo le conversioni numeriche; i filtri e la contaminazione per sito restano invariati. Le righe dei task sono riunite in ordine prima delle statistiche e della scrittura.",
+        "en": "Partitioning follows numeric conversion; filters and per-site contamination are unchanged. Task rows are combined in order before statistics and output."
+      },
+      "source_lines": [
+        204,
+        268
       ]
     }
   ],
@@ -639,7 +662,7 @@
           27,
           33
         ],
-        "sha256": "ddd5d8d7bbe904606762d30a9d00a3d66d3ba532384ea1da3c75eaac75363c16"
+        "sha256": "5e7b445bda7aa326770a805caa025ab5a6f47a10af7dd49d3e9acbbe72895f7a"
       }
     },
     {
@@ -739,143 +762,235 @@
           }
         ]
       }
+    },
+    {
+      "id": "parallel_execution_policy",
+      "value": {
+        "default_mode": "auto",
+        "modes": [
+          "auto",
+          "serial"
+        ],
+        "environment": [
+          "NIPAT_EXECUTION_MODE",
+          "NIPAT_MAX_WORKERS",
+          "NIPAT_CPU_LIMIT",
+          "NIPAT_MEMORY_LIMIT_MIB"
+        ],
+        "cli": [
+          "--execution-mode",
+          "--max-workers"
+        ],
+        "serial_workers": 1,
+        "nested_worker_pools": false,
+        "result_order": "input task order",
+        "memory_estimate_minimum_mib": 2048,
+        "available_memory_fraction": 0.8,
+        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit",
+        "internal_library_threads": 1,
+        "thread_limit_scope": "managed requests, workflow steps and native engine run"
+      },
+      "applies_to": "contamination",
+      "origin": "NIPAT scientific engine and client",
+      "description": {
+        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. I thread interni delle librerie numeriche e di vroom sono limitati a uno nei percorsi gestiti e nell’avvio nativo del motore; client e coordinatori restano distinti dai processi di calcolo.",
+        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. Numeric-library and vroom internal threads are limited to one in managed execution paths and native engine runs; clients and coordinators remain separate from calculation workers."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/parallel.R",
+        "source_lines": [
+          1,
+          205
+        ],
+        "sha256": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
+        "dependencies": [
+          {
+            "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
+            "source_lines": [
+              10,
+              10
+            ],
+            "sha256": "d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26"
+          },
+          {
+            "path": "src/nipat/execution/options.py",
+            "source_lines": [
+              12,
+              34
+            ],
+            "sha256": "0a53d636dc26461b15807f5f8ec54f1719367ddc4d76412eaa137428ff4ae972"
+          },
+          {
+            "path": "src/nipat/execution/runner.py",
+            "source_lines": [
+              190,
+              198
+            ],
+            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
+          },
+          {
+            "path": "src/nipat_scientific/parallel.py",
+            "source_lines": [
+              8,
+              43
+            ],
+            "sha256": "5583abb381fcd43ccc90895210f776e97b476ef652a9bb070aa69d81d0b491a8"
+          },
+          {
+            "path": "engine/main.py",
+            "source_lines": [
+              407,
+              414
+            ],
+            "sha256": "8f66d87dbc38481c4f1d4aff2f191f0a4b1742ed0972159e1e8f39d54d7b4de8"
+          }
+        ]
+      }
     }
   ],
   "audit_sections": [
     {
       "start": 1,
-      "end": 21,
+      "end": 25,
       "summary": {
         "it": "Librerie, tre argomenti posizionali e cartella di output.",
         "en": "Libraries, three positional arguments and output directory."
       }
     },
     {
-      "start": 22,
-      "end": 35,
+      "start": 26,
+      "end": 39,
       "summary": {
         "it": "Lettura della prima riga e riconoscimento dell'intestazione del pannello.",
         "en": "First-row reading and panel-header detection."
       }
     },
     {
-      "start": 36,
-      "end": 59,
+      "start": 40,
+      "end": 63,
       "summary": {
         "it": "Lettura del pannello con intestazione e normalizzazione dei nomi.",
         "en": "Reading a headered panel and normalizing names."
       }
     },
     {
-      "start": 60,
-      "end": 86,
+      "start": 64,
+      "end": 90,
       "summary": {
         "it": "Lettura del pannello senza intestazione e assegnazione delle colonne.",
         "en": "Reading a headerless panel and assigning columns."
       }
     },
     {
-      "start": 87,
-      "end": 99,
+      "start": 91,
+      "end": 103,
       "summary": {
         "it": "Controllo e conversione delle coordinate del pannello.",
         "en": "Panel-coordinate checks and conversion."
       }
     },
     {
-      "start": 100,
-      "end": 128,
+      "start": 104,
+      "end": 132,
       "summary": {
         "it": "Selezione dei file, ricerca ricorsiva ed esclusione del pannello.",
         "en": "File selection, recursive discovery and panel exclusion."
       }
     },
     {
-      "start": 129,
-      "end": 137,
+      "start": 133,
+      "end": 141,
       "summary": {
         "it": "Inizializzazione dello schema del riepilogo.",
         "en": "Summary-schema initialization."
       }
     },
     {
-      "start": 138,
-      "end": 181,
+      "start": 142,
+      "end": 185,
       "summary": {
         "it": "Lettura del campione, colonne obbligatorie e conversioni numeriche.",
         "en": "Sample reading, required columns and numeric conversions."
       }
     },
     {
-      "start": 182,
-      "end": 198,
+      "start": 186,
+      "end": 202,
       "summary": {
         "it": "Uso del rapporto fornito o calcolo dai conteggi.",
         "en": "Use of the supplied ratio or calculation from counts."
       }
     },
     {
-      "start": 199,
-      "end": 211,
+      "start": 203,
+      "end": 218,
       "summary": {
-        "it": "Filtri sui valori mancanti e sulla somma REF+ALT.",
-        "en": "Missing-value and REF+ALT-sum filters."
+        "it": "Funzione dei filtri indipendenti per riga: valori mancanti e profondità positiva.",
+        "en": "Independent per-row filter function: missing values and positive depth."
       }
     },
     {
-      "start": 212,
-      "end": 219,
+      "start": 219,
+      "end": 226,
       "summary": {
         "it": "Restrizione ai siti del pannello per coordinate.",
         "en": "Restriction to panel sites by coordinates."
       }
     },
     {
-      "start": 220,
-      "end": 229,
+      "start": 227,
+      "end": 236,
       "summary": {
         "it": "Calcolo e filtro del rapporto delle altre letture.",
         "en": "Calculation and filtering of the other-read ratio."
       }
     },
     {
-      "start": 230,
-      "end": 244,
+      "start": 237,
+      "end": 252,
       "summary": {
         "it": "Selezione dei siti informativi e contaminazione per sito.",
         "en": "Informative-site selection and per-site contamination."
       }
     },
     {
-      "start": 245,
-      "end": 258,
+      "start": 253,
+      "end": 267,
       "summary": {
-        "it": "Media, deviazione standard e casi con pochi siti.",
-        "en": "Mean, standard deviation and low-site-count cases."
+        "it": "Partizione in righe contigue secondo il budget e riunione ordinata dei risultati.",
+        "en": "Resource-bounded contiguous-row partitioning and ordered result assembly."
       }
     },
     {
-      "start": 259,
-      "end": 269,
+      "start": 268,
+      "end": 281,
+      "summary": {
+        "it": "Media e deviazione standard sul vettore ricomposto nell’ordine originale.",
+        "en": "Mean and standard deviation over the recombined vector in original order."
+      }
+    },
+    {
+      "start": 282,
+      "end": 292,
       "summary": {
         "it": "Identificativo del campione e costruzione della riga del riepilogo.",
         "en": "Sample identifier and construction of its summary row."
       }
     },
     {
-      "start": 270,
-      "end": 283,
+      "start": 293,
+      "end": 306,
       "summary": {
         "it": "Scrittura della tabella per campione e restituzione della riga del riepilogo.",
         "en": "Per-sample table writing and return of its summary row."
       }
     },
     {
-      "start": 284,
-      "end": 298,
+      "start": 307,
+      "end": 328,
       "summary": {
-        "it": "Elaborazione sequenziale, unione delle righe in un’unica operazione e scrittura del riepilogo finale.",
-        "en": "Sequential processing, one-time row combination and final-summary writing."
+        "it": "Pool campioni senza collisioni di output, raccolta ordinata e scrittura del riepilogo.",
+        "en": "Sample pool without output collisions, ordered collection and summary writing."
       }
     }
   ]

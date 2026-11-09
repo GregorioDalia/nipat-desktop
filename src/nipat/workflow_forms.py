@@ -170,7 +170,7 @@ class DnpCpiForm(DnpContaminationForm):
         # convention or a second independent list of BAM files.
         dnp_fields = {field.key: field for field in WorkflowForm.fields(self)}
         result = [Field("pairs", "Coppie cfDNA materno / campione paterno", "pairs")]
-        result += [dnp_fields[key] for key in ("reference", "panel", "parallel")]
+        result += [dnp_fields[key] for key in ("reference", "panel")]
         if self.include_contamination:
             result.extend(field for field in super().fields()
                           if field.key in {"contamination_panel_mode", "contamination_panel"})
@@ -393,7 +393,7 @@ class DnpCpiForm(DnpContaminationForm):
         mode = values["cutoff_mode"]
         return {
             "pairs": list(values["pairs"]), "reference": values["reference"], "panel": values["panel"],
-            "parallel": values["parallel"] == "2", "popfreq": values["popfreq"],
+            "parallel": False, "popfreq": values["popfreq"],
             "err_const": values["err_const"], "cpi_panel": values["cpi_panel"] if mode == "1" else None,
             "cutoffs": values["cutoffs"] if mode == "2" else None,
             "cutoff_map": values["cutoff_map"] if mode == "3" else None,

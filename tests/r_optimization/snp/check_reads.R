@@ -15,6 +15,46 @@ extract <- function(path) {
   parse(text=lines[seq.int(start, end-1L)])
 }
 blocks <- lapply(paths, extract)
+source(Sys.getenv("NIPAT_PARALLEL_HELPER",
+                  unset=file.path(repository, "src/nipat_scientific/parallel.R")))
+candidate_expressions <- parse(file=paths[["candidate"]])
+group_definition <- Filter(function(expression) {
+  is.call(expression) && identical(expression[[1L]], as.name("<-")) &&
+    identical(expression[[2L]], as.name("nipat_snp_group_reads"))
+}, candidate_expressions)
+stopifnot(length(group_definition) == 1L)
+eval(group_definition[[1L]], globalenv())
+
+# readr uses its own thread pool, independent of the BLAS/OpenMP limits. Check
+# the real panel-reading call with a conflicting user option, then compare its
+# parsed values and row order against the frozen reference.
+local({
+  settings <- options(readr.num_threads=8L)
+  on.exit(options(settings), add=TRUE)
+  path <- tempfile(fileext=".tsv")
+  on.exit(unlink(path), add=TRUE)
+  writeLines(c("chr\tpos1\tpos2", "chr2\t120\t120", "chr1\t50\t50"), path)
+  panel_assignment <- function(path) {
+    expressions <- Filter(function(expression) {
+      is.call(expression) && identical(expression[[1L]], as.name("<-")) &&
+        identical(expression[[2L]], as.name("fake_DNP"))
+    }, parse(file=path))
+    stopifnot(length(expressions) == 1L)
+    expressions[[1L]]
+  }
+  evaluate_panel <- function(expression) {
+    values <- new.env(parent=globalenv())
+    values$snplist_file <- path
+    eval(expression, values)
+    as.data.frame(values$fake_DNP)
+  }
+  reference <- evaluate_panel(panel_assignment(paths[["reference"]]))
+  trace("read_tsv", where=asNamespace("readr"), print=FALSE,
+        tracer=quote(stopifnot(identical(num_threads, 1L))))
+  on.exit(untrace("read_tsv", where=asNamespace("readr")), add=TRUE)
+  candidate <- evaluate_panel(panel_assignment(paths[["candidate"]]))
+  stopifnot(identical(reference, candidate))
+})
 
 row <- function(position, bases, names, chromosome="chr1", extra=NULL) {
   paste(c(chromosome, position, "A", nchar(bases), bases,
@@ -40,31 +80,51 @@ cases <- list(
   mismatched_lengths=vapply(49:51, function(position) row(position, ".,", "a,b,c"), ""),
   unicode_names=vapply(49:51, function(position) row(position, ".,", "\u00e9,Z"), "")
 )
+# Interleaved reads shared across many windows must retain their complete
+# coordinate paths; partitioning by locus would change the scientific result.
+cases$interleaved_global_names <- unlist(lapply(c(50L, 120L, 180L), function(center) {
+  qnames <- sprintf("read_%02d", c(seq(1L, 63L, 2L), seq(2L, 64L, 2L)))
+  vapply((center-1L):(center+1L), function(position) row(
+    position, paste(rep(c(".", ",", "G", "t"), 16L), collapse=""),
+    paste(qnames, collapse=",")), "")
+}), use.names=FALSE)
 original_locale <- Sys.getlocale("LC_COLLATE")
 comparisons <- 0L
+configurations <- list(
+  serial=list(mode="serial", workers="4"),
+  two=list(mode="auto", workers="2"),
+  four=list(mode="auto", workers="4"),
+  four_repeat=list(mode="auto", workers="4")
+)
 for (locale in unique(c(original_locale, "C", "C.UTF-8", "en_US.UTF-8"))) {
   selected <- suppressWarnings(Sys.setlocale("LC_COLLATE", locale))
   if (!nzchar(selected)) next
   for (name in names(cases)) {
     path <- tempfile(fileext=".pileup")
     writeLines(cases[[name]], path, useBytes=TRUE)
-    values <- lapply(blocks, function(block) {
+    evaluate <- function(block) {
       environment <- new.env(parent=globalenv())
       environment$pileup_file <- path
       tryCatch({
         invisible(capture.output(suppressMessages(suppressWarnings(eval(block, environment)))))
         list(ok=TRUE, result=environment$df_count2)
       }, error=function(error) list(ok=FALSE, class=class(error), message=conditionMessage(error)))
-    })
+    }
+    reference <- evaluate(blocks$reference)
+    for (configuration in names(configurations)) {
+      settings <- configurations[[configuration]]
+      Sys.setenv(NIPAT_EXECUTION_MODE=settings$mode, NIPAT_MAX_WORKERS=settings$workers)
+      candidate <- evaluate(blocks$candidate)
+      if (!identical(reference, candidate)) {
+        print(list(reference=reference, candidate=candidate))
+        stop("SNP pileup mismatch: ", locale, " / ", name, " / ", configuration)
+      }
+      comparisons <- comparisons + 1L
+    }
     unlink(path)
-    if (!identical(values$reference, values$candidate)) {
-      print(values)
-      stop("SNP pileup mismatch: ", locale, " / ", name)
+    if (!reference$ok && !name %in% c("whitespace_name", "mismatched_lengths")) {
+      stop("Unexpected failure in SNP reference: ", name, ": ", reference$message)
     }
-    if (!values$reference$ok && !name %in% c("whitespace_name", "mismatched_lengths")) {
-      stop("Unexpected failure in SNP reference: ", name, ": ", values$reference$message)
-    }
-    comparisons <- comparisons + 1L
   }
 }
 Sys.setlocale("LC_COLLATE", original_locale)

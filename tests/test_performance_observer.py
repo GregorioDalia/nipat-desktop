@@ -185,6 +185,96 @@ class ContainerObserverTests(unittest.TestCase):
                    subprocess.CompletedProcess([], 0, raw, "")), self.assertRaises(ValueError):
             self.observer._stats()
 
+    def collect_responses(self, responses, observations):
+        """Exercise the real parser and collection loop around a container exit."""
+        with patch("nipat.execution.performance.inspect_container", side_effect=observations), patch(
+            "nipat.execution.performance.subprocess.run", side_effect=[
+                subprocess.CompletedProcess([], 0, raw, "") for raw in responses
+            ],
+        ):
+            self.observer.start()
+            self.observer._thread.join(timeout=2)
+            self.assertFalse(self.observer._thread.is_alive())
+            return self.observer.stop()
+
+    def test_exit_during_first_stats_query_is_unavailable_without_a_collection_failure(self):
+        zero = stats(memory="0B / 0B", cpu_percent="0.00%", pids="0")
+        summary = self.collect_responses([zero] * 3, [owned(), owned("exited")])
+        self.assertEqual(summary["status"], "unavailable")
+        self.assertEqual(summary["reason"], "container_stopped_during_sample")
+        self.assertEqual(summary["sample_count"], 0)
+        self.assertEqual(summary["observation_failures"], {})
+
+    def test_exit_after_valid_samples_does_not_turn_a_complete_collection_partial(self):
+        zero = stats(memory="0B / 0B", cpu_percent="0.00%", pids="0")
+        summary = self.collect_responses([stats()] + [zero] * 3, [owned(), owned("exited")])
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(summary["reason"], "container_stopped_during_sample")
+        self.assertEqual(summary["sample_count"], 1)
+        self.assertEqual(summary["observation_failures"], {})
+        self.assertEqual(summary["sampled_maxima"]["pids"], 7)
+
+    def test_zero_row_from_still_running_container_remains_a_reported_failure(self):
+        zero = stats(memory="0B / 0B", cpu_percent="0.00%", pids="0")
+        summary = self.collect_responses([zero] * 3, [owned()] * 4)
+        self.assertEqual(summary["reason"], "repeated_observation_failures")
+        self.assertEqual(summary["observation_failures"], {"ValueError": 3})
+        self.assertEqual(summary["failure_reasons"], {"zero_metrics_while_running": 3})
+        self.assertEqual(summary["sample_count"], 0)
+
+    def test_exit_confirmation_rejects_a_replacement_container_with_the_same_name(self):
+        zero = stats(memory="0B / 0B", cpu_percent="0.00%", pids="0")
+        replacement = {**owned("exited"), "container_id": "f" * 64}
+        summary = self.collect_responses([zero] * 3, [owned(), replacement])
+        self.assertEqual(summary["reason"], "ownership_not_verified")
+        self.assertEqual(summary["failure_reasons"], {"ownership_not_verified": 1})
+        self.assertEqual(summary["sample_count"], 0)
+
+    def test_malformed_stats_are_not_hidden_by_a_container_exit(self):
+        summary = self.collect_responses(["not JSON; private sample.bam"] * 3, [owned()])
+        self.assertEqual(summary["reason"], "repeated_observation_failures")
+        self.assertEqual(summary["failure_reasons"], {"invalid_stats_json": 3})
+        self.assertEqual(summary["observation_failures"], {"ValueError": 3})
+        self.assertNotIn("private sample.bam", json.dumps(summary))
+
+    def test_unavailable_exit_confirmation_does_not_suppress_zero_row_failures(self):
+        zero = stats(memory="0B / 0B", cpu_percent="0.00%", pids="0")
+        absent = {"owned": False, "availability": "absent"}
+        summary = self.collect_responses([zero] * 3, [owned()] + [absent] * 3)
+        self.assertEqual(summary["reason"], "repeated_observation_failures")
+        self.assertEqual(summary["failure_reasons"], {"terminal_state_not_confirmed": 3})
+
+    def test_shutdown_preserves_any_prior_real_collection_failure(self):
+        zero = stats(memory="0B / 0B", cpu_percent="0.00%", pids="0")
+        summary = self.collect_responses(
+            ["invalid", stats(), zero], [owned(), owned("exited")],
+        )
+        self.assertEqual(summary["status"], "partial")
+        self.assertEqual(summary["sample_count"], 1)
+        self.assertEqual(summary["failure_reasons"], {"invalid_stats_json": 1})
+
+    def test_startup_wait_does_not_skip_a_short_running_container(self):
+        self.observer._interval = 2.0
+        waited = []
+
+        def inspection(*args):
+            elapsed = sum(waited)
+            return owned("created" if not waited else "running" if elapsed < 0.5 else "exited")
+
+        def read():
+            self.observer._stop.set()
+            return {**parse_stats(stats(), CONTAINER), "observed_at": "2026-11-03T12:00:00Z"}
+
+        with patch("nipat.execution.performance.inspect_container", side_effect=inspection), patch.object(
+            self.observer._stop, "wait", side_effect=lambda seconds: waited.append(seconds) or False,
+        ), patch.object(self.observer, "_stats", side_effect=read):
+            self.observer.start()
+            self.observer._thread.join(timeout=2)
+            self.assertFalse(self.observer._thread.is_alive())
+            summary = self.observer.stop()
+        self.assertEqual(summary["status"], "completed")
+        self.assertEqual(summary["sample_count"], 1)
+
     def test_stats_addresses_verified_id_with_bounded_timeout_and_no_stdin(self):
         self.observer._identifier = CONTAINER
         with patch("nipat.execution.performance.subprocess.run", return_value=

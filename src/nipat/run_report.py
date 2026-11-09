@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import html
 import io
+from itertools import islice
 import json
 import math
 import os
@@ -13,12 +14,15 @@ from urllib.parse import quote
 
 
 _MAX_JSON = 32 * 1024 * 1024
+_MAX_PARALLEL_BYTES = 8 * 1024 * 1024
+_MAX_PARALLEL_FILES = 1024
+_MAX_PARALLEL_STEPS = 128
 _STATUS = {"succeeded": "Completata", "failed": "Non riuscita", "interrupted": "Interrotta",
            "cancelled": "Interrotta", "planned": "Pianificata: analisi non eseguita",
            "running": "In esecuzione", "preparing": "Preparazione", "pending": "In attesa",
            "blocked": "Non avviata"}
 _PARAMETERS = {"reference": "Genoma di riferimento", "panel": "Pannello", "snp_panel": "Pannello SNP",
-               "contamination_panel": "Pannello Contamination", "parallel": "Elaborazione parallela",
+               "contamination_panel": "Pannello Contamination", "parallel": "Opzione parallela del codice storico",
                "popfreq": "Frequenze di popolazione", "err_const": "Costante di errore",
                "cutoff_mode": "Selezione dei siti CPI", "cutoffs": "Pannelli CPI",
                "mother_prefix": "Prefisso materno", "father_prefix": "Prefisso paterno",
@@ -26,12 +30,12 @@ _PARAMETERS = {"reference": "Genoma di riferimento", "panel": "Pannello", "snp_p
                "input_dir": "Cartella degli input", "bamlist": "Lista BAM"}
 
 
-def _read_json(path: Path) -> dict:
+def _read_json(path: Path, *, max_bytes: int = _MAX_JSON) -> dict:
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"Metadati non disponibili: {path.name}")
     with path.open("rb") as stream:
-        content = stream.read(_MAX_JSON + 1)
-    if len(content) > _MAX_JSON:
+        content = stream.read(max_bytes + 1)
+    if len(content) > max_bytes:
         raise ValueError(f"Metadati troppo grandi: {path.name}")
     result = json.loads(content)
     if not isinstance(result, dict):
@@ -122,6 +126,146 @@ def _mib(value: object) -> str:
     if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
         return "Non disponibile"
     return f"{value / (1024 * 1024):.2f} MiB"
+
+
+def _positive_integer(value: object) -> bool:
+    return type(value) is int and value > 0
+
+
+def _parallel_section(run_dir: Path, metadata: dict) -> str:
+    """Show bounded, run-owned execution evidence, including without telemetry.
+
+    Worker limits are plans, not observations. Complete task intervals can prove
+    concurrent R work; missing or truncated events only provide a lower bound.
+    No RSS counters are added together and no input files are read.
+    """
+    options = metadata.get("execution_options")
+    requested = isinstance(options, dict) and "execution_mode" in options
+    work_dirs = [("Analisi", "work")]
+    incomplete = False
+    try:
+        steps = _performance_file(run_dir, "output/workflow/steps")
+        if steps.is_dir():
+            entries = list(islice(steps.iterdir(), _MAX_PARALLEL_STEPS + 1))
+            incomplete = len(entries) > _MAX_PARALLEL_STEPS
+            for entry in sorted(entries[:_MAX_PARALLEL_STEPS], key=lambda path: path.name):
+                relative = f"output/workflow/steps/{entry.name}/work"
+                if _performance_file(run_dir, relative).is_dir():
+                    work_dirs.append((entry.name, relative))
+    except (OSError, ValueError):
+        incomplete = True
+
+    remaining = _MAX_PARALLEL_BYTES
+    file_count = 0
+    groups = {}
+    acquisition_rows = []
+    for step, relative in work_dirs:
+        try:
+            acquisition = _read_json(_performance_file(run_dir, relative + "/dnp-pileup.json"),
+                                     max_bytes=1024 * 1024)
+            parallel = acquisition.get("parallel")
+            if isinstance(parallel, dict):
+                planned = parallel.get("workers")
+                observed = parallel.get("observed_max_processes")
+                acquisition_rows.append([step, acquisition.get("strategy"),
+                    planned if _positive_integer(planned) else None,
+                    observed if type(observed) is int and observed >= 0 else None,
+                    acquisition.get("status"), parallel.get("reason")])
+        except (OSError, ValueError, RecursionError):
+            pass  # Older runs do not include acquisition scheduling evidence.
+        try:
+            directory = _performance_file(run_dir, relative + "/parallel")
+            if not directory.is_dir():
+                continue
+            paths = islice(directory.glob("worker-*.jsonl"), _MAX_PARALLEL_FILES + 1)
+            for path in paths:
+                file_count += 1
+                if file_count > _MAX_PARALLEL_FILES or remaining <= 0:
+                    incomplete = True
+                    break
+                path = _performance_file(run_dir, path.relative_to(run_dir).as_posix())
+                with path.open("rb") as handle:
+                    data = handle.read(remaining + 1)
+                if len(data) > remaining:
+                    incomplete = True
+                    break
+                remaining -= len(data)
+                for line in data.splitlines():
+                    try:
+                        event = json.loads(line)
+                    except (ValueError, RecursionError):
+                        incomplete = True
+                        continue
+                    if (not isinstance(event, dict) or event.get("schema_version") != 1
+                            or event.get("interface") != "nipat-parallel-v1"):
+                        incomplete = True
+                        continue
+                    label, coordinator = event.get("label"), event.get("coordinator_pid")
+                    if not isinstance(label, str) or not _positive_integer(coordinator):
+                        incomplete = True
+                        continue
+                    # Acquisition has its own measured samtools records; an R
+                    # budget announcement alone is not evidence of R tasks.
+                    if label == "dnp-pileup":
+                        continue
+                    group = groups.setdefault((step, label, coordinator),
+                                              {"workers": None, "tasks": {}})
+                    workers = event.get("workers")
+                    if _positive_integer(workers):
+                        group["workers"] = max(group["workers"] or 0, workers)
+                    if event.get("event") not in {"task-start", "task-end"}:
+                        continue
+                    timestamp, pid, index = (event.get("observed_at_unix"),
+                                             event.get("pid"), event.get("task_index"))
+                    if (type(timestamp) not in (int, float) or not math.isfinite(timestamp)
+                            or timestamp < 0 or not _positive_integer(pid) or not _positive_integer(index)):
+                        incomplete = True
+                        continue
+                    task = group["tasks"].setdefault((pid, index), {})
+                    key = event["event"]
+                    if key in task:
+                        incomplete = True
+                    task[key] = timestamp
+        except (OSError, ValueError, RecursionError):
+            incomplete = True
+
+    rows = []
+    for (step, label, _), group in sorted(groups.items()):
+        events = []
+        partial = incomplete
+        for task in group["tasks"].values():
+            start, finish = task.get("task-start"), task.get("task-end")
+            if start is None or finish is None or finish < start:
+                partial = True
+                continue
+            if finish == start:
+                partial = True  # Insufficient timestamp resolution for overlap.
+                continue
+            events.extend(((start, 1), (finish, -1)))
+        active = maximum = 0
+        for _, delta in sorted(events):
+            active += delta
+            maximum = max(maximum, active)
+        observed = (f"Almeno {maximum} (eventi incompleti)" if partial else maximum) if events else None
+        rows.append([step, label, group["workers"], observed])
+    if not requested and not rows and not acquisition_rows:
+        return ""
+    body = ["<h2>Parallelismo effettivamente registrato</h2>"]
+    if rows:
+        body.append(_table(["Passaggio", "Fase R", "Processi pianificati", "Task simultanei osservati"], rows))
+    if acquisition_rows:
+        body.append(_table(["Passaggio", "Preparazione pileup", "Processi pianificati",
+                            "Massimo di processi samtools osservati", "Stato", "Motivo"], acquisition_rows))
+    if not rows and not acquisition_rows:
+        body.append("<p>Decisioni e attività dei processi non disponibili per questa esecuzione.</p>")
+    if incomplete:
+        body.append("<p>Parte della diagnostica è assente, non leggibile o supera i limiti del resoconto; "
+                    "le osservazioni mostrate possono essere incomplete.</p>")
+    body.append("<p>Il limite richiesto e i processi pianificati non dimostrano da soli il parallelismo. "
+                "I task simultanei derivano dagli intervalli di attività registrati; "
+                "non misurano il numero di core occupati. I passaggi del workflow sono sequenziali "
+                "e i valori di fasi diverse non vanno sommati.</p>")
+    return "\n".join(body)
 
 
 def _performance_section(run_dir: Path, metadata: dict) -> str:
@@ -251,9 +395,12 @@ def write_run_report(run_dir: Path) -> dict:
         body.append("<p>Questa esecuzione non registra una corrispondenza dei campioni. Consultare gli input in run.json.</p>")
 
     parameters = metadata.get("parameters")
+    options = metadata.get("execution_options")
+    modern_parallel = isinstance(options, dict) and "execution_mode" in options
     if isinstance(parameters, dict):
         values = [[_PARAMETERS.get(key, key), value] for key, value in parameters.items()
-                  if key not in {"sample_mapping", "bams", "inputs", "expected_steps"}]
+                  if key not in {"sample_mapping", "bams", "inputs", "expected_steps"}
+                  and not (key == "parallel" and modern_parallel)]
         if values:
             body.extend(["<h2>Impostazioni registrate</h2>", _table(["Impostazione", "Valore"], values)])
 
@@ -272,14 +419,23 @@ def write_run_report(run_dir: Path) -> dict:
         from nipat.resource_ui import resource_lines
         body.append("<h2>Risorse rilevate prima dell'analisi</h2><ul>" + "".join(
             f"<li>{html.escape(line)}</li>" for line in resource_lines(snapshot)) + "</ul>")
-    options = metadata.get("execution_options")
     if isinstance(options, dict):
         body.extend(["<h2>Limiti richiesti per l'analisi</h2>", _table(["Impostazione", "Valore"], [
             ["Quota CPU", options.get("cpus") or "Nessun limite aggiuntivo"],
             ["RAM (MiB)", options.get("memory_mb") or "Nessun limite aggiuntivo"],
-            ["Numero massimo di processi", options.get("pids_limit") or "Nessun limite aggiuntivo"],
+            ["Limite di processi/thread del container", options.get("pids_limit") or "Nessun limite aggiuntivo"],
             ["Checksum degli input", options.get("input_hashes")],
         ])])
+        if modern_parallel:
+            body.extend(["<h3>Modalità e blocchi richiesti</h3>", _table(["Impostazione", "Valore"], [
+                ["Modalità di esecuzione", {"auto": "Automatica", "serial": "Seriale"}.get(
+                    options.get("execution_mode"), options.get("execution_mode"))],
+                ["Massimo di processi di calcolo", options.get("max_workers") or "Scelta automatica entro le risorse disponibili"],
+                ["Dimensione obiettivo dei blocchi DNP (MiB)", options.get("dnp_block_mib")],
+                ["Massimo di loci per blocco DNP", options.get("dnp_block_loci")],
+            ]), "<p>I MiB del blocco descrivono l'input grezzo, non la RAM occupata dal processo. "
+                "La modalità seriale usa un processo di calcolo alla volta, anche se il massimo richiesto è maggiore.</p>"])
+    body.append(_parallel_section(run_dir, metadata))
     commands = metadata.get("commands")
     if isinstance(commands, list):
         diagnostics = []

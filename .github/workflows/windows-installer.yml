@@ -180,6 +180,8 @@ jobs:
             nipat-wsl-rootfs:installer-test -euc \
             '/usr/local/bin/nipat-engine ensure; /usr/local/bin/nipat-engine ensure; docker info --format "{{.OSType}}"; docker compose version'
       - name: Fetch the published WSL component for verified reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python .github/scripts/release_inputs.py --tag v0.7.2 --kind rootfs --output-dir build/previous-runtime
       - name: Export pinned assets and trusted installer manifest
         run: |
@@ -450,6 +452,8 @@ jobs:
             --output build/linux-output/linux-installation-check.json \
             --system-package-test
       - name: Fetch the exact published 0.7.2 upgrade baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python .github/scripts/release_inputs.py --tag v0.7.2 --kind deb --output-dir build/upgrade-baseline
       - name: Upgrade the real previous package and preserve research data
         run: |

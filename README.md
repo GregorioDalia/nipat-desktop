@@ -10,14 +10,14 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.9.** Questa versione riduce allocazioni e calcoli
-ripetuti nei quattro programmi R e chiarisce la configurazione delle risorse.
-I confronti differenziali usano i sorgenti congelati della 0.8.5 e verificano
-tabelle, quantità intermedie non arrotondate e PDF nei casi coperti.
-Le [note della 0.8.9](docs/RELEASE_0.8.9.md) e il
-[contratto di equivalenza](docs/OPTIMIZATION_0.8.9.md) descrivono modifiche,
-verifiche e limiti. La diagnostica delle prestazioni resta facoltativa e
-disattivata normalmente: **Avvia analisi** esegue il workflow ordinario.
+**Versione stabile: 0.8.14.** La versione offre esecuzione seriale o automatica,
+un massimo configurabile di processi e pileup DNP parallelo per cromosoma.
+Il calcolo DNP distribuisce i blocchi di tutti i campioni in una coda comune,
+anche con più BAM dei processi disponibili. SNPcall, Contamination e CPI
+condividono lo stesso modello di budget; la diagnostica resta facoltativa.
+Le [note della 0.8.14](docs/RELEASE_0.8.14.md) descrivono modifiche,
+aggiornamento e limiti delle prove. I confronti scientifici mantengono
+il [riferimento congelato 0.8.5](docs/OPTIMIZATION_0.8.9.md).
 
 ## Download
 
@@ -25,14 +25,14 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.9 |
+| Sistema | Versione stabile 0.8.14 |
 | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/NIPAT-0.8.9-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/NIPAT-0.8.9-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.9/nipat-desktop_0.8.9_amd64.deb) |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-0.8.14-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/NIPAT-0.8.14-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.14/nipat-desktop_0.8.14_amd64.deb) |
 
-La pagina della [release 0.8.9](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.9)
+La pagina della [release 0.8.14](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.14)
 riporta note, checksum e verifiche dei pacchetti. Le
 [release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
 restano disponibili. La
@@ -185,8 +185,10 @@ Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
 
 `--bam` è ripetibile; `--bamlist` accetta un elenco di BAM. Contamination usa
 il pannello DNP selezionato, oppure quello indicato con `--contamination-panel`.
-`--parallel` riguarda soltanto il calcolo DNPcall sui campioni: le analisi
-successive iniziano dopo il completamento e la verifica degli output DNPcall.
+Il parallelismo è regolato dalle opzioni globali
+`--execution-mode auto|serial` e `--max-workers`; non occorre aggiungere
+`--parallel`. Le analisi successive iniziano dopo il completamento e la
+verifica degli output DNPcall.
 
 Per calcolare CPI dopo DNPcall, assegnare esplicitamente il BAM cfDNA materno
 e quello paterno a ogni coppia:
@@ -294,7 +296,8 @@ indipendenti e problemi riproducibili.
 - [Sintesi del prodotto](SUNTO.md)
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
-- [Note della versione stabile 0.8.9](docs/RELEASE_0.8.9.md)
+- [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
+- [Note della versione stabile 0.8.14](docs/RELEASE_0.8.14.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)

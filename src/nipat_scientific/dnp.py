@@ -1,8 +1,8 @@
 """Prepare DNPcall's native files inside the scientific image.
 
-The unchanged R script parses equals-delimited options and builds an unquoted
-samtools shell command. Only safe container aliases reach that interface;
-original host paths are retained by the client, not passed to R.
+The R script retains its equals-delimited option interface and delegates BAM
+acquisition to the bundled argv-based helper. Safe container aliases keep that
+interface unambiguous; original host paths are retained by the client.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def _native_path(path: Path, label: str) -> str:
 
 
 def prepare_dnp(request: object) -> DnpPreparation:
-    """Validate all inputs before writing native panel/list for unchanged R."""
+    """Validate all inputs before writing the native R panel and sample list."""
     if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
         raise ValidationError("Richiesta DNPcall non valida: campi mancanti o inattesi.")
     validate_request_presentation(request)
@@ -92,8 +92,8 @@ def prepare_dnp(request: object) -> DnpPreparation:
         seen.add(bam)
         bams.append(native_bam)
         sources.append(bam)
-        # The native mpileup uses -l: BAM indexes remain optional and are never
-        # created next to user data. Include any supplied sidecars in overlap checks.
+        # Indexed selection is used when a sidecar exists; absent indexes retain
+        # the sequential mpileup path. Never create indexes next to user data.
         for suffix in (".bai", ".csi"):
             for candidate in (Path(str(bam) + suffix), bam.with_suffix(suffix)):
                 if candidate.is_file():

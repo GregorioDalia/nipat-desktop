@@ -289,10 +289,11 @@ def run_wizard(
                 else:
                     form = WorkflowForm(choice, ui, layout, err_const,
                                         defaults=settings.preferences.workflow_defaults(choice))
+                form.execution_options = settings.execution_options()
                 form.collect()
                 while form.review(dry_run=dry_run, performance_diagnostics=requested_diagnostics):
                     workflows.runner.options = replace(
-                        settings.execution_options(),
+                        form.execution_options,
                         performance_diagnostics=form.performance_diagnostics,
                     )
                     # A command-line request is consumed by this attempt, even

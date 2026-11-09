@@ -98,7 +98,10 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
         raise ValidationError("Il motore deve avere filesystem in sola lettura e rete disabilitata.")
     mappings = {item["container_path"] for item in record["input_mounts"]}
     run_target = str(layout.container_path(run_dir))
-    volumes = service["volumes"]
+    scratch = [v for v in service["volumes"] if v.get("target") == "/scratch"]
+    if scratch != [{"type": "volume", "target": "/scratch", "read_only": False}]:
+        raise ValidationError("Atteso un solo volume scratch anonimo, senza sorgente host.")
+    volumes = [v for v in service["volumes"] if v.get("target") != "/scratch"]
     if len(volumes) != len(mappings) + 1 or {v["target"] for v in volumes} != mappings | {run_target}:
         raise ValidationError("Mount inattesi: consentiti soltanto input selezionati e singolo run.")
     for volume in volumes:
@@ -118,7 +121,10 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
     required = {"engine/main.py", *(f"lib/nipat_scientific/{name}.py" for name in (
         "__init__", "errors", "panels", "files", "contamination", "snp", "dnp", "cpi",
         "catalog", "plan", "executor", "outputs", "presentation", "performance",
-    )), "lib/nipat_scientific/presentation.R", *(f"lib/nipat_scientific/catalog_data/{name}.json" for name in (
+        "scratch", "dnp_pileup", "progress", "parallel",
+    )), "lib/nipat_scientific/presentation.R", "lib/nipat_scientific/progress.R",
+        "lib/nipat_scientific/dnp_blocks.R", "lib/nipat_scientific/parallel.R",
+        *(f"lib/nipat_scientific/catalog_data/{name}.json" for name in (
         "dnp-call", "snp-call", "contamination", "cpi",
     ))}
     if set(hashes) != required or any(not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in hashes.values()):

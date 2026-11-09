@@ -154,6 +154,32 @@ class WorkflowExecutionTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 2)
         self.assertEqual(result["plan_sha256"], hashlib.sha256((self.run / "plan.json").read_bytes()).hexdigest())
 
+    def test_progress_scopes_follow_actual_steps_and_sample_order_without_diagnostics(self):
+        self.add_cpi()
+        events_dir = self.root / "progress"
+        child_scopes = []
+        def record_scope(command, cwd, log_path):
+            child_scopes.append((os.environ["NIPAT_PROGRESS_STEP_ID"],
+                                 json.loads(os.environ["NIPAT_PROGRESS_SAMPLE_IDS"]),
+                                 json.loads(os.environ["NIPAT_PROGRESS_SAMPLE_MAP"])))
+            return self.fake_r(command, cwd, log_path)
+        with patch.dict(os.environ, {"NIPAT_PROGRESS_DIR": str(events_dir), "NIPAT_PERFORMANCE_DIR": ""}):
+            result = self.execute(record_scope)
+        self.assertEqual(result["status"], "succeeded")
+        self.assertEqual(child_scopes[0], ("dnp", ["donor_a", "donor_b"],
+                                         {"sample_0001": "donor_a", "sample_0002": "donor_b"}))
+        self.assertEqual(child_scopes[1][:2], ("contamination", ["donor_b", "donor_a"]))
+        events = [json.loads(line) for path in events_dir.glob("*.jsonl")
+                  for line in path.read_text().splitlines()]
+        for step, expected_samples, _ in child_scopes:
+            actual = [row for row in events if row["step_id"] == step]
+            self.assertTrue(actual)
+            self.assertTrue(all(row["sample_ids"] == expected_samples for row in actual))
+            self.assertEqual({row["phase"] for row in actual}, {
+                "preparation", "presentation-preparation", "r-execution", "output-validation",
+                "presentation-finalization"})
+            self.assertTrue(all(row["outcome"] == "succeeded" for row in actual if row["event"] == "end"))
+
     def test_existing_run_is_never_overwritten_even_after_success(self):
         self.execute()
         before = (self.run / "workflow-state.json").read_bytes()

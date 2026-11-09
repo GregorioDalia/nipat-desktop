@@ -57,11 +57,11 @@ class WorkflowWizardTests(unittest.TestCase):
         return result, "\n".join(messages)
 
     def inputs(self, *, choice="W", name="chain"):
-        return [choice, "1", "1", f'"{self.bam}"', "", self.reference, self.panel, "1", "1", "", name]
+        return [choice, "1", "1", f'"{self.bam}"', "", self.reference, self.panel, "1", "", name]
 
     def cpi_inputs(self, *, preset="2", name="cpi-chain"):
         return ["W", preset, "Pair1", self.bam, self.father, "",
-                self.reference, self.panel, "1"] + (["1"] if preset == "3" else []) + [
+                self.reference, self.panel] + (["1"] if preset == "3" else []) + [
                     self.popfreq, "0", "", "", name,
                 ]
 
@@ -112,16 +112,16 @@ class WorkflowWizardTests(unittest.TestCase):
                 prompts = [call.args[0] for call in self.reader.call_args_list]
                 self.assertEqual(prompts.count("File FASTA di riferimento: "), 2)
 
-    def test_bamlist_parallel_and_distinct_contamination_panel(self):
+    def test_bamlist_and_distinct_contamination_panel(self):
         bamlist = self.file("bams.txt", '"sample with spaces.bam"\n')
         status, output = self.invoke([
-            "w", "1", "2", bamlist, self.reference, self.panel, "2", "2", self.positions,
+            "w", "1", "2", bamlist, self.reference, self.panel, "2", self.positions,
             "", "", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.workflows.dnp_contamination.assert_called_once_with(
             bams=None, bamlist=bamlist, reference=self.reference, panel=self.panel,
-            parallel=True, contamination_panel=self.positions, snp_panel=None, run_name=None,
+            parallel=False, contamination_panel=self.positions, snp_panel=None, run_name=None,
         )
         self.assertIn("Indicare ora il file di coordinate", output)
         self.assert_no_single_analysis()
@@ -141,11 +141,11 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertNotIn("[ERRORE]", output)
 
     def test_review_can_select_another_panel_then_revert_to_dnp_panel(self):
-        # Field 6 is the Contamination panel choice; switching back must not leak
+        # Field 5 is the Contamination panel choice; switching back must not leak
         # a hidden, previously collected path into the execution request.
         status, _ = self.invoke(self.inputs() + [
-            "2", "6", "2", self.positions,
-            "2", "6", "1", "1", "0", "0",
+            "2", "5", "2", self.positions,
+            "2", "5", "1", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.assertIsNone(self.workflows.dnp_contamination.call_args.kwargs["contamination_panel"])
@@ -153,7 +153,7 @@ class WorkflowWizardTests(unittest.TestCase):
 
     def test_empty_different_panel_waits_until_a_valid_path_is_supplied(self):
         status, output = self.invoke([
-            "W", "1", "1", self.bam, "", self.reference, self.panel, "1", "2", "",
+            "W", "1", "1", self.bam, "", self.reference, self.panel, "2", "",
             self.positions, "", "", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -218,7 +218,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_multiple_pairs_can_share_paternal_sample_with_distinct_ids(self):
         status, output = self.invoke([
             "W", "2", "Pair1", self.bam, self.father,
-            "Pair2", self.other_mother, self.father, "", self.reference, self.panel, "1",
+            "Pair2", self.other_mother, self.father, "", self.reference, self.panel,
             self.popfreq, "0", "", "", "", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -232,14 +232,14 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_full_chain_exposes_numeric_parameter_named_cutoffs_and_other_contamination_panel(self):
         status, output = self.invoke([
             "W", "3", "Pair1", self.bam, self.father, "",
-            self.reference, self.panel, "2", "2", self.positions,
+            self.reference, self.panel, "2", self.positions,
             self.popfreq, "2", "selected", self.positions, "", "0.001", "", "full",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         arguments = self.workflows.dnp_cpi.call_args.kwargs
         self.assertTrue(arguments["include_contamination"])
-        self.assertTrue(arguments["parallel"])
+        self.assertFalse(arguments["parallel"])
         self.assertEqual(arguments["contamination_panel"], self.positions)
         self.assertEqual(arguments["cutoffs"], [("selected", self.positions)])
         self.assertIsNone(arguments["cpi_panel"])
@@ -263,7 +263,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_backtracking_inside_pair_keeps_id_and_explicit_roles(self):
         status, _ = self.invoke([
             "W", "2", "Pair1", self.bam, ":indietro", self.other_mother, self.father, "",
-            self.reference, self.panel, "1", self.popfreq, "1", self.positions, "", "", "",
+            self.reference, self.panel, self.popfreq, "1", self.positions, "", "", "",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -274,7 +274,7 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_invalid_id_and_same_bam_in_both_roles_are_corrected_before_dispatch(self):
         status, output = self.invoke([
             "W", "2", "", "123", "Pair1", self.bam, self.bam, self.father, "",
-            self.reference, self.panel, "1", self.popfreq, "0", "", "", "",
+            self.reference, self.panel, self.popfreq, "0", "", "", "",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
@@ -308,7 +308,7 @@ class WorkflowWizardTests(unittest.TestCase):
         store.save(preferences)
         status, output = self.invoke([
             "W", "2", "Pair1", self.bam, self.father, "",
-            "", "", "", "", "", "", "", "", "", "1", "0", "0",
+            "", "", "", "", "", "", "", "", "1", "0", "0",
         ], preferences_store=store)
         self.assertEqual(status, 0)
         arguments = self.workflows.dnp_cpi.call_args.kwargs
@@ -316,7 +316,7 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertEqual(arguments["cpi_panel"], self.positions)
         self.assertEqual(arguments["popfreq"], self.popfreq)
         self.assertEqual(arguments["err_const"], 0.002)
-        self.assertTrue(arguments["parallel"])
+        self.assertFalse(arguments["parallel"])
         self.assertEqual(arguments["pairs"], [("Pair1", self.bam, self.father)])
         self.assertNotIn("CustomMother", output)
         self.assertNotIn("CustomFather", output)
@@ -324,8 +324,8 @@ class WorkflowWizardTests(unittest.TestCase):
     def test_review_changing_cpi_cutoff_mode_to_all_does_not_reuse_hidden_panel(self):
         status, _ = self.invoke([
             "W", "2", "Pair1", self.bam, self.father, "",
-            self.reference, self.panel, "1", self.popfreq, "1", self.positions, "", "", "",
-            "2", "6", "0", "1", "0", "0",
+            self.reference, self.panel, self.popfreq, "1", self.positions, "", "", "",
+            "2", "5", "0", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         arguments = self.workflows.dnp_cpi.call_args.kwargs
@@ -363,8 +363,8 @@ class WorkflowWizardTests(unittest.TestCase):
 
     def test_review_can_enable_then_disable_snp_without_leaking_hidden_panel(self):
         status, _ = self.invoke(self.inputs() + [
-            "2", "7", "2", self.snp_panel,
-            "2", "7", "1", "1", "0", "0",
+            "2", "6", "2", self.snp_panel,
+            "2", "6", "1", "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.assertIsNone(self.workflows.dnp_contamination.call_args.kwargs["snp_panel"])

@@ -1,6 +1,8 @@
 #!/usr/bin/env Rscript
 # NIPAT 0.8.9 modification, 2026-11-07: reuse invariant CPI calculations and
 # identical threshold selections; retain the formulas and every output row.
+# NIPAT 0.8.12: bounded, ordered parallel work across pairs, cutoffs or
+# independent threshold intervals. Scientific reductions retain their order.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -11,6 +13,9 @@ suppressPackageStartupMessages({
   library(stringr)
   library(tidyr)
 })
+
+source(Sys.getenv("NIPAT_PARALLEL_HELPER",
+                  unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
 
 ## cli parser
 parser <- ArgumentParser()
@@ -169,25 +174,47 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
   mismatch_counts <- integer(interval_count)
   matching_counts <- integer(interval_count)
 
-  for (interval_index in seq_along(interval_starts)) {
+  compute_interval <- function(interval_index) {
     i <- iterations[interval_starts[interval_index]]
-    mother_counts[interval_index] <- sum(madre_info$fetal_reads >= i)
+    mother_count <- sum(madre_info$fetal_reads >= i)
     pi_selected <- pi_fetal_reads >= i
-    father_counts[interval_index] <- sum(pi_selected)
+    father_count <- sum(pi_selected)
 
     ## Retain the original ordered product, including its handling of zero,
     ## underflow and overflow. Neither cumulative division nor sums of logs
     ## are equivalent substitutes for prod() on the selected PI values.
-    CPI_val <- ifelse(father_counts[interval_index] > 0,
+    CPI_val <- ifelse(father_count > 0,
                       prod(pi_values[pi_selected], na.rm=TRUE), NA_real_)
-    cpi_values[interval_index] <- CPI_val
-    log_cpi_values[interval_index] <- ifelse(
+    log_CPI_val <- ifelse(
       !is.na(CPI_val) & CPI_val > 0, log10(CPI_val), NA_real_)
 
     informative_selected <- informative_fetal_reads >= i
     n_mismatch <- sum(mismatch[informative_selected])
-    mismatch_counts[interval_index] <- n_mismatch
-    matching_counts[interval_index] <- sum(informative_selected) - n_mismatch
+    list(mother = mother_count, father = father_count, cpi = CPI_val,
+         log_cpi = log_CPI_val, mismatch = n_mismatch,
+         matching = sum(informative_selected) - n_mismatch)
+  }
+  interval_workers <- nipat_parallel_workers(interval_count)
+  # Fork at most a few contiguous chunks per worker, not one process for every
+  # threshold interval. The interval order inside each chunk is unchanged.
+  chunk_size <- max(1L, ceiling(interval_count / (4L * interval_workers)))
+  if (interval_workers == 1L) chunk_size <- interval_count
+  interval_chunks <- split(seq_along(interval_starts),
+                           ceiling(seq_along(interval_starts) / chunk_size))
+  chunk_values <- nipat_parallel_lapply(interval_chunks, function(indices) {
+    lapply(indices, compute_interval)
+  }, label = "cpi-thresholds", workers = interval_workers)
+  interval_values <- unname(unlist(chunk_values, recursive = FALSE))
+  # Assign into the original typed vectors in input order. Each product and
+  # each sum above still processes exactly the original ordered observations.
+  for (interval_index in seq_along(interval_values)) {
+    value <- interval_values[[interval_index]]
+    mother_counts[interval_index] <- value$mother
+    father_counts[interval_index] <- value$father
+    cpi_values[interval_index] <- value$cpi
+    log_cpi_values[interval_index] <- value$log_cpi
+    mismatch_counts[interval_index] <- value$mismatch
+    matching_counts[interval_index] <- value$matching
   }
   results <- data.frame(
     Iteration=iterations,
@@ -311,10 +338,11 @@ fetal_fraction_rows <- vector("list", nrow(coppie) * nrow(cutoff_df))
 all_combined_plots <- list()
 ## Reuse a parent shared by consecutive pairs, retaining at most the two
 ## prepared tables already needed by the current pair.
-last_mother_path <- NULL
-last_father_path <- NULL
+pair_cache <- new.env(parent = emptyenv())
+pair_cache$mother_path <- NULL
+pair_cache$father_path <- NULL
 
-for (i in 1:nrow(coppie)) {
+process_pair <- function(i) {
   mamma_id <- coppie$mamma[i]
   papa_id  <- coppie$papa[i]
   pair_name <- paste0("Mother", mamma_id, "-Father", papa_id, "_DNPs")
@@ -322,7 +350,7 @@ for (i in 1:nrow(coppie)) {
   mother_path <- file.path(args$pileup_dir, paste0(args$mother_prefix, mamma_id, ".txt"))
   father_path <- file.path(args$pileup_dir, paste0(args$father_prefix, papa_id, ".txt"))
 
-  if (!identical(mother_path, last_mother_path)) {
+  if (!identical(mother_path, pair_cache$mother_path)) {
     madre <- read.table(mother_path, header=TRUE, check.names=FALSE)
     madre$chr <- as.character(madre$chr)
     madre <- madre %>%
@@ -334,10 +362,13 @@ for (i in 1:nrow(coppie)) {
         ratio_Ref_mother = N_REF / (N_REF + N_ALT),
         total_count = total_count
       ) %>% dplyr::filter(Error_mother/total_count <= 0.10)
-    last_mother_path <- mother_path
+    pair_cache$mother <- madre
+    pair_cache$mother_path <- mother_path
+  } else {
+    madre <- pair_cache$mother
   }
 
-  if (!identical(father_path, last_father_path)) {
+  if (!identical(father_path, pair_cache$father_path)) {
     padre <- read.table(father_path, header=TRUE, check.names=FALSE)
     padre$chr <- as.character(padre$chr)
     padre <- padre %>%
@@ -353,12 +384,13 @@ for (i in 1:nrow(coppie)) {
         Ref_father = ifelse(ratio_Ref_father < 0.1, 0, Ref_father),
         Alt_father = ifelse(ratio_Ref_father > 0.9, 0, Alt_father)
       ) %>% dplyr::filter(Error_father/total_count <= 0.10)
-    last_father_path <- father_path
+    pair_cache$father <- padre
+    pair_cache$father_path <- father_path
+  } else {
+    padre <- pair_cache$father
   }
 
-  per_cutoff_plots <- list()
-
-  for (k in seq_len(nrow(cutoff_df))) {
+  cutoff_results <- nipat_parallel_lapply(seq_len(nrow(cutoff_df)), function(k) {
     cutoff_label <- cutoff_df$Cutoff[k]
     dnp_list <- cutoff_panels[[k]]
 
@@ -382,16 +414,10 @@ for (i in 1:nrow(coppie)) {
 
     cfDNA_percent <- median_fetal_fraction * 100
 
-    per_cutoff_plots[[cutoff_label]] <- plot_CPI(
-      res,
-      cutoff_label,
-      pair_name,
-      cfDNA_percent = cfDNA_percent,
-      cpi_medff = cpi_at_med
-    )
-
-    ## Reuse the pair/panel CPI result for the CSV summary.
-    madre_cutoff <- if (!is.null(dnp_list)) madre %>% semi_join(dnp_list, by=c("chr","pos1","pos2")) else madre
+    ## The core has already selected this panel and the informative maternal
+    ## rows. Every row admitted by the summary below is in madre_info; retain
+    ## its original summary formula and positivity filter, including NA/Inf.
+    madre_cutoff <- out$madre_info
 
     madre_cutoff <- madre_cutoff %>%
       mutate(
@@ -405,14 +431,10 @@ for (i in 1:nrow(coppie)) {
 
     n_sites_mother <- nrow(madre_cutoff)
 
-    ## recalc father informative count after merge
-    if (!is.null(dnp_list)) {
-      padre_cut_tmp <- padre %>% semi_join(dnp_list, by=c("chr","pos1","pos2"))
-    } else {
-      padre_cut_tmp <- padre
-    }
-
-    df_merge_tmp <- inner_join(madre_cutoff, padre_cut_tmp, by=c("chr","pos1","pos2")) %>%
+    ## Maternal keys are already limited to the panel. Joining the original
+    ## father table therefore selects the same paternal rows (and duplicates)
+    ## in the same order, without applying that panel a second time.
+    df_merge_tmp <- inner_join(madre_cutoff, padre, by=c("chr","pos1","pos2")) %>%
       mutate(threshold = case_when(
         ratio_Ref_mother >= 0.9 & Alt_father >= 0 ~ "informative",
         ratio_Ref_mother <= 0.1 & Ref_father >= 0 ~ "informative",
@@ -431,9 +453,8 @@ for (i in 1:nrow(coppie)) {
     med_cpi <- ifelse(length(all_cpi_vals)==0, NA, median(all_cpi_vals))
     mean_cpi <- ifelse(length(all_cpi_vals)==0, NA, mean(all_cpi_vals))
 
-    summary_index <- (i - 1L) * nrow(cutoff_df) + k
     if (has_cutoffs) {
-      fetal_fraction_rows[[summary_index]] <- data.frame(
+      summary_row <- data.frame(
         Pair = pair_name,
         Cutoff = cutoff_label,
         N_sites_mother = n_sites_mother,
@@ -447,7 +468,7 @@ for (i in 1:nrow(coppie)) {
         CPI_medianFF = round(cpi_at_med,3)
       )
     } else {
-      fetal_fraction_rows[[summary_index]] <- data.frame(
+      summary_row <- data.frame(
         Pair = pair_name,
         N_sites_mother = n_sites_mother,
         N_sites_father = n_sites_father,
@@ -460,6 +481,26 @@ for (i in 1:nrow(coppie)) {
         CPI_medianFF = round(cpi_at_med,3)
       )
     }
+    list(label = cutoff_label, plot_data = res, summary = summary_row,
+         cfDNA_percent = cfDNA_percent, cpi_at_med = cpi_at_med)
+  }, label = "cpi-cutoffs")
+  list(pair_name = pair_name, cutoffs = cutoff_results)
+}
+
+pair_results <- nipat_parallel_lapply(seq_len(nrow(coppie)), process_pair,
+                                    label = "cpi-pairs")
+for (i in seq_along(pair_results)) {
+  pair_result <- pair_results[[i]]
+  pair_name <- pair_result$pair_name
+  per_cutoff_plots <- list()
+  for (k in seq_along(pair_result$cutoffs)) {
+    cutoff_result <- pair_result$cutoffs[[k]]
+    per_cutoff_plots[[cutoff_result$label]] <- plot_CPI(
+      cutoff_result$plot_data, cutoff_result$label, pair_name,
+      cfDNA_percent = cutoff_result$cfDNA_percent,
+      cpi_medff = cutoff_result$cpi_at_med)
+    summary_index <- (i - 1L) * nrow(cutoff_df) + k
+    fetal_fraction_rows[[summary_index]] <- cutoff_result$summary
   }
 
   ## save combined plots in plots_dir

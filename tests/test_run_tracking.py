@@ -232,7 +232,7 @@ class RunTrackingTests(unittest.TestCase):
         def execute(command, **kwargs):
             if command[1] == "run":
                 raise KeyboardInterrupt
-            self.assertEqual(command, ["docker", "rm", "--force", probe])
+            self.assertEqual(command, ["docker", "rm", "--force", "--volumes", probe])
             signal.raise_signal(signal.SIGINT)
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 

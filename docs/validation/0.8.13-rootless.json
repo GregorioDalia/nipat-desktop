@@ -1,0 +1,1011 @@
+{
+  "baseline": {
+    "files": [
+      {
+        "path": "docker/scientific-runtime/verify-packages.R",
+        "sha256": "ef30c69555f6871f7c38c89baba5b52e1ef7d82fd02aaf206ae4568e2f686af7"
+      },
+      {
+        "path": "scientific/vendor/DNPcall/DNPcall.R",
+        "sha256": "d0600427d058a141da8683d98904c51be95ec09ebd5804ea879164d1f5ce7e36"
+      },
+      {
+        "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+        "sha256": "10ca01a476f5259b65a063aea95ff76e57c11567a304667065ea9c7b9206545a"
+      },
+      {
+        "path": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
+        "sha256": "00068e501d1fefe2b721001f141fc2595be42c9349873ee353a29a305816c9c9"
+      },
+      {
+        "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
+        "sha256": "28f0d0298cdce06c6d9f33ec5d7a224a8c9fa7dfb6fde87b930ee938e703cc08"
+      },
+      {
+        "path": "src/nipat_scientific/presentation.R",
+        "sha256": "f368a60172d0bc9c632c09c49a1ea5924b835fb7a1db91413dffc8817ab1f193"
+      }
+    ],
+    "schema_version": 1,
+    "source_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+    "source_tag": "v0.8.5",
+    "version": "0.8.5"
+  },
+  "candidate_r_sha256": {
+    "scientific/vendor/DNPcall/DNPcall.R": "12c45aa28bfe7ed83084a5b76d6618e3f1a9ed66b4ba30180d6c33ffa0737948",
+    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "d144d8131ec220b913a92f995491c676a80812812f3ab79d60ca23e5b87610c1",
+    "scientific/vendor/NEWPAT/SNPcall/SNPcall.R": "66003583814f39102f3137485d7b8157c54e51a9c93094d68ee9769dc4d1ea64",
+    "scientific/vendor/NEWPAT/contamination/detect_contamination.R": "d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26"
+  },
+  "cases": [
+    {
+      "case": "dnp-single",
+      "comparisons": 1,
+      "pdf_page_comparisons": 5,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-multi",
+      "comparisons": 1,
+      "pdf_page_comparisons": 10,
+      "status": "passed",
+      "table_file_comparisons": 3,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-parallel",
+      "comparisons": 1,
+      "pdf_page_comparisons": 10,
+      "status": "passed",
+      "table_file_comparisons": 3,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-varied-qualities",
+      "comparisons": 1,
+      "pdf_page_comparisons": 5,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "snp-edge",
+      "comparisons": 5,
+      "pdf_page_comparisons": 0,
+      "status": "passed",
+      "table_file_comparisons": 5,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial",
+        "auto",
+        "manual-2",
+        "manual-4",
+        "manual-4-repeat"
+      ],
+      "workflow": "snp-call"
+    },
+    {
+      "case": "snp-extra-columns",
+      "comparisons": 1,
+      "pdf_page_comparisons": 0,
+      "status": "passed",
+      "table_file_comparisons": 1,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "snp-call"
+    },
+    {
+      "case": "cpi-all",
+      "comparisons": 1,
+      "pdf_page_comparisons": 4,
+      "status": "passed",
+      "table_file_comparisons": 1,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-panels",
+      "comparisons": 1,
+      "pdf_page_comparisons": 4,
+      "status": "passed",
+      "table_file_comparisons": 1,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-zero-error",
+      "comparisons": 1,
+      "pdf_page_comparisons": 4,
+      "status": "passed",
+      "table_file_comparisons": 1,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-shared-parents",
+      "comparisons": 5,
+      "pdf_page_comparisons": 30,
+      "status": "passed",
+      "table_file_comparisons": 5,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial",
+        "auto",
+        "manual-2",
+        "manual-4",
+        "manual-4-repeat"
+      ],
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-intervals",
+      "comparisons": 5,
+      "pdf_page_comparisons": 10,
+      "status": "passed",
+      "table_file_comparisons": 5,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial",
+        "auto",
+        "manual-2",
+        "manual-4",
+        "manual-4-repeat"
+      ],
+      "workflow": "cpi"
+    },
+    {
+      "case": "cpi-single-cutoffs",
+      "comparisons": 5,
+      "pdf_page_comparisons": 10,
+      "status": "passed",
+      "table_file_comparisons": 5,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial",
+        "auto",
+        "manual-2",
+        "manual-4",
+        "manual-4-repeat"
+      ],
+      "workflow": "cpi"
+    },
+    {
+      "case": "contamination-batch",
+      "comparisons": 5,
+      "pdf_page_comparisons": 0,
+      "status": "passed",
+      "table_file_comparisons": 90,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial",
+        "auto",
+        "manual-2",
+        "manual-4",
+        "manual-4-repeat"
+      ],
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-single",
+      "comparisons": 1,
+      "pdf_page_comparisons": 0,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "contamination"
+    },
+    {
+      "case": "contamination-panel-only",
+      "comparisons": 1,
+      "pdf_page_comparisons": 0,
+      "status": "passed",
+      "table_file_comparisons": 1,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "contamination"
+    },
+    {
+      "case": "dnp-blocks-1",
+      "comparisons": 5,
+      "pdf_page_comparisons": 25,
+      "status": "passed",
+      "table_file_comparisons": 10,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial",
+        "auto",
+        "manual-2",
+        "manual-4",
+        "manual-4-repeat"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-2",
+      "comparisons": 1,
+      "pdf_page_comparisons": 5,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-blocks-3",
+      "comparisons": 1,
+      "pdf_page_comparisons": 5,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-numeric-blocks",
+      "comparisons": 1,
+      "pdf_page_comparisons": 5,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    },
+    {
+      "case": "dnp-repeated-qname-compatibility",
+      "comparisons": 1,
+      "pdf_page_comparisons": 5,
+      "status": "passed",
+      "table_file_comparisons": 2,
+      "unrounded_r_values": "identical",
+      "variants": [
+        "serial"
+      ],
+      "workflow": "dnp-call"
+    }
+  ],
+  "comparison": {
+    "pdf_metadata": "excluded",
+    "pdf_pixels": "exact",
+    "pdf_raster_dpi": 36,
+    "table_bytes": "exact",
+    "unrounded_r": "identical"
+  },
+  "counts": {
+    "candidate_comparisons": 44,
+    "cases": 20,
+    "focused_r_checks": 9,
+    "indexed_pileup_cases": 25,
+    "observed_concurrent_executions": 24,
+    "parallel_candidate_comparisons": 24,
+    "pdf_file_comparisons": 137,
+    "pdf_page_comparisons": 137,
+    "reference_executions": 20,
+    "required_concurrent_executions": 16,
+    "reused_completed_executions": 0,
+    "scientific_executions": 64,
+    "serial_candidate_comparisons": 20,
+    "table_file_comparisons": 145,
+    "unrounded_r_comparisons": 44
+  },
+  "dnp_cancellation": {
+    "file": "dnp-cancellation/dnp-cancellation.json",
+    "observed_r_progress": {
+      "completed": 1,
+      "event": "progress",
+      "interface": "nipat-progress-v1",
+      "phase": "dnp-processing",
+      "sample_ids": [
+        "sample_cancel"
+      ],
+      "schema_version": 1,
+      "sequence": 4,
+      "source_id": "a7ed95ce2c484cefbac5d103fbf0f128-8186-000000000000",
+      "step_id": "dnp",
+      "total": 32,
+      "unit": "loci",
+      "workflow": "dnp-call"
+    },
+    "sha256": "e3e077eed07ce5494ffff09c3940797ba88dd80f4cac308db3786eee4e8279e5",
+    "status": "passed",
+    "test_source_sha256": "8aad63d5014d826523c2da4f2240614d92f2d7de0f38c18a705b7b9b24fa3614"
+  },
+  "environment": {
+    "R": "4.4.2",
+    "container_limits_applied": false,
+    "execution": "rootless R 4.4.2; host kernel/glibc; no Docker qualification",
+    "production_cpu_and_memory_detection": true,
+    "rootless_adapter_sha256": "22d9af1d1707762c895c9d760de93fbe9c9974886f63c468e8c1d37a73870c4a",
+    "rscript_adapter_sha256": "b83686216fbe317be2cad78f3ac3c3858d456eabe4246781da00f933ac53b81a",
+    "samtools": "samtools 1.21"
+  },
+  "evidence": {
+    "candidate_source_hashes_rechecked_after_execution": true,
+    "complete_report": "rootless-equivalence.json",
+    "complete_report_sha256": "e746f165bca39ef40cb5d747eea9475572b1f3308d6c452e3f89d4007b1ecca0",
+    "qualification_executions_reused": false
+  },
+  "fixture_input_sha256": {
+    "contamination/panel.txt": "f7bad23344c31fa30bdce20dfdea1fd43dbfe767c97e8958ad7a7fe9773e10ec",
+    "contamination/samples/batch00.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch01.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch02.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch03.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch04.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch05.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch06.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch07.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch08.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch09.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch10.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/batch11.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "contamination/samples/boundaries.txt": "fea28ace426d11d02789e35bd8f8a0514504e55b0909825f3ebfe3b24244356f",
+    "contamination/samples/sample0.txt": "2f1cc1b5f46106c80d9178af26d8af893860a9d21ad333a0959d0c972bf82115",
+    "contamination/samples/sample1.txt": "a99402d5279438b5aa080149dc031470d800f18eec7cd4072b03437fe1be67fc",
+    "contamination/samples/sample2.txt": "9d65a01bbabf4619596321eb238b6c139ae259b32d47a0d3184e2cf0a603af8a",
+    "contamination/samples/single.txt": "3e83d9023995fffaeae344247d89b95eb4a1477a5477b1bfbac32d7cdbebc89a",
+    "cpi/full.tsv": "3b4d9c65f973d7887c7fbd30991e3ffbd5ffe65f6010d18e9c1001a87169df1d",
+    "cpi/population.tsv": "b31888e4550e921cf7c1f6e106f0b96794dd6241cf96dd54e2accd459bc7e8f1",
+    "cpi/samples/FatherDeep.txt": "abbbe137e97af59aaeb9109c39af024184c447d79c565744f2b97dfbd67b98f2",
+    "cpi/samples/FatherInformative.txt": "caf35530741113be22138412bf8190ecade424183f6d96839694de5bedb3f449",
+    "cpi/samples/FatherNoSites.txt": "caf35530741113be22138412bf8190ecade424183f6d96839694de5bedb3f449",
+    "cpi/samples/MotherDeep.txt": "4a4ef8ef02f011ce609b63304f96e6ec7f9a23df76308667a6b2df8d8a9529dc",
+    "cpi/samples/MotherInformative.txt": "3a6b729bde97a66151948ec5cf1d9c87336d0d24f7ee62f87e2686cd9562af62",
+    "cpi/samples/MotherNoSites.txt": "0e5a108989e470f213387724a62033cf5aa841e7287464ea257c08ee82d21b2a",
+    "cpi/subset.tsv": "383b5bd9af3608afe39e1191b932f80e83da7bcc97113e1f8041c3fced99ae19",
+    "dnp-blocks/Boundary.bam": "c5272fde229a2e612eabb84bc94b57421c05345255f6897490a6007d338aaa91",
+    "dnp-blocks/Boundary.bam.bai": "28e60dbe0f3a132706732ee3ccd3199a726d27c46b24e48f3c5ddc14a506e0ce",
+    "dnp-blocks/Boundary.sam": "37c0c7e699fddebfbe758a8a588b7c36adcf0fe2f5fb24ca3131f3b75526a83a",
+    "dnp-blocks/Duplicate.bam": "f0649597f8cc142a06e79023e1a46f363cc5f0e1b99eb642a78b8185c0ec2719",
+    "dnp-blocks/Duplicate.bam.bai": "6964abd03337910b396de3551480b18f9da3ee30cb39db652447f97c9edbaf0f",
+    "dnp-blocks/Duplicate.sam": "72745946501c1559d7658d46a4b524ff2fad62d80c922c4e793b049cc445775a",
+    "dnp-blocks/panel.txt": "238e7c0163a39cc9e783e1c5706c379590ba9f5d4f7bf53c288416a851f43768",
+    "dnp-blocks/reference.fa": "03ccded4c33601d17e54304ab5f1edbc81ad2aff146ca5ff9c6799c3f88367ee",
+    "dnp-blocks/reference.fa.fai": "b27aaf0b44f240c6442f1413a4f021fe9746458f33cea24b5e2fecd35954661c",
+    "dnp-numeric/Boundary.bam": "e86a6c41b6b5f7af1a6c45816fd77f61a28339b479b5d3e721bc4693a6661bce",
+    "dnp-numeric/Boundary.bam.bai": "ea60c1037e1a37e7c56bfd50bcf0117f801516b4b2a5b234078ef2fb015bf478",
+    "dnp-numeric/Boundary.sam": "cff0a59ab50deeaf4fa9dc64ddef3c86e7246ee1a61ea07e18d756e538e6a21a",
+    "dnp-numeric/panel.txt": "30b5809c0e951c53aea9b458df784ea8c429ffe57657ee6e0cfe8b76f8302a54",
+    "dnp-numeric/reference.fa": "28b996da441af17de759dd0f6efd2b3d7a7d15af43a25a6d633332cbf571df84",
+    "dnp-numeric/reference.fa.fai": "e73443e5f68dc4e8547c46c1569a6b74d321c147af5c10450321b73dd26fb9b9",
+    "dnp/A.bam": "ce98ec2484eeffd052eefb5869c7d47b345dc40e2eff5a2da013b259cb3dd272",
+    "dnp/A.sam": "a8362c3fcbaca28aa0aa10c33e9a6a28ad5c2e442faccba68a85d32235241973",
+    "dnp/B.bam": "e008da27d48c2c4128ac6567886942f1e40e38992eb8a876fb31b8aba6db2b00",
+    "dnp/B.sam": "a4e9a1fd14a05af55093c19b0dd06e9605aea70f5b483a27f9dfbfb03479eb27",
+    "dnp/Quality.bam": "026ee0b335e0567b5736c0413b603ca347319e5133f57442eda16ec8df6dc025",
+    "dnp/Quality.sam": "d61a0f6fcdc07b0fc72281c8ab8ffa498a119238ef8db4598182ec57e9f52764",
+    "dnp/panel.txt": "0880e3f033c82714eea03a40b6fa6bb028c199becdebc40dbfa09d2767814083",
+    "dnp/reference.fa": "2c97cf815db8013859d4f433c7d6b276dc62c3f5d4ece76082fa772f2a79dd86",
+    "dnp/reference.fa.fai": "8c5490df4fc23c7324a09d6363b3ef7e49ffb29739c95fdaf9ec680d3da9bc59",
+    "panel-only/panel.txt": "f7bad23344c31fa30bdce20dfdea1fd43dbfe767c97e8958ad7a7fe9773e10ec",
+    "snp/panel.tsv": "d27d79e2976c5aa3cd4181c43757728a87a4b11d1e35f43589a045e41de8cbb7",
+    "snp/pileup-wide.txt": "7b3d6bffb4c48d65d9c3571711520d9d9449b8c328274b9f21e31f66ac0753b9",
+    "snp/pileup.txt": "b7f9ab52e0ee10dec89f393cef498f97872ad418f7854e9adf9c96f5748a1088"
+  },
+  "focused_r_checks": [
+    {
+      "path": "tests/r_optimization/contamination/check_parallel.R",
+      "sha256": "dbf5f1b85e9f0291f89b771e9951287a71ddc325d058d588bbda2feeb0166715",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/cpi/check_core.R",
+      "sha256": "037a4ba9d1e66eb51b652e10c9191760639114bb19f2a25eed53cb1ac81b9e0b",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/dnp/check_blocks.R",
+      "sha256": "dfcdcfc4ea01ee9a92a6c2155a3d340712cd07dfe8eba9c0af24c923ace25fdd",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/dnp/check_parallel_blocks.R",
+      "sha256": "7a36d0780151672fb48199d3b1d42ffdc231c4487e50b9cd5b5cbe6d81ee5a87",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/dnp/check_reader.R",
+      "sha256": "cfd68d9cde50313a6eb0c64688ea0a9e9c8b482ae9efff9eabf2ee75e0ccd95c",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/parallel/check_acquisition_budget.R",
+      "sha256": "b28c95831f9e4d7e7ba22ad565af342ed496b37ea45f030c68b8e6f7f9123eb6",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/parallel/check_budget.R",
+      "sha256": "02683221f1a8cf7dbab2cb9026e5765d6258c8741a3aaf3a01cdf0d9253f0898",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/performance/check_costs.R",
+      "sha256": "a4de5189567963dc31ed8eec6ded0260d12f8cfcfd0b170fd5cd80fb75e53af4",
+      "status": "passed"
+    },
+    {
+      "path": "tests/r_optimization/snp/check_reads.R",
+      "sha256": "08aa3b30fde518e3f9ee8f2be97f786cf3b1ecee885123da56c8008e2c2d49fe",
+      "status": "passed"
+    }
+  ],
+  "harness_sha256": {
+    "scripts/verify_r_equivalence.py": "4dfa47e043a14d84d96d21ac5712e9e0a9185987331b1f1ebc432b88aa24b12a",
+    "tests/r_optimization/capture.R": "659b6417bb2885c0c870ad66c49071af31aecd86893be2286e56bfe2d1b058d3",
+    "tests/r_optimization/compare.R": "e5358fff2ae6f721c7e097e59e1ce9f810b078a85151c45091ab1936ad6c172e"
+  },
+  "indexed_pileup": {
+    "cases": [
+      {
+        "case": "indexed-single",
+        "maximum_first_sample_depth": 8018,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-pipe"
+      },
+      {
+        "case": "indexed-multiple",
+        "maximum_first_sample_depth": 10,
+        "pileup_sha256": "956114f84484b703d2df438e6828e3212df31753bc2af9833cb58be5a477247d",
+        "rows": 31,
+        "size_bytes": 2446191,
+        "status": "passed",
+        "strategy": "indexed-disk"
+      },
+      {
+        "case": "missing-index",
+        "maximum_first_sample_depth": 8018,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "sequential"
+      },
+      {
+        "case": "mixed-index",
+        "maximum_first_sample_depth": 8018,
+        "pileup_sha256": "c1b7df6efb0c8810c2efaeda1d56aab03d79b747ba9962bda20d509d082cfd73",
+        "rows": 31,
+        "size_bytes": 2446191,
+        "status": "passed",
+        "strategy": "indexed-disk"
+      },
+      {
+        "case": "chromosomes-serial",
+        "mode": "serial",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 1,
+        "recorded_overlap": 1,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-auto-1",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 1,
+        "recorded_overlap": 1,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-auto-2",
+        "mode": "auto",
+        "observed_samtools_maximum": 2,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 2,
+        "recorded_overlap": 2,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-auto-4",
+        "mode": "auto",
+        "observed_samtools_maximum": 4,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 4,
+        "recorded_overlap": 4,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-auto-4-repeat",
+        "mode": "auto",
+        "observed_samtools_maximum": 4,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 4,
+        "recorded_overlap": 4,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-multiple",
+        "mode": "auto",
+        "observed_samtools_maximum": 4,
+        "pileup_sha256": "956114f84484b703d2df438e6828e3212df31753bc2af9833cb58be5a477247d",
+        "process_budget": 4,
+        "recorded_overlap": 4,
+        "rows": 31,
+        "size_bytes": 2446191,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "budgeted-missing-index",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 4,
+        "recorded_overlap": 0,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "case": "budgeted-mixed-index",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "c1b7df6efb0c8810c2efaeda1d56aab03d79b747ba9962bda20d509d082cfd73",
+        "process_budget": 2,
+        "recorded_overlap": 0,
+        "rows": 31,
+        "size_bytes": 2446191,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "case": "chromosomes-unknown-panel-contig",
+        "mode": "auto",
+        "observed_samtools_maximum": 2,
+        "pileup_sha256": "e7e9f866c993fce28541c46f55b8a9808dfb5b566fd93294b06bbf33002b7ebf",
+        "process_budget": 2,
+        "recorded_overlap": 2,
+        "rows": 31,
+        "size_bytes": 2445258,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-single-task",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "7476721adb5a5d506e0eecd39759bf0c99bdb5823aeae3827cd8fe60f792126b",
+        "process_budget": 4,
+        "recorded_overlap": 1,
+        "rows": 5,
+        "size_bytes": 601425,
+        "status": "passed",
+        "strategy": "indexed-chromosomes"
+      },
+      {
+        "case": "chromosomes-empty-selection",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "process_budget": 4,
+        "recorded_overlap": 0,
+        "rows": 0,
+        "size_bytes": 0,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "case": "budgeted-incompatible-dictionaries",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "c1b7df6efb0c8810c2efaeda1d56aab03d79b747ba9962bda20d509d082cfd73",
+        "process_budget": 4,
+        "recorded_overlap": 0,
+        "rows": 31,
+        "size_bytes": 2446191,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "case": "budgeted-non-coordinate-header",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "8211e4d697c99df34fd1aab35a62a7ad1bffde8a07b99823b2f3b980be19c893",
+        "process_budget": 4,
+        "recorded_overlap": 0,
+        "rows": 5,
+        "size_bytes": 775,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "case": "budgeted-ambiguous-contig",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "c1a92bec367401970ea90a48473c67bca342c2c716bae32a1f27d55aeb1c8976",
+        "process_budget": 4,
+        "recorded_overlap": 0,
+        "rows": 5,
+        "size_bytes": 795,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "case": "budgeted-special-dot-contig",
+        "mode": "auto",
+        "observed_samtools_maximum": 1,
+        "pileup_sha256": "de2e7dd5d3106dc4ee2283379137ab406cce4683843a19159f5a4e8a781cb721",
+        "process_budget": 4,
+        "recorded_overlap": 0,
+        "rows": 5,
+        "size_bytes": 760,
+        "status": "passed",
+        "strategy": "sequential-budgeted"
+      },
+      {
+        "behavior": "fails without sequential fallback",
+        "case": "corrupt-index",
+        "status": "passed"
+      },
+      {
+        "behavior": "fails without sequential fallback",
+        "case": "budgeted-corrupt-index",
+        "status": "passed"
+      },
+      {
+        "behavior": "fails without sequential fallback",
+        "case": "budgeted-mixed-corrupt-index",
+        "status": "passed"
+      },
+      {
+        "behavior": "fails without sequential fallback",
+        "case": "budgeted-dictionary-corrupt-index",
+        "status": "passed"
+      },
+      {
+        "behavior": "paused real samtools reaped; partial output removed",
+        "case": "cancellation",
+        "paused_children": 2,
+        "status": "passed"
+      },
+      {
+        "behavior": "paused real samtools reaped; partial output removed",
+        "case": "parallel-cancellation",
+        "paused_children": 2,
+        "status": "passed"
+      }
+    ],
+    "coverage": [
+      "overlapping BED intervals",
+      "unsorted panel",
+      "nonlexical contigs",
+      "read crossing disjoint windows",
+      "repeated QNAME",
+      "insertions and deletions",
+      "overlapping paired reads",
+      "filtered flags",
+      "depth above 8000",
+      "one/two/four-process budgets",
+      "actual samtools overlap",
+      "parallel repeated run",
+      "multi-BAM column order",
+      "incompatible dictionaries",
+      "non-coordinate header",
+      "ambiguous contig",
+      "unknown BED contig",
+      "empty selection",
+      "missing/mixed/corrupt indexes",
+      "parallel cancellation"
+    ],
+    "file": "indexed-pileup/indexed-pileup.json",
+    "helper_sha256": "12d17b2169bc5239db67d1c49a8af0f18cd5d1dbf5115fcacf963c9a78a08619",
+    "samtools_version": "samtools 1.21",
+    "sha256": "25c4b1f7ab2a056f5c3ef8715beaf787aedd6f2be5b7363c4af14bbc1632d326",
+    "status": "passed",
+    "test_source_sha256": "3ed7e90f828552f4d8fa7761c6c9c263023a75c6e9ad5398594c803192f091ec"
+  },
+  "inputs_unchanged": true,
+  "limitations": [
+    "Scientific sources executed with a relocated R runtime on the host Linux kernel/glibc; no Docker/WSL or Windows installer qualification.",
+    "The requested Docker limits of 4 CPUs and 8 GiB were not applied; the production resource detector used the available host resources.",
+    "The R scientific parallel cases selected two workers under the available memory budget, including runs requesting a maximum of four. The separate pileup process tests independently observed one, two and four samtools children.",
+    "The fixtures are synthetic; the private BAM/FASTA dataset and 0.8.12 versus 0.8.13 performance require separate Windows testing.",
+    "PDF comparisons cover exact rendered pixels at 36 DPI and exclude nondeterministic PDF metadata."
+  ],
+  "parallel_qualification": {
+    "concurrent_worker_cases": [
+      "contamination-batch",
+      "cpi-shared-parents",
+      "dnp-blocks-1",
+      "snp-edge"
+    ],
+    "container_limits": null,
+    "container_limits_applied": false,
+    "distinct_worker_cases": [
+      "cpi-single-cutoffs",
+      "cpi-single-intervals"
+    ],
+    "observations": [
+      {
+        "case": "snp-edge",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 4,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "auto"
+      },
+      {
+        "case": "snp-edge",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 4,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-2"
+      },
+      {
+        "case": "snp-edge",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 4,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4"
+      },
+      {
+        "case": "snp-edge",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 4,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4-repeat"
+      },
+      {
+        "case": "cpi-shared-parents",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 5,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "auto"
+      },
+      {
+        "case": "cpi-shared-parents",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 5,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-2"
+      },
+      {
+        "case": "cpi-shared-parents",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 5,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4"
+      },
+      {
+        "case": "cpi-shared-parents",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 5,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4-repeat"
+      },
+      {
+        "case": "cpi-single-intervals",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 3,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "auto"
+      },
+      {
+        "case": "cpi-single-intervals",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 3,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "manual-2"
+      },
+      {
+        "case": "cpi-single-intervals",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 3,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4"
+      },
+      {
+        "case": "cpi-single-intervals",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 3,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4-repeat"
+      },
+      {
+        "case": "cpi-single-cutoffs",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 2,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "auto"
+      },
+      {
+        "case": "cpi-single-cutoffs",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 2,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "manual-2"
+      },
+      {
+        "case": "cpi-single-cutoffs",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 2,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4"
+      },
+      {
+        "case": "cpi-single-cutoffs",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 2,
+        "overlapping_workers_required": false,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4-repeat"
+      },
+      {
+        "case": "contamination-batch",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 17,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "auto"
+      },
+      {
+        "case": "contamination-batch",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 17,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-2"
+      },
+      {
+        "case": "contamination-batch",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 17,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4"
+      },
+      {
+        "case": "contamination-batch",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 17,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4-repeat"
+      },
+      {
+        "case": "dnp-blocks-1",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 12,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "auto"
+      },
+      {
+        "case": "dnp-blocks-1",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 12,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-2"
+      },
+      {
+        "case": "dnp-blocks-1",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 12,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4"
+      },
+      {
+        "case": "dnp-blocks-1",
+        "maximum_planned_workers": 2,
+        "observed_child_count": 12,
+        "overlapping_workers_required": true,
+        "simultaneous_child_workers": true,
+        "variant": "manual-4-repeat"
+      }
+    ],
+    "variants": [
+      "serial",
+      "auto",
+      "manual-2",
+      "manual-4",
+      "manual-4-repeat"
+    ],
+    "workflows": [
+      "contamination",
+      "cpi",
+      "dnp-call",
+      "snp-call"
+    ]
+  },
+  "reproduction": {
+    "canonical_container_command": "python scripts/verify_r_equivalence.py --image <immutable-locally-built-scientific-image> --output-dir <new-directory>",
+    "local_adapter": "External development adapter qualify_0812.py with --full; its hash is recorded above",
+    "reference": "tests/reference_r/0.8.5/manifest.json"
+  },
+  "schema_version": 1,
+  "scope": "Local scientific source qualification on synthetic fixtures; not installer or real-dataset performance qualification",
+  "status": "passed",
+  "supporting_source_sha256": {
+    "src/nipat_scientific/dnp_blocks.R": "723a18bac069d35b6e6e7c9c0d0b469d2fedb38e27eea635c43ea930accd7dbc",
+    "src/nipat_scientific/dnp_pileup.py": "12d17b2169bc5239db67d1c49a8af0f18cd5d1dbf5115fcacf963c9a78a08619",
+    "src/nipat_scientific/parallel.R": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
+    "src/nipat_scientific/parallel.py": "dd76d2f9ca9a688956ae5107173f84a3566489d0da414b8e12aee7d8dac04216",
+    "src/nipat_scientific/progress.R": "f8171a8db9d24b057fe859e78b47c03694c512bf2480ca0f09ebf753c65f19e0",
+    "src/nipat_scientific/progress.py": "991d0c99411f7ee044975e617b0ba5a51053e0d5fec28465ecb2c90d0ec2cdc0",
+    "src/nipat_scientific/scratch.py": "03b109cf778899a7c03de1ccf0753358b6890dae42feccc4ae8ec3be560c2dd6"
+  },
+  "synthetic_performance": {
+    "file": "performance-observations.tsv",
+    "interpretation": "No production speed or peak-memory claim; synthetic instrumentation only",
+    "memory": "Rprofmem allocation totals from a separate pass; not peak RAM",
+    "scope": "source transformations and CPI core; three timing observations per variant",
+    "sha256": "6b6bf2a4151e9c7de5a14c8a6e5f7e208d26951f4264ec478d5bb52e7b821e6a",
+    "speed_threshold": "none"
+  },
+  "version": "0.8.13"
+}

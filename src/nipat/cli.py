@@ -49,9 +49,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-hashes", choices=("auto", "full"),
                         help="provenienza: auto calcola SHA-256 fino a 16 MiB; full su tutti gli input")
     parser.add_argument("--cpus", type=float,
-                        help="quota CPU del container; non imposta il numero di worker R")
+                        help="quota CPU del container, rispettata anche dal parallelismo automatico")
     parser.add_argument("--memory-mb", type=int, help="limite memoria del container in MiB")
     parser.add_argument("--pids-limit", type=int, help="limite dei processi nel container")
+    parser.add_argument("--execution-mode", choices=("auto", "serial"),
+                        help="auto distribuisce preparazione pileup DNP e calcolo R entro le risorse disponibili; serial usa un processo di calcolo alla volta")
+    parser.add_argument("--max-workers", type=int,
+                        help="massimo di processi di calcolo condiviso dalle fasi di preparazione DNP e R, esclusi i coordinatori; rispetta anche CPU, RAM e lavoro disponibile")
+    parser.add_argument("--dnp-block-mib", type=int,
+                        help="dimensione obiettivo dei blocchi DNP in MiB di input grezzo (default 32), non un limite RAM")
+    parser.add_argument("--dnp-block-loci", type=int,
+                        help="numero obiettivo massimo di loci per blocco DNP (default 64)")
     parser.add_argument(
         "--performance-diagnostics", action="store_true", default=None,
         help="raccoglie misure locali delle prestazioni per questa analisi; nel wizard solo per la prossima analisi",
@@ -130,7 +138,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dnp_contamination.add_argument(
         "--parallel", action="store_true",
-        help="parallelismo fra campioni in DNPcall; i due passaggi restano sequenziali",
+        help="opzione DNP storica, mantenuta per compatibilita'; usare --execution-mode e --max-workers",
     )
     dnp_contamination.add_argument("--run-name")
     dnp_contamination.add_argument("--snp-panel", type=_path,
@@ -160,7 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
             composed_cpi.add_argument("--contamination-panel", type=_path,
                                       help="pannello Contamination; se omesso usa il pannello DNPcall")
         composed_cpi.add_argument("--parallel", action="store_true",
-                                  help="parallelismo fra campioni in DNPcall; i passaggi restano sequenziali")
+                                  help="opzione DNP storica; la modalita' globale di esecuzione ha precedenza")
         composed_cpi.add_argument("--run-name")
         composed_cpi.add_argument("--snp-panel", type=_path,
                                   help="aggiunge SNPcall indipendente su ogni BAM, con questo pannello SNP")
@@ -182,7 +190,8 @@ def build_parser() -> argparse.ArgumentParser:
     dnp_input.add_argument("--bamlist", type=_path, help="file con un percorso BAM per riga")
     dnp.add_argument("--reference", type=_path, required=True)
     dnp.add_argument("--panel", type=_path, required=True)
-    dnp.add_argument("--parallel", action="store_true")
+    dnp.add_argument("--parallel", action="store_true",
+                     help="opzione storica; il parallelismo automatico e' gia' predefinito, --execution-mode serial ha precedenza")
     dnp.add_argument("--run-name")
 
     snp = subparsers.add_parser("snp-call", help="esegue SNPcall da BAM o pileup esistente")
@@ -242,6 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     execution_overrides = {
         name: getattr(args, name) for name in (
             "input_hashes", "cpus", "memory_mb", "pids_limit", "performance_diagnostics",
+            "execution_mode", "max_workers", "dnp_block_mib", "dnp_block_loci",
         )
         if getattr(args, name) is not None
     }

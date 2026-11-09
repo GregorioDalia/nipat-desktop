@@ -1,0 +1,1136 @@
+{
+  "schema_version": 1,
+  "candidate_version": "0.8.14",
+  "baseline_commit": "d607f81850834b6fefad9fbd4f3543c27d8a57f9",
+  "reference_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+  "runtime": {
+    "r_version": "4.4.2",
+    "mode": "relocated pinned runtime on Linux host; not Docker or Windows",
+    "host": "Linux-6.18.57-x86_64-with-glibc2.41"
+  },
+  "scope": "Synthetic isolated microbenchmarks; not complete workflows or user dataset performance. Five alternating repetitions; equality checked before timing.",
+  "candidate_sha256": {
+    "src/nipat_scientific/dnp_blocks.R": "f9dddb7d035ff22ee333d774940ba001aa5291ba3a43683141d22f047e326f5c",
+    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "5df16d3dd54693f076480945939deb46861920a2e0155f078a6a42444a440c4f"
+  },
+  "dnp_reader": {
+    "fixtures": {
+      "deep_contiguous": {
+        "rows": 512,
+        "depth": 6000,
+        "raw_mib": 38.09619
+      },
+      "short_contiguous": {
+        "rows": 20000,
+        "depth": 4,
+        "raw_mib": 1.335144
+      },
+      "short_gapped": {
+        "requested_rows": 10000,
+        "depth": 4,
+        "raw_mib": 0.667572
+      }
+    },
+    "median_seconds": {
+      "deep_contiguous": {
+        "old": 1.292,
+        "new": 1.303
+      },
+      "short_contiguous": {
+        "old": 0.204000000000001,
+        "new": 0.0389999999999979
+      },
+      "short_gapped": {
+        "old": 0.0899999999999999,
+        "new": 0.0849999999999973
+      }
+    },
+    "observations": [
+      {
+        "case": "deep_contiguous",
+        "round": 1,
+        "method": "old",
+        "elapsed_seconds": 1.344
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 1,
+        "method": "new",
+        "elapsed_seconds": 1.362
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 2,
+        "method": "new",
+        "elapsed_seconds": 1.279
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 2,
+        "method": "old",
+        "elapsed_seconds": 1.272
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 3,
+        "method": "old",
+        "elapsed_seconds": 1.243
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 3,
+        "method": "new",
+        "elapsed_seconds": 1.359
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 4,
+        "method": "new",
+        "elapsed_seconds": 1.296
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 4,
+        "method": "old",
+        "elapsed_seconds": 1.294
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 5,
+        "method": "old",
+        "elapsed_seconds": 1.292
+      },
+      {
+        "case": "deep_contiguous",
+        "round": 5,
+        "method": "new",
+        "elapsed_seconds": 1.303
+      },
+      {
+        "case": "short_contiguous",
+        "round": 1,
+        "method": "old",
+        "elapsed_seconds": 0.240000000000002
+      },
+      {
+        "case": "short_contiguous",
+        "round": 1,
+        "method": "new",
+        "elapsed_seconds": 0.032
+      },
+      {
+        "case": "short_contiguous",
+        "round": 2,
+        "method": "new",
+        "elapsed_seconds": 0.054000000000002
+      },
+      {
+        "case": "short_contiguous",
+        "round": 2,
+        "method": "old",
+        "elapsed_seconds": 0.172000000000001
+      },
+      {
+        "case": "short_contiguous",
+        "round": 3,
+        "method": "old",
+        "elapsed_seconds": 0.204000000000001
+      },
+      {
+        "case": "short_contiguous",
+        "round": 3,
+        "method": "new",
+        "elapsed_seconds": 0.032
+      },
+      {
+        "case": "short_contiguous",
+        "round": 4,
+        "method": "new",
+        "elapsed_seconds": 0.0389999999999979
+      },
+      {
+        "case": "short_contiguous",
+        "round": 4,
+        "method": "old",
+        "elapsed_seconds": 0.282
+      },
+      {
+        "case": "short_contiguous",
+        "round": 5,
+        "method": "old",
+        "elapsed_seconds": 0.195
+      },
+      {
+        "case": "short_contiguous",
+        "round": 5,
+        "method": "new",
+        "elapsed_seconds": 0.0599999999999987
+      },
+      {
+        "case": "short_gapped",
+        "round": 1,
+        "method": "old",
+        "elapsed_seconds": 0.0899999999999999
+      },
+      {
+        "case": "short_gapped",
+        "round": 1,
+        "method": "new",
+        "elapsed_seconds": 0.0809999999999995
+      },
+      {
+        "case": "short_gapped",
+        "round": 2,
+        "method": "new",
+        "elapsed_seconds": 0.0899999999999999
+      },
+      {
+        "case": "short_gapped",
+        "round": 2,
+        "method": "old",
+        "elapsed_seconds": 0.0899999999999999
+      },
+      {
+        "case": "short_gapped",
+        "round": 3,
+        "method": "old",
+        "elapsed_seconds": 0.0899999999999999
+      },
+      {
+        "case": "short_gapped",
+        "round": 3,
+        "method": "new",
+        "elapsed_seconds": 0.0849999999999973
+      },
+      {
+        "case": "short_gapped",
+        "round": 4,
+        "method": "new",
+        "elapsed_seconds": 0.083000000000002
+      },
+      {
+        "case": "short_gapped",
+        "round": 4,
+        "method": "old",
+        "elapsed_seconds": 0.0910000000000011
+      },
+      {
+        "case": "short_gapped",
+        "round": 5,
+        "method": "old",
+        "elapsed_seconds": 0.145
+      },
+      {
+        "case": "short_gapped",
+        "round": 5,
+        "method": "new",
+        "elapsed_seconds": 0.117000000000001
+      }
+    ],
+    "rss_scope": "Whole fresh R process reading the deep fixture and prebuilt index; three independent processes per method; os.wait4 ru_maxrss in KiB; not container peak",
+    "rss_observations": [
+      {
+        "method": "old",
+        "max_rss_kib": 193684
+      },
+      {
+        "method": "new",
+        "max_rss_kib": 205704
+      },
+      {
+        "method": "new",
+        "max_rss_kib": 204876
+      },
+      {
+        "method": "old",
+        "max_rss_kib": 193112
+      },
+      {
+        "method": "old",
+        "max_rss_kib": 193080
+      },
+      {
+        "method": "new",
+        "max_rss_kib": 204948
+      }
+    ],
+    "median_rss_mib": {
+      "old": 188.5859375,
+      "new": 200.14453125
+    },
+    "cumulative_allocations_deep": {
+      "old_mib": 114.901626586914,
+      "new_mib": 114.884056091309,
+      "old_events": 1055,
+      "new_events": 52
+    },
+    "interpretation": "Clear benefit for many short contiguous rows; deep case timing effectively neutral, with about 11.56 MiB higher median process peak. Cumulative allocations are not peak memory."
+  },
+  "index_profile": {
+    "code_changed": false,
+    "fixture": "deep_contiguous",
+    "elapsed_seconds": 0.817,
+    "sampling_interval_seconds": 0.01,
+    "sampled_seconds": 0.79,
+    "readLines_self_percent": 46.84,
+    "strsplit_self_percent": 37.97,
+    "limitation": "Single short synthetic profile, not a stable estimate for the real dataset. No validated replacement index was adopted."
+  },
+  "measurement_file_sha256": {
+    "reader-benchmark-final.log": "18b625bacf597521f39e69a5227eff7a71892f6cf4a6fb1579f7de20d832b06e",
+    "reader-range-benchmark.csv": "19c358e40615d331452cfeffe4a36c7aceb1fb125e1b4dc8bd88f1480469b12e",
+    "reader-memory-final.tsv": "c868662882f655924dfbd25c8b712b8c0d55c84679def0beb3d63b12ea9fb2b6",
+    "index-deep-profile.out": "94e6e929201bc571e1a7b39673ca2325e5b469e2c9988bcd3d9f0a33bcca6d63",
+    "cpi-audit/benchmark-final/report.json": "c606048b31904f702b4c866e03dc38bfa6b188cdfd00550d5243dbb3ab735a1a",
+    "cpi-audit/benchmark-repository/report.json": "69c650bf52f793b3cb397b4d49273f674d1496ac7cbc86fd4c9f26e697b4975d",
+    "reader-benchmark-evidence.json": "a15adfe3a3a22304ac5f43fdcef58588692d35b661bb0a0d059316a3693552be"
+  },
+  "cpi_summary_first_session": {
+    "status": "passed",
+    "scope": "Cutoff result assembly and summary from an identical precomputed CPI result. Excludes I/O, CPI core computation, plotting, package loading. No whole-workflow speed claim.",
+    "repetitions": 5,
+    "comparison": "R identical across all versions; exact table and plot-label TSV SHA-256; byte-identical RDS 0.8.13/candidate",
+    "legacy_serialization_note": "0.8.5 summary data.frame attributes are stored as names,row.names,class; 0.8.13 and candidate use names,class,row.names. Attribute values and R objects compare identical; this pre-existing attribute ordering difference changes raw RDS hashes.",
+    "cases": [
+      {
+        "case": "5000-ALL",
+        "median_seconds": {
+          "0.8.5": 0.00999999999999979,
+          "0.8.13": 0.00900000000000012,
+          "candidate": 0.00800000000000001
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.00900000000000012,
+            0.00900000000000012,
+            0.01,
+            0.0100000000000002,
+            0.00999999999999979
+          ],
+          "0.8.13": [
+            0.00800000000000001,
+            0.0169999999999999,
+            0.00900000000000012,
+            0.0089999999999999,
+            0.00999999999999979
+          ],
+          "candidate": [
+            0.00800000000000001,
+            0.00900000000000012,
+            0.00800000000000001,
+            0.00800000000000001,
+            0.0170000000000003
+          ]
+        },
+        "change_vs_0.8.13_percent": -11.11,
+        "input_sha256": "7f99260ea48a9cc67170d3072580efe869949ce0fe4adafa6f10f40052914f98",
+        "common_table_sha256": {
+          "summary": "7d22b8ac1a8639dfdd60f4caf783b2b4ce5887481900543209ce82418f6a837d",
+          "plot_data": "1b57389dbd57322537789f593a697dc2c276de6102002ce7188fd03eab52e108",
+          "plot_labels": "329bf06ab6ff6c7e3cd2dd2c365cd1582912b896ba68eba66677e69ee1d18737"
+        },
+        "rds_sha256": {
+          "0.8.5": "85adad99dfa2a08ced16c2d53c91bde7d56a5f1df79adeaa748710b112cd9be3",
+          "0.8.13": "a9a89d5515a661a0a45ef5f28fbdd1a9878a94ba5eba29246aeee9a32b402637",
+          "candidate": "a9a89d5515a661a0a45ef5f28fbdd1a9878a94ba5eba29246aeee9a32b402637"
+        }
+      },
+      {
+        "case": "5000-full",
+        "median_seconds": {
+          "0.8.5": 0.0129999999999999,
+          "0.8.13": 0.0110000000000001,
+          "candidate": 0.00800000000000001
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.024,
+            0.0140000000000002,
+            0.0129999999999999,
+            0.0129999999999999,
+            0.0120000000000005
+          ],
+          "0.8.13": [
+            0.012,
+            0.0110000000000001,
+            0.0119999999999996,
+            0.0110000000000001,
+            0.0110000000000001
+          ],
+          "candidate": [
+            0.00800000000000001,
+            0.00800000000000001,
+            0.00900000000000034,
+            0.00900000000000034,
+            0.00800000000000001
+          ]
+        },
+        "change_vs_0.8.13_percent": -27.27,
+        "input_sha256": "595b53a3b57713ca759fb83f8de2ea7ed435e0c3fa7030ebeeb932e2da90d78d",
+        "common_table_sha256": {
+          "summary": "f80f57067dd8282e0352f6c07252cfaaaf8f3e6343ff7858588f2992ea128be3",
+          "plot_data": "3d49252fbab7352c11a7b7778dfb58910927e0f452867fc6324488e8ee8f9e1e",
+          "plot_labels": "e396e28f8fe5adcb31bd46042b462575be4c54f8edeeaee4416031c034dd3029"
+        },
+        "rds_sha256": {
+          "0.8.5": "2612f7f3b9e92932e2659cf4a441ba75e50e2807426ae882ea29a95ea6fc1f53",
+          "0.8.13": "844dd4f42468dc1aad7caa50a7409a8365cab420eb7e838e2c54991313c09fe0",
+          "candidate": "844dd4f42468dc1aad7caa50a7409a8365cab420eb7e838e2c54991313c09fe0"
+        }
+      },
+      {
+        "case": "5000-tenth",
+        "median_seconds": {
+          "0.8.5": 0.0110000000000001,
+          "0.8.13": 0.0100000000000007,
+          "candidate": 0.00800000000000001
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0110000000000001,
+            0.0110000000000001,
+            0.0120000000000005,
+            0.0119999999999996,
+            0.0110000000000001
+          ],
+          "0.8.13": [
+            0.0179999999999998,
+            0.00999999999999979,
+            0.0100000000000007,
+            0.0110000000000001,
+            0.0100000000000007
+          ],
+          "candidate": [
+            0.00899999999999945,
+            0.00800000000000001,
+            0.00700000000000056,
+            0.00800000000000001,
+            0.00800000000000001
+          ]
+        },
+        "change_vs_0.8.13_percent": -20.0,
+        "input_sha256": "de00e87d570886ecf0a84d0ac7693642b568cf48a524cf068d9d884f22a503c7",
+        "common_table_sha256": {
+          "summary": "c7236a4ff87398059b21338f2b86082f28e9f116dee45af1813a11aa52b7037f",
+          "plot_data": "121f71ac58e24fedd8441104579787418ca774002b9b129c7ba43452a5290fec",
+          "plot_labels": "28aaffe53149997c8d9aa06a61ab5abcf6f7bb2bb161e83479258f88f6053acc"
+        },
+        "rds_sha256": {
+          "0.8.5": "8b32386a18ff241067424f88b69f2aae7f36700f3c68dcb69464949d5a74438a",
+          "0.8.13": "a30b032c35f2ab7ffed3cad2b40ce5ff1b556ecf6fbdbe5fde35148f907313f8",
+          "candidate": "a30b032c35f2ab7ffed3cad2b40ce5ff1b556ecf6fbdbe5fde35148f907313f8"
+        }
+      },
+      {
+        "case": "50000-ALL",
+        "median_seconds": {
+          "0.8.5": 0.0229999999999997,
+          "0.8.13": 0.0199999999999996,
+          "candidate": 0.0199999999999996
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0259999999999998,
+            0.0229999999999997,
+            0.0240000000000009,
+            0.0210000000000008,
+            0.0210000000000008
+          ],
+          "0.8.13": [
+            0.0259999999999998,
+            0.0229999999999997,
+            0.0199999999999996,
+            0.0199999999999996,
+            0.0199999999999996
+          ],
+          "candidate": [
+            0.0199999999999996,
+            0.0210000000000008,
+            0.0199999999999996,
+            0.0199999999999996,
+            0.0210000000000008
+          ]
+        },
+        "change_vs_0.8.13_percent": 0.0,
+        "input_sha256": "75fccb08e47fa7ef1fa8b190e41f6a06f6385458125b1ec01ab63fcb15705a83",
+        "common_table_sha256": {
+          "summary": "bbc9a31588ca8271f0e8bb134f8aefaa8e653aa04f4a56946bbc42faddb4d25a",
+          "plot_data": "438f73e19f267fad5023ccd8633dbe5634b94b879cb1a2001653e0a279b0490f",
+          "plot_labels": "329bf06ab6ff6c7e3cd2dd2c365cd1582912b896ba68eba66677e69ee1d18737"
+        },
+        "rds_sha256": {
+          "0.8.5": "bc2bfb49ae38febdfe99e66ae61b8e6ea6730b06e16240b74499ee15aa0afcfd",
+          "0.8.13": "6f2c83d86ad9da9874cabe235dc808242589b5d293461750fe1bd87c1ce7fe89",
+          "candidate": "6f2c83d86ad9da9874cabe235dc808242589b5d293461750fe1bd87c1ce7fe89"
+        }
+      },
+      {
+        "case": "50000-full",
+        "median_seconds": {
+          "0.8.5": 0.0419999999999998,
+          "0.8.13": 0.0360000000000014,
+          "candidate": 0.0210000000000008
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0449999999999999,
+            0.0700000000000003,
+            0.0419999999999998,
+            0.0410000000000004,
+            0.0419999999999998
+          ],
+          "0.8.13": [
+            0.0360000000000014,
+            0.0360000000000014,
+            0.0360000000000014,
+            0.0339999999999989,
+            0.0340000000000007
+          ],
+          "candidate": [
+            0.0370000000000008,
+            0.0210000000000008,
+            0.0210000000000008,
+            0.0199999999999996,
+            0.0199999999999996
+          ]
+        },
+        "change_vs_0.8.13_percent": -41.67,
+        "input_sha256": "fe4f52db9248174ad9bf374d4f46f26b4c887362c1dc8761857dcde7ba16f018",
+        "common_table_sha256": {
+          "summary": "3138bc775cd7514208bc61b2bc1ad522515ca2538f817e36f198ace784eea0c7",
+          "plot_data": "9fbbf04ba889d29c518260b6d50e50e620b2a693c19efc237675c8545414210b",
+          "plot_labels": "e396e28f8fe5adcb31bd46042b462575be4c54f8edeeaee4416031c034dd3029"
+        },
+        "rds_sha256": {
+          "0.8.5": "e3694276efb94b5731a79d002e82c9bc5f5c5c069ae25e433eee974a97062cfc",
+          "0.8.13": "4da5a5e01ea435eebe53f5a1ec0b8e8f49864dcda3c45e6af44521e66f95b37e",
+          "candidate": "4da5a5e01ea435eebe53f5a1ec0b8e8f49864dcda3c45e6af44521e66f95b37e"
+        }
+      },
+      {
+        "case": "50000-tenth",
+        "median_seconds": {
+          "0.8.5": 0.020999999999999,
+          "0.8.13": 0.016,
+          "candidate": 0.0100000000000016
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0210000000000008,
+            0.0199999999999996,
+            0.0210000000000008,
+            0.020999999999999,
+            0.0199999999999996
+          ],
+          "0.8.13": [
+            0.0150000000000006,
+            0.016,
+            0.016,
+            0.0170000000000012,
+            0.0289999999999999
+          ],
+          "candidate": [
+            0.00999999999999979,
+            0.0100000000000016,
+            0.0109999999999992,
+            0.0100000000000016,
+            0.0189999999999984
+          ]
+        },
+        "change_vs_0.8.13_percent": -37.5,
+        "input_sha256": "4b196f23e954705d4a00420bc03b3572073b2f1bd23fef2e39b59364a8176ade",
+        "common_table_sha256": {
+          "summary": "caa0e3d7033e60c916fae80d627b97ad4c3ea997087bb531e9cbaac26a75e446",
+          "plot_data": "c2621fba04ba364ec594f55d8d9ce09b87fe1e0addb2d05df25e7be9058d41c8",
+          "plot_labels": "75c4410afedd00900eece9793b83f12b8025c73266b3ecd003c28c808ed978f7"
+        },
+        "rds_sha256": {
+          "0.8.5": "00580cb35ebfc10cc49de46049948b23c134ed89a4870f2fa9dc13a77dfaa42b",
+          "0.8.13": "0dc07d1a16f220ed389b06a8d91a443473ff47cb8d7b4d121ad2138955ed1d37",
+          "candidate": "0dc07d1a16f220ed389b06a8d91a443473ff47cb8d7b4d121ad2138955ed1d37"
+        }
+      }
+    ]
+  },
+  "cpi_summary_replay": {
+    "status": "passed",
+    "scope": "Cutoff result assembly and summary from identical precomputed CPI result. Excludes I/O, CPI core computation, plotting, package loading. No whole-workflow speed claim.",
+    "runtime": "R 4.4.2, restored official NIPAT runtime, serial, OPENBLAS_NUM_THREADS=1",
+    "repetitions": 5,
+    "comparison": "R identical across all versions; exact table and plot-label TSV SHA-256; byte-identical RDS 0.8.13/candidate",
+    "legacy_serialization_note": "0.8.5 summary data.frame attributes are stored as names,row.names,class; 0.8.13 and candidate use names,class,row.names. Attribute values and R objects compare identical; this pre-existing attribute ordering difference changes raw RDS hashes.",
+    "manifest": "SHA256SUMS",
+    "manifest_sha256": "c7e9ba6866d9bca91666f3f5b29ff238d5e5c990e26b4b6a24e8591409bb680e",
+    "cases": [
+      {
+        "case": "5000-ALL",
+        "median_seconds": {
+          "0.8.5": 0.00900000000000034,
+          "0.8.13": 0.00800000000000001,
+          "candidate": 0.0100000000000002
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0089999999999999,
+            0.00900000000000012,
+            0.01,
+            0.012,
+            0.00900000000000034
+          ],
+          "0.8.13": [
+            0.018,
+            0.00800000000000001,
+            0.00800000000000001,
+            0.00800000000000001,
+            0.012
+          ],
+          "candidate": [
+            0.00800000000000001,
+            0.0150000000000001,
+            0.00800000000000001,
+            0.0170000000000003,
+            0.0100000000000002
+          ]
+        },
+        "change_vs_0.8.13_percent": 25.0,
+        "input_sha256": "7f99260ea48a9cc67170d3072580efe869949ce0fe4adafa6f10f40052914f98",
+        "common_table_sha256": {
+          "summary": "7d22b8ac1a8639dfdd60f4caf783b2b4ce5887481900543209ce82418f6a837d",
+          "plot_data": "1b57389dbd57322537789f593a697dc2c276de6102002ce7188fd03eab52e108",
+          "plot_labels": "329bf06ab6ff6c7e3cd2dd2c365cd1582912b896ba68eba66677e69ee1d18737"
+        },
+        "rds_sha256": {
+          "0.8.5": "85adad99dfa2a08ced16c2d53c91bde7d56a5f1df79adeaa748710b112cd9be3",
+          "0.8.13": "a9a89d5515a661a0a45ef5f28fbdd1a9878a94ba5eba29246aeee9a32b402637",
+          "candidate": "a9a89d5515a661a0a45ef5f28fbdd1a9878a94ba5eba29246aeee9a32b402637"
+        }
+      },
+      {
+        "case": "5000-full",
+        "median_seconds": {
+          "0.8.5": 0.0179999999999998,
+          "0.8.13": 0.0110000000000001,
+          "candidate": 0.00900000000000034
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0249999999999999,
+            0.0119999999999996,
+            0.0289999999999999,
+            0.0179999999999998,
+            0.0129999999999999
+          ],
+          "0.8.13": [
+            0.012,
+            0.0109999999999997,
+            0.0119999999999996,
+            0.0109999999999992,
+            0.0110000000000001
+          ],
+          "candidate": [
+            0.0100000000000002,
+            0.00800000000000001,
+            0.0159999999999991,
+            0.00900000000000034,
+            0.00900000000000034
+          ]
+        },
+        "change_vs_0.8.13_percent": -18.18,
+        "input_sha256": "595b53a3b57713ca759fb83f8de2ea7ed435e0c3fa7030ebeeb932e2da90d78d",
+        "common_table_sha256": {
+          "summary": "f80f57067dd8282e0352f6c07252cfaaaf8f3e6343ff7858588f2992ea128be3",
+          "plot_data": "3d49252fbab7352c11a7b7778dfb58910927e0f452867fc6324488e8ee8f9e1e",
+          "plot_labels": "e396e28f8fe5adcb31bd46042b462575be4c54f8edeeaee4416031c034dd3029"
+        },
+        "rds_sha256": {
+          "0.8.5": "2612f7f3b9e92932e2659cf4a441ba75e50e2807426ae882ea29a95ea6fc1f53",
+          "0.8.13": "844dd4f42468dc1aad7caa50a7409a8365cab420eb7e838e2c54991313c09fe0",
+          "candidate": "844dd4f42468dc1aad7caa50a7409a8365cab420eb7e838e2c54991313c09fe0"
+        }
+      },
+      {
+        "case": "5000-tenth",
+        "median_seconds": {
+          "0.8.5": 0.0110000000000001,
+          "0.8.13": 0.00899999999999945,
+          "candidate": 0.00699999999999967
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0110000000000001,
+            0.0110000000000001,
+            0.0110000000000001,
+            0.0110000000000001,
+            0.0110000000000001
+          ],
+          "0.8.13": [
+            0.00899999999999945,
+            0.00800000000000001,
+            0.0179999999999998,
+            0.00899999999999945,
+            0.00999999999999979
+          ],
+          "candidate": [
+            0.00699999999999967,
+            0.00699999999999967,
+            0.00700000000000056,
+            0.00699999999999967,
+            0.00699999999999967
+          ]
+        },
+        "change_vs_0.8.13_percent": -22.22,
+        "input_sha256": "de00e87d570886ecf0a84d0ac7693642b568cf48a524cf068d9d884f22a503c7",
+        "common_table_sha256": {
+          "summary": "c7236a4ff87398059b21338f2b86082f28e9f116dee45af1813a11aa52b7037f",
+          "plot_data": "121f71ac58e24fedd8441104579787418ca774002b9b129c7ba43452a5290fec",
+          "plot_labels": "28aaffe53149997c8d9aa06a61ab5abcf6f7bb2bb161e83479258f88f6053acc"
+        },
+        "rds_sha256": {
+          "0.8.5": "8b32386a18ff241067424f88b69f2aae7f36700f3c68dcb69464949d5a74438a",
+          "0.8.13": "a30b032c35f2ab7ffed3cad2b40ce5ff1b556ecf6fbdbe5fde35148f907313f8",
+          "candidate": "a30b032c35f2ab7ffed3cad2b40ce5ff1b556ecf6fbdbe5fde35148f907313f8"
+        }
+      },
+      {
+        "case": "50000-ALL",
+        "median_seconds": {
+          "0.8.5": 0.0220000000000002,
+          "0.8.13": 0.0220000000000002,
+          "candidate": 0.0220000000000002
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0220000000000002,
+            0.0259999999999998,
+            0.0240000000000009,
+            0.020999999999999,
+            0.0220000000000002
+          ],
+          "0.8.13": [
+            0.0220000000000002,
+            0.0199999999999996,
+            0.0200000000000014,
+            0.0359999999999996,
+            0.0359999999999996
+          ],
+          "candidate": [
+            0.0220000000000002,
+            0.0220000000000002,
+            0.0220000000000002,
+            0.020999999999999,
+            0.020999999999999
+          ]
+        },
+        "change_vs_0.8.13_percent": 0.0,
+        "input_sha256": "75fccb08e47fa7ef1fa8b190e41f6a06f6385458125b1ec01ab63fcb15705a83",
+        "common_table_sha256": {
+          "summary": "bbc9a31588ca8271f0e8bb134f8aefaa8e653aa04f4a56946bbc42faddb4d25a",
+          "plot_data": "438f73e19f267fad5023ccd8633dbe5634b94b879cb1a2001653e0a279b0490f",
+          "plot_labels": "329bf06ab6ff6c7e3cd2dd2c365cd1582912b896ba68eba66677e69ee1d18737"
+        },
+        "rds_sha256": {
+          "0.8.5": "bc2bfb49ae38febdfe99e66ae61b8e6ea6730b06e16240b74499ee15aa0afcfd",
+          "0.8.13": "6f2c83d86ad9da9874cabe235dc808242589b5d293461750fe1bd87c1ce7fe89",
+          "candidate": "6f2c83d86ad9da9874cabe235dc808242589b5d293461750fe1bd87c1ce7fe89"
+        }
+      },
+      {
+        "case": "50000-full",
+        "median_seconds": {
+          "0.8.5": 0.0589999999999993,
+          "0.8.13": 0.0410000000000004,
+          "candidate": 0.0359999999999996
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0800000000000001,
+            0.0619999999999994,
+            0.0570000000000004,
+            0.0449999999999999,
+            0.0589999999999993
+          ],
+          "0.8.13": [
+            0.0629999999999988,
+            0.0589999999999993,
+            0.0410000000000004,
+            0.0329999999999995,
+            0.0339999999999989
+          ],
+          "candidate": [
+            0.0310000000000006,
+            0.0370000000000008,
+            0.0370000000000008,
+            0.0350000000000001,
+            0.0359999999999996
+          ]
+        },
+        "change_vs_0.8.13_percent": -12.2,
+        "input_sha256": "fe4f52db9248174ad9bf374d4f46f26b4c887362c1dc8761857dcde7ba16f018",
+        "common_table_sha256": {
+          "summary": "3138bc775cd7514208bc61b2bc1ad522515ca2538f817e36f198ace784eea0c7",
+          "plot_data": "9fbbf04ba889d29c518260b6d50e50e620b2a693c19efc237675c8545414210b",
+          "plot_labels": "e396e28f8fe5adcb31bd46042b462575be4c54f8edeeaee4416031c034dd3029"
+        },
+        "rds_sha256": {
+          "0.8.5": "e3694276efb94b5731a79d002e82c9bc5f5c5c069ae25e433eee974a97062cfc",
+          "0.8.13": "4da5a5e01ea435eebe53f5a1ec0b8e8f49864dcda3c45e6af44521e66f95b37e",
+          "candidate": "4da5a5e01ea435eebe53f5a1ec0b8e8f49864dcda3c45e6af44521e66f95b37e"
+        }
+      },
+      {
+        "case": "50000-tenth",
+        "median_seconds": {
+          "0.8.5": 0.0229999999999997,
+          "0.8.13": 0.0180000000000007,
+          "candidate": 0.0100000000000016
+        },
+        "observations_seconds": {
+          "0.8.5": [
+            0.0229999999999997,
+            0.0199999999999996,
+            0.0359999999999996,
+            0.0250000000000021,
+            0.0199999999999996
+          ],
+          "0.8.13": [
+            0.0150000000000006,
+            0.0210000000000008,
+            0.0269999999999992,
+            0.0159999999999982,
+            0.0180000000000007
+          ],
+          "candidate": [
+            0.00999999999999979,
+            0.0120000000000005,
+            0.0100000000000016,
+            0.0100000000000016,
+            0.0100000000000016
+          ]
+        },
+        "change_vs_0.8.13_percent": -44.44,
+        "input_sha256": "4b196f23e954705d4a00420bc03b3572073b2f1bd23fef2e39b59364a8176ade",
+        "common_table_sha256": {
+          "summary": "caa0e3d7033e60c916fae80d627b97ad4c3ea997087bb531e9cbaac26a75e446",
+          "plot_data": "c2621fba04ba364ec594f55d8d9ce09b87fe1e0addb2d05df25e7be9058d41c8",
+          "plot_labels": "75c4410afedd00900eece9793b83f12b8025c73266b3ecd003c28c808ed978f7"
+        },
+        "rds_sha256": {
+          "0.8.5": "00580cb35ebfc10cc49de46049948b23c134ed89a4870f2fa9dc13a77dfaa42b",
+          "0.8.13": "0dc07d1a16f220ed389b06a8d91a443473ff47cb8d7b4d121ad2138955ed1d37",
+          "candidate": "0dc07d1a16f220ed389b06a8d91a443473ff47cb8d7b4d121ad2138955ed1d37"
+        }
+      }
+    ]
+  },
+  "cpi_interpretation": "Both sessions are retained. The replay uses the checked-in optional harness; timing variation is large relative to the small absolute savings. No stable percentage or whole-workflow acceleration is claimed.",
+  "optional_harness_sha256": {
+    "tests/r_optimization/cpi/benchmark_summary.R": "ee6fa9e0b7900cc383999939b56a6ece70d59fad1a3a74c85f6e6c8ccfc23557",
+    "tests/r_optimization/dnp/benchmark_reader.R": "30e78c6ff219c40af9458618433c25227430e34aa8caa3357b00b7a550524ae3"
+  },
+  "dnp_full_measurement_evidence": {
+    "baseline_git": "d607f81850834b6fefad9fbd4f3543c27d8a57f9",
+    "baseline_source_sha256": "723a18bac069d35b6e6e7c9c0d0b469d2fedb38e27eea635c43ea930accd7dbc",
+    "candidate_source_sha256": "f9dddb7d035ff22ee333d774940ba001aa5291ba3a43683141d22f047e326f5c",
+    "timing_harness_sha256": "a3e924ef250137b78f7c9730aef9fa2096f93ed208e5b82566afc795fae40daf",
+    "portable_harness_sha256": "30e78c6ff219c40af9458618433c25227430e34aa8caa3357b00b7a550524ae3",
+    "portable_harness_validation": "R parse and rss-new mode passed; timings below from equivalent scratch harness before packaging",
+    "runtime": "R4.4.2 Linux x86_64; OPENBLAS_NUM_THREADS=1",
+    "method": "Five alternating old/new runs per case, gc before each; strict identical(data.frame) first; three separate R processes per method for RSS, measured via os.wait4 ru_maxrss. Timed/alloc runs warm within process; RSS includes R startup+source+index loading+one deep read.",
+    "fixtures": {
+      "deep_contiguous": {
+        "rows": 512,
+        "depth": 6000,
+        "bytes": 39946752,
+        "read_spans": 5
+      },
+      "short_contiguous": {
+        "rows": 20000,
+        "depth": 4,
+        "mib": 1.335144,
+        "read_spans": 1
+      },
+      "short_gapped": {
+        "rows": 10000,
+        "depth": 4,
+        "mib": 0.667572,
+        "read_spans": 10000,
+        "candidate_path": "original direct per-row fast path"
+      }
+    },
+    "timings": [
+      {
+        "case": "deep_contiguous",
+        "round": "1",
+        "method": "old",
+        "elapsed_seconds": "1.344"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "1",
+        "method": "new",
+        "elapsed_seconds": "1.362"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "2",
+        "method": "new",
+        "elapsed_seconds": "1.279"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "2",
+        "method": "old",
+        "elapsed_seconds": "1.272"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "3",
+        "method": "old",
+        "elapsed_seconds": "1.243"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "3",
+        "method": "new",
+        "elapsed_seconds": "1.359"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "4",
+        "method": "new",
+        "elapsed_seconds": "1.296"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "4",
+        "method": "old",
+        "elapsed_seconds": "1.294"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "5",
+        "method": "old",
+        "elapsed_seconds": "1.292"
+      },
+      {
+        "case": "deep_contiguous",
+        "round": "5",
+        "method": "new",
+        "elapsed_seconds": "1.303"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "1",
+        "method": "old",
+        "elapsed_seconds": "0.240000000000002"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "1",
+        "method": "new",
+        "elapsed_seconds": "0.032"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "2",
+        "method": "new",
+        "elapsed_seconds": "0.054000000000002"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "2",
+        "method": "old",
+        "elapsed_seconds": "0.172000000000001"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "3",
+        "method": "old",
+        "elapsed_seconds": "0.204000000000001"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "3",
+        "method": "new",
+        "elapsed_seconds": "0.032"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "4",
+        "method": "new",
+        "elapsed_seconds": "0.0389999999999979"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "4",
+        "method": "old",
+        "elapsed_seconds": "0.282"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "5",
+        "method": "old",
+        "elapsed_seconds": "0.195"
+      },
+      {
+        "case": "short_contiguous",
+        "round": "5",
+        "method": "new",
+        "elapsed_seconds": "0.0599999999999987"
+      },
+      {
+        "case": "short_gapped",
+        "round": "1",
+        "method": "old",
+        "elapsed_seconds": "0.0899999999999999"
+      },
+      {
+        "case": "short_gapped",
+        "round": "1",
+        "method": "new",
+        "elapsed_seconds": "0.0809999999999995"
+      },
+      {
+        "case": "short_gapped",
+        "round": "2",
+        "method": "new",
+        "elapsed_seconds": "0.0899999999999999"
+      },
+      {
+        "case": "short_gapped",
+        "round": "2",
+        "method": "old",
+        "elapsed_seconds": "0.0899999999999999"
+      },
+      {
+        "case": "short_gapped",
+        "round": "3",
+        "method": "old",
+        "elapsed_seconds": "0.0899999999999999"
+      },
+      {
+        "case": "short_gapped",
+        "round": "3",
+        "method": "new",
+        "elapsed_seconds": "0.0849999999999973"
+      },
+      {
+        "case": "short_gapped",
+        "round": "4",
+        "method": "new",
+        "elapsed_seconds": "0.083000000000002"
+      },
+      {
+        "case": "short_gapped",
+        "round": "4",
+        "method": "old",
+        "elapsed_seconds": "0.0910000000000011"
+      },
+      {
+        "case": "short_gapped",
+        "round": "5",
+        "method": "old",
+        "elapsed_seconds": "0.145"
+      },
+      {
+        "case": "short_gapped",
+        "round": "5",
+        "method": "new",
+        "elapsed_seconds": "0.117000000000001"
+      }
+    ],
+    "median_seconds": {
+      "deep_contiguous_old": 1.292,
+      "deep_contiguous_new": 1.303,
+      "short_contiguous_old": 0.204000000000001,
+      "short_contiguous_new": 0.0389999999999979,
+      "short_gapped_old": 0.0899999999999999,
+      "short_gapped_new": 0.0849999999999973
+    },
+    "rprofmem_allocations": [
+      {
+        "case": "deep_contiguous",
+        "method": "old",
+        "allocation_mib": 114.901626586914,
+        "allocation_count": 1055
+      },
+      {
+        "case": "deep_contiguous",
+        "method": "new",
+        "allocation_mib": 114.884056091309,
+        "allocation_count": 52
+      },
+      {
+        "case": "short_contiguous",
+        "method": "old",
+        "allocation_mib": 4.14556884765625,
+        "allocation_count": 57
+      },
+      {
+        "case": "short_contiguous",
+        "method": "new",
+        "allocation_mib": 6.70195007324219,
+        "allocation_count": 69
+      },
+      {
+        "case": "short_gapped",
+        "method": "old",
+        "allocation_mib": 2.07005310058594,
+        "allocation_count": 50
+      },
+      {
+        "case": "short_gapped",
+        "method": "new",
+        "allocation_mib": 2.60449981689453,
+        "allocation_count": 59
+      }
+    ],
+    "rss_kib": [
+      {
+        "method": "old",
+        "max_rss_kib": "193684"
+      },
+      {
+        "method": "new",
+        "max_rss_kib": "205704"
+      },
+      {
+        "method": "new",
+        "max_rss_kib": "204876"
+      },
+      {
+        "method": "old",
+        "max_rss_kib": "193112"
+      },
+      {
+        "method": "old",
+        "max_rss_kib": "193080"
+      },
+      {
+        "method": "new",
+        "max_rss_kib": "204948"
+      }
+    ],
+    "median_rss_mib": {
+      "old": 188.5859375,
+      "new": 200.14453125
+    },
+    "index_profile": {
+      "elapsed_seconds": 0.817,
+      "sampled_seconds": 0.79,
+      "sample_interval_seconds": 0.01,
+      "readLines_self_seconds": 0.37,
+      "readLines_self_percent": 46.84,
+      "strsplit_self_seconds": 0.3,
+      "strsplit_self_percent": 37.97,
+      "qname_duplicate_check_total_percent": 35.44,
+      "decision": "Index unchanged. Profile identifies both line reading and QNAME splitting/type semantics, and does not establish correctness or benefit for a raw-buffer replacement."
+    },
+    "limits": [
+      "Synthetic isolated reads, not user BAM or whole-pipeline timing.",
+      "Deep reader timing is effectively unchanged; benefit measured for many short contiguous rows.",
+      "Deep max RSS increased by about11.56MiB (+6.1%); cumulative allocation bytes stayed effectively unchanged.",
+      "No claim of lower total RAM or faster indexing."
+    ]
+  }
+}

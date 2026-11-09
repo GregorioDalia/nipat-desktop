@@ -33,7 +33,10 @@ from nipat_scientific.panels import read_dnp_list, read_position_panel, read_snp
 from nipat_scientific.outputs import _artifact, _collect_outputs, _cpi_bindings
 from nipat_scientific.plan import validate_plan
 from nipat_scientific.snp import prepare_snp
-from nipat_scientific.performance import phase
+from nipat_scientific import progress
+from nipat_scientific.progress import observed_phase as phase
+from nipat_scientific.scratch import dnp_environment
+from nipat_scientific.parallel import execution_environment
 from nipat_scientific.presentation import (
     step_presentation, prepare_presentation, finish_presentation, finish_plan_presentation,
 )
@@ -282,137 +285,149 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             previous[signum] = signal.getsignal(signum)
             signal.signal(signum, cancellation.receive)
         for step, record in zip(plan["steps"], state["steps"], strict=True):
-            if cancellation.signum is not None:
-                raise KeyboardInterrupt
-            active = record
-            record["status"], record["started_utc"] = "running", _utc()
-            _atomic_json(root / "workflow-state.json", state)
-            directory = root / "steps" / step["id"]
-            directory.mkdir(parents=True)
-            work, output = directory / "work", directory / "output"
-            request = {"schema_version": 1, "workflow": step["workflow"],
-                       "work_dir": str(work), "out_dir": str(output)}
+            sample_ids = progress.step_sample_ids(step)
+            aliases = ({f"sample_{index:04d}": value for index, value in enumerate(sample_ids, 1)}
+                       if step["workflow"] == "dnp-call" else {})
+            with progress.context(step["workflow"], step_id=step["id"],
+                                  sample_ids=sample_ids, sample_map=aliases):
+                if cancellation.signum is not None:
+                    raise KeyboardInterrupt
+                active = record
+                record["status"], record["started_utc"] = "running", _utc()
+                _atomic_json(root / "workflow-state.json", state)
+                directory = root / "steps" / step["id"]
+                directory.mkdir(parents=True)
+                work, output = directory / "work", directory / "output"
+                request = {"schema_version": 1, "workflow": step["workflow"],
+                           "work_dir": str(work), "out_dir": str(output)}
 
-            def record_request(bindings=()):
-                presentation = step_presentation(plan, step, request, bindings)
-                if presentation is not None:
-                    request["presentation"] = presentation
-                _atomic_json(directory / "request.json", request)
+                def record_request(bindings=()):
+                    presentation = step_presentation(plan, step, request, bindings)
+                    if presentation is not None:
+                        request["presentation"] = presentation
+                    _atomic_json(directory / "request.json", request)
 
-            with phase("preparation", workflow=step["workflow"], step=step["id"]):
-                if step["workflow"] == "dnp-call":
-                    request.update({"panel": step["inputs"]["panel"],
-                                    "samples": [{"path": samples[identifier]["path"], "sample_id": f"sample_{number:04d}"}
-                                                for number, identifier in enumerate(step["inputs"]["samples"], 1)],
-                                    "reference": step["inputs"]["reference"], "parallel": step["parameters"]["parallel"]})
-                    record_request()
-                    prepared = prepare_dnp(request)
-                    native, cwd = prepared.native_arguments, prepared.working_dir
-                elif step["workflow"] == "snp-call":
-                    mode = step["parameters"]["mode"]
-                    path = samples[step["inputs"]["sample"]]["path"]
-                    record["sample_mapping"] = {"sample": step["inputs"]["sample"], "mode": mode, "path": path}
-                    request.update({"mode": mode, "panel": step["inputs"]["panel"],
-                                    "bam": path if mode == "bam" else None,
-                                    "pileup": path if mode == "pileup" else None,
-                                    "reference": step["inputs"]["reference"]})
-                    record_request()
-                    _atomic_json(root / "workflow-state.json", state)
-                    prepared = prepare_snp(request)
-                    native, cwd = prepared.native_arguments, work
-                    if prepared.preparation_command is not None:
-                        if cancellation.signum is not None:
-                            raise KeyboardInterrupt
-                        record["preparation_command"] = prepared.preparation_command
-                        record["preparation_log"] = f"steps/{step['id']}/preparation.log"
+                with phase("preparation", workflow=step["workflow"], step=step["id"]):
+                    if step["workflow"] == "dnp-call":
+                        request.update({"panel": step["inputs"]["panel"],
+                                        "samples": [{"path": samples[identifier]["path"], "sample_id": f"sample_{number:04d}"}
+                                                    for number, identifier in enumerate(step["inputs"]["samples"], 1)],
+                                        "reference": step["inputs"]["reference"], "parallel": step["parameters"]["parallel"]})
+                        record_request()
+                        prepared = prepare_dnp(request)
+                        native, cwd = prepared.native_arguments, prepared.working_dir
+                    elif step["workflow"] == "snp-call":
+                        mode = step["parameters"]["mode"]
+                        path = samples[step["inputs"]["sample"]]["path"]
+                        record["sample_mapping"] = {"sample": step["inputs"]["sample"], "mode": mode, "path": path}
+                        request.update({"mode": mode, "panel": step["inputs"]["panel"],
+                                        "bam": path if mode == "bam" else None,
+                                        "pileup": path if mode == "pileup" else None,
+                                        "reference": step["inputs"]["reference"]})
+                        record_request()
                         _atomic_json(root / "workflow-state.json", state)
-                        print(f"Workflow step {step['id']}: samtools preparation (log: {record['preparation_log']})",
-                              file=sys.stderr, flush=True)
-                        code = (run_process(prepared.preparation_command, cwd, directory / "preparation.log")
-                                if run_process is not None else
-                                _run_process(prepared.preparation_command, cwd, directory / "preparation.log", cancellation))
-                        if cancellation.signum is not None:
-                            raise KeyboardInterrupt
-                        if type(code) is not int or code < 0:
-                            raise PlanExecutionError("execution.process", "The preparation process returned an invalid exit code.")
-                        record["preparation_exit_code"] = code
-                        if code:
-                            record["exit_code"] = code
-                            raise PlanExecutionError("execution.process",
-                                                     f"{step['id']} preparation exited with code {code}; see {record['preparation_log']}.")
-                        # A zero exit from samtools does not guarantee usable data.
-                        # Keep its log and prevent R from consuming an empty or
-                        # structurally incompatible pileup.
-                        require_snp_pileup(prepared.generated_pileup)
-                        record["preparation_artifacts"] = [
-                            {"kind": kind, **_artifact(work / name, root, work)}
-                            for kind, name in (("regions-bed", "snp_regions.bed"), ("pileup", "pileup.txt"))
+                        prepared = prepare_snp(request)
+                        native, cwd = prepared.native_arguments, work
+                        if prepared.preparation_command is not None:
+                            if cancellation.signum is not None:
+                                raise KeyboardInterrupt
+                            record["preparation_command"] = prepared.preparation_command
+                            record["preparation_log"] = f"steps/{step['id']}/preparation.log"
+                            _atomic_json(root / "workflow-state.json", state)
+                            print(f"Workflow step {step['id']}: samtools preparation (log: {record['preparation_log']})",
+                                  file=sys.stderr, flush=True)
+                            with phase("pileup", workflow=step["workflow"], step=step["id"]):
+                                code = (run_process(prepared.preparation_command, cwd, directory / "preparation.log")
+                                        if run_process is not None else
+                                        _run_process(prepared.preparation_command, cwd, directory / "preparation.log", cancellation))
+                                if cancellation.signum is not None:
+                                    raise KeyboardInterrupt
+                                if type(code) is not int or code < 0:
+                                    raise PlanExecutionError("execution.process", "The preparation process returned an invalid exit code.")
+                                record["preparation_exit_code"] = code
+                                if code:
+                                    record["exit_code"] = code
+                                    raise PlanExecutionError("execution.process",
+                                                             f"{step['id']} preparation exited with code {code}; see {record['preparation_log']}.")
+                            # A zero exit from samtools does not guarantee usable data.
+                            # Keep its log and prevent R from consuming an empty or
+                            # structurally incompatible pileup.
+                            require_snp_pileup(prepared.generated_pileup)
+                            record["preparation_artifacts"] = [
+                                {"kind": kind, **_artifact(work / name, root, work)}
+                                for kind, name in (("regions-bed", "snp_regions.bed"), ("pileup", "pileup.txt"))
+                            ]
+                            _atomic_json(root / "workflow-state.json", state)
+                    elif step["workflow"] == "contamination":
+                        selected = []
+                        for number, reference in enumerate(step["inputs"]["samples"], 1):
+                            path = _resolve_table(reference, samples, outputs)
+                            selected.append({"path": str(path), "name": f"table_{number:04d}.txt"})
+                        request["panel"] = step["inputs"]["panel"]
+                        request["samples"] = selected
+                        record_request()
+                        native, cwd = prepare_contamination(request), work
+                    else:
+                        selections, pairs = _cpi_bindings(step)
+                        # Retain the explicit identities even when R leaves only
+                        # partial plots or preparation fails before any output exists.
+                        record["pair_mapping"] = [
+                            {key: pair[key] for key in ("pair", "mother", "father", "native_pair")}
+                            for pair in pairs
                         ]
+                        request.update({
+                            "samples": [{"path": str(_resolve_table(item["source"], samples, outputs)), "name": item["name"]}
+                                        for item in selections],
+                            "pairs": ",".join(pair["native_selection"] for pair in pairs),
+                            "mother_prefix": "Mother", "father_prefix": "Father",
+                            "popfreq": step["inputs"]["popfreq"], "cutoffs": step["inputs"]["cutoffs"],
+                            "cutoff_mode": step["parameters"]["cutoff_mode"], "err_const": step["parameters"]["err_const"],
+                        })
+                        record_request(pairs)
                         _atomic_json(root / "workflow-state.json", state)
-                elif step["workflow"] == "contamination":
-                    selected = []
-                    for number, reference in enumerate(step["inputs"]["samples"], 1):
-                        path = _resolve_table(reference, samples, outputs)
-                        selected.append({"path": str(path), "name": f"table_{number:04d}.txt"})
-                    request["panel"] = step["inputs"]["panel"]
-                    request["samples"] = selected
-                    record_request()
-                    native, cwd = prepare_contamination(request), work
-                else:
-                    selections, pairs = _cpi_bindings(step)
-                    # Retain the explicit identities even when R leaves only
-                    # partial plots or preparation fails before any output exists.
-                    record["pair_mapping"] = [
-                        {key: pair[key] for key in ("pair", "mother", "father", "native_pair")}
-                        for pair in pairs
-                    ]
-                    request.update({
-                        "samples": [{"path": str(_resolve_table(item["source"], samples, outputs)), "name": item["name"]}
-                                    for item in selections],
-                        "pairs": ",".join(pair["native_selection"] for pair in pairs),
-                        "mother_prefix": "Mother", "father_prefix": "Father",
-                        "popfreq": step["inputs"]["popfreq"], "cutoffs": step["inputs"]["cutoffs"],
-                        "cutoff_mode": step["parameters"]["cutoff_mode"], "err_const": step["parameters"]["err_const"],
-                    })
-                    record_request(pairs)
-                    _atomic_json(root / "workflow-state.json", state)
-                    native, cwd = prepare_cpi(request), work
-            if cancellation.signum is not None:
-                raise KeyboardInterrupt
-            validation_report = work / "input-validation.json"
-            record["input_validation"] = _artifact(validation_report, root, work)
-            record["input_warnings"] = json.loads(validation_report.read_text(encoding="utf-8"))["warnings"]
-            with phase("presentation-preparation", workflow=step["workflow"], step=step["id"]):
-                command = prepare_presentation(request, scripts[step["workflow"]], native)
-            record["command"] = command
-            _atomic_json(root / "workflow-state.json", state)
-            print(f"Workflow step {step['id']}: {step['workflow']} (log: {record['log']})", file=sys.stderr, flush=True)
-            with phase("r-execution", workflow=step["workflow"], step=step["id"]):
-                code = (run_process(command, cwd, directory / "command.log") if run_process is not None
-                        else _run_process(command, cwd, directory / "command.log", cancellation))
-            if cancellation.signum is not None:
-                raise KeyboardInterrupt
-            if type(code) is not int or code < 0:
-                raise PlanExecutionError("execution.process", "The scientific process returned an invalid exit code.")
-            record["exit_code"] = code
-            if code:
-                raise PlanExecutionError("execution.process", f"{step['id']} exited with code {code}; see {record['log']}.")
-            with phase("output-validation", workflow=step["workflow"], step=step["id"]):
-                artifacts = _collect_outputs(step, request, root, output)
-            with phase("presentation-finalization", workflow=step["workflow"], step=step["id"]):
-                presentation = finish_presentation(request, root)
-            if presentation is not None:
-                artifacts["presentation"] = presentation
-            for warning in artifacts.get("quality_warnings", []):
-                print(f"NIPAT output warning [{warning['code']}]: {warning}", file=sys.stderr, flush=True)
-            if cancellation.signum is not None:
-                raise KeyboardInterrupt
-            record.update(status="succeeded", artifacts=artifacts, finished_utc=_utc())
-            if step["workflow"] == "dnp-call":
-                for artifact in artifacts["dnp-tables"]:
-                    outputs[(step["id"], artifact["sample"])] = root / artifact["path"]
-            _atomic_json(root / "workflow-state.json", state)
-            active = None
+                        native, cwd = prepare_cpi(request), work
+                if cancellation.signum is not None:
+                    raise KeyboardInterrupt
+                validation_report = work / "input-validation.json"
+                record["input_validation"] = _artifact(validation_report, root, work)
+                record["input_warnings"] = json.loads(validation_report.read_text(encoding="utf-8"))["warnings"]
+                with phase("presentation-preparation", workflow=step["workflow"], step=step["id"]):
+                    command = prepare_presentation(request, scripts[step["workflow"]], native)
+                record["command"] = command
+                _atomic_json(root / "workflow-state.json", state)
+                print(f"Workflow step {step['id']}: {step['workflow']} (log: {record['log']})", file=sys.stderr, flush=True)
+                with dnp_environment(step["workflow"], work), \
+                        execution_environment(work), \
+                        phase("r-execution", workflow=step["workflow"], step=step["id"]) as progress_state:
+                    code = (run_process(command, cwd, directory / "command.log") if run_process is not None
+                            else _run_process(command, cwd, directory / "command.log", cancellation))
+                    if cancellation.signum is not None:
+                        progress_state["outcome"] = "cancelled"
+                    elif code:
+                        progress_state["outcome"] = "failed"
+                if cancellation.signum is not None:
+                    raise KeyboardInterrupt
+                if type(code) is not int or code < 0:
+                    raise PlanExecutionError("execution.process", "The scientific process returned an invalid exit code.")
+                record["exit_code"] = code
+                if code:
+                    raise PlanExecutionError("execution.process", f"{step['id']} exited with code {code}; see {record['log']}.")
+                with phase("output-validation", workflow=step["workflow"], step=step["id"]):
+                    artifacts = _collect_outputs(step, request, root, output)
+                with phase("presentation-finalization", workflow=step["workflow"], step=step["id"]):
+                    presentation = finish_presentation(request, root)
+                if presentation is not None:
+                    artifacts["presentation"] = presentation
+                for warning in artifacts.get("quality_warnings", []):
+                    print(f"NIPAT output warning [{warning['code']}]: {warning}", file=sys.stderr, flush=True)
+                if cancellation.signum is not None:
+                    raise KeyboardInterrupt
+                record.update(status="succeeded", artifacts=artifacts, finished_utc=_utc())
+                if step["workflow"] == "dnp-call":
+                    for artifact in artifacts["dnp-tables"]:
+                        outputs[(step["id"], artifact["sample"])] = root / artifact["path"]
+                _atomic_json(root / "workflow-state.json", state)
+                active = None
         if cancellation.signum is not None:
             raise KeyboardInterrupt
         state.update(status="succeeded", exit_code=0)

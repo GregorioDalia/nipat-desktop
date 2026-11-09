@@ -46,12 +46,16 @@ def _client_record(parent: Path, layout: ProjectLayout) -> dict:
         raise ValueError("SNP batch did not record one complete, image-owned plan invocation.")
     run_target = str(layout.container_path(parent))
     inputs = {item["container_path"] for item in record["input_mounts"]}
+    scratch = [item for item in service["volumes"] if item.get("target") == "/scratch"]
+    if scratch != [{"type": "volume", "target": "/scratch", "read_only": False}]:
+        raise ValueError("SNP plan requires one anonymous scratch volume without a host source.")
+    volumes = [item for item in service["volumes"] if item.get("target") != "/scratch"]
     if (set(config["services"]) != {"scientific"} or service.get("read_only") is not True
             or service.get("network_mode") != "none"
-            or len(service["volumes"]) != len(inputs) + 1
-            or {item["target"] for item in service["volumes"]} != inputs | {run_target}):
+            or len(volumes) != len(inputs) + 1
+            or {item["target"] for item in volumes} != inputs | {run_target}):
         raise ValueError("SNP plan requires isolated input/current-run mounts and no network.")
-    for item in service["volumes"]:
+    for item in volumes:
         if (item.get("type") != "bind" or item.get("bind", {}).get("create_host_path") is not False
                 or item.get("read_only", False) != (item["target"] != run_target)):
             raise ValueError("SNP plan mounted an original input writable or exposed another directory.")

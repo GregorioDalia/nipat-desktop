@@ -24,6 +24,11 @@ IMAGE_ID = "sha256:" + "a" * 64
 def engine_metadata():
     return {
         "schema_version": 1, "interface": "native-r-v1",
+        "parallel_execution": {
+            "interface": "nipat-parallel-v1", "schema_version": 1,
+            "default_mode": "auto", "modes": ["auto", "serial"], "max_workers": True,
+            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+        },
         "scientific_validation": {
             "interface": "scientific-validation-v1",
             "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
@@ -46,6 +51,7 @@ def engine_metadata():
                 "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
                 "lib/nipat_scientific/cpi.py", "lib/nipat_scientific/outputs.py",
                 "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
+                "lib/nipat_scientific/parallel.py", "lib/nipat_scientific/parallel.R",
             )},
         },
     }
@@ -315,7 +321,7 @@ class BundledRunnerTests(unittest.TestCase):
         self.assertEqual(execute.call_args_list[0].args[0],
                          ["docker", "stop", "--time", "10", "nipat-run-plan"])
         self.assertEqual(execute.call_args_list[1].args[0],
-                         ["docker", "rm", "--force", "nipat-run-plan"])
+                         ["docker", "rm", "--force", "--volumes", "nipat-run-plan"])
         self.assertEqual(cleanup["graceful_stop"]["returncode"], 0)
 
     def test_plan_stop_timeout_still_removes_container(self):
@@ -391,7 +397,11 @@ class BundledRunnerTests(unittest.TestCase):
         self.assertIn("/tmp:rw,nosuid,nodev,size=128m", service["tmpfs"])
         self.assertEqual(service["environment"]["TMPDIR"], "/tmp")
         volumes = service["volumes"]
-        self.assertEqual(len(volumes), 2)
+        self.assertEqual(len(volumes), 3)
+        self.assertEqual(service["environment"]["NIPAT_SCRATCH_ROOT"], "/scratch")
+        scratch = [v for v in volumes if v["type"] == "volume"]
+        self.assertEqual(scratch, [{"type": "volume", "target": "/scratch", "read_only": False}])
+        volumes = [v for v in volumes if v["type"] == "bind"]
         self.assertEqual({v["target"] for v in volumes}, {
             "/workspace/inputs/sample_001.tsv", str(self.layout.container_path(run)),
         })
@@ -482,9 +492,9 @@ class BundledRunnerTests(unittest.TestCase):
                 self.assertEqual(service["network_mode"], "none")
                 self.assertTrue(service["read_only"])
                 self.assertEqual({volume["target"] for volume in service["volumes"]}, {
-                    "/workspace/inputs/sample_001.tsv", str(self.layout.container_path(run)),
+                    "/workspace/inputs/sample_001.tsv", str(self.layout.container_path(run)), "/scratch",
                 })
-                self.assertEqual([volume["read_only"] for volume in service["volumes"]], [True, False])
+                self.assertEqual([volume["read_only"] for volume in service["volumes"]], [True, False, False])
                 popen.assert_called_once()
                 command = popen.call_args.args[0]
                 self.assertEqual([command[i + 1] for i, arg in enumerate(command) if arg == "-f"],
@@ -589,6 +599,9 @@ class BundledRunnerTests(unittest.TestCase):
         self.assertEqual(service["image"], "${NIPAT_RUNTIME_IMAGE:-nipat-scientific-runtime:"
                          + __version__ + "}")
         for volume in service["volumes"]:
+            if volume["type"] == "volume":
+                self.assertNotIn("source", volume)
+                continue
             self.assertTrue(volume["source"].startswith("/mnt/d/NIPAT test $$ENV, è/"))
         self.assertIn("$$VALUE", service["volumes"][0]["source"])
         record = json.loads((run / "run.json").read_text(encoding="utf-8"))

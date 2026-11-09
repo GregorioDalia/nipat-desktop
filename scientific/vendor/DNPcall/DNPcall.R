@@ -1,5 +1,5 @@
-# NIPAT 0.8.9 optimization: tokenize pileup observations directly, reuse quality
-# conversions and grouping indices, and release consumed intermediate data.
+# NIPAT 0.8.13: one resource budget for pileup acquisition and R processing.
+# Scientific formulas and within-locus observation order remain unchanged.
 cat("\n###### DNPcall ######\n\n\n\n")
 
 
@@ -85,15 +85,9 @@ format_df_decimals <- function(df, digits = 3) {
 
 
 
-# check if parallel mode is enabled
-parallel_mode <- "--parallel" %in% args
-
-# determine the number of cores to use (automatically use all if --parallel is specified)
-if ("--parallel" %in% args) {
-  ncores <- parallel::detectCores()
-} else {
-  ncores <- 1
-}
+# The legacy --parallel argument remains accepted. The common execution policy
+# selects automatic or serial work for all R modules and caps the global pool.
+source(Sys.getenv("NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
 
 
 
@@ -144,14 +138,46 @@ RefAltDNP <- make_RefAltDNP(r_DNPlist)
 
 
 
+# Scientific formulas stay below; this helper only indexes and bounds input.
+source(Sys.getenv("NIPAT_DNP_BLOCKS_HELPER", unset = "/opt/nipat/lib/nipat_scientific/dnp_blocks.R"))
+nipat_progress <- function(...) invisible(NULL)
+progress_helper <- Sys.getenv("NIPAT_PROGRESS_R_HELPER")
+if (nzchar(progress_helper)) {
+  tryCatch(source(progress_helper), error = function(error) invisible(NULL))
+}
+
 # pileup calling with samtools
 cat("\nMaking mpileup...\n")
-commA <- paste0("samtools mpileup -b ", bamlist,
-                " -l bedfile_for_mpileup.bed -f ", reference,
-                " --output-QNAME --no-output-ins --no-output-del --no-output-ends > mpileup.txt")
-
-
-system(commA, ignore.stderr=T)
+dnp_scratch <- Sys.getenv("NIPAT_DNP_SCRATCH")
+if (!nzchar(dnp_scratch)) {
+  dir.create("work", showWarnings = FALSE)
+  dnp_scratch <- tempfile("dnp-", tmpdir = "work")
+}
+dir.create(dnp_scratch, recursive = TRUE, showWarnings = FALSE)
+dnp_scratch <- normalizePath(dnp_scratch, mustWork = TRUE)
+pileup_path <- file.path(dnp_scratch, "mpileup.txt")
+pileup_helper <- Sys.getenv("NIPAT_DNP_PILEUP_HELPER", unset = "/opt/nipat/lib/nipat_scientific/dnp_pileup.py")
+# Acquisition finishes before the R block pool starts. Export the same resource
+# policy to the Python scheduler instead of creating a second independent pool
+# or interpreting the legacy --parallel flag. The helper caps this upper bound
+# by the actual number of chromosome tasks and counts each samtools process.
+acquisition_budget <- nipat_parallel_budget(.Machine$integer.max)
+acquisition_budget_path <- file.path("work", "dnp-acquisition-budget.json")
+dir.create(dirname(acquisition_budget_path), recursive = TRUE, showWarnings = FALSE)
+jsonlite::write_json(c(list(schema_version = 1L, interface = "nipat-parallel-v1"),
+                       acquisition_budget), acquisition_budget_path,
+                     auto_unbox = TRUE, pretty = TRUE, digits = NA, null = "null")
+acquisition_started <- proc.time()[["elapsed"]]
+acquisition_status <- system2("python3", c(shQuote(pileup_helper),
+  "--bamlist", shQuote(bamlist), "--bed", "bedfile_for_mpileup.bed",
+  "--reference", shQuote(reference), "--output", shQuote(pileup_path),
+  "--scratch-dir", shQuote(dnp_scratch), "--metadata", "work/dnp-pileup.json",
+  "--budget", shQuote(acquisition_budget_path)))
+if (acquisition_status != 0L) stop("DNP pileup acquisition failed")
+acquisition_seconds <- unname(proc.time()[["elapsed"]] - acquisition_started)
+if (identical(Sys.getenv("NIPAT_DNP_KEEP_PILEUP"), "1")) {
+  if (!file.copy(pileup_path, "mpileup.txt", overwrite = FALSE)) stop("Cannot retain test pileup")
+}
 
 # read sample list, remove path and ".bam" extension in the name
 read_samplelist <- function(bamlist_file) {
@@ -164,14 +190,31 @@ samplelist <- read_samplelist(bamlist)
 
 # reading pileup file in r
 cat("\nReading mpileup...\n")
-pileup_bamlist <- read.csv("mpileup.txt", quote="", row.names=NULL, stringsAsFactors=F, header =F, sep="\t")
+nipat_progress("start", "pileup-index")
+pileup_index <- nipat_dnp_index(pileup_path)
+block_plan <- nipat_dnp_plan(pileup_index, ForUniqReads, RefAltDNP)
+# Persist the strategy before scientific processing, including on later errors.
+nipat_dnp_write_metrics("work/dnp-blocks.json", list(
+  schema_version = 1L, status = "started", index_rows = pileup_index$rows,
+  index_bytes = pileup_index$bytes, column_classes = pileup_index$classes,
+  acquisition_seconds = acquisition_seconds, index_seconds = pileup_index$elapsed_seconds,
+  block_loci_limit = block_plan$max_loci, block_raw_bytes_limit = block_plan$max_bytes,
+  compatibility_reasons = I(block_plan$compatibility_reasons),
+  unmatched_coordinate_rows = block_plan$unmatched_rows,
+  repeated_qname_rows = pileup_index$repeated_qname_rows,
+  memory_limit_scope = "raw input proxy; complete windows and legacy compatibility groups are never split or truncated"
+))
+nipat_progress("end", "pileup-index", outcome = "succeeded")
+# Every sample/block pair shares one bounded pool. Complete global index and
+# compatibility groups are constructed once before any worker is started.
 common_columns <- 3
 final_merged_data <- NULL
 
 update_peak()
 
 # calling processing for each sample
-process_individual <- function(i) {
+prepare_individual <- function(i) {
+  force(i)
   cat(paste0("\nProcessing sample: ", i, "\n"))
 
   start_ind_time <- Sys.time()
@@ -186,6 +229,70 @@ process_individual <- function(i) {
     }
   }
 
+  nipat_progress("start", "dnp-processing", sample_ids = i)
+  final_df_elab <- function(dataframe_final2, df_grouped, dfIND_summary) {
+    FINAL_df <- merge(dataframe_final2, df_grouped, by.x = "DNPs", by.y = "chr1", all = TRUE)
+
+    FINAL_df2 <- separate(FINAL_df, col = "DNPs", into = c("pos1", "pos2"), sep = "\\|")
+    FINAL_df3 <- separate(FINAL_df2, col = "pos1", into = c("chr", "pos1"), sep = "\\:")
+    FINAL_df4 <- separate(FINAL_df3, col = "pos2", into = c("chr", "pos2"), sep = "\\:")
+
+    final <- FINAL_df4[, c(2, 1, 3:ncol(FINAL_df4))]
+
+    final$Reference <- gsub('\\|', '', final$Reference)
+    final$Alternative <- gsub('\\|', '', final$Alternative)
+    final$combined_bases <- gsub('\\|', '', final$combined_bases)
+
+    final$.nipat_sort_key <- FINAL_df$DNPs
+    final <- final %>%
+      mutate(pos1 = as.numeric(pos1),
+             pos2 = as.numeric(pos2)) %>%
+      left_join(dfIND_summary, by = c("chr", "pos1", "pos2"))
+
+    final <- final %>%
+      relocate(indel_reads, indel_ratio, .after = total_count)
+    sort_keys <- final$.nipat_sort_key
+    final$.nipat_sort_key <- NULL
+
+      colnames(final) <- c("chr", "pos1", "pos2",
+                          "REF", "ALT", "N_REF",
+                          "N_ALT", "N_Other",
+                          "GL0", "GL1", "GL2", "GT",
+                          "combined_bases",
+                          "combined_counts", "total_count", "reads_discarded_for_indels", "ratio_reads_discarded_for_indels")
+
+    indiv_final <- final[, c("chr", "pos1", "pos2", "REF", "ALT", "GT")]
+
+    update_peak_ind()
+
+    # final memory check in case the peak occurred at the end of the function
+    final_mem <- get_memory_usage_mb()
+    if (final_mem > peak_ind_mem) {
+     peak_ind_mem <- final_mem
+    }
+
+    return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem,
+                sort_keys = sort_keys))
+
+  }
+
+
+  compute_block <- function(pileup_bamlist, ForUniqReads, RefAltDNP) {
+  if (!nrow(pileup_bamlist)) {
+    # An uncovered block still occurs in the whole-sample final merge. Supply
+    # its missing counts/likelihoods to the unchanged final formatter.
+    missing <- data.frame(
+      DNPs = RefAltDNP$POS, Reference = RefAltDNP$ref, Alternative = RefAltDNP$alt,
+      N_Reference = 0, N_Alternative = 0, N_Altro = 0,
+      GL0 = 0, GL1 = 0, GL2 = 0, GT = NA, stringsAsFactors = FALSE)
+    grouped <- data.frame(chr1 = character(), combined_bases = character(),
+                          combined_counts = character(), total_count = integer())
+    indels <- data.frame(chr = character(), pos1 = numeric(), pos2 = numeric(),
+                         indel_reads = integer(), indel_ratio = numeric())
+    result <- final_df_elab(missing, grouped, indels)
+    result$has_likelihoods <- FALSE
+    return(result)
+  }
   # extract sample-specific columns
   depth_col <- common_columns + (which(samplelist == i) - 1) * 4 + 1
   reads_col <- depth_col + 1
@@ -403,7 +510,7 @@ process_individual <- function(i) {
       parts <- strsplit(x, "\\|")[[1]]
       paste(parts[2:3], collapse = "|")
     }
-    if (!length(values)) return(sapply(values, extract))
+    if (!length(values)) return(character())
     patterns <- unique(values)
     pairs <- vapply(patterns, extract, character(1), USE.NAMES = FALSE)
     result <- pairs[match(values, patterns)]
@@ -601,6 +708,12 @@ process_individual <- function(i) {
 
   # merge the 3 dfs
   merge_3_dfs <- function(ref_dt_grouped, alt_dt_grouped, altro_dt3, RefAltDNP, res) {
+    # A complete block can lack retained ref/alt reads although other blocks
+    # have them. Preserve the whole-sample merge's empty likelihood schema.
+    if (is.null(res)) res <- data.frame(
+      chr_pos = character(), ref_hap = character(), alt_hap = character(),
+      GL0 = numeric(), GL1 = numeric(), GL2 = numeric(), GT = character(),
+      stringsAsFactors = FALSE)
     merged1 <- merge(ref_dt_grouped, alt_dt_grouped, by = "DNPs", all = TRUE)
     merged2 <- merge(merged1, altro_dt3, by = "DNPs", all = TRUE)
     merged3 <- merge(merged2, RefAltDNP, by.x = "DNPs", by.y = "POS", all = TRUE)
@@ -623,57 +736,31 @@ process_individual <- function(i) {
   dataframe_final2 <- dataframe_final %>%
     mutate(GT=ifelse(N_Altro/(N_Altro+N_Reference+N_Alternative) >= 0.1, NA, GT))
 
-  final_df_elab <- function(dataframe_final2, df_grouped) {
-    FINAL_df <- merge(dataframe_final2, df_grouped, by.x = "DNPs", by.y = "chr1", all = TRUE)
-
-    FINAL_df2 <- separate(FINAL_df, col = "DNPs", into = c("pos1", "pos2"), sep = "\\|")
-    FINAL_df3 <- separate(FINAL_df2, col = "pos1", into = c("chr", "pos1"), sep = "\\:")
-    FINAL_df4 <- separate(FINAL_df3, col = "pos2", into = c("chr", "pos2"), sep = "\\:")
-
-    final <- FINAL_df4[, c(2, 1, 3:ncol(FINAL_df4))]
-
-    final$Reference <- gsub('\\|', '', final$Reference)
-    final$Alternative <- gsub('\\|', '', final$Alternative)
-    final$combined_bases <- gsub('\\|', '', final$combined_bases)
-
-    final <- final %>%
-      mutate(pos1 = as.numeric(pos1),
-             pos2 = as.numeric(pos2)) %>%
-      left_join(dfIND_summary, by = c("chr", "pos1", "pos2"))
-
-    final <- final %>%
-      relocate(indel_reads, indel_ratio, .after = total_count)
-
-      colnames(final) <- c("chr", "pos1", "pos2",
-                          "REF", "ALT", "N_REF",
-                          "N_ALT", "N_Other",
-                          "GL0", "GL1", "GL2", "GT",
-                          "combined_bases",
-                          "combined_counts", "total_count", "reads_discarded_for_indels", "ratio_reads_discarded_for_indels")
-
-    indiv_final <- final[, c("chr", "pos1", "pos2", "REF", "ALT", "GT")]
-
-    update_peak_ind()
-
-    # final memory check in case the peak occurred at the end of the function
-    final_mem <- get_memory_usage_mb()
-    if (final_mem > peak_ind_mem) {
-     peak_ind_mem <- final_mem
-    }
-
-    return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem))
-
+  result <- final_df_elab(dataframe_final2, df_grouped, dfIND_summary)
+  result$has_likelihoods <- !is.null(res) && nrow(res) > 0L
+  result
   }
 
-
-  result_list <- final_df_elab(dataframe_final2, df_grouped)
-
-  indiv_final <- result_list$indiv_final
-  final <- result_list$final
-  peak_ind_mem <- result_list$peak_mem
-
-
+  finish_individual <- function(processed) {
+  block_results <- processed$results
+  block_metrics <- processed$metrics
+  block_workers <- processed$workers
+  observed_block_workers <- processed$observed_workers
+  processing_seconds <- processed$elapsed_seconds
+  peak_ind_mem <<- max(peak_ind_mem,
+                       vapply(block_results, function(value) value$peak_mem, numeric(1)))
+  rm(processed)
+  # The legacy whole-sample calculation fails when no ref/alt likelihood can
+  # be formed anywhere. Empty blocks must not turn that failure into a result.
+  if (!any(vapply(block_results, function(value) value$has_likelihoods, logical(1)))) {
+    stop("DNP sample has no retained reference/alternative likelihoods")
+  }
+  final <- nipat_dnp_combine(block_results)
+  indiv_final <- final[, c("chr", "pos1", "pos2", "REF", "ALT", "GT")]
+  rm(block_results)
   colnames(indiv_final)[6] <- paste0("GT_", i)
+  nipat_progress("end", "dnp-processing", sample_ids = i, outcome = "succeeded")
+  nipat_progress("start", "plots", sample_ids = i)
 
 
   # format numeric columns and save individual output files
@@ -764,21 +851,45 @@ process_individual <- function(i) {
 
   cat(paste0("\n>>> Summary for ", i, ":\n"))
   cat(paste0("Execution Time (seconds): ", ind_exec_time, "\n"))
-  cat(paste0("Peak RAM (MB): ", peak_ind_mem, "\n"))
-  return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem))
+  cat(paste0("Maximum observed R-process RSS (MiB): ", peak_ind_mem, "\n"))
+  nipat_progress("end", "plots", sample_ids = i, outcome = "succeeded")
+  return(list(indiv_final = indiv_final, final = final, peak_mem = peak_ind_mem,
+              block_metrics = block_metrics, block_workers = block_workers,
+              observed_block_workers = observed_block_workers,
+              processing_seconds = processing_seconds))
+  }
+  list(compute = compute_block, finish = finish_individual)
 }
 
 update_peak()
 
-# run the individual-level processing in parallel or serial mode
-cat(paste0("\nRunning ", ifelse(parallel_mode, "in parallel", "sequentially"), "\n"))
-
-
-if (parallel_mode) {
-  results <- mclapply(samplelist, process_individual, mc.cores = ncores)
-} else {
-  results <- lapply(samplelist, process_individual)
+processors <- lapply(samplelist, prepare_individual)
+# Parsing retains common fields and only the current sample's four columns.
+# It uses the full index's classes and original column names for every block.
+sample_columns <- lapply(seq_along(samplelist), function(number) {
+  c(seq_len(common_columns), common_columns + (number - 1L) * 4L + seq_len(4L))
+})
+processed_samples <- nipat_dnp_process_samples(pileup_index, block_plan, ForUniqReads,
+  RefAltDNP, lapply(processors, function(processor) processor$compute), columns = sample_columns,
+  progress = function(sample_number, completed, total) {
+    nipat_progress("progress", "dnp-processing", sample_ids = samplelist[[sample_number]],
+                   completed = completed, total = total, unit = "loci")
+  })
+ncores <- processed_samples$workers
+observed_workers <- processed_samples$observed_workers
+observed_sample_workers <- processed_samples$observed_samples
+processing_seconds <- processed_samples$elapsed_seconds
+processing_tasks <- processed_samples$task_count
+cat(paste0("\nDNP shared sample/block pool: ", ncores, " worker(s), ",
+           processing_tasks, " task(s) across ", length(samplelist), " sample(s)\n"))
+results <- vector("list", length(samplelist))
+for (number in seq_along(samplelist)) {
+  results[[number]] <- processors[[number]]$finish(processed_samples$samples[[number]])
+  # Scientific tables are retained for the final merge; release intermediate
+  # block objects before formatting and plotting the following sample.
+  processed_samples$samples[number] <- list(NULL)
 }
+rm(processed_samples, processors)
 
 
 # combine GT columns from all individuals into a single dataframe
@@ -787,7 +898,8 @@ final_merged_data <- Reduce(function(x, y) merge(x, y,
                                                  all = TRUE),
                             lapply(results, function(res) res$indiv_final))
 
-# collect all peak RAM values
+# These are discrete observations of individual R-process RSS, not the peak
+# concurrent memory of all workers. The container observer records that measure.
 all_peak_mems <- sapply(results, function(x) x$peak_mem)
 global_peak <- max(all_peak_mems, na.rm = TRUE)
 mean_peak <- round(mean(all_peak_mems, na.rm = TRUE), 2)
@@ -800,12 +912,13 @@ write.table(final_merged_data_formatted,
             sep = "\t", row.names = FALSE, quote = FALSE)
 
 
-# Print peak memory usage and time
+# Print observed per-process memory and time without implying a container peak.
 end_time <- Sys.time()
 total_time <- round(difftime(end_time, start_time, units = "mins"), 2)
 cat(paste0("\nTotal execution time: ", total_time, " minutes\n"))
-cat(paste0("Peak RAM usage: ", global_peak, " MB\n"))
-cat(paste0("Average per-sample Peak RAM usage (MB): ", mean_peak, "\n"))
+cat(paste0("Maximum observed R-process RSS (MiB): ", global_peak, "\n"))
+cat(paste0("Average per-sample maximum observed R-process RSS (MiB): ", mean_peak, "\n"))
+cat("Per-process RSS observations are not the combined memory peak; see the container performance diagnostics.\n")
 cat(paste0("Number of individuals processed: ", length(samplelist), "\n"))
 
 
@@ -868,11 +981,31 @@ if (ncol(df_for_upset) >= 2) {
 
 
 
-# remove now useless files
-commB = paste0("rm mpileup.txt")
-system(commB, ignore.stderr=T)
+nipat_dnp_write_metrics("work/dnp-blocks.json", list(
+  schema_version = 1L, status = "succeeded", acquisition_seconds = acquisition_seconds,
+  index_seconds = pileup_index$elapsed_seconds, index_rows = pileup_index$rows,
+  index_bytes = pileup_index$bytes, column_classes = pileup_index$classes,
+  block_loci_limit = block_plan$max_loci, block_raw_bytes_limit = block_plan$max_bytes,
+  memory_limit_scope = "raw input proxy; complete windows and legacy compatibility groups are never split or truncated",
+  compatibility_reasons = I(block_plan$compatibility_reasons),
+  unmatched_coordinate_rows = block_plan$unmatched_rows,
+  repeated_qname_rows = pileup_index$repeated_qname_rows,
+  scheduling_strategy = "global-sample-blocks",
+  worker_scope = "one shared pool across all samples and blocks; no nested pools",
+  workers = ncores, observed_workers = observed_workers, task_count = processing_tasks,
+  processing_seconds = processing_seconds,
+  sample_processing_seconds_scope = "first block start to last block finish; sample intervals may overlap",
+  sample_workers = observed_sample_workers,
+  block_workers = max(vapply(results, function(result) result$observed_block_workers, integer(1))),
+  estimated_worker_memory_mib = nipat_dnp_worker_memory_mib(block_plan),
+  samples = setNames(lapply(results, function(result) list(
+    processing_seconds = result$processing_seconds, block_workers = result$block_workers,
+    observed_block_workers = result$observed_block_workers, blocks = result$block_metrics)), samplelist),
+  elapsed_seconds_including_acquisition_and_index = as.numeric(difftime(Sys.time(), start_time, units = "secs"))
+))
 
-commC = paste0("rm bedfile_for_mpileup.bed")
-system(commC, ignore.stderr=T)
+# remove now useless files; the retained test copy is separate from scratch.
+unlink(pileup_path)
+unlink("bedfile_for_mpileup.bed")
 
 cat("\nAll done!\n")

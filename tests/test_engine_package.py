@@ -80,8 +80,10 @@ class EnginePackageTests(unittest.TestCase):
             "snp_alleles": "uppercase-working-copy",
         })
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 20)
+        self.assertEqual(len(hashes), 27)
         self.assertIn("lib/nipat_scientific/performance.py", hashes)
+        for name in ("scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "parallel.py", "parallel.R"):
+            self.assertIn(f"lib/nipat_scientific/{name}", hashes)
         self.assertIn("engine/main.py", hashes)
         self.assertIn("lib/nipat_scientific/contamination.py", hashes)
         self.assertIn("lib/nipat_scientific/snp.py", hashes)
@@ -120,7 +122,7 @@ class EnginePackageTests(unittest.TestCase):
             "read_only": True, "network_mode": "none", "volumes": [{
                 "type": "bind", "source": str(run), "target": str(layout.container_path(run)),
                 "bind": {"create_host_path": False},
-            }],
+            }, {"type": "volume", "target": "/scratch", "read_only": False}],
         }}}), encoding="utf-8")
         record = {"status": "succeeded", "workflow": "contamination", "source": {"role": "client"},
                   "input_mounts": [], "runtime": {"engine": metadata, "image_id": "sha256:" + "a" * 64},
@@ -132,6 +134,56 @@ class EnginePackageTests(unittest.TestCase):
         (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
         with self.assertRaisesRegex(ValidationError, "preparazione"):
             helper.check_bundled_run(run, layout)
+
+    def test_snp_plan_accepts_anonymous_scratch_without_relaxing_input_isolation(self):
+        from nipat.paths import ProjectLayout
+
+        spec = importlib.util.spec_from_file_location(
+            "nipat_snp_plan_provenance", PROJECT_ROOT / "scripts/verify_snp_workflow.py")
+        helper = importlib.util.module_from_spec(spec)
+        with patch.object(sys, "path", [str(PROJECT_ROOT / "scripts"), *sys.path]):
+            spec.loader.exec_module(helper)
+        layout = ProjectLayout(self.root, self.root, self.root / "data", self.root / "runs",
+                               self.root / "compose.yaml")
+        run = self.root / "runs/snp-plan"
+        (run / "work").mkdir(parents=True)
+        record = {
+            "status": "succeeded", "source": {"role": "client"},
+            "commands": [{"argv": ["python3", "/opt/nipat/engine/main.py", "execute-plan"]}],
+            "runtime": {"engine": {"plan_execution": {"workflows": ["snp-call"]}}},
+            "input_mounts": [{"container_path": "/inputs/sample.bam"}],
+        }
+        (run / "run.json").write_text(json.dumps(record), encoding="utf-8")
+        original = {"type": "bind", "source": str(self.root / "original.bam"),
+                    "target": "/inputs/sample.bam", "read_only": True,
+                    "bind": {"create_host_path": False}}
+        current_run = {"type": "bind", "source": str(run),
+                       "target": str(layout.container_path(run)), "read_only": False,
+                       "bind": {"create_host_path": False}}
+        scratch = {"type": "volume", "target": "/scratch", "read_only": False}
+        compose = run / "work/engine-compose.json"
+
+        def write_mounts(volumes):
+            compose.write_text(json.dumps({"services": {"scientific": {
+                "read_only": True, "network_mode": "none", "volumes": volumes,
+            }}}), encoding="utf-8")
+
+        write_mounts([original, current_run, scratch])
+        self.assertEqual(helper._client_record(run, layout), record)
+        for label, replacement in {
+            "missing": [],
+            "host bind": [{**scratch, "type": "bind", "source": str(self.root)}],
+            "named volume": [{**scratch, "source": "shared-scratch"}],
+            "duplicate": [scratch, scratch],
+            "read-only": [{**scratch, "read_only": True}],
+        }.items():
+            with self.subTest(scratch=label):
+                write_mounts([original, current_run, *replacement])
+                with self.assertRaisesRegex(ValueError, "anonymous scratch"):
+                    helper._client_record(run, layout)
+        write_mounts([{**original, "read_only": False}, current_run, scratch])
+        with self.assertRaisesRegex(ValueError, "original input writable"):
+            helper._client_record(run, layout)
 
     def test_modified_or_missing_script_prevents_execution(self):
         source = self.root / "scientific" / engine.SCRIPT_PATHS["cpi"]
@@ -277,6 +329,8 @@ class EnginePackageTests(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "POSIX executable fixture exercises container process replacement.")
     def test_process_replacement_preserves_rscript_exit_status_and_arguments(self):
+        from nipat_scientific.parallel import THREAD_LIMITS
+
         fake_bin = self.root / "bin"
         fake_bin.mkdir()
         fake_rscript = fake_bin / "Rscript"
@@ -285,11 +339,18 @@ class EnginePackageTests(unittest.TestCase):
             '[ "$#" -eq 3 ] || exit 99\n'
             '[ "$2" = "argument with spaces" ] || exit 98\n'
             '[ "$3" = "literal;value" ] || exit 97\n'
-            "exit 37\n",
+            + "".join(f'[ "${name}" = "1" ] || exit 96\n' for name in THREAD_LIMITS)
+            + "exit 37\n",
             encoding="utf-8",
         )
         fake_rscript.chmod(0o755)
         environment = os.environ.copy()
+        environment.update({name: "8" for name in THREAD_LIMITS})
+        environment["NIPAT_EXECUTION_MODE"] = "serial"
+        environment["NIPAT_MAX_WORKERS"] = "8"
+        # The native engine must use its own bundled helper when no desktop
+        # installation is available on the import path.
+        environment["PYTHONPATH"] = str(self.root / "absent application")
         environment["PATH"] = str(fake_bin) + os.pathsep + environment.get("PATH", "")
         result = subprocess.run(
             [sys.executable, str(self.root / "engine" / "main.py"), "run", "cpi", "--",
@@ -786,7 +847,7 @@ class EnginePackageTests(unittest.TestCase):
         commands = self.snp_events()
         self.assertEqual([Path(command[0]).name for command in commands], ["Rscript"])
         self.assertEqual(commands[0][commands[0].index("--pileup") + 1], request["pileup"])
-        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json"})
+        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json", "parallel"})
 
     @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
     def test_standalone_zero_exit_without_output_is_a_failure(self):
