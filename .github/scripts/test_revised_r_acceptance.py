@@ -121,11 +121,14 @@ class RevisedRAcceptanceTests(unittest.TestCase):
     def audited_report(self):
         self.record["version"] = self.manifest["version"] = "0.8.20"
         for name, workflow in acceptance.R_AUDIT_CASES.items():
-            count = int(name.rsplit("-", 1)[1]) if name.startswith("dnp-multi-blocks-") else 1
+            # Real 0.8.5 oracle: four plots per sample and two shared plots.
+            # The prior five-per-BAM assumption incorrectly rejected 3/6 BAM.
+            plot_count = {"dnp-multi-blocks-2": 10, "dnp-multi-blocks-3": 14,
+                          "dnp-multi-blocks-6": 26}.get(name, 5)
             case = {"case": name, "workflow": workflow, "status": "passed", "unrounded_r_values": "identical",
                     "table_sha256": {"result.tsv": "c" * 64},
                     "plots": {f"plot{number}.pdf": {"pages": 1, "raster_dpi": 36,
-                              "page_sha256": {"page-1.ppm": "d" * 64}} for number in range(count * 5)}}
+                              "page_sha256": {"page-1.ppm": "d" * 64}} for number in range(plot_count)}}
             if name.startswith("dnp-multi-blocks-"):
                 variants = {}
                 for variant, cap in (("candidate", None), ("auto", None), ("manual-2", 2),
@@ -181,6 +184,25 @@ class RevisedRAcceptanceTests(unittest.TestCase):
             mutate(case)
             self.write_report()
             with self.subTest(index=index), self.assertRaises(ValueError):
+                self.verify()
+
+    def test_0820_requires_every_expected_oracle_plot_for_each_multibam_fixture(self):
+        self.audited_report()
+        complete = copy.deepcopy(self.report)
+        for name, expected_count in (("dnp-multi-blocks-2", 10), ("dnp-multi-blocks-3", 14),
+                                     ("dnp-multi-blocks-6", 26)):
+            self.report = copy.deepcopy(complete)
+            case = next(item for item in self.report["cases"] if item["case"] == name)
+            self.assertEqual(len(case["plots"]), expected_count)
+            self.write_report()
+            self.verify()
+            case["plots"].pop(next(iter(case["plots"])))
+            # Even mutually consistent serial/parallel reports must retain all
+            # plots expected from the known fixture and immutable oracle.
+            for variant in case["execution_variants"].values():
+                variant["plots"] = copy.deepcopy(case["plots"])
+            self.write_report()
+            with self.subTest(case=name), self.assertRaisesRegex(ValueError, "Multi-BAM PDF comparisons are incomplete"):
                 self.verify()
 
     def test_old_schema_still_rejects_revised_r_even_with_reviewed_hashes(self):
