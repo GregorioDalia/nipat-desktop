@@ -240,37 +240,55 @@ def _deep_sample(identifier: str, root: Path, *, run_container) -> tuple[Path, P
     return generated / "work/sample.bam", panel, expected
 
 
-def _failed_snp_plan(identifier: str, root: Path, inputs: Path, *, run_image) -> None:
+def _failed_snp_plan(identifier: str, root: Path, inputs: Path, *, run_container) -> None:
+    """Qualify serial fail-fast and bounded parallel sibling cancellation separately."""
     broken = root / "SNP plan failure inputs"
     shutil.copytree(inputs, broken)
     (broken / "invalid.bam").write_bytes(b"Deliberately invalid BAM\n")
-    plan = {"schema_version": 1, "samples": [
-        {"id": "broken", "kind": "bam", "path": "/inputs/invalid.bam"},
-        {"id": "valid", "kind": "bam", "path": "/inputs/sample.bam"},
-    ], "steps": [
-        {"id": label, "workflow": "snp-call", "inputs": {
-            "sample": sample, "reference": "/inputs/reference.fa", "panel": "/inputs/SNPlist.tsv",
-        }, "parameters": {"mode": "bam"}}
-        for label, sample in (("a_failure", "broken"), ("z_independent", "valid"))
-    ]}
-    destination = root / "failed SNP plan results"
-    (destination / "work").mkdir(parents=True)
-    (destination / "work/plan.json").write_text(json.dumps(plan), encoding="utf-8")
-    run_image(identifier, ["execute-plan", "--plan", "/results/work/plan.json",
-                           "--run-dir", "/results/workflow"], inputs=broken,
-              results=destination, expected_returncode=1)
-    run = destination / "workflow"
-    state = _state(run)
-    records = {item["id"]: item for item in state["steps"]}
-    failed = records["a_failure"]
-    if (state["status"] != "failed" or state["exit_code"] != 1
-            or failed["status"] != "failed" or failed.get("preparation_exit_code") != 1
-            or records["z_independent"]["status"] != "blocked"):
-        raise ValueError("samtools failure did not stop the SNP plan deterministically.")
-    if (run / "steps/z_independent").exists() or (run / failed["log"]).exists():
-        raise ValueError("R or the later independent SNP ran after failed samtools preparation.")
-    if not (run / failed["preparation_log"]).is_file():
-        raise ValueError("Failed SNP preparation lost its samtools diagnostic log.")
+    shutil.copyfile(broken / "sample.bam", broken / "pending.bam")
+    for mode in ("serial", "auto"):
+        chosen = [("a_failure", "broken", "invalid.bam"), ("b_independent", "valid", "sample.bam")]
+        if mode == "auto":
+            chosen.append(("z_pending", "pending", "pending.bam"))
+        plan = {"schema_version": 1, "samples": [
+            {"id": sample, "kind": "bam", "path": f"/inputs/{filename}"}
+            for _label, sample, filename in chosen
+        ], "steps": [
+            {"id": label, "workflow": "snp-call", "inputs": {
+                "sample": sample, "reference": "/inputs/reference.fa", "panel": "/inputs/SNPlist.tsv",
+            }, "parameters": {"mode": "bam"}}
+            for label, sample, _filename in chosen
+        ]}
+        destination = root / f"failed SNP plan {mode} results"
+        (destination / "work").mkdir(parents=True)
+        (destination / "work/plan.json").write_text(json.dumps(plan), encoding="utf-8")
+        run_container(identifier, ["env", f"NIPAT_EXECUTION_MODE={mode}", "NIPAT_MAX_WORKERS=2",
+            "python3", "/opt/nipat/engine/main.py", "execute-plan", "--plan", "/results/work/plan.json",
+            "--run-dir", "/results/workflow"], inputs=broken,
+            results=destination, expected_returncode=1)
+        run = destination / "workflow"
+        state = _state(run)
+        records = {item["id"]: item for item in state["steps"]}
+        failed = records["a_failure"]
+        if (state["status"] != "failed" or state["exit_code"] != 1
+                or failed["status"] != "failed" or failed.get("preparation_exit_code") != 1):
+            raise ValueError(f"samtools failure did not preserve the {mode} SNP failure status.")
+        if (run / failed["log"]).exists():
+            raise ValueError("R ran after the failing sample's unsuccessful samtools preparation.")
+        if not (run / failed["preparation_log"]).is_file():
+            raise ValueError("Failed SNP preparation lost its samtools diagnostic log.")
+        if mode == "serial":
+            if records["b_independent"]["status"] != "blocked" or (run / "steps/b_independent").exists():
+                raise ValueError("Serial SNP failure started a later independent sample.")
+        else:
+            if state.get("snp_parallel", {}).get("workers") != 2:
+                raise ValueError("Parallel failure qualification did not exercise two real SNP workers.")
+            if records["b_independent"]["status"] not in {"cancelled", "succeeded"}:
+                raise ValueError("A started SNP sibling was neither stopped nor already complete.")
+            if records["z_pending"]["status"] != "blocked" or (run / "steps/z_pending").exists():
+                raise ValueError("Parallel SNP failure started a pending sample.")
+            if state.get("snp_summary") or (run / "snp_summary").exists():
+                raise ValueError("A failed SNP batch produced an aggregate success summary.")
 
 
 def check_snp_plans(identifier: str, root: Path, inputs: Path, expected: Path,
@@ -355,7 +373,7 @@ def check_snp_plans(identifier: str, root: Path, inputs: Path, expected: Path,
         raise ValueError("A SNP plan changed an original input.")
     if {path.name for path in project.iterdir()} != {"compose.yaml"}:
         raise ValueError("SNP plan execution copied scientific sources to the client directory.")
-    _failed_snp_plan(identifier, root, inputs, run_image=run_image)
+    _failed_snp_plan(identifier, root, inputs, run_container=run_container)
     print("PASS: public SNP BAM/pileup batches and independent SNP tasks beside DNPcall -> Contamination; "
           "three distinct same-name samples, independent counts/likelihoods/genotypes, standalone parity, original sample identity, "
           "retained BED/pileup hashes, isolated single-container execution and real samtools failure isolation.", flush=True)
