@@ -203,7 +203,7 @@ class SnpParallelTests(unittest.TestCase):
                 with patch.object(Path, "read_text", read):
                     state = self.execute(run, NIPAT_MAX_WORKERS="2")
                 self.assertEqual(state["status"], "failed", state)
-                self.assertEqual(state["error"]["code"], "execution.worker_state")
+                self.assertEqual(state["error"]["code"], "execution.worker_state", state["error"])
                 self.assertIn("state-snp0.json", state["error"]["message"])
                 if failure != "wrong-identity":
                     self.assertIn("FileNotFoundError" if failure == "missing" else "JSONDecodeError",
