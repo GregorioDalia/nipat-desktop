@@ -94,13 +94,12 @@ def _merge_record(record, path):
     record.update(updated)
 
 
-def execute_independent_snp_steps(plan, state, root, scripts, samples, cancellation, *, step_runner, atomic_json):
+def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, atomic_json):
     """Return False for serial/mixed/single-task plans, otherwise finish the batch.
 
-    The callable arguments belong to the coordinator. Fresh worker interpreters
-    import the same production step runner instead of serializing Python state.
+    Only the coordinator writes the global state. Fresh worker interpreters
+    import the production step runner instead of serializing Python state.
     """
-    del step_runner, samples
     steps = plan["steps"]
     if (os.name != "posix" or len(steps) < 2 or any(step["workflow"] != "snp-call" for step in steps)
             or os.environ.get("NIPAT_EXECUTION_MODE", "auto") == "serial"

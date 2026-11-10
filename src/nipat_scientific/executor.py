@@ -389,7 +389,7 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
 
 
 def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Path], run_process=None) -> dict:
-    """Run a fresh plan sequentially; return persisted status, never hide failure.
+    """Run a fresh plan with bounded concurrency and return persisted status.
 
     ``run_process`` is an optional embedding/testing hook taking command, cwd and
     log_path; production uses a cancellable subprocess group. Unsupported plans,
@@ -431,8 +431,7 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             signal.signal(signum, cancellation.receive)
         from nipat_scientific.snp_parallel import execute_independent_snp_steps
         parallel_done = execute_independent_snp_steps(
-            plan, state, root, scripts, samples, cancellation,
-            step_runner=_execute_step, atomic_json=_atomic_json,
+            plan, state, root, scripts, cancellation, atomic_json=_atomic_json,
         ) if run_process is None else False
         if not parallel_done:
             for step, record in zip(plan["steps"], state["steps"], strict=True):

@@ -368,6 +368,62 @@ class RevisedRAcceptanceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Only known scientific"):
             acceptance.validate(self.record, "0.8.9", COMMIT, 123)
 
+    def reviewed_snp_example_change(self):
+        path = acceptance.SNP2_EXAMPLE_OUTPUT
+        original = self.sources[acceptance.R_REFERENCE_COMMIT]
+        candidate = self.sources[COMMIT]
+        original[path] = b"previous nine-column SNP result\n"
+        candidate[path] = b"SNPcall 2.0 seventeen-column result\n"
+        for files in (original, candidate):
+            files["distribution-files.txt"] += (path + "\n").encode()
+        change = {"path": path, "before_sha256": digest(original[path]),
+                  "after_sha256": digest(candidate[path])}
+        self.record["reviewed_source_changes"].append(change)
+        self.record["reviewed_source_changes"].sort(key=lambda item: item["path"])
+        return change
+
+    def test_snp2_example_output_is_reviewable_from_0830_with_exact_hashes(self):
+        change = self.reviewed_snp_example_change()
+        for version in ("0.8.30", "0.8.31"):
+            with self.subTest(version=version):
+                self.record["version"] = version
+                acceptance.validate(self.record, version, COMMIT, 123)
+                checked = acceptance.verify_baseline(self.record, self.read_source)
+                self.assertIn(change, checked["reviewed_source_changes"])
+
+    def test_earlier_versions_cannot_review_changed_snp_example_output(self):
+        self.reviewed_snp_example_change()
+        for version in ("0.8.9", "0.8.20", "0.8.29"):
+            self.record["version"] = version
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, "Only known scientific"):
+                acceptance.validate(self.record, version, COMMIT, 123)
+
+    def test_snp2_does_not_allow_other_scientific_fixture_changes(self):
+        self.record["version"] = "0.8.30"
+        original = copy.deepcopy(self.record["reviewed_source_changes"])
+        for path in ("scientific/vendor/NEWPAT/SNPcall/examples/SNPlist.txt",
+                     "scientific/vendor/NEWPAT/SNPcall/examples/pileup.txt",
+                     "scientific/vendor/NEWPAT/SNPcall/examples/other-output.txt",
+                     "scientific/vendor/NEWPAT/contamination/examples/output.txt"):
+            self.record["reviewed_source_changes"] = sorted(original + [{
+                "path": path, "before_sha256": "1" * 64, "after_sha256": "2" * 64,
+            }], key=lambda item: item["path"])
+            with self.subTest(path=path), self.assertRaisesRegex(ValueError, "Only known scientific"):
+                acceptance.validate(self.record, "0.8.30", COMMIT, 123)
+
+    def test_snp2_example_change_cannot_be_omitted_or_relabelled(self):
+        change = self.reviewed_snp_example_change()
+        self.record["version"] = "0.8.30"
+        for field in ("before_sha256", "after_sha256"):
+            original = change[field]
+            change[field] = "f" * 64
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "exact baseline-to-candidate delta"):
+                acceptance.verify_baseline(self.record, self.read_source)
+            change[field] = original
+        self.record["reviewed_source_changes"].remove(change)
+        with self.assertRaisesRegex(ValueError, "exact baseline-to-candidate delta"):
+            acceptance.verify_baseline(self.record, self.read_source)
+
     def test_report_cannot_be_relabelled_as_different_package_source_or_image(self):
         for key, value in (("version", "0.8.10"), ("source_commit", "b" * 40), ("runtime_image", "sha256:" + "c" * 64)):
             original = self.manifest[key]
