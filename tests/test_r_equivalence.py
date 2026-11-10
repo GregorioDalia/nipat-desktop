@@ -38,8 +38,8 @@ class REquivalenceTests(unittest.TestCase):
         self.assertEqual(result["source_commit"], "ce59f4beeeec710b1b42d425cb87d7aad729f71d")
         self.assertEqual(verification.scientific_reference_path("snp-call"),
                          Path("tests/reference_r/2.0/SNPcall.R"))
-        self.assertTrue(str(verification.scientific_reference_path("dnp-call")).startswith(
-            "tests/reference_r/0.8.5/"))
+        self.assertTrue(verification.scientific_reference_path("dnp-call").is_relative_to(
+            Path("tests/reference_r/0.8.5")))
         frozen = self.file(result["frozen_path"], "# altered oracle\n")
         with self.assertRaisesRegex(ValueError, "SNPcall 2.0 reference was modified"):
             verification.verify_snp_reference(self.root)
