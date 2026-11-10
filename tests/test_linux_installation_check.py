@@ -1,6 +1,7 @@
 import importlib.util
 import csv
 import json
+import math
 from pathlib import Path
 import tempfile
 import unittest
@@ -182,6 +183,53 @@ class InstalledAutomaticPlanEvidenceTests(unittest.TestCase):
         check.check_automatic_plan(self.run, self.fixture, self.manifest, self.image, self.sources)
 
     def test_complete_installed_plan_evidence_matches_expected_identity_and_numbers(self):
+        self.verify()
+
+    def current_snp2_outputs(self):
+        self.manifest["version"] = "0.8.30"
+        self.record["source"]["nipat_version"] = "0.8.30"
+        for step in self.state["steps"]:
+            if not step["id"].startswith("snp_"):
+                continue
+            artifact = step["artifacts"]["snp-tables"][0]
+            rows = check.read_table(self.workflow / artifact["path"])
+            values = []
+            for row in rows:
+                ref, alt = row["Reference"], row["Alternative"]
+                nr, na = int(row["N_Reference"]), int(row["N_Alternative"])
+                likelihoods = [nr * math.log(0.9999) + na * math.log(0.0001),
+                               21 * math.log(0.5), nr * math.log(0.0001) + na * math.log(0.9999)]
+                observed = {base: count for base, count in sorted(((ref, nr), (alt, na))) if count}
+                values.append({"chr": row["chr"], "pos": row["pos"], "REF": ref, "ALT": alt,
+                    "N_REF": str(nr), "N_ALT": str(na), "N_Other": "0", "total_count": "21",
+                    "ratio": str(nr / 21), **{f"GL{index}": str(value) for index, value in enumerate(likelihoods)},
+                    "GT": ("0/0", "0/1", "1/1")[max(range(3), key=likelihoods.__getitem__)],
+                    "reads_discarded_for_indels": "0", "ratio_reads_discarded_for_indels": "0",
+                    "combined_bases": "-".join(observed),
+                    "combined_counts": "-".join(str(count) for count in observed.values())})
+            artifact.update(self.table(artifact["path"], values))
+
+    def test_current_package_requires_complete_snp2_scientific_results(self):
+        self.current_snp2_outputs()
+        self.verify()
+
+    def test_current_package_rejects_changed_likelihood_genotype_and_observations(self):
+        self.current_snp2_outputs()
+        artifact = self.state["steps"][-1]["artifacts"]["snp-tables"][0]
+        original = check.read_table(self.workflow / artifact["path"])
+        for field, value in {"GL0": "0", "GL1": "0", "GL2": "0", "GT": "9/9",
+                             "reads_discarded_for_indels": "1", "ratio_reads_discarded_for_indels": "0.1",
+                             "combined_bases": "N", "combined_counts": "999"}.items():
+            with self.subTest(field=field):
+                rows = [row.copy() for row in original]
+                rows[0][field] = value
+                artifact.update(self.table(artifact["path"], rows))
+                with self.assertRaisesRegex(RuntimeError, "Installed SNP2"):
+                    self.verify()
+
+    def test_last_stable_package_retains_its_legacy_snp_oracle(self):
+        self.manifest["version"] = "0.8.20"
+        self.record["source"]["nipat_version"] = "0.8.20"
         self.verify()
 
     def test_successful_parent_does_not_hide_an_incomplete_scientific_step(self):
