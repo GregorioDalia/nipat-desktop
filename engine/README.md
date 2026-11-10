@@ -44,11 +44,11 @@ al manifest scientifico incluso. `describe --json` restituisce:
 | --- | --- |
 | `schema_version` | `1` |
 | `interface` | `native-r-v1` |
-| `workflow_interfaces` | `dnp-call-v1`, `snp-call-v1`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
+| `workflow_interfaces` | `dnp-call-v1`, `snp-call-v2`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
 | `preparation.interface` | `workflow-preparation-v1` |
 | `plan_execution.interface` | `workflow-plan-execution-v1` |
 | `plan_execution.workflows` | `dnp-call`, `snp-call`, `contamination`, `cpi` |
-| `plan_execution.scheduling` | `sequential` |
+| `plan_execution.scheduling` | `dependency-order-with-bounded-independent-snp` |
 | `plan_execution.resume` | `false` |
 | Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
 | `preparation.file_sha256` | Hash dell'ingresso del motore, dei moduli Python condivisi, dell'adattatore R di presentazione e delle schede JSON del catalogo |
@@ -83,7 +83,10 @@ riflette l'esito del piano.
 Sono supportati i passaggi DNPcall, SNPcall, Contamination e CPI. SNPcall
 usa un BAM con riferimento oppure un pileup importato: non consuma risultati
 degli altri passaggi e non produce tabelle DNP compatibili con essi.
-Le dipendenze determinano l'ordine sequenziale. Ogni passaggio conserva la
+Le dipendenze determinano l'ordine nei piani misti; un piano di soli SNP
+indipendenti può distribuire i campioni entro il budget comune, lasciando
+seriali i pool interni ai worker. La modalità seriale rimane disponibile.
+Ogni passaggio conserva la
 propria richiesta, i file preparati, i risultati e il log; lo stato complessivo
 è registrato in `workflow-state.json`. Il processo del motore rimane attivo
 per gestire la sequenza e inoltrare l'interruzione al gruppo di processi
@@ -176,8 +179,15 @@ l'indice adiacente `.fai`; un riferimento BGZF richiede anche `.gzi`.
 L'indice BAM è facoltativo perché samtools usa `-l`, senza accesso indicizzato
 per regione. Il motore conserva i nomi dei cromosomi del pannello, genera le
 finestre BED di tre basi in `work/snp_regions.bed` ed esegue samtools,
-conservando `work/pileup.txt`. Entrambe le modalità producono
-`output/SNPcall_output.txt`.
+conservando `work/pileup.txt`. Il comando include `-d 0`, senza limite di
+profondità, come SNPcall 2.0. Entrambe le modalità producono
+`output/SNPcall_output.txt`, con il nuovo schema a 17 colonne, quattro
+grafici del campione e una directory `summary` con genotipi e risorse.
+Il pannello normalizzato ha colonne `chr`, `pos`, `ref`, `alt`; il formato
+precedente `pos=chr:posizione`, `ref`, `alt` resta accettato. Le posizioni
+devono essere comprese fra 2 e 2147483646 anche in modalità pileup.
+L'interfaccia `snp-call-v2` segnala il cambiamento dello schema scientifico;
+la richiesta JSON conserva `schema_version: 1`.
 
 ## DNPcall
 

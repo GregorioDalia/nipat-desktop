@@ -45,6 +45,7 @@ selezionati nella sottocartella `output/workflow`:
 | `output/workflow/steps/contamination` | Preparazione, risultati e log Contamination, quando selezionato. |
 | `output/workflow/steps/cpi` | Preparazione, risultati e log CPI, quando selezionato. |
 | `output/workflow/steps/snp_0001`, ecc. | Un passaggio SNPcall per ogni campione selezionato. |
+| `output/workflow/snp_summary/group_0001`, ecc. | Riepiloghi SNP 2.0 di campioni distinti con pannello, riferimento e modalità compatibili; genotipi uniti, etichette dei campioni, risorse e grafici. |
 
 Ogni cartella di passaggio contiene `request.json`, `command.log`, `work`
 e `output`. `command.log` conserva l'output R. Nei passaggi SNPcall da BAM,
@@ -61,6 +62,13 @@ o nel passaggio successivo corrispondente. La modalità BAM conserva
 `work/snp_regions.bed` e `work/pileup.txt` nella cartella del passaggio;
 la modalità pileup conserva il riferimento all'input e non lo rigenera.
 Questi percorsi sono relativi a `output/workflow`.
+
+La fase SNP 2.0 salva inoltre quattro grafici del campione in
+`output/plots/sample_0001` e genotipi, valori non assegnati e `resources.tsv`
+in `output/summary`. La tabella delle risorse misura tempo della fase R e
+RSS iniziale/finale; non rappresenta il picco RAM né include la precedente
+acquisizione da BAM. Nei riepiloghi comuni l'UpSet indica genotipi assegnati,
+distinguendoli dalla semplice presenza di letture.
 
 ## Stati e significato dell'esito
 

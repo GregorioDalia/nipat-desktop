@@ -20,6 +20,14 @@ Le [note della 0.8.20](docs/RELEASE_0.8.20.md) descrivono modifiche,
 aggiornamento e limiti delle prove. I confronti scientifici mantengono
 il [riferimento congelato 0.8.5](docs/OPTIMIZATION_0.8.9.md).
 
+**Candidato di sviluppo: 0.8.30.** Integra SNPcall 2.0 della ricercatrice,
+con genotipi, likelihood basate sulle qualità e riepiloghi di più campioni,
+e corregge la presentazione dei risultati dei quattro moduli. Per SNP il
+riferimento scientifico diventa la versione upstream 2.0 congelata; gli altri
+tre moduli mantengono la baseline numerica 0.8.5. Le
+[note della 0.8.30](docs/RELEASE_0.8.30.md) distinguono implementazione,
+verifiche e stato di distribuzione. I download seguenti restano della stabile.
+
 ## Download
 
 Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
@@ -52,7 +60,7 @@ separati; **Invio mantiene la configurazione corrente**.
 | Workflow | Input | Risultati principali |
 | --- | --- | --- |
 | DNPcall | Uno o più BAM, FASTA indicizzato e pannello DNP | Conteggi, genotipi, riepiloghi e grafici. |
-| SNPcall | BAM e FASTA indicizzato, oppure pileup con QNAME; pannello SNP | Tabella dei conteggi SNP. |
+| SNPcall 2.0 | BAM e FASTA indicizzato, oppure pileup con qualità e QNAME; pannello SNP | Conteggi, likelihood e genotipi SNP, statistiche degli indel e grafici; riepiloghi nei run con più campioni. |
 | Contamination | Tabelle individuali compatibili con DNPcall e pannello di coordinate | Stime per sito e riepilogo per campione. |
 | CPI | Tabelle cfDNA materne e paterne, coppie, frequenze di popolazione ed eventuali pannelli | Frazione fetale, CPI e grafici. |
 
@@ -77,8 +85,10 @@ scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
 input senza modificare gli algoritmi o avviare analisi.
 
 Il [contratto dei piani](docs/WORKFLOW_CONTRACT.md) identifica campioni,
-dipendenze e risultati. Validatore ed esecutore supportano le quattro analisi
-in ordine sequenziale. SNPcall è un'attività indipendente: legge il BAM o il
+dipendenze e risultati. I piani misti rispettano l'ordine dei passaggi;
+un batch composto soltanto da SNPcall può distribuire i campioni indipendenti
+entro il budget comune, mantenendo l'esecuzione seriale selezionabile.
+SNPcall è un'attività indipendente: legge il BAM o il
 pileup selezionato e non fornisce tabelle compatibili con Contamination o CPI.
 Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
 modalità di consultazione e significato delle informazioni esposte.

@@ -62,6 +62,37 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("Almeno 2 (eventi incompleti)", page)
         self.assertIn("osservazioni mostrate possono essere incomplete", page)
 
+    def test_snp_batch_overlap_is_reported_separately_from_serial_inner_r_tasks(self):
+        self.metadata["execution_options"] = {"execution_mode": "auto", "max_workers": 3}
+        self.parallel_events(self.root / "output/workflow/parallel/snp", label="snp-samples", workers=3)
+        inner = self.root / "output/workflow/steps/snp0/work/parallel"
+        self.parallel_events(inner, label="snp-reads", workers=1)
+        for pid in (24, 25):
+            (inner / f"worker-{pid}.jsonl").unlink()
+        self.save()
+        write_run_report(self.root)
+        page = (self.root / "run-report.html").read_text(encoding="utf-8")
+        self.assertIn("Campioni SNP</pre></td><td><pre>snp-samples</pre></td><td><pre>3</pre></td><td><pre>2", page)
+        self.assertIn("snp0</pre></td><td><pre>snp-reads</pre></td><td><pre>1</pre></td><td><pre>1", page)
+        self.assertIn("batch SNP possono eseguire campioni indipendenti in parallelo", page)
+        self.assertNotIn("I passaggi del workflow sono sequenziali", page)
+
+    def test_snp_batch_diagnostics_never_follow_an_external_symlink(self):
+        outside = self.root / "outside"
+        self.parallel_events(outside, label="SECRET_SNP_BATCH")
+        parent = self.root / "output/workflow/parallel"
+        parent.mkdir(parents=True)
+        try:
+            (parent / "snp").symlink_to(outside, target_is_directory=True)
+        except OSError:
+            self.skipTest("Creating symbolic links is unavailable on this platform")
+        self.metadata["execution_options"] = {"execution_mode": "auto"}
+        self.save()
+        write_run_report(self.root)
+        page = (self.root / "run-report.html").read_text(encoding="utf-8")
+        self.assertNotIn("SECRET_SNP_BATCH", page)
+        self.assertIn("Decisioni e attività dei processi non disponibili", page)
+
     def test_worker_evidence_budget_prevents_unbounded_read_and_no_concurrency_is_invented(self):
         self.metadata["execution_options"] = {"execution_mode": "auto"}
         self.parallel_events(self.root / "work/parallel")

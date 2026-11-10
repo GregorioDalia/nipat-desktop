@@ -136,12 +136,13 @@ def _parallel_section(run_dir: Path, metadata: dict) -> str:
     """Show bounded, run-owned execution evidence, including without telemetry.
 
     Worker limits are plans, not observations. Complete task intervals can prove
-    concurrent R work; missing or truncated events only provide a lower bound.
+    concurrent work; missing or truncated events only provide a lower bound.
     No RSS counters are added together and no input files are read.
     """
     options = metadata.get("execution_options")
     requested = isinstance(options, dict) and "execution_mode" in options
-    work_dirs = [("Analisi", "work")]
+    work_dirs = [("Analisi", "work", "work/parallel"),
+                 ("Campioni SNP", "output/workflow", "output/workflow/parallel/snp")]
     incomplete = False
     try:
         steps = _performance_file(run_dir, "output/workflow/steps")
@@ -151,7 +152,7 @@ def _parallel_section(run_dir: Path, metadata: dict) -> str:
             for entry in sorted(entries[:_MAX_PARALLEL_STEPS], key=lambda path: path.name):
                 relative = f"output/workflow/steps/{entry.name}/work"
                 if _performance_file(run_dir, relative).is_dir():
-                    work_dirs.append((entry.name, relative))
+                    work_dirs.append((entry.name, relative, relative + "/parallel"))
     except (OSError, ValueError):
         incomplete = True
 
@@ -159,7 +160,7 @@ def _parallel_section(run_dir: Path, metadata: dict) -> str:
     file_count = 0
     groups = {}
     acquisition_rows = []
-    for step, relative in work_dirs:
+    for step, relative, parallel_directory in work_dirs:
         try:
             acquisition = _read_json(_performance_file(run_dir, relative + "/dnp-pileup.json"),
                                      max_bytes=1024 * 1024)
@@ -174,7 +175,7 @@ def _parallel_section(run_dir: Path, metadata: dict) -> str:
         except (OSError, ValueError, RecursionError):
             pass  # Older runs do not include acquisition scheduling evidence.
         try:
-            directory = _performance_file(run_dir, relative + "/parallel")
+            directory = _performance_file(run_dir, parallel_directory)
             if not directory.is_dir():
                 continue
             paths = islice(directory.glob("worker-*.jsonl"), _MAX_PARALLEL_FILES + 1)
@@ -252,7 +253,7 @@ def _parallel_section(run_dir: Path, metadata: dict) -> str:
         return ""
     body = ["<h2>Parallelismo effettivamente registrato</h2>"]
     if rows:
-        body.append(_table(["Passaggio", "Fase R", "Processi pianificati", "Task simultanei osservati"], rows))
+        body.append(_table(["Passaggio", "Fase", "Processi pianificati", "Task simultanei osservati"], rows))
     if acquisition_rows:
         body.append(_table(["Passaggio", "Preparazione pileup", "Processi pianificati",
                             "Massimo di processi samtools osservati", "Stato", "Motivo"], acquisition_rows))
@@ -263,8 +264,9 @@ def _parallel_section(run_dir: Path, metadata: dict) -> str:
                     "le osservazioni mostrate possono essere incomplete.</p>")
     body.append("<p>Il limite richiesto e i processi pianificati non dimostrano da soli il parallelismo. "
                 "I task simultanei derivano dagli intervalli di attività registrati; "
-                "non misurano il numero di core occupati. I passaggi del workflow sono sequenziali "
-                "e i valori di fasi diverse non vanno sommati.</p>")
+                "non misurano il numero di core occupati. I batch SNP possono eseguire campioni indipendenti "
+                "in parallelo; gli altri passaggi del workflow mantengono il proprio ordine. "
+                "I valori di fasi diverse non vanno sommati.</p>")
     return "\n".join(body)
 
 

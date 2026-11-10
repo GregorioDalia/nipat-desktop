@@ -174,14 +174,14 @@ def build_parser() -> argparse.ArgumentParser:
                                   help="aggiunge SNPcall indipendente su ogni BAM, con questo pannello SNP")
 
     snp_batch = workflow_presets.add_parser(
-        "snp-batch", help="esegue SNPcall in sequenza su piu' BAM o pileup, con risultati separati",
+        "snp-batch", help="esegue SNPcall 2.0 su piu' BAM o pileup, con risultati individuali e genotipi aggregati",
     )
     snp_batch_input = snp_batch.add_mutually_exclusive_group(required=True)
     snp_batch_input.add_argument("--bam", type=_path, action="append", help="ripetibile per piu' BAM")
     snp_batch_input.add_argument("--bamlist", type=_path, help="file con un percorso BAM per riga")
     snp_batch_input.add_argument("--pileup", type=_path, action="append", help="ripetibile per piu' pileup SNP")
     snp_batch.add_argument("--reference", type=_path, help="FASTA obbligatorio soltanto per input BAM")
-    snp_batch.add_argument("--panel", type=_path, required=True, help="pannello SNP comune ai campioni")
+    snp_batch.add_argument("--panel", type=_path, required=True, help="pannello SNP comune: chr, pos, ref, alt (accetta anche pos=chr:coordinata)")
     snp_batch.add_argument("--run-name")
 
     dnp = subparsers.add_parser("dnp-call", help="esegue DNPcall da BAM")

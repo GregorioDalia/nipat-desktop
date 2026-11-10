@@ -25,8 +25,14 @@ Le versioni di riferimento di CPI e Contamination derivano dal
 [commit NEWPAT `17d2b8bbd09b1a0ff0651198c21e544aef197824`](https://github.com/lpistacchia/NEWPAT/tree/17d2b8bbd09b1a0ff0651198c21e544aef197824).
 Il blob CPI originale è `a362c976f9e9280e64f5bc2ec4a7b83b1e9647e6`; il blob
 Contamination è `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
-SNPcall e DNPcall sono identificati dai byte conservati nel repository e dal
-manifest seguente.
+SNPcall 2.0 deriva dal
+[commit NEWPAT `ce59f4beeeec710b1b42d425cb87d7aad729f71d`](https://github.com/lpistacchia/NEWPAT/tree/ce59f4beeeec710b1b42d425cb87d7aad729f71d/SNPcall),
+blob `7a2e01e94c9e278af52aa861646fec3b16df8b1c`. Il sorgente upstream
+originale è congelato in `tests/reference_r/2.0/SNPcall.R`, SHA-256
+`855a96c897d1bcb8ce30b725baecfa739d01be323252da07554a63aa66965da4`.
+La copia operativa mantiene l'adattatore pileup NIPAT, il budget comune e
+gli export del prodotto. DNPcall è identificato dai byte conservati nel
+repository e dal manifest seguente.
 
 La revisione di sviluppo **0.8.14** limita esplicitamente a un thread il
 lettore readr di SNPcall, applica i limiti dei thread anche all'avvio nativo
@@ -43,22 +49,27 @@ conservano i valori iniziali di 32 MiB e 64 loci. La
 [guida al parallelismo R](../docs/PARALLELISMO_0.8.12.md) documentano queste
 basi. I file conservano attribuzioni e licenze e indicano le modifiche NIPAT.
 
-Il riferimento per l'equivalenza rimane **NIPAT v0.8.5**, commit
+Per **DNPcall, CPI e Contamination** il riferimento numerico rimane **NIPAT v0.8.5**, commit
 `eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copie congelate in
 [`tests/reference_r/0.8.5`](../tests/reference_r/0.8.5/README.md). Comprende
 le modifiche di compatibilità già distribuite in quella versione: non è
 una dichiarazione di identità con sorgenti upstream mai modificati. La
-baseline non viene aggiornata per far passare un candidato. Il
+baseline non viene aggiornata per far passare un candidato. **SNPcall usa
+invece il riferimento upstream 2.0 congelato**: il nuovo raggruppamento per
+SNP e lettura, le qualità e le likelihood rappresentano una modifica
+scientifica richiesta, non un'ottimizzazione da confrontare con il vecchio SNP.
+Le correzioni dei grafici hanno verifiche proprie, distinte dall'equivalenza
+delle tabelle. Il
 [piano iniziale](../docs/OPTIMIZATION_0.8.9.md) e il
 [contratto delle verifiche R](../tests/r_optimization/README.md) documentano
 copertura, controlli di equivalenza e limiti delle evidenze.
 
 | Componente | SHA-256 |
 | --- | --- |
-| DNPcall | `12c45aa28bfe7ed83084a5b76d6618e3f1a9ed66b4ba30180d6c33ffa0737948` |
-| SNPcall | `8e92ec718cafd5f8c12fc3d2c1d39c086a2219cf023150fea9a842748640dc8e` |
+| DNPcall | `7163c685a41b65431c86c7e65fe68cf66df5aba4a270bd3c3c7cc40f7e37a5b9` |
+| SNPcall | `cc1bf385969adaac24834234b811ba4497aa2397872f0500139a5c534964899d` |
 | Contamination | `d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26` |
-| CPI | `5df16d3dd54693f076480945939deb46861920a2e0155f078a6a42444a440c4f` |
+| CPI | `64497a6d542300c29bb225202d4c2555e8ac1888f963495356f49e6c962481d7` |
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate
@@ -118,11 +129,39 @@ l'inferenza dei tipi restano comuni all'intero pileup.
 
 ### SNPcall
 
-SNPcall riceve un pileup con colonna QNAME e un pannello SNP. Il client può
+SNPcall 2.0 riceve un pileup con riferimento, qualità e colonna QNAME e un pannello SNP. Il client può
 accettare un pileup già disponibile oppure un BAM e il riferimento FASTA.
 In quest'ultimo caso il motore genera finestre BED di tre basi ed esegue
-samtools prima di R; un errore di samtools interrompe il workflow.
-Il risultato è `output/SNPcall_output.txt`. Dalla 0.8.14 la lettura del
+samtools prima di R; un errore di samtools interrompe il workflow. Come
+nell'upstream 2.0, `-d 0` elimina il limite predefinito di profondità. Il
+pannello nuovo ha colonne `chr`, `pos`, `ref`, `alt`; il formato precedente
+`pos=chr:posizione`, `ref`, `alt` viene normalizzato in quattro colonne.
+Entrambi richiedono posizioni da 2 a 2147483646.
+
+Il risultato è `output/SNPcall_output.txt`, con 17 colonne: coordinate e
+alleli, conteggi REF/ALT/altre basi, totale e frazione REF, likelihood
+`GL0`/`GL1`/`GL2`, `GT`, statistiche degli indel e basi osservate con conteggi.
+Le likelihood sono logaritmi naturali, non probabilità normalizzate; usano
+la qualità Phred della base centrale delle osservazioni REF/ALT.
+`GT` è mancante se la frazione di altre basi è almeno 0.1. Le statistiche
+degli indel si riferiscono alla base centrale prima del filtro, mentre
+un indel su un fianco può comunque escludere la lettura dal calcolo.
+Il rapporto `ratio` resta `N_REF / (N_REF + N_ALT)`.
+
+Ogni finestra di tre basi viene associata al proprio SNP prima del
+raggruppamento per QNAME. Le posizioni condivise da finestre vicine
+contribuiscono a entrambe; il parallelismo mantiene interi i gruppi
+`SNP_id`/QNAME e ripristina l'ordine prima dei calcoli. Tokenizzazione
+diretta con percorso di compatibilità, aggregazione unica di basi/coordinate/
+qualità e indicizzazione dei gruppi di likelihood riducono lavoro duplicato.
+Il riferimento upstream resta distinto da questi adattamenti.
+
+I risultati comprendono grafici per genotipo e conteggi REF/ALT/altre basi,
+una tabella dei genotipi e riepiloghi con valori mancanti espliciti. I run
+con più campioni includono la copertura condivisa. I tempi R e la memoria
+residente iniziale/finale sono misure distinte dal tempo complessivo del
+workflow e dal picco di memoria del container.
+Dalla 0.8.14 la lettura del
 pannello specifica `num_threads = 1L`: il lettore non sceglie autonomamente
 un numero di thread aggiuntivi rispetto al budget di calcolo.
 
@@ -172,8 +211,11 @@ calcoli e limiti:
 Qualsiasi modifica ai sorgenti scientifici richiede una revisione dedicata,
 provenienza verificabile, aggiornamento del manifest e regressioni pertinenti.
 La verifica differenziale `scripts/verify_r_equivalence.py` confronta i
-candidati con il riferimento immutabile 0.8.5 nello stesso runtime: tabelle
-complete, valori non arrotondati e resa dei PDF. I confronti sono obbligatori
+candidati con i riferimenti immutabili nello stesso runtime: SNPcall 2.0
+per SNP, NIPAT 0.8.5 per gli altri tre moduli. Confronta tabelle complete e
+valori non arrotondati; i grafici corretti hanno controlli di presentazione
+dedicati, senza imporre l'identità visiva con un istogramma difettoso.
+I confronti sono obbligatori
 nella CI scientifica e prima del confezionamento degli installatori.
 La corrispondenza degli hash o degli esempi non sostituisce la validazione
 di dominio con input indipendenti.

@@ -33,6 +33,11 @@ because they were produced with NIPAT, place scientific results under the GPL.
 | DNPcall | <https://github.com/fravasini/DNPcall> | [Upstream LICENSE](scientific/vendor/DNPcall/LICENSE), containing the GNU GPL version 3 text. Includes the supplied DNPcall files and accompanying examples. |
 
 These components retain their original authorship, license texts and notices.
+NIPAT 0.8.30 adapts the complete SNPcall 2.0 scientific core from NEWPAT commit
+`ce59f4beeeec710b1b42d425cb87d7aad729f71d`; an unmodified copy is retained in
+`tests/reference_r/2.0/SNPcall.R` as the differential-test reference. NIPAT's
+input adapters, resource scheduling and presentation changes are identified
+separately from that upstream source.
 The `GPL-3.0-or-later` grant for original NIPAT material does not add an
 "or later" permission to third-party files. Their own applicable terms govern
 them.

@@ -113,17 +113,17 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
     engine = runtime.get("engine", {})
     if (record["status"] != "succeeded" or record["source"].get("role") != "client"
             or record.get("workflow") != workflow
-            or engine.get("workflow_interfaces", {}).get(workflow) != f"{workflow}-v1"
+            or engine.get("workflow_interfaces", {}).get(workflow) != ("snp-call-v2" if workflow == "snp-call" else f"{workflow}-v1")
             or engine.get("preparation", {}).get("interface") != "workflow-preparation-v1"
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime.get("image_id", ""))):
         raise ValidationError("Identità dell'immagine o provenienza del motore mancanti.")
     hashes = engine["preparation"].get("file_sha256", {})
     required = {"engine/main.py", *(f"lib/nipat_scientific/{name}.py" for name in (
-        "__init__", "errors", "panels", "files", "contamination", "snp", "dnp", "cpi",
+        "__init__", "errors", "panels", "files", "contamination", "snp", "snp_summary", "snp_parallel", "dnp", "cpi",
         "catalog", "plan", "executor", "outputs", "presentation", "performance",
         "scratch", "dnp_pileup", "progress", "parallel",
     )), "lib/nipat_scientific/presentation.R", "lib/nipat_scientific/progress.R",
-        "lib/nipat_scientific/dnp_blocks.R", "lib/nipat_scientific/parallel.R",
+        "lib/nipat_scientific/dnp_blocks.R", "lib/nipat_scientific/parallel.R", "lib/nipat_scientific/plots.R",
         *(f"lib/nipat_scientific/catalog_data/{name}.json" for name in (
         "dnp-call", "snp-call", "contamination", "cpi",
     ))}

@@ -88,6 +88,7 @@ format_df_decimals <- function(df, digits = 3) {
 # The legacy --parallel argument remains accepted. The common execution policy
 # selects automatic or serial work for all R modules and caps the global pool.
 source(Sys.getenv("NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
+source(Sys.getenv("NIPAT_PLOTS_HELPER", unset = "/opt/nipat/lib/nipat_scientific/plots.R"))
 
 
 
@@ -773,75 +774,7 @@ prepare_individual <- function(i) {
   dir.create(indiv_plot_dir, showWarnings = FALSE, recursive = TRUE)
 
 
-  # plot number of genotypes per sample
-  p <- ggplot(final, aes(GT))+
-    geom_histogram(stat="count")+
-    labs(x = "Genotypes")
-    ggsave(file.path(indiv_plot_dir, paste0(i,"_N_genotypes.pdf")), plot=p, width = 11, height=5)
-
-  # make reads frequency plots
-  count_class <- function(vettore) {
-    # get max value
-    max_val <- max(vettore, na.rm = TRUE)
-
-    # get max break
-    max_break <- ceiling((max_val + 10) / 10) * 10
-
-    # make breaks and labels
-    breaks <- seq(1, max_break, by = 5)
-    labels <- paste(breaks, breaks + 4, sep = "-")
-
-    # make categorized vector
-    classi <- cut(vettore, breaks = c(breaks, Inf), labels = labels, right = TRUE, include.lowest = TRUE)
-
-    # count
-    tabella <- as.data.frame(table(classi))
-    names(tabella) <- c("class", "Freq")
-
-    return(tabella)
-  }
-  for_N_REF_plot <- count_class(final$N_REF)
-
-  q <- ggplot(for_N_REF_plot, aes(x = class, y = Freq)) +
-    geom_col(fill = "green3", color = "black", width = 1) +  # bordo nero, nessuno spazio tra le barre
-    labs(
-      title = "Reference reads count",
-      x = "Number of reads",
-      y = "Occurences"
-    ) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 5)) +
-    scale_x_discrete(breaks = for_N_REF_plot$class[seq(1, length(for_N_REF_plot$class), 5)])
-  ggsave(file.path(indiv_plot_dir, paste0(i, "_Ref_read_count.pdf")), plot=q, width = 11, height=5)
-
-
-  for_N_ALT_plot <- count_class(final$N_ALT)
-
-  s <- ggplot(for_N_ALT_plot, aes(x = class, y = Freq)) +
-    geom_col(fill = "red3", color = "black", width = 1) +  # bordo nero, nessuno spazio tra le barre
-    labs(
-      title = "Alternative reads count",
-      x = "Number of reads",
-      y = "Occurences"
-    ) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 5)) +
-    scale_x_discrete(breaks = for_N_ALT_plot$class[seq(1, length(for_N_ALT_plot$class), 5)])
-  ggsave(file.path(indiv_plot_dir, paste0(i, "_Alt_read_count.pdf")), plot = s, width = 11, height = 5)
-
-  for_N_Other_plot <- count_class(final$N_Other)
-
-  r <- ggplot(for_N_Other_plot, aes(x = class, y = Freq)) +
-    geom_col(fill = "steelblue", color = "black", width = 1) +  # bordo nero, nessuno spazio tra le barre
-    labs(
-      title = "Other reads count",
-      x = "Number of reads",
-      y = "Occurences"
-    ) +
-    theme_minimal() +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 5)) +
-    scale_x_discrete(breaks = for_N_Other_plot$class[seq(1, length(for_N_Other_plot$class), 5)])
-  ggsave(file.path(indiv_plot_dir, paste0(i, "_Other_read_count.pdf")), plot = r, width = 11, height = 5)
+  nipat_sample_plots(final, indiv_plot_dir, i, locus_kind = "DNP")
 
   end_ind_time <- Sys.time()
   end_ind_mem <- get_memory_usage_mb()
@@ -923,63 +856,8 @@ cat(paste0("Number of individuals processed: ", length(samplelist), "\n"))
 
 
 
-# plot unassigned genotypes
-
-final_merged_data$NA_count <- rowSums(
-  is.na(final_merged_data[, 6:ncol(final_merged_data), drop = FALSE])
-)
-
-final_merged_data$DNP_name <- paste0(final_merged_data$chr, ":", final_merged_data$pos1, "-", final_merged_data$pos2)
-
-w <- ggplot(final_merged_data, aes(x = DNP_name, y = NA_count)) +
-  geom_col(fill = "steelblue2", color = "black", width = 1) +
-  labs(
-    title = "Unassigned genotypes",
-    x = "DNPs",
-    y = "Occurences"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
-  ggsave(file.path(output, "summary", "Unassigned_genotypes.pdf"),
-         plot=w, width = nrow(final_merged_data), height=5, limitsize = FALSE)
-
-
-######################
-
-# make datset for upset plot
-make_upset_df <- function(df) {
-  df$DNP <- paste(df$chr, paste(df$pos1, df$pos2, sep = "-"), sep = ":")
-  gt_cols <- grep("^GT_", colnames(df), value = TRUE)
-  df_bin <- as.data.frame(
-  lapply(df[, gt_cols, drop = FALSE], function(x) ifelse(is.na(x), 0, 1))
-  )
-  colnames(df_bin) <- gsub("^GT_", "", colnames(df_bin))
-  rownames(df_bin) <- df$DNP
-  return(df_bin)
-}
-df_for_upset <- make_upset_df(final_merged_data)
-
-if (ncol(df_for_upset) >= 2) {
-  u <- upset(
-    df_for_upset,
-    intersect = colnames(df_for_upset),
-    min_size = 0,
-    name = "DNPs covered"
-  )
-
-  ggsave(
-    file.path(output, "summary", "DNPs_covered_UpSet_plot.pdf"),
-    plot = u,
-    limitsize = FALSE,
-    width = ncol(df_for_upset) * 30,
-    height = ncol(df_for_upset) * 2
-  )
-} else {
-  message("Skipping UpSet plot: at least two samples are required.")
-}
-
-
-
+# Plot only copies of the final genotype table; retain every scientific row.
+nipat_genotype_summary(final_merged_data, file.path(output, "summary"), locus_kind = "DNP")
 
 nipat_dnp_write_metrics("work/dnp-blocks.json", list(
   schema_version = 1L, status = "succeeded", acquisition_seconds = acquisition_seconds,

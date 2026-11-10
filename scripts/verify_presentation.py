@@ -10,6 +10,8 @@ import argparse
 import csv
 import hashlib
 import json
+import math
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -37,7 +39,7 @@ def check_canonical(first: Path, second: Path) -> None:
     def tables(root):
         return {path.relative_to(root).as_posix(): path.read_bytes()
                 for path in root.rglob("*") if path.suffix in {".txt", ".csv", ".tsv"}
-                and "presentation" not in path.relative_to(root).parts}
+                and "presentation" not in path.relative_to(root).parts and path.name != "resources.tsv"}
     if tables(first) != tables(second) or not tables(first):
         raise ValueError(f"Canonical scientific tables changed: {first} / {second}")
 
@@ -60,7 +62,7 @@ def check_readable(run: Path, *, artifact_root: Path | None = None) -> dict:
                        for value in headers]
         for row in expected[1:]:
             for number, header in enumerate(headers):
-                if header in {"Pair", "individuo"}:
+                if header in {"Pair", "individuo", "sample"}:
                     row[number] = config["replacements"].get(row[number], row[number])
         if export["sample"]:
             expected[0].insert(0, "Sample")
@@ -70,6 +72,10 @@ def check_readable(run: Path, *, artifact_root: Path | None = None) -> dict:
             raise ValueError(f"Readable table changed a scientific field: {source}")
     extracted = {}
     for source, export in config["plots"].items():
+        info = subprocess.run(["pdfinfo", str(directory / export["target"])], text=True, capture_output=True, check=True)
+        dimensions = re.search(r"Page size:\s+([0-9.]+) x ([0-9.]+) pts", info.stdout)
+        if dimensions is None or any(not 0 < float(value) <= 20 * 72 for value in dimensions.groups()):
+            raise ValueError(f"Unreadable/unbounded PDF dimensions: {source}\n{info.stdout}")
         process = subprocess.run(["pdftotext", "-enc", "UTF-8", str(directory / export["target"]), "-"],
                                  text=True, capture_output=True, check=True)
         text = " ".join(unicodedata.normalize("NFC", process.stdout).split())
@@ -77,7 +83,7 @@ def check_readable(run: Path, *, artifact_root: Path | None = None) -> dict:
         labels = []
         if export["sample"]:
             labels = [config["samples"][export["sample"]]]
-        elif source.endswith("DNPs_covered_UpSet_plot.pdf"):
+        elif source.endswith(("DNPs_covered_UpSet_plot.pdf", "SNPs_covered_UpSet_plot.pdf")):
             labels = list(config["samples"].values())
         elif config["workflow"] == "cpi":
             labels = (list(config["pairs"].values()) if source.endswith("All_CPIplots.pdf") else
@@ -85,6 +91,17 @@ def check_readable(run: Path, *, artifact_root: Path | None = None) -> dict:
         for label in labels:
             if "".join(unicodedata.normalize("NFC", label).split()) not in "".join(text.split()):
                 raise ValueError(f"Original sample label missing inside PDF {source}: {label!r}\n{text}")
+    if config["workflow"] == "snp-call":
+        table = read_table(run / "output/SNPcall_output.txt")
+        expected_columns = {"chr", "pos", "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count", "ratio",
+                            "GL0", "GL1", "GL2", "GT", "reads_discarded_for_indels",
+                            "ratio_reads_discarded_for_indels", "combined_bases", "combined_counts"}
+        if set(table[0]) != expected_columns or len(config["plots"]) != 5:
+            raise ValueError("Incomplete SNPcall 2.0 presentation contract")
+        resources = read_table(run / "output/summary/resources.tsv")
+        for row in resources[1:]:
+            if any(not math.isfinite(float(value)) or float(value) < 0 for value in row[1:]):
+                raise ValueError("SNP resource observations must be finite and non-negative")
     (run / "work/presentation-pdf-text.json").write_text(json.dumps(extracted, ensure_ascii=False, indent=2))
     return config
 
@@ -138,11 +155,13 @@ def check_plan(identifier: str, root: Path, inputs: Path) -> None:
                     "popfreq": "/inputs/population.tsv", "cutoffs": []}, "parameters": {"cutoff_mode": "all", "err_const": ERR}},
                 {"id": "snp", "workflow": "snp-call", "inputs": {"sample": "maternal", "reference": "/inputs/reference.fa",
                     "panel": "/inputs/SNPlist.tsv"}, "parameters": {"mode": "bam"}},
+                {"id": "snp_paternal", "workflow": "snp-call", "inputs": {"sample": "paternal", "reference": "/inputs/reference.fa",
+                    "panel": "/inputs/SNPlist.tsv"}, "parameters": {"mode": "bam"}},
             ]}
     roots = []
     for mode in ("canonical", "readable"):
         run = root / f"plan-{mode}"
-        value = {**plan, **({"presentation": {"samples": {"maternal": "Madre à.bam", "paternal": "Padre β.bam"}, "pairs": {}}}
+        value = {**plan, **({"presentation": {"samples": {"maternal": 'Madre à "A".bam', "paternal": "Padre β.bam"}, "pairs": {}}}
                            if mode == "readable" else {})}
         write_request(run, value)
         output = run_image(identifier, ["execute-plan", "--plan", "/results/work/request.json", "--run-dir", "/results/workflow"],
@@ -160,9 +179,25 @@ def check_plan(identifier: str, root: Path, inputs: Path) -> None:
         check_readable(roots[1] / relative, artifact_root=roots[1])
     # The consumer deliberately receives reversed registry order.
     config = json.loads((roots[1] / "steps/contamination/work/presentation-config.json").read_text())
-    if config["samples"] != {"table_0001": "Padre β.bam", "table_0002": "Madre à.bam"}:
+    if config["samples"] != {"table_0001": "Padre β.bam", "table_0002": 'Madre à "A".bam'}:
         raise ValueError("Workflow lost original names while rebinding downstream inputs")
-    print("PASS: four-step automatic workflow; canonical identities, labels and reversed sample order preserved.", flush=True)
+    groups = state.get("snp_summary", [])
+    if len(groups) != 1 or set(groups[0]["samples"]) != {"maternal", "paternal"}:
+        raise ValueError("Two-sample SNP 2.0 summary is missing or misidentified")
+    group = groups[0]
+    table = roots[1] / group["genotypes"]["path"]
+    if table.read_bytes() != (roots[0] / group["genotypes"]["path"]).read_bytes():
+        raise ValueError("Presentation changed batch genotype values or identities")
+    plots = {Path(item["path"]).name: roots[1] / item["path"] for item in group["plots"]}
+    upset = plots.get("SNPs_covered_UpSet_plot.pdf")
+    if upset is None:
+        raise ValueError("Two-sample SNP 2.0 UpSet plot is missing")
+    extracted = subprocess.run(["pdftotext", "-enc", "UTF-8", str(upset), "-"],
+                               text=True, capture_output=True, check=True).stdout
+    for name in ('Madre à "A".bam', "Padre β.bam"):
+        if "".join(name.split()) not in "".join(extracted.split()):
+            raise ValueError(f"Quoted/Unicode batch sample label changed: {name!r}\n{extracted}")
+    print("PASS: four-module automatic workflow including a two-sample SNP 2.0 summary; canonical identities, labels and reversed sample order preserved.", flush=True)
 
 
 def main() -> int:
@@ -170,8 +205,8 @@ def main() -> int:
     parser.add_argument("--image", required=True)
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
-    if shutil.which("pdftotext") is None:
-        parser.error("pdftotext is required; install poppler-utils on Ubuntu")
+    if shutil.which("pdftotext") is None or shutil.which("pdfinfo") is None:
+        parser.error("pdftotext and pdfinfo are required; install poppler-utils on Ubuntu")
     root = args.output_dir.resolve() if args.output_dir else Path(tempfile.mkdtemp(prefix="nipat-presentation-")).resolve()
     root.mkdir(parents=True, exist_ok=True)
     print(f"Presentation regression artifacts: {root}", flush=True)

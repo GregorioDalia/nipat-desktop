@@ -230,7 +230,7 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
-      - name: Compare optimized R with the immutable 0.8.5 reference
+      - name: Compare scientific cores with immutable versioned references
         env:
           TMPDIR: ${{ runner.temp }}/nipat-r-equivalence-check
         run: |

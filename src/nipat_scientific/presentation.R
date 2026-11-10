@@ -61,6 +61,11 @@ present_plot <- function(plot) {
     if (!is.character(label)) return(label)
     presented <- replace_label(label)
     if (!identical(presented, label) && identical(config$workflow, "cpi")) {
+      # Full names remain in sample-map.tsv and readable tables. Very long
+      # custom pair labels get an explicit display-only ellipsis, preventing
+      # a title alone from exceeding a readable PDF page.
+      presented <- ifelse(nchar(presented) > 800L,
+                          paste0(substr(presented, 1L, 797L), "..."), presented)
       presented <- wrap_label(presented, 50L)
       maximum_lines <<- max(maximum_lines, vapply(strsplit(presented, "\n", fixed = TRUE), length, 1L))
     }
@@ -108,26 +113,31 @@ display_ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
   relative <- substring(native, nchar(prefix) + 1L)
   item <- config$plots[[relative]]
   if (is.null(item)) stop(paste("No display mapping for scientific plot", relative))
-  presented <- present_plot(plot)
-  grob <- if (inherits(presented$plot, "patchwork")) {
-    patchwork::patchworkGrob(presented$plot)
-  } else {
-    ggplot2::ggplotGrob(presented$plot)
-  }
-  grob <- replace_grob(grob)
+  page_sources <- if (inherits(plot, "nipat_plot_pages")) unclass(plot) else list(plot)
+  presented <- lapply(page_sources, present_plot)
+  grobs <- lapply(presented, function(page) {
+    grob <- if (inherits(page$plot, "patchwork")) {
+      patchwork::patchworkGrob(page$plot)
+    } else {
+      ggplot2::ggplotGrob(page$plot)
+    }
+    replace_grob(grob)
+  })
   extra_height <- 0
   if (identical(config$workflow, "cpi")) {
-    rows <- if (identical(relative, "plots/All_CPIplots.pdf")) length(config$pairs) else 1L
-    extra_height <- max(0, presented$maximum_lines - 1L) * 0.18 * rows
+    # Four cutoff panels per page, at most two rows. The number of pairs no
+    # longer makes a PDF page arbitrarily tall.
+    maximum_lines <- max(vapply(presented, function(page) page$maximum_lines, 1L))
+    extra_height <- max(0, maximum_lines - 1L) * 0.18 * 2L
   }
   if (!is.null(item$sample)) {
     label <- wrap_label(config$samples[[item$sample]], 110L)
-    # Individual native DNP plots have no sample caption; add one to the copy.
     caption <- grid::textGrob(label, gp = grid::gpar(fontsize = 10))
     extra_height <- length(strsplit(label, "\n", fixed = TRUE)[[1]]) * 0.18 + 0.1
-    grob <- gtable::gtable_add_rows(grob, grid::unit(extra_height, "in"), pos = 0)
-    grob <- gtable::gtable_add_grob(grob, caption,
-      t = 1, l = 1, r = ncol(grob), clip = "off")
+    grobs <- lapply(grobs, function(grob) {
+      grob <- gtable::gtable_add_rows(grob, grid::unit(extra_height, "in"), pos = 0)
+      gtable::gtable_add_grob(grob, caption, t = 1, l = 1, r = ncol(grob), clip = "off")
+    })
   }
   options <- list(...)
   options$device <- NULL
@@ -136,12 +146,18 @@ display_ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
     if (!is.numeric(options$height)) stop("Scientific plot height is required")
     options$height <- options$height + extra_height
   }
+  displayed <- if (inherits(plot, "nipat_plot_pages")) nipat_plot_pages(grobs) else grobs[[1]]
   do.call(ggplot2::ggsave, c(list(filename = file.path(config$directory, item$target),
-                                 plot = grob, device = grDevices::cairo_pdf), options))
+                                 plot = displayed, device = grDevices::cairo_pdf), options))
   invisible(result)
 }
 # Preserve the native global execution environment (DNPcall explicitly updates
 # .GlobalEnv for memory accounting); keep adapter state private in this closure.
 assign("ggsave", display_ggsave, envir = globalenv())
 sys.source(config$script, envir = globalenv(), keep.source = FALSE)
+# SNPcall 2.0 exposes a sourcable core for differential tests; its standalone
+# guard deliberately does not execute when loaded through this adapter.
+if (identical(config$workflow, "snp-call")) {
+  get("nipat_snp_main", envir = globalenv(), inherits = FALSE)()
+}
 })

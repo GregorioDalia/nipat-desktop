@@ -202,7 +202,7 @@ class WorkflowForm:
             else:
                 result += [Field("bam", "BAM", "file"),
                            Field("reference", "File FASTA di riferimento", "file", check=check_reference)]
-            result += [Field("panel", "Lista SNP (pos, ref, alt)", "file",
+            result += [Field("panel", "Lista SNP (chr, pos, ref, alt)", "file",
                              check=lambda path: read_snp_positions(path, for_bed=values.get("mode") != "2"))]
         elif self.choice == "3":
             result = [Field("mode", "Input Contamination", "choice", "1", options=(
@@ -267,7 +267,7 @@ class WorkflowForm:
         elif field.key == "panel":
             text = ("Il pannello DNP indica le posizioni e gli alleli da analizzare. Scegliere un file senza intestazione: cinque colonne chr, pos1, pos2, REF, ALT. Le due posizioni devono essere adiacenti e gli alleli di due basi. DNP_list.txt e' un nome di esempio: il file puo' avere un altro nome."
                     if self.choice == "1" else
-                    "Scegliere una tabella separata da tabulazioni con intestazione pos, ref, alt. Esempio di riga: chr1:1770788, C, G (con tabulazioni tra i valori)."
+                    "Scegliere una tabella separata da tabulazioni con intestazione chr, pos, ref, alt. Esempio di riga: chr1, 1770788, C, G. E' accettato anche il formato precedente pos, ref, alt con coordinate chr1:1770788. Le posizioni devono essere comprese tra 2 e 2147483646."
                     if self.choice == "2" else
                     "Scegliere le coordinate DNP da includere nell'analisi: colonne chr, pos1, pos2, con o senza intestazione. E' accettato anche il pannello DNP a cinque colonne. DNP_list.txt e' un nome di esempio: il file puo' avere un altro nome.")
         else:

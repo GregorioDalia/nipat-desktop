@@ -29,11 +29,11 @@ PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
     "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
     "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R",
-    "parallel.py", "parallel.R",
+    "parallel.py", "parallel.R", "plots.R", "snp_summary.py", "snp_parallel.py",
 )
 CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
-    "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
+    "contamination": "contamination-v1", "snp-call": "snp-call-v2", "dnp-call": "dnp-call-v1",
     "cpi": "cpi-v1",
 }
 
@@ -138,12 +138,15 @@ def verify_bundle(bundle_root: Path) -> dict:
             "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
             "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
             "snp_alleles": "uppercase-working-copy",
+            "snp_model": "SNPcall-2.0",
+            "snp_output_columns": 17,
+            "snp_panel_formats": ["chr-pos-ref-alt", "legacy-chr:pos-ref-alt"],
         },
         "plan_execution": {
             "interface": "workflow-plan-execution-v1",
             "schema_version": 1,
             "workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
-            "scheduling": "sequential",
+            "scheduling": "dependency-order-with-bounded-independent-snp",
             "resume": False,
         },
         "progress": {
@@ -390,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
                                         pileup_state["outcome"] = "failed"
                                         preparation_state["outcome"] = "failed"
                                         return returncode
-                                require_snp_pileup(prepared.generated_pileup)
+                                require_snp_pileup(prepared.generated_pileup, allow_empty=True)
                             native_arguments = prepared.native_arguments
                 except (ValidationError, ValueError) as exc:
                     raise BundleError(str(exc)) from exc

@@ -1,7 +1,10 @@
 # Scientific R equivalence
 
-`scripts/verify_r_equivalence.py` runs the frozen NIPAT 0.8.5 scripts and the
-candidate scripts in the same immutable scientific image. The candidate files
+`scripts/verify_r_equivalence.py` runs DNP, CPI and Contamination against frozen
+NIPAT 0.8.5 scripts, and SNP against the complete scientific core of SNPcall 2.0
+from NEWPAT commit `ce59f4beeeec710b1b42d425cb87d7aad729f71d`, in the same immutable
+scientific image. The byte-identical SNP reference lives at
+`tests/reference_r/2.0/SNPcall.R` and has an independent pinned SHA-256. The candidate files
 inside that image must match the checkout. The reference is pinned to commit
 `eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`; its six files and digests are
 checked independently of its manifest.
@@ -12,7 +15,7 @@ python scripts/verify_r_equivalence.py \
   --output-dir build/r-equivalence
 ```
 
-The output directory must be new. Docker and Poppler's `pdftoppm` are required.
+The output directory must be new. Docker and Poppler's `pdftoppm` and `pdfinfo` are required.
 Containers have no network and mount sources and inputs read-only. Inputs are
 generated from public synthetic fixtures; no personal sequencing data are used.
 Qualification containers are limited to four CPUs and 8 GiB; the production
@@ -24,19 +27,33 @@ The comparisons require:
 
 - identical complete TSV/CSV/TXT output bytes, including schema, order and NA;
 - `identical()` unrounded R values, types and attributes;
-- identical PDF page pixels at 36 DPI, excluding volatile PDF metadata;
+- renderable, bounded revised PDFs with exact serial/parallel page pixels at
+  36 DPI, excluding volatile PDF metadata;
+- histogram boundary/zero/missing-value semantics and all-locus paginated plots
+  in `presentation/check_plots.R`; historical plot pixels are not the oracle
+  for the intentionally corrected bins and page sizes;
 - unchanged inputs and successful focused R checks under `*/check_*.R`.
 
-`capture.R` evaluates the complete scientific source with its native CLI
-arguments. It retains unrounded DNP tables, SNP tables, Contamination summaries
+`capture.R` evaluates the scientific source with its native CLI arguments.
+For SNP it calls `call_sample` from the pinned 2.0 source, excluding only the
+final native BAM-list invocation; empty samples use the literal upstream worker
+fallback. Candidate SNP tables are captured through the same core interface.
+The real-image engine/presentation checks separately cover all new SNP plots,
+batch summaries, original sample labels and resource records. It retains unrounded DNP tables, SNP tables, Contamination summaries
 and every distinct CPI calculation's inputs and threshold results. Repeated CPI
 calls in the reference are collapsed only after confirming identical results.
 Forked CPI calculations write separate process-local audit records. Their
 invocation list is canonicalized by complete inputs for the value comparison;
 the result data and scientific file order remain subject to exact comparison.
 The production scripts need no diagnostic flags or test-specific branches.
+The historical DNP plot appends `NA_count` and `DNP_name` after exporting its
+genotype table. Capture excludes exactly those two presentation-only fields
+on both sides; all other summary fields remain exact. Revised plot-derived
+counts/labels are verified separately by `presentation/check_plots.R`.
 
-Every case compares the frozen reference with the explicitly serial candidate.
+Every case compares the appropriate frozen module reference with the explicitly
+serial candidate and a maximum-two-process candidate, including exact rendered
+plot equality between candidate executions.
 Representative DNP, SNP and Contamination cases and three CPI scheduling paths
 (pairs, cutoffs, threshold intervals) also run automatic scheduling, maximum
 two processes, maximum four processes and a repeated maximum-four run. Each
@@ -52,7 +69,8 @@ be reached when the effective resource budget is smaller.
 Cases include neighboring DNPs, insertion/deletion reads, forward/reverse reads,
 mixed-case read names, uncovered sites, one/two samples and parallel execution;
 varied DNP qualities; SNP reads shared across loci, special read names and
-additional pileup columns; CPI shared parents, long threshold ranges,
+additional pileup columns, varied qualities, overlapping SNP windows and wholly
+uncovered samples; CPI shared parents, long threshold ranges,
 empty informative sets, missing population loci, metadata NA, ALL/named panels
 and zero error; Contamination supplied/derived ratios, boundaries, one/zero
 informative sites, batches and panel-only directories.

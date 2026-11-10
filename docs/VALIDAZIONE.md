@@ -138,7 +138,7 @@ Documentare almeno le condizioni rilevanti per l'uso previsto:
 | Area | Casi utili |
 | --- | --- |
 | DNPcall | Uno e più BAM; lista e argomenti ripetuti; modalità seriale e parallela; corrispondenza tra alias, conteggi e genotipi. |
-| SNPcall | BAM e pileup compatibile dello stesso caso; conteggi REF, ALT e altre letture; formato QNAME richiesto. |
+| SNPcall 2.0 | BAM e pileup compatibile dello stesso caso; conteggi REF/ALT/altre basi, qualità e likelihood, genotipi e soglia del 10% di altre basi, indel centrali e laterali, finestre sovrapposte, loci senza copertura; uno e più campioni. |
 | Contamination | Singoli file e cartella con gli stessi input; presenza e assenza di `ratio_REF_ALT`; nessun sito informativo. |
 | CPI | Coppie appropriate; prefissi configurati; ALL, pannello singolo e più cutoff; nessun sito informativo. |
 | Workflow automatici | Composizioni DNPcall/Contamination/CPI; campioni condivisi fra coppie; SNPcall indipendente e batch; corrispondenza fra piano, campioni, output e analisi separate; passaggi bloccati dopo errore o interruzione. |
@@ -159,7 +159,14 @@ distinti i risultati delle etichette selezionate.
 
 Per i pannelli SNP confrontare anche rappresentazioni equivalenti in maiuscolo
 e minuscolo: la normalizzazione deve lasciare invariati i conteggi e il file
-originale. Provare tabelle con conteggi negativi, loci duplicati e frequenze
+originale. Confrontare anche il pannello nuovo a quattro colonne con quello
+precedente a tre colonne equivalente. Per SNP 2.0 il riferimento è il sorgente
+upstream congelato, non l'algoritmo SNP della 0.8.5: il raggruppamento per
+SNP/QNAME, le qualità e l'assenza del limite di profondità possono cambiare
+legittimamente i risultati. Gli altri tre moduli conservano la baseline
+numerica 0.8.5. Per i grafici verificare zero, valori ai confini delle classi,
+`NA`, campioni distinti e leggibilità con molti loci.
+Provare tabelle con conteggi negativi, loci duplicati e frequenze
 non finite: devono essere rifiutate prima di R. Registrare separatamente gli
 avvisi che mantengono i valori forniti, come frequenze zero o rapporti
 incoerenti con i conteggi; il loro significato va valutato nel caso scientifico.

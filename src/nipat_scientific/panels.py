@@ -101,20 +101,32 @@ def write_position_panel(records: list[DnpRecord], destination: Path) -> None:
 
 
 def read_snp_list(path: Path, *, for_bed: bool = True) -> list[SnpRecord]:
+    """Accept SNPcall 2.0 panels and normalize the legacy chr:position format.
+
+    Both interfaces use a three-base window. Coordinates must therefore leave
+    room for both neighbours in R's signed 32-bit coordinate representation.
+    ``for_bed`` remains a compatibility argument for existing callers.
+    """
     records = []
     seen = set()
     for line_number, row in table_rows(path, {"pos", "ref", "alt"}, "Lista SNP"):
+        if set(row) not in ({"pos", "ref", "alt"}, {"chr", "pos", "ref", "alt"}):
+            raise ValidationError("Lista SNP: attese le colonne chr, pos, ref, alt oppure pos, ref, alt.")
         coordinate = row["pos"].strip()
         try:
-            chromosome, position_text = coordinate.rsplit(":", 1)
+            if "chr" in row:
+                chromosome, position_text = row["chr"].strip(), coordinate
+            else:
+                chromosome, position_text = coordinate.rsplit(":", 1)
             position = int(position_text)
         except ValueError as exc:
             raise ValidationError(
                 f"Lista SNP: coordinata non valida alla riga {line_number}: {coordinate}"
             ) from exc
-        if position < (2 if for_bed else 1) or not chromosome or any(c.isspace() for c in chromosome):
+        if (not 2 <= position <= 2147483646 or not chromosome or ":" in chromosome
+                or any(c.isspace() for c in chromosome)):
             raise ValidationError(
-                f"Lista SNP: posizione troppo bassa o cromosoma non valido alla riga {line_number}: {coordinate}"
+                f"Lista SNP: posizione fuori intervallo 2..2147483646 o cromosoma non valido alla riga {line_number}: {coordinate}"
             )
         alleles = [row[name].strip().upper() for name in ("ref", "alt")]
         if any(len(allele) != 1 or allele not in "ACGT" for allele in alleles) or alleles[0] == alleles[1]:
@@ -136,9 +148,9 @@ def read_snp_positions(path: Path, *, for_bed: bool = True) -> list[tuple[str, i
 def write_snp_list(records: list[SnpRecord], destination: Path) -> None:
     with destination.open("x", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(["pos", "ref", "alt"])
+        writer.writerow(["chr", "pos", "ref", "alt"])
         for row in records:
-            writer.writerow([f"{row.chromosome}:{row.position}", row.reference, row.alternative])
+            writer.writerow([row.chromosome, row.position, row.reference, row.alternative])
 
 
 def read_position_panel(path: Path) -> list[DnpRecord]:

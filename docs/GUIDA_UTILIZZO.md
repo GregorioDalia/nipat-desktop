@@ -409,13 +409,17 @@ alleli maiuscoli senza modificare l'originale. Il pannello stabilisce quali
 posizioni e quali alleli analizzare. `DNP_list.txt` è un nome di esempio:
 è possibile scegliere un file con un altro nome, purché rispetti il formato.
 
-Il valore iniziale dell'esecuzione è seriale; il menu e `--parallel`
-consentono quella parallela. Il menu propone il valore salvato in **Configura**,
-se presente. I BAM ricevono alias `sample_0001`, ecc.; la
+Il valore iniziale dell'esecuzione è automatico entro il budget comune;
+`--execution-mode serial` seleziona l'esecuzione seriale e `--max-workers`
+limita il pool automatico. L'opzione storica `--parallel` resta accettata per
+compatibilità. Il menu propone il valore salvato in **Configura**, se presente.
+I BAM ricevono alias `sample_0001`, ecc.; la
 corrispondenza con i nomi originali è registrata nel run. Con un solo campione
 non viene prodotto il grafico UpSet.
 
 ### SNPcall
+
+Dalla 0.8.30 il motore usa il modello scientifico di **SNPcall 2.0**.
 
 Selezionare BAM e FASTA indicizzato per generare il pileup oppure indicare
 un pileup esistente. In CLI usare `--bam` con `--reference` oppure `--pileup`.
@@ -426,16 +430,38 @@ samtools e i nomi delle letture (QNAME) nella settima, come prodotti da
 `--output-QNAME`. Le colonne successive sono ignorate dallo script R.
 Un pileup a sei colonne non contiene le informazioni richieste.
 
-La lista SNP è tabulata, con intestazioni `pos`, `ref`, `alt`. La posizione
-ha forma `chr1:1770788`. Nella modalità BAM la posizione deve essere almeno 2,
-per consentire la costruzione della finestra di tre basi.
+La lista SNP è tabulata, con intestazioni `chr`, `pos`, `ref`, `alt`, per esempio
+`chr1`, `1770788`, `C`, `T`. Rimane accettato il formato precedente a tre
+colonne `pos`, `ref`, `alt`, con posizione nella forma `chr1:1770788`.
+NIPAT prepara in entrambi i casi un pannello a quattro colonne. La posizione
+deve essere compresa tra 2 e 2147483646 anche con un pileup importato, per
+consentire la finestra di tre basi. Il cromosoma non deve contenere spazi o `:`.
 Gli alleli `ref` e `alt` sono basi singole A, C, G o T. NIPAT accetta
 maiuscole e minuscole e prepara una copia del pannello con gli alleli
 maiuscoli prima dell'avvio R, senza modificare il file selezionato.
 Le due basi devono essere distinte e le coordinate non possono essere duplicate.
-L'output `SNPcall_output.txt` include conteggi REF, ALT e altre letture.
-Il totale comprende le letture altre; il rapporto REF usa solo REF e ALT
-nel denominatore.
+Il pileup generato da BAM usa `samtools mpileup -d 0`: come in SNPcall 2.0,
+non applica il precedente limite predefinito di 8000 letture per posizione
+e file. Le qualità e i nomi delle letture sono necessari al nuovo calcolo;
+per un pileup importato valgono i filtri applicati da chi lo ha prodotto.
+
+L'output `SNPcall_output.txt` contiene 17 colonne:
+
+| Colonne | Significato |
+| --- | --- |
+| `chr`, `pos`, `REF`, `ALT` | Coordinate e alleli del pannello. |
+| `N_REF`, `N_ALT`, `N_Other`, `total_count` | Conteggi dopo i filtri della finestra; il totale include le altre basi. |
+| `ratio` | `N_REF / (N_REF + N_ALT)`: frazione REF, non frazione ALT. Senza letture REF/ALT il rapporto non è definito. |
+| `GL0`, `GL1`, `GL2` | Log-likelihood naturali dei genotipi `0/0`, `0/1`, `1/1`, calcolate dalle qualità Phred della base centrale delle letture REF/ALT. Non sono probabilità normalizzate. |
+| `GT` | Genotipo con likelihood massima; `NA` senza osservazioni informative o se `N_Other / total_count >= 0.1`. La soglia non cancella conteggi o likelihood. |
+| `reads_discarded_for_indels`, `ratio_reads_discarded_for_indels` | Numero e frazione di osservazioni complete con indel sulla base centrale, prima del filtro. Non misurano tutte le letture escluse per indel sui fianchi. |
+| `combined_bases`, `combined_counts` | Basi osservate e conteggi corrispondenti, nello stesso ordine e separati da `-`. |
+
+Le letture sono raggruppate per **SNP e QNAME**: una lettura che attraversa
+più finestre contribuisce separatamente a ciascuno SNP. Questo e il modello
+di qualità possono produrre risultati diversi dal vecchio SNP di NIPAT;
+il riferimento di confronto è SNPcall 2.0. Un conteggio zero e un valore
+mancante `NA` hanno significati distinti e rimangono distinguibili nei grafici.
 
 ### Contamination
 
@@ -793,6 +819,13 @@ BAM e pileup non possono essere mescolate nello stesso run del menu o comando.
 Per il significato delle colonne e i requisiti degli input consultare
 [SNPcall](#snpcall).
 
+Un batch composto soltanto da SNPcall può elaborare campioni indipendenti
+in parallelo entro il budget comune; `--execution-mode serial` mantiene
+un solo processo di calcolo. I riepiloghi riuniscono campioni distinti con
+lo stesso pannello, riferimento e modalità, senza mescolare analisi con
+contratti diversi. La tabella dei genotipi e i grafici non sostituiscono
+gli output individuali.
+
 ```powershell
 .\nipat.cmd --runs-dir "..\risultati" workflow snp-batch `
   --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
@@ -820,6 +853,9 @@ e percorsi Linux.
 | `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination, quando selezionato. |
 | `output/workflow/steps/cpi/output` | Riepilogo CSV e grafici PDF CPI, quando selezionato. |
 | `output/workflow/steps/snp_0001/output/SNPcall_output.txt` | Risultato del primo campione SNPcall; i successivi usano `snp_0002`, ecc. |
+| `output/workflow/steps/snp_0001/output/plots/sample_0001` | Quattro PDF SNP del campione: genotipi, conteggi REF, ALT e altre basi. |
+| `output/workflow/steps/snp_0001/output/summary` | Genotipi, grafico dei valori non assegnati e `resources.tsv` del singolo campione. |
+| `output/workflow/snp_summary/group_0001` | Riepilogo di almeno due campioni compatibili: `merged_genotypes.tsv`, `sample_labels.tsv`, `resources.tsv`, PDF dei genotipi non assegnati e UpSet; gruppi successivi hanno numerazione distinta. |
 | `output/workflow/steps/<id>/request.json` | Richiesta concreta del passaggio. |
 | `output/workflow/steps/<id>/command.log` | Messaggi R del passaggio; per DNPcall comprende anche i messaggi interni allo script. |
 | `output/workflow/steps/snp_0001/preparation.log` | Messaggi samtools del primo campione SNPcall da BAM; il comando è registrato nello stato. |
@@ -838,6 +874,10 @@ La mappa dei campioni in `run.json` collega i nomi interni agli input originali;
 `artifacts.snp-tables` nello stato del passaggio collega la tabella al campione.
 Non attribuire le tabelle ai campioni usando soltanto il nome fisso
 `SNPcall_output.txt`: considerare il passaggio e la mappa registrata.
+L'UpSet conta i loci con **genotipo assegnato**, non tutti i loci con almeno
+una lettura. `resources.tsv` riporta secondi della fase R e memoria residente
+all'inizio e alla fine: questi valori non sono il tempo totale da BAM o il
+picco di RAM. Usare la diagnostica del run per le misure complessive.
 
 Per usare **tabelle DNPcall già disponibili**, avviare invece **3 — Contamination**
 e selezionare i file richiesti in `output/individual_outputs` del run DNPcall,

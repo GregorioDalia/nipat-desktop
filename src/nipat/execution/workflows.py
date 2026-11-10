@@ -467,7 +467,7 @@ class Workflows:
         pileups: list[Path] | None = None, reference: Path | None = None,
         panel: Path, run_name: str | None = None,
     ) -> Path:
-        """Run independent per-sample SNP analyses in one sequential image-owned plan."""
+        """Run SNPcall 2.0 samples with a shared worker budget and genotype summary."""
         if sum(value is not None for value in (bams, bamlist, pileups)) != 1:
             raise ValidationError("Indicare --bam, --bamlist oppure --pileup per il workflow SNPcall.")
         mode = "pileup" if pileups is not None else "bam"

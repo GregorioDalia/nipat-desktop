@@ -6,7 +6,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-CHECK_NAME = "Compare optimized R with the immutable 0.8.5 reference"
+CHECK_NAME = "Compare scientific cores with immutable versioned references"
 
 
 def job_text(workflow, identifier):

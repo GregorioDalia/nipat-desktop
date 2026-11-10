@@ -40,7 +40,7 @@ def engine_metadata():
             name: {"script": f"scientific/vendor/{name}/main.R", "sha256": "c" * 64}
             for name in ("dnp-call", "snp-call", "contamination", "cpi")
         },
-        "workflow_interfaces": {"contamination": "contamination-v1", "snp-call": "snp-call-v1",
+        "workflow_interfaces": {"contamination": "contamination-v1", "snp-call": "snp-call-v2",
                                 "dnp-call": "dnp-call-v1", "cpi": "cpi-v1"},
         "preparation": {
             "interface": "workflow-preparation-v1",
@@ -52,6 +52,8 @@ def engine_metadata():
                 "lib/nipat_scientific/cpi.py", "lib/nipat_scientific/outputs.py",
                 "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
                 "lib/nipat_scientific/parallel.py", "lib/nipat_scientific/parallel.R",
+                "lib/nipat_scientific/plots.R", "lib/nipat_scientific/snp_summary.py",
+                "lib/nipat_scientific/snp_parallel.py",
             )},
         },
     }
@@ -156,7 +158,7 @@ class BundledRunnerTests(unittest.TestCase):
         description = engine_metadata()
         description["plan_execution"] = {
             "interface": "workflow-plan-execution-v1", "schema_version": 1,
-            "workflows": ["dnp-call", "contamination"], "scheduling": "sequential", "resume": False,
+            "workflows": ["dnp-call", "contamination"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
         }
         for name in ("plan", "executor"):
             description["preparation"]["file_sha256"][f"lib/nipat_scientific/{name}.py"] = "e" * 64
@@ -265,7 +267,7 @@ class BundledRunnerTests(unittest.TestCase):
                 description = self.plan_metadata()
                 description["plan_execution"]["workflows"].append("snp-call")
                 if invalid == "snp-interface":
-                    description["workflow_interfaces"]["snp-call"] = "snp-call-v2"
+                    description["workflow_interfaces"]["snp-call"] = "snp-call-v1"
                 else:
                     module = "snp" if invalid == "snp-source" else "executor"
                     del description["preparation"]["file_sha256"][f"lib/nipat_scientific/{module}.py"]
@@ -484,7 +486,7 @@ class BundledRunnerTests(unittest.TestCase):
                 self.assertEqual(record["bundled_workflow"], workflow)
                 self.assertEqual(record["runtime"]["image_id"], IMAGE_ID)
                 self.assertEqual(record["runtime"]["engine"]["workflow_interfaces"][workflow],
-                                 f"{workflow}-v1")
+                                 ("snp-call-v2" if workflow == "snp-call" else f"{workflow}-v1"))
                 self.assertEqual(record["source"]["role"], "client")
                 service = json.loads((run / "work/engine-compose.json").read_text(encoding="utf-8"))[
                     "services"]["scientific"]
@@ -516,7 +518,7 @@ class BundledRunnerTests(unittest.TestCase):
                         self.runner, "_capture", side_effect=self.captured(description),
                     ), patch("nipat.execution.runner.subprocess.Popen") as popen:
                         with self.assertRaisesRegex(RuntimeExecutionError,
-                                                    f"contratto {label}.*{workflow}-v1"):
+                                                    f"contratto {label}.*{workflow}-v{2 if workflow == 'snp-call' else 1}"):
                             with context:
                                 self.fail(f"An incompatible image must not execute {label}.")
                     popen.assert_not_called()

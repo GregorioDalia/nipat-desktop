@@ -16,17 +16,19 @@ from nipat.paths import ProjectLayout
 
 
 SNP_COLUMNS = {
-    "chr", "pos", "Reference", "Alternative", "N_Reference", "N_Alternative",
-    "N_Altro", "total_count", "ratio",
+    "chr", "pos", "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count",
+    "ratio", "GL0", "GL1", "GL2", "GT", "reads_discarded_for_indels",
+    "ratio_reads_discarded_for_indels", "combined_bases", "combined_counts",
 }
 
 
 def compare_snp_outputs(expected_path: Path, actual_path: Path) -> int:
+    """Compare every SNPcall 2.0 field, preserving missing and infinite values."""
     def read(path: Path) -> dict[tuple[str, str], dict[str, str]]:
         with path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
-            if set(reader.fieldnames or []) != SNP_COLUMNS or len(reader.fieldnames) != 9:
-                raise ValidationError(f"Colonne SNPcall inattese: {path}")
+            if set(reader.fieldnames or []) != SNP_COLUMNS or len(reader.fieldnames) != len(SNP_COLUMNS):
+                raise ValidationError(f"Colonne SNPcall 2.0 inattese: {path}")
             result = {}
             for row in reader:
                 if None in row or any(value is None for value in row.values()):
@@ -42,25 +44,30 @@ def compare_snp_outputs(expected_path: Path, actual_path: Path) -> int:
     expected, actual = read(expected_path), read(actual_path)
     if expected.keys() != actual.keys():
         raise ValidationError("Le coordinate SNPcall differiscono dal riferimento.")
+    integer_columns = {"N_REF", "N_ALT", "N_Other", "total_count", "reads_discarded_for_indels"}
+    numeric_columns = {"ratio", "GL0", "GL1", "GL2", "ratio_reads_discarded_for_indels"}
     for key, row in actual.items():
-        for column in ("Reference", "Alternative"):
-            if row[column] != expected[key][column]:
-                raise ValidationError(f"{key}: {column} diverso dal riferimento.")
-        for column in ("N_Reference", "N_Alternative", "N_Altro", "total_count"):
-            try:
-                matches = int(row[column]) == int(expected[key][column])
-            except (TypeError, ValueError) as exc:
-                raise ValidationError(f"{key}: {column} non intero.") from exc
+        for column in SNP_COLUMNS - {"chr", "pos"}:
+            observed, reference = row[column], expected[key][column]
+            if observed == "NA" or reference == "NA":
+                matches = observed == reference
+            elif column in integer_columns:
+                try:
+                    matches = int(observed) == int(reference)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(f"{key}: {column} non intero.") from exc
+            elif column in numeric_columns:
+                try:
+                    observed_number, reference_number = float(observed), float(reference)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(f"{key}: {column} non numerico.") from exc
+                matches = (not math.isnan(observed_number) and not math.isnan(reference_number)
+                           and math.isclose(observed_number, reference_number,
+                                            rel_tol=1e-12, abs_tol=1e-12))
+            else:
+                matches = observed == reference
             if not matches:
                 raise ValidationError(f"{key}: {column} diverso dal riferimento.")
-        try:
-            observed, reference = float(row["ratio"]), float(expected[key]["ratio"])
-        except (TypeError, ValueError) as exc:
-            raise ValidationError(f"{key}: ratio non numerico.") from exc
-        if not math.isfinite(observed) or not math.isclose(
-            observed, reference, rel_tol=0, abs_tol=1e-12
-        ):
-            raise ValidationError(f"{key}: ratio diverso dal riferimento.")
     return len(actual)
 
 

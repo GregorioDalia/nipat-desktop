@@ -523,7 +523,7 @@
           603,
           669
         ],
-        "sha256": "7f155eebbbbe0f507991b3e544626cdafbe7fdb7381b3159df5dcd50c44f1fba"
+        "sha256": "1557b32c42f8c3c8fd4b4b35a4a1634f263ac709044509131d068acc2baca37c"
       }
     },
     {
@@ -544,7 +544,7 @@
           603,
           669
         ],
-        "sha256": "7f155eebbbbe0f507991b3e544626cdafbe7fdb7381b3159df5dcd50c44f1fba"
+        "sha256": "1557b32c42f8c3c8fd4b4b35a4a1634f263ac709044509131d068acc2baca37c"
       }
     },
     {
@@ -569,10 +569,10 @@
       "evidence": {
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
-          144,
-          189
+          156,
+          201
         ],
-        "sha256": "e06c1cd03d9cc3782d3103563431fff278e64ee2c312a96fbb10ac901b14e065"
+        "sha256": "0794988796809bf15aebf20c8f732632523978fbbaafa5a92eaece059b4007d6"
       }
     },
     {
@@ -598,7 +598,7 @@
           92,
           100
         ],
-        "sha256": "e06c1cd03d9cc3782d3103563431fff278e64ee2c312a96fbb10ac901b14e065"
+        "sha256": "0794988796809bf15aebf20c8f732632523978fbbaafa5a92eaece059b4007d6"
       }
     },
     {
@@ -686,7 +686,7 @@
           101,
           142
         ],
-        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+        "sha256": "1b2859b76c3eea91be66813b13464687464d34605457e81f24243d36f61f8b0f"
       }
     },
     {
@@ -704,7 +704,7 @@
           179,
           195
         ],
-        "sha256": "29414a0652598af593c55eeb883bd59f4980c5f6617943e8575c5a59d644b71e"
+        "sha256": "1b2859b76c3eea91be66813b13464687464d34605457e81f24243d36f61f8b0f"
       }
     },
     {
@@ -724,10 +724,10 @@
       "evidence": {
         "path": "src/nipat_scientific/outputs.py",
         "source_lines": [
-          152,
-          245
+          189,
+          311
         ],
-        "sha256": "2e8d48cb8f07616cef551163cdc3f9eb3b314a423dce649f2a1ce7a66f03bc74"
+        "sha256": "6dbe8028da0d68767a76d61fcaa7118207bac24edfa328ce446abd1ec2826edb"
       }
     },
     {
@@ -741,24 +741,24 @@
       "applies_to": "contamination",
       "origin": "NIPAT presentation adapter",
       "description": {
-        "it": "Gli export leggibili conservano i valori numerici e mostrano i nomi originali in tabelle e grafici. Gli ID interni e gli output canonici rimangono invariati; la colonna Sample delle copie individuali e le mappe esplicitano la provenienza. I nomi duplicati sono distinti, quelli dei file adattati ai vincoli dei filesystem. Le etichette dei fogli di calcolo sono protette come testo. La seconda resa dei PDF aggiunge tempo al run.",
-        "en": "Readable exports preserve numeric values and show original names in tables and plots. Internal IDs and canonical outputs remain unchanged; the Sample column in individual copies and the maps make provenance explicit. Duplicate names are disambiguated and filenames adapted to filesystem constraints. Spreadsheet labels are protected as text. Rendering additional PDFs adds time to the run."
+        "it": "Gli export leggibili conservano valori numerici e nomi originali di campioni e coppie, con associazioni esplicite agli output canonici. Lo zero resta distinto da NA; i rapporti, le likelihood, le unità delle risorse e la copertura per genotipo sono descritti nell'indice HTML. I duplicati sono disambiguati, i nomi adattati al filesystem e le etichette protette come testo per i fogli di calcolo. I grafici aggiuntivi richiedono tempo.",
+        "en": "Readable exports preserve numeric values and original sample/pair names, explicitly mapped to canonical outputs. Zero remains distinct from NA; ratios, likelihoods, resource units and genotype coverage are described in the HTML index. Duplicates are disambiguated, filenames adapted to the filesystem and spreadsheet labels protected as text. Additional plot rendering takes time."
       },
       "evidence": {
         "path": "src/nipat_scientific/presentation.py",
         "source_lines": [
           1,
-          303
+          362
         ],
-        "sha256": "c35dc33a72aca2e7a09da3abb66525562d3e225b0cac968c008b84ff8263062e",
+        "sha256": "6feddc305562645ce79fb197aed39e9ecb4a054ff80507f7a8e0b3f67e59b471",
         "dependencies": [
           {
             "path": "src/nipat_scientific/presentation.R",
             "source_lines": [
               1,
-              147
+              163
             ],
-            "sha256": "f368a60172d0bc9c632c09c49a1ea5924b835fb7a1db91413dffc8817ab1f193"
+            "sha256": "145baac97be8cf37835ff87e8557599cc762f73c921573d6747e92a503b57ad6"
           }
         ]
       }
@@ -826,23 +826,23 @@
               190,
               198
             ],
-            "sha256": "5830fdac8e59b1510606ffaa2ed0fa5f86c8c7396f0fda2235d6e0ac4b883727"
+            "sha256": "2039bed62df37f5f437c2510373214a9a054b2234195928e8b86cd131ecf4c07"
           },
           {
             "path": "src/nipat_scientific/parallel.py",
             "source_lines": [
               8,
-              43
+              44
             ],
-            "sha256": "5583abb381fcd43ccc90895210f776e97b476ef652a9bb070aa69d81d0b491a8"
+            "sha256": "bcdf3866e76419ac0b2879bf292be2a45eeb69ec6a590332652423f1aade87f7"
           },
           {
             "path": "engine/main.py",
             "source_lines": [
-              407,
-              414
+              410,
+              417
             ],
-            "sha256": "8f66d87dbc38481c4f1d4aff2f191f0a4b1742ed0972159e1e8f39d54d7b4de8"
+            "sha256": "c48d540f537e1aa181e76fab8d6399034ffd06d39e96b43f9911c3ec8de6cf54"
           }
         ]
       }

@@ -253,8 +253,12 @@ def require_contamination_input(path: Path) -> list[dict]:
     return _counts(path, cpi=False)
 
 
-def require_snp_pileup(path: Path) -> None:
-    """Check QNAME's required seventh-column position; R ignores later columns."""
+def require_snp_pileup(path: Path, *, allow_empty: bool = False) -> None:
+    """Check the quality-bearing seven-column single-sample pileup contract.
+
+    A successful samtools call can produce no rows when the entire panel has
+    zero coverage; callers must opt in for that generated intermediate.
+    """
     found = False
     with input_text(path) as handle:
         for number, line in enumerate(handle, 1):
@@ -272,5 +276,5 @@ def require_snp_pileup(path: Path) -> None:
             except ValueError as exc:
                 raise ValidationError(f"Pileup SNP: riga {number} non valida o intestazione presente.") from exc
             found = True
-    if not found:
+    if not found and not allow_empty:
         raise ValidationError(f"Pileup SNP vuoto: {path}")

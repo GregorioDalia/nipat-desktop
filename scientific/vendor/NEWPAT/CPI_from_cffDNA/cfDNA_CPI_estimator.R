@@ -16,6 +16,7 @@ suppressPackageStartupMessages({
 
 source(Sys.getenv("NIPAT_PARALLEL_HELPER",
                   unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
+source(Sys.getenv("NIPAT_PLOTS_HELPER", unset = "/opt/nipat/lib/nipat_scientific/plots.R"))
 
 ## cli parser
 parser <- ArgumentParser()
@@ -243,8 +244,10 @@ plot_CPI <- function(df, cutoff_label, pair_name,
   if (nrow(df) == 0) {
     return(
       ggplot() +
-        theme_void() +
-        labs(title = paste(pair_name, "-", cutoff_label, "(no data)"))
+        theme_void(base_size = 9) +
+        annotate("text", x = 0, y = 0, label = "No informative loci available", size = 3) +
+        labs(title = paste(pair_name, "-", cutoff_label, "(no data)")) +
+        theme(plot.title = element_text(size = 9, hjust = 0))
     )
   }
 
@@ -279,7 +282,7 @@ plot_CPI <- function(df, cutoff_label, pair_name,
     ")"
   )
 
-  ggplot(df, aes(x = Iteration)) +
+  cpi_plot <- ggplot(df, aes(x = Iteration)) +
     annotate("rect", xmin = -Inf, xmax = Inf,
              ymin = -Inf, ymax = -4, fill = "red", alpha = 0.05) +
     annotate("rect", xmin = -Inf, xmax = Inf,
@@ -289,9 +292,6 @@ plot_CPI <- function(df, cutoff_label, pair_name,
 
     geom_line(aes(y = log_CPI), colour = "black") +
     geom_point(aes(y = log_CPI), colour = "black", size = 1.3) +
-    geom_line(aes(y = NotMismatch), colour = "green") +
-    geom_line(aes(y = Mismatch), colour = "orange",
-              linetype = "dashed") +
 
     annotate(
       "label",
@@ -308,7 +308,6 @@ plot_CPI <- function(df, cutoff_label, pair_name,
 
     scale_y_continuous(
       name = expression(log[10](CPI)),
-      sec.axis = sec_axis(~ ., name = "Matching / mismatching sites"),
       expand = expansion(mult = c(0.02, 0.14))
     ) +
 
@@ -323,6 +322,8 @@ plot_CPI <- function(df, cutoff_label, pair_name,
 
     theme_bw(base_size = 9) +
     theme(
+      legend.position = "bottom",
+      plot.caption = element_text(size = 7, hjust = 0),
       plot.title = element_text(size = 9, hjust = 0),
       axis.title = element_text(size = 8),
       axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
@@ -331,6 +332,20 @@ plot_CPI <- function(df, cutoff_label, pair_name,
       ),
       plot.margin = margin(8, 12, 8, 8)
     )
+  # Counts and log likelihood ratios have different units. Separate aligned
+  # panels keep the original values and avoid negative/fractional site axes.
+  sites_plot <- ggplot(df, aes(x = Iteration)) +
+    geom_line(aes(y = NotMismatch, colour = "Matching sites")) +
+    geom_point(aes(y = NotMismatch, colour = "Matching sites"), size = 1) +
+    geom_line(aes(y = Mismatch, colour = "Mismatching sites"), linetype = "dashed") +
+    geom_point(aes(y = Mismatch, colour = "Mismatching sites"), size = 1) +
+    scale_colour_manual(name = NULL, values = c("Matching sites" = "#008A38", "Mismatching sites" = "#C46B00")) +
+    scale_y_continuous(name = "Informative sites", limits = c(0, NA), breaks = nipat_integer_breaks) +
+    scale_x_continuous(name = "Minimum number of fetal reads considered", breaks = ticks,
+      limits = c(2, max(3, max_iter)), expand = expansion(mult = c(0.02, 0.02))) +
+    theme_bw(base_size = 9) +
+    theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
+  (cpi_plot / sites_plot) + patchwork::plot_layout(heights = c(2, 1))
 }
 
 ## main containers
@@ -505,20 +520,19 @@ for (i in seq_along(pair_results)) {
 
   ## save combined plots in plots_dir
   if (length(per_cutoff_plots)>0) {
-    combined <- Reduce(`+`, per_cutoff_plots[names(per_cutoff_plots)]) +
-      patchwork::plot_layout(ncol=length(per_cutoff_plots))
+    combined <- nipat_cpi_pages(per_cutoff_plots[names(per_cutoff_plots)])
     ggsave(file.path(plots_dir, paste0(pair_name,"_CPIplot.pdf")),
-           plot=combined, width=max(12,4*length(per_cutoff_plots)), height=4)
-    all_combined_plots[[pair_name]] <- combined
+           plot=combined, width=12, height=10)
+    all_combined_plots <- c(all_combined_plots, unname(per_cutoff_plots))
   }
 
 }
 
 ## save single big pdf with all pairs
 if (length(all_combined_plots)>0) {
-  final_plot <- wrap_plots(all_combined_plots, ncol=1)
+  final_plot <- nipat_cpi_pages(all_combined_plots)
   ggsave(file.path(plots_dir, "All_CPIplots.pdf"),
-         plot=final_plot, width=12, height=4*length(all_combined_plots), limitsize=FALSE)
+         plot=final_plot, width=12, height=10)
 }
 
 fetal_fraction_summary <- do.call(rbind, fetal_fraction_rows)

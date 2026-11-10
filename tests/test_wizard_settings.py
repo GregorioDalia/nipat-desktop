@@ -35,8 +35,8 @@ class WizardSettingsTests(unittest.TestCase):
         self.ref = self.file("ref.fa", ">chr1\nAC\n")
         self.file("ref.fa.fai", "chr1\t2\t6\t2\t3\n")
         self.panel = self.file("DNP.tsv", "chr1\t2\t3\tAC\tGT\n")
-        self.snp = self.file("SNP.tsv", "pos\tref\talt\nchr1:1\tA\tG\n")
-        self.pileup = self.file("pileup.txt", "chr1\t1\tA\t1\t.\tI\tread1\n")
+        self.snp = self.file("SNP.tsv", "pos\tref\talt\nchr1:2\tA\tG\n")
+        self.pileup = self.file("pileup.txt", "chr1\t2\tA\t1\t.\tI\tread1\n")
         self.popfreq = self.file("freq.tsv", "chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t1\t2\t0.5\t0.5\n")
 
     def file(self, name, contents):

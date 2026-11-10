@@ -32,7 +32,7 @@ from nipat.validation.integrity import verify_sha256_manifest
 BUNDLED_WORKFLOW_INTERFACES = {
     "dnp-call": "dnp-call-v1",
     "contamination": "contamination-v1",
-    "snp-call": "snp-call-v1",
+    "snp-call": "snp-call-v2",
     "cpi": "cpi-v1",
 }
 BUNDLED_WORKFLOW_LABELS = {
@@ -267,6 +267,8 @@ class DockerComposeRunner:
             "lib/nipat_scientific/outputs.py",
             "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
             "lib/nipat_scientific/parallel.py", "lib/nipat_scientific/parallel.R",
+            "lib/nipat_scientific/plots.R", "lib/nipat_scientific/snp_summary.py",
+            "lib/nipat_scientific/snp_parallel.py",
         }
 
         def has_digest(value: Any) -> bool:
@@ -348,7 +350,7 @@ class DockerComposeRunner:
                     and set(PLAN_WORKFLOWS[workflow]).issubset(
                         value for value in execution["workflows"] if isinstance(value, str)
                     )
-                    and execution.get("scheduling") == "sequential"
+                    and execution.get("scheduling") == "dependency-order-with-bounded-independent-snp"
                     and execution.get("resume") is False
                 )
         if not valid:

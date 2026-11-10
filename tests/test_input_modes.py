@@ -58,8 +58,8 @@ class InputModeTests(unittest.TestCase):
                     mother_prefix="Mother", father_prefix="Father")
 
     def test_snp_existing_external_pileup_skips_mpileup_and_reference(self):
-        panel = self.write("SNP list.tsv", "pos\tref\talt\nchr1:1\tA\tC\n")
-        pileup = self.write("pileup $ ,=.txt", "chr1\t1\tA\t1\t.\tI\tread1\n")
+        panel = self.write("SNP list.tsv", "pos\tref\talt\nchr1:2\tA\tC\n")
+        pileup = self.write("pileup $ ,=.txt", "chr1\t2\tA\t1\t.\tI\tread1\n")
         before = pileup.read_bytes()
         run = self.workflows.snp_call(pileup=pileup, panel=panel)
         self.assertEqual(len(self.runner.calls), 1)

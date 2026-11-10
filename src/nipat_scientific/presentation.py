@@ -162,7 +162,14 @@ def prepare_presentation(request: dict, script: Path, arguments: list[str]) -> l
         if len(samples) > 1:
             export("summary/DNPs_covered_UpSet_plot.pdf", "DNPs_covered_UpSet_plot.pdf", kind="plot")
     elif workflow == "snp-call":
-        export("SNPcall_output.txt", f"{_filename(samples['sample_0001'], 'sample_0001')}_SNP.txt", sample="sample_0001")
+        identity = "sample_0001"
+        stem = _filename(samples[identity], identity)
+        export("SNPcall_output.txt", f"{stem}_SNP.txt", sample=identity)
+        for suffix in ("N_genotypes", "Ref_read_count", "Alt_read_count", "Other_read_count"):
+            export(f"plots/{identity}/{identity}_{suffix}.pdf", f"{stem}_{suffix}.pdf", sample=identity, kind="plot")
+        export("summary/SNPcall_AllGenotypes.txt", "SNP_AllGenotypes.txt")
+        export("summary/Unassigned_genotypes.pdf", "SNP_Unassigned_genotypes.pdf", sample=identity, kind="plot")
+        export("summary/resources.tsv", "SNP_resources.tsv")
     elif workflow == "contamination":
         export("contamination_summary.txt", "Contamination_summary.txt")
         for identity, label in samples.items():
@@ -196,7 +203,7 @@ def _copy_table(source: Path, target: Path, replacements: dict[str, str], *, sam
     if not rows:
         raise PlanExecutionError("presentation.table", f"Tabella senza intestazione: {source.name}")
     original_headers = rows[0][:]
-    identity_columns = {index for index, header in enumerate(original_headers) if header in {"Pair", "individuo"}}
+    identity_columns = {index for index, header in enumerate(original_headers) if header in {"Pair", "individuo", "sample"}}
     rows[0] = [_spreadsheet_label(replacements.get(header, header)) if header.startswith("GT_") else header
                for header in original_headers]
     for row in rows[1:]:
@@ -265,14 +272,50 @@ def finish_presentation(request: dict, root: Path) -> dict | None:
                      "Le tabelle individuali aggiungono la colonna Sample per identificare il campione. "
                      "I risultati canonici e gli identificativi interni restano disponibili nella cartella superiore.</p>"
                      "<p>Nei file CSV/TSV i nomi che un foglio di calcolo potrebbe interpretare come formule "
-                     "hanno un apostrofo iniziale di protezione. Qui e nei grafici il nome resta completo.</p>"
+                     "hanno un apostrofo iniziale di protezione. Qui e nella tabella di corrispondenza il nome resta completo.</p>"
                      f"<table><tr><th>Identificativo interno</th><th>Campione</th></tr>{mappings}</table>"
                      '<p><a href="sample-map.tsv">Tabella di corrispondenza</a></p>'
-                     f"<h2>Risultati</h2><ul>{links}</ul>"), encoding="utf-8")
+                     f"{_interpretation_notes(request['workflow'])}<h2>Risultati</h2><ul>{links}</ul>"), encoding="utf-8")
     report = {"schema_version": 1, "interface": "readable-results-v1", "status": "complete",
               "index": _file_record(index, root), "sample_map": _file_record(map_path, root), "files": files}
     (work / "presentation-report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return report
+
+
+def _interpretation_notes(workflow: str) -> str:
+    """Explain units and missing data without inventing scientific estimates."""
+    common = ("<h2>Come leggere i risultati</h2><p>NA indica un valore non disponibile o un genotipo non assegnato; "
+              "non equivale a zero. I conteggi e le stime sono riportati come prodotti dal modulo scientifico.</p>")
+    descriptions = {
+        "snp-call": (
+            "<p>SNPcall 2.0: N_REF, N_ALT e N_Other contano le osservazioni conservate; total_count è la loro somma. "
+            "ratio è N_REF / (N_REF + N_ALT), quindi è la frazione di riferimento. GL0, GL1 e GL2 sono "
+            "log-verosimiglianze naturali dei genotipi 0/0, 0/1 e 1/1: non sono probabilità né punteggi Phred. "
+            "GT è il genotipo assegnato dal modello; con almeno il 10% di osservazioni Other resta NA.</p>"
+            "<p>reads_discarded_for_indels e la relativa ratio descrivono gli indel alla base centrale prima del filtro "
+            "sull'intera finestra: non contano tutte le letture eliminate nei fianchi. Gli istogrammi includono una classe "
+            "separata per zero; gli estremi delle classi positive sono inclusi. Il grafico UpSet confronta i loci con "
+            "GT assegnato, non la sola presenza di copertura.</p>"
+            "<p>resources.tsv riporta tempo di elaborazione del campione e RSS osservata all'inizio e alla fine "
+            "(MiB); queste osservazioni non misurano il picco di memoria. Per il tempo complessivo e la memoria "
+            "del contenitore consultare la diagnostica dell'esecuzione.</p>"),
+        "dnp-call": (
+            "<p>N_REF, N_ALT e N_Other sono i conteggi delle osservazioni conservate; ratio è la frazione di riferimento "
+            "N_REF / (N_REF + N_ALT). GL0, GL1 e GL2 sono log-verosimiglianze naturali. "
+            "Gli istogrammi includono zero in una classe separata e usano intervalli positivi con entrambi gli estremi "
+            "inclusi. Il grafico UpSet confronta i loci con genotipo assegnato, non la sola copertura. "
+            "Il grafico dei genotipi non assegnati è suddiviso in pagine per mantenere leggibili tutti i loci.</p>"),
+        "cpi": (
+            "<p>Median_fetal_fraction_raw è una frazione; Median_fetal_fraction_percent è la stessa misura in percentuale. "
+            "Le colonne logCPI e, per compatibilità con lo script originale, CPI_medianFF contengono log10(CPI), "
+            "non CPI grezzo. I grafici distinguono log10(CPI) dai conteggi dei siti matching/mismatching. "
+            "I confronti senza siti informativi mantengono NA e sono indicati come privi di dati.</p>"),
+        "contamination": (
+            "<p>Le stime di contaminazione sono frazioni: 0,025 corrisponde al 2,5%. La tabella di riepilogo separa "
+            "i campioni e riporta anche il numero di loci usati. Un campione senza loci informativi mantiene "
+            "le stime NA; non deve essere interpretato come contaminazione nulla.</p>"),
+    }
+    return common + descriptions.get(workflow, "")
 
 
 def _html_page(title: str, body: str) -> str:
@@ -297,7 +340,23 @@ def finish_plan_presentation(plan: dict, state: dict, root: Path) -> dict | None
                            f'{html.escape(step["workflow"])} — risultati</a></li>')
         else:
             entries.append(f'<li>{html.escape(step["id"])}: {html.escape(step["status"])}</li>')
+    summaries = []
+    for group in state.get("snp_summary", []):
+        links = []
+        for label, item in [("Genotipi di tutti i campioni", group["genotypes"]),
+                            ("Risorse per campione", group["resources"]),
+                            ("Nomi dei campioni", group["sample_labels"]),
+                            *[(Path(item["path"]).name, item) for item in group["plots"]]]:
+            _file_record(root / item["path"], root)
+            links.append(f'<li><a href="../{quote(item["path"], safe="/")}">{html.escape(label)}</a></li>')
+        summaries.append(f'<h3>{html.escape(group["id"])} — {len(group["samples"])} campioni</h3>'
+                         f'<ul>{"".join(links)}</ul>')
+    summary_html = ("<h2>Confronto SNPcall 2.0 tra campioni</h2>"
+                    "<p>Ogni gruppo usa lo stesso pannello e riferimento. Le tabelle dei genotipi mantengono "
+                    "gli identificativi interni; la tabella dei nomi consente di risalire ai campioni originali. "
+                    "UpSet confronta i loci con genotipo assegnato, non la sola copertura.</p>" + "".join(summaries)
+                    if summaries else "")
     index = directory / "index.html"
     index.write_text(_html_page("Workflow NIPAT", "<h1>Risultati del workflow</h1>"
-                     f'<p>Stato: {html.escape(state["status"])}</p><ul>{"".join(entries)}</ul>'), encoding="utf-8")
+                     f'<p>Stato: {html.escape(state["status"])}</p><ul>{"".join(entries)}</ul>{summary_html}'), encoding="utf-8")
     return {"schema_version": 1, "index": _file_record(index, root)}

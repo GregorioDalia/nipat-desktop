@@ -12,7 +12,7 @@ from nipat_scientific.files import (
     DNP_OUTPUT_COLUMNS, locus_key, nonnegative_integer, require_columns,
     require_dnp_input, table_rows,
 )
-from nipat_scientific.panels import read_dnp_list, read_snp_positions
+from nipat_scientific.panels import read_dnp_list, read_snp_list
 
 
 def _sha256(path: Path) -> str:
@@ -26,8 +26,9 @@ _CPI_COLUMNS = {
     "Median_logCPI", "Mean_logCPI", "CPI_medianFF",
 }
 _SNP_COLUMNS = {
-    "chr", "pos", "Reference", "Alternative", "N_Reference", "N_Alternative",
-    "N_Altro", "total_count", "ratio",
+    "chr", "pos", "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count", "ratio",
+    "GL0", "GL1", "GL2", "GT", "reads_discarded_for_indels",
+    "ratio_reads_discarded_for_indels", "combined_bases", "combined_counts",
 }
 
 
@@ -72,8 +73,44 @@ def _pdf_artifact(path: Path, root: Path, output_dir: Path) -> dict:
     artifact = _artifact(path, root, output_dir)
     with path.open("rb") as handle:
         if handle.read(5) != b"%PDF-" or path.stat().st_size <= 5:
-            raise PlanExecutionError("execution.output", f"Invalid CPI PDF: {path.name}")
+            raise PlanExecutionError("execution.output", f"Invalid scientific PDF: {path.name}")
     return artifact
+
+
+def _collect_snp_auxiliary(output_dir: Path, root: Path, genotypes: dict) -> dict:
+    """Require the complete SNPcall 2.0 result, including native summaries."""
+    summary = output_dir / "summary"
+    table = summary / "SNPcall_AllGenotypes.txt"
+    genotype_artifact = _artifact(table, root, output_dir)
+    actual = {}
+    for number, row in table_rows(table, {"chr", "pos", "REF", "ALT", "GT_sample_0001"}, "SNP genotypes"):
+        key = (row["chr"], nonnegative_integer(row["pos"], table, number, "pos", positive=True))
+        if key in actual:
+            raise PlanExecutionError("execution.output", "SNP genotype summary contains duplicate loci.")
+        actual[key] = (row["REF"], row["ALT"], row["GT_sample_0001"])
+    if actual != genotypes:
+        raise PlanExecutionError("execution.output", "SNP genotype summary differs from its sample result.")
+    resource_path = summary / "resources.tsv"
+    resource_artifact = _artifact(resource_path, root, output_dir)
+    resources = list(table_rows(resource_path, {"sample", "seconds", "resident_MB_start", "resident_MB_end"},
+                                "SNP resources"))
+    if len(resources) != 1 or resources[0][1]["sample"] != "sample_0001":
+        raise PlanExecutionError("execution.output", "SNP resource summary must contain the native sample exactly once.")
+    _, resource = resources[0]
+    for column in ("seconds", "resident_MB_start", "resident_MB_end"):
+        raw = resource[column]
+        if raw == "NA" and column != "seconds":
+            continue
+        try:
+            value = float(raw)
+        except ValueError as exc:
+            raise PlanExecutionError("execution.output", f"Invalid SNP resource value: {column}") from exc
+        if not math.isfinite(value) or value < 0:
+            raise PlanExecutionError("execution.output", f"Invalid SNP resource value: {column}")
+    plots = [_pdf_artifact(output_dir / "plots" / "sample_0001" / f"sample_0001_{name}.pdf", root, output_dir)
+             for name in ("N_genotypes", "Ref_read_count", "Alt_read_count", "Other_read_count")]
+    plots.append(_pdf_artifact(summary / "Unassigned_genotypes.pdf", root, output_dir))
+    return {"genotypes": genotype_artifact, "resources": resource_artifact, "plots": plots}
 
 
 def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
@@ -155,12 +192,15 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
     if step["workflow"] == "snp-call":
         path = output_dir / "SNPcall_output.txt"
         artifact = _artifact(path, root, output_dir)
+        expected = {(record.chromosome, record.position): record for record in
+                    read_snp_list(Path(request["panel"]))}
         with path.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t", strict=True)
             columns = reader.fieldnames or []
             if not _SNP_COLUMNS.issubset(columns) or len(columns) != len(set(columns)):
                 raise PlanExecutionError("execution.output", "SNPcall result columns are missing or duplicated.")
             found = set()
+            genotypes = {}
             warnings = []
             for number, row in enumerate(reader, 2):
                 if None in row or any(value is None for value in row.values()):
@@ -172,15 +212,40 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
                 if key in found:
                     raise PlanExecutionError("execution.output", "SNPcall result contains duplicate loci.")
                 found.add(key)
+                genotypes[key] = (row["REF"], row["ALT"], row["GT"])
+                panel_record = expected.get(key)
+                if panel_record is None or (row["REF"], row["ALT"]) != (
+                        panel_record.reference, panel_record.alternative):
+                    raise PlanExecutionError("execution.output", "SNPcall result alleles or loci differ from the selected panel.")
                 counts = [nonnegative_integer(row[column], path, number, column)
-                          for column in ("N_Reference", "N_Alternative", "N_Altro")]
+                          for column in ("N_REF", "N_ALT", "N_Other")]
                 if nonnegative_integer(row["total_count"], path, number, "total_count") != sum(counts):
                     raise PlanExecutionError("execution.output", "SNPcall total_count does not equal the read-count sum.")
                 warnings.extend(_numeric_warnings(row, {"ratio"}, path, number, allow_missing=sum(counts[:2]) == 0))
-        expected = set(read_snp_positions(Path(request["panel"]), for_bed=request["mode"] == "bam"))
+                for column in ("GL0", "GL1", "GL2"):
+                    if row[column] == "NA":
+                        warnings.extend(_numeric_warnings(row, {column}, path, number,
+                                                          allow_missing=sum(counts[:2]) == 0))
+                        continue
+                    try:
+                        likelihood = float(row[column])
+                    except ValueError as exc:
+                        raise PlanExecutionError("execution.output", f"Invalid SNPcall {column}.") from exc
+                    # Q=0 legitimately produces log(0) = -Inf in this model.
+                    if math.isnan(likelihood) or likelihood == math.inf:
+                        raise PlanExecutionError("execution.output", f"Invalid SNPcall {column}: NaN or +Inf.")
+                if row["GT"] not in {"NA", "0/0", "0/1", "1/1"}:
+                    raise PlanExecutionError("execution.output", "SNPcall genotype must be 0/0, 0/1, 1/1 or NA.")
+                if ((not sum(counts[:2]) or counts[2] * 10 >= sum(counts)) and row["GT"] != "NA"):
+                    raise PlanExecutionError("execution.output", "SNPcall genotype violates the unassigned-genotype rule.")
+                if row["reads_discarded_for_indels"] != "NA":
+                    nonnegative_integer(row["reads_discarded_for_indels"], path, number,
+                                        "reads_discarded_for_indels")
+                warnings.extend(_numeric_warnings(row, {"ratio_reads_discarded_for_indels"},
+                                                  path, number, allow_missing=True))
         # R outer-joins the selected panel, retaining zero-coverage loci. A
         # header-only file is therefore incomplete for every valid panel.
-        if found != expected:
+        if found != set(expected):
             raise PlanExecutionError("execution.output", "SNPcall result loci do not match the selected panel.")
         preparation = []
         if request["mode"] == "bam":
@@ -188,6 +253,7 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
             preparation = [{"kind": kind, **_artifact(work / name, root, work)}
                            for kind, name in (("regions-bed", "snp_regions.bed"), ("pileup", "pileup.txt"))]
         return {"snp-tables": [{"sample": step["inputs"]["sample"], **artifact}],
+                "snp-summary": _collect_snp_auxiliary(output_dir, root, genotypes),
                 "preparation": preparation, "quality_warnings": warnings}
     if step["workflow"] == "dnp-call":
         directory = output_dir / "individual_outputs"

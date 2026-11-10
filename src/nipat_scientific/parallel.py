@@ -18,8 +18,9 @@ THREAD_LIMITS = {
 def execution_environment(work_dir: Path | None = None):
     """Keep each step's effective worker decisions in its own writable directory.
 
-    Workflow steps are sequential. R owns the single bounded process pool within
-    each step; threaded numeric libraries must not multiply that process budget.
+    Mixed plans execute steps in order. Independent SNP batches isolate samples
+    in separate workers whose R pools stay serial; other steps may use the shared
+    bounded R pool. Threaded libraries must not multiply the process budget.
     """
     # Native R invocation has no managed work directory but must respect the
     # same thread budget as validated requests and workflow plans.

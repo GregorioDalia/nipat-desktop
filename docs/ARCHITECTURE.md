@@ -91,7 +91,9 @@ permessi dell'account che ha avviato WSL.
 ## Contratto tra client e motore
 
 Ogni analisi produce una richiesta JSON con versione di schema 1 e una delle
-interfacce `dnp-call-v1`, `snp-call-v1`, `contamination-v1` o `cpi-v1`.
+interfacce `dnp-call-v1`, `snp-call-v2`, `contamination-v1` o `cpi-v1`.
+La seconda versione dell'interfaccia SNP identifica il modello SNPcall 2.0
+e il relativo output a 17 colonne; il piano mantiene lo schema versione 1.
 La richiesta contiene percorsi interni al container, parametri e destinazioni.
 Il motore valida nuovamente i file e prepara gli input prima di avviare R.
 I piani usano uno schema distinto, identificato da `schema_version: 1`,

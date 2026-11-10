@@ -205,6 +205,146 @@ class RevisedRAcceptanceTests(unittest.TestCase):
             with self.subTest(case=name), self.assertRaisesRegex(ValueError, "Multi-BAM PDF comparisons are incomplete"):
                 self.verify()
 
+    def snp2_report(self):
+        self.audited_report()
+        self.record["version"] = self.manifest["version"] = "0.8.30"
+        self.report["snp_reference"] = copy.deepcopy(acceptance.SNP2_REFERENCE)
+        frozen = Path(__file__).resolve().parents[2] / acceptance.SNP2_REFERENCE["frozen_path"]
+        self.sources[COMMIT][acceptance.SNP2_REFERENCE["frozen_path"]] = frozen.read_bytes()
+        self.report["comparison"].update(pdf_pixels="candidate-serial-vs-parallel",
+                                         pdf_reference="structural-and-reviewed-presentation")
+        self.sources[COMMIT][acceptance.PRESENTATION_SOURCE] = b"candidate plotting source"
+        self.report["supporting_source_sha256"] = {
+            acceptance.PRESENTATION_SOURCE: digest(self.sources[COMMIT][acceptance.PRESENTATION_SOURCE]),
+        }
+        for name, workflow in acceptance.SNP2_CASES.items():
+            self.report["cases"].append({"case": name, "workflow": workflow, "status": "passed",
+                "unrounded_r_values": "identical", "table_sha256": {"result.tsv": "c" * 64}, "plots": {}})
+        for case in self.report["cases"]:
+            case["scientific_reference"] = "SNPcall 2.0" if case["workflow"] == "snp-call" else "NIPAT 0.8.5"
+            case["plots_comparison"] = "renderable-and-bounded"
+            for plot in case["plots"].values():
+                plot["page_size_points"] = [720, 432]
+            if "execution_variants" not in case:
+                compared = {key: copy.deepcopy(case[key]) for key in
+                            ("status", "unrounded_r_values", "table_sha256", "plots")}
+                case["execution_variants"] = {"candidate": compared}
+                if case["plots"]:
+                    case["execution_variants"]["parallel"] = copy.deepcopy(compared)
+            for name, variant in case["execution_variants"].items():
+                variant["plots"] = copy.deepcopy(case["plots"])
+                variant["plots_comparison"] = ("renderable-and-bounded" if name == "candidate"
+                                                else "candidate-serial-exact-pixels")
+                variant["execution_configuration"] = {
+                    "requested_mode": "serial" if name == "candidate" else "auto",
+                    "requested_max_workers": None if name == "candidate" else 2,
+                }
+        helper = acceptance.PRESENTATION_HELPER
+        self.sources[COMMIT][helper] = b"histogram boundaries and PDF presentation checks"
+        self.report["helpers"].append({"path": helper, "status": "passed", "sha256": digest(self.sources[COMMIT][helper])})
+        self.write_report()
+
+    def test_0830_requires_both_scientific_references_and_corrected_presentation(self):
+        self.snp2_report()
+        checked = self.verify()
+        self.assertEqual((checked["cases_verified"], checked["focused_scripts_verified"]), (26, 12))
+        self.assertEqual(checked["snp_reference"], acceptance.SNP2_REFERENCE)
+        self.assertFalse(checked["domain_validation_claimed"])
+
+    def test_0830_rejects_missing_or_relabelled_scientific_references(self):
+        self.snp2_report()
+        complete = copy.deepcopy(self.report)
+        mutations = [lambda r: r.pop("snp_reference"),
+                     lambda r: r["snp_reference"].update(source_commit="f" * 40),
+                     lambda r: r["snp_reference"].update(sha256="f" * 64),
+                     lambda r: r["snp_reference"].update(repository="other/NEWPAT"),
+                     lambda r: r["cases"][0].pop("scientific_reference"),
+                     lambda r: r["cases"][0].update(scientific_reference="SNPcall 2.0")]
+        for index, mutate in enumerate(mutations):
+            self.report = copy.deepcopy(complete)
+            mutate(self.report)
+            self.write_report()
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                self.verify()
+        self.report = copy.deepcopy(complete)
+        case = next(item for item in self.report["cases"] if item["workflow"] == "snp-call")
+        case["scientific_reference"] = "NIPAT 0.8.5"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "wrong algorithm reference"):
+            self.verify()
+
+    def test_0830_frozen_snp_reference_is_independently_pinned(self):
+        self.snp2_report()
+        path = acceptance.SNP2_REFERENCE["frozen_path"]
+        self.sources[COMMIT][path] += b"\n# changed scientific oracle\n"
+        with self.assertRaisesRegex(ValueError, "pinned upstream bytes"):
+            self.verify()
+        # A candidate cannot bless its own altered oracle by updating the report.
+        self.report["snp_reference"]["sha256"] = digest(self.sources[COMMIT][path])
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "immutable SNPcall 2.0"):
+            self.verify()
+
+    def test_0830_requires_all_new_cases_and_presentation_helper(self):
+        self.snp2_report()
+        complete = copy.deepcopy(self.report)
+        for field, identity, names in (("cases", "case", acceptance.SNP2_CASES),
+                                       ("helpers", "path", [acceptance.PRESENTATION_HELPER])):
+            for name in names:
+                self.report = copy.deepcopy(complete)
+                self.report[field] = [item for item in self.report[field] if item[identity] != name]
+                self.write_report()
+                with self.subTest(missing=name), self.assertRaises(ValueError):
+                    self.verify()
+
+    def test_0830_rejects_false_or_incomplete_pdf_comparisons(self):
+        self.snp2_report()
+        complete = copy.deepcopy(self.report)
+        mutations = [lambda c: c.pop("execution_variants"),
+                     lambda c: c["execution_variants"].pop("parallel"),
+                     lambda c: c.pop("plots_comparison"),
+                     lambda c: c["execution_variants"]["parallel"].update(plots_comparison="exact-to-0.8.5"),
+                     lambda c: c["execution_variants"]["parallel"].update(plots={}),
+                     lambda c: c["execution_variants"]["parallel"].update(table_sha256={"result.tsv": "e" * 64}),
+                     lambda c: c["execution_variants"]["candidate"].update(plots_comparison="not-compared"),
+                     lambda c: c["execution_variants"]["parallel"].pop("execution_configuration"),
+                     lambda c: c["execution_variants"]["parallel"]["execution_configuration"].update(requested_mode="serial"),
+                     lambda c: c["plots"]["plot0.pdf"].update(page_size_points=[720, 10000])]
+        for index, mutate in enumerate(mutations):
+            self.report = copy.deepcopy(complete)
+            mutate(self.report["cases"][0])
+            self.write_report()
+            with self.subTest(index=index), self.assertRaises(ValueError):
+                self.verify()
+
+    def test_0830_cannot_claim_old_pixel_oracle_or_unbound_plotting_source(self):
+        self.snp2_report()
+        complete = copy.deepcopy(self.report)
+        for mutation in (lambda r: r["comparison"].update(pdf_pixels="exact"),
+                         lambda r: r["comparison"].pop("pdf_reference"),
+                         lambda r: r.pop("supporting_source_sha256"),
+                         lambda r: r["supporting_source_sha256"].update({acceptance.PRESENTATION_SOURCE: "e" * 64})):
+            self.report = copy.deepcopy(complete)
+            mutation(self.report)
+            self.write_report()
+            with self.assertRaises(ValueError):
+                self.verify()
+
+    def test_new_presentation_policy_does_not_relax_0820_acceptance(self):
+        self.snp2_report()
+        self.record["version"] = self.manifest["version"] = "0.8.20"
+        with self.assertRaisesRegex(ValueError, "exact tables, unrounded R values and PDF pixels"):
+            self.verify()
+
+    def test_0830_prereleases_cannot_downgrade_the_new_scientific_contract(self):
+        self.snp2_report()
+        self.record["version"] = self.manifest["version"] = "0.8.30rc1"
+        self.verify()
+        self.report["cases"] = [item for item in self.report["cases"] if item["case"] != "dnp-multi-blocks-6"]
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "Required scientific differential cases"):
+            self.verify()
+
     def test_old_schema_still_rejects_revised_r_even_with_reviewed_hashes(self):
         record = copy.deepcopy(self.record)
         record.update(schema_version=5)
