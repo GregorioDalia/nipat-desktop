@@ -11,11 +11,11 @@ import tempfile
 import textwrap
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from nipat_scientific.executor import _atomic_json, _Cancellation, execute_plan
 from nipat_scientific.parallel import THREAD_LIMITS
-from nipat_scientific.snp_parallel import execute_independent_snp_steps
+from nipat_scientific.snp_parallel import _kill_group, execute_independent_snp_steps
 
 
 FAKE_R = r'''
@@ -132,6 +132,18 @@ class SnpParallelTests(unittest.TestCase):
                     self.assertFalse(execute_independent_snp_steps(plan, {}, self.root / "unused", {}, _Cancellation(),
                                      atomic_json=_atomic_json))
             budget.assert_not_called()
+
+    def test_darwin_exited_group_permission_error_does_not_mask_the_primary_failure(self):
+        for platform, returncode in (("darwin", 0), ("darwin", 17), ("darwin", None), ("linux", 0)):
+            with self.subTest(platform=platform, returncode=returncode):
+                worker = Mock(pid=123, poll=Mock(return_value=returncode))
+                with patch("nipat_scientific.snp_parallel.sys.platform", platform), \
+                        patch("nipat_scientific.snp_parallel.os.killpg", side_effect=PermissionError(errno.EPERM, "no signalable members")):
+                    if platform == "darwin" and returncode is not None:
+                        _kill_group(worker, signal.SIGTERM)
+                    else:
+                        with self.assertRaises(PermissionError):
+                            _kill_group(worker, signal.SIGTERM)
 
     def test_state_replacement_during_worker_execution_cannot_abort_the_batch(self):
         # A host-mounted filesystem need not let the coordinator open a record

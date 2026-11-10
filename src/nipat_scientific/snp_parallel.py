@@ -65,6 +65,12 @@ def _kill_group(process, signum):
         os.killpg(process.pid, signum)
     except ProcessLookupError:
         pass
+    except PermissionError:
+        # Darwin can retain an exited group's zombies and return EPERM when
+        # no signalable members remain. Never hide denial for a live worker
+        # or on platforms where this is not the exited-group convention.
+        if sys.platform != "darwin" or process.poll() is None:
+            raise
 
 
 def _stop_workers(active):

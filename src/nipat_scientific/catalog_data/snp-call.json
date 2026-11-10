@@ -937,7 +937,8 @@
         "worker_internal_parallelism": 1,
         "coordinator": "single writer of workflow-state.json",
         "failure": "stop active worker process groups and do not launch pending samples",
-        "state_collection": "read only after worker exit; retry read/JSON failures up to 20 times, 50 ms between attempts"
+        "state_collection": "read only after worker exit; retry read/JSON failures up to 20 times, 50 ms between attempts",
+        "group_cleanup": "Darwin EPERM is ignored only after worker exit; permission errors on live workers remain fatal"
       },
       "description": {
         "it": "Un piano di soli SNP indipendenti può usare un pool di campioni limitato dal budget comune R. Ogni interprete worker possiede il proprio passaggio e gruppo di processi; samtools e R restano entro quel gruppo e i pool R interni sono seriali. Il coordinatore conserva identità e ordine nello stato, propaga errori e interruzioni e ferma il lavoro attivo prima di terminare. Piani misti, campione singolo e modalità seriale mantengono il percorso ordinato. Lo stato del singolo worker viene letto dopo la sua uscita, con tentativi limitati per errori temporanei di lettura; gli errori persistenti conservano file e causa originale. Un errore di lettura durante la chiusura non sostituisce il guasto principale e non impedisce la finalizzazione degli altri campioni.",
@@ -945,10 +946,10 @@
       },
       "evidence": {
         "path": "src/nipat_scientific/snp_parallel.py",
-        "sha256": "731b60437925f9e388a48788093526f3de39f57b2541e178344f24052a099b0b",
+        "sha256": "c73d45fb9d39ac5da3cbe56073285c27d3fb4a93d3fa85ba84aa647c49b922fe",
         "source_lines": [
           1,
-          270
+          276
         ],
         "dependencies": [
           {
