@@ -1,6 +1,6 @@
 # Accettazione degli installatori
 
-NIPAT Desktop 0.8.20 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+NIPAT Desktop 0.8.30 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
 macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
 identifica commit, build e checksum; distingue prove automatiche,
 osservazioni sui dispositivi e validazione scientifica di dominio.
@@ -60,10 +60,10 @@ una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
 Usare una build manuale **Installers (review build)** completata sul commit
 revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
 i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
-di build diverse. Consultare le note della versione da qualificare, incluse
-quelle della [stabile 0.8.20](RELEASE_0.8.20.md) e della
-[candidata 0.8.30](RELEASE_0.8.30.md); i risultati di qualificazione devono
-riferirsi ai pacchetti esatti.
+di build diverse. Consultare le [note della 0.8.30](RELEASE_0.8.30.md);
+i risultati di qualificazione devono riferirsi ai pacchetti esatti. Le
+[note della 0.8.20](RELEASE_0.8.20.md) conservano il contesto della
+precedente versione e delle sue verifiche.
 
 La sequenza è: costruire, raccogliere evidenze, revisionare il record,
 integrare sorgenti e record in `main` conservando il commit compilato,

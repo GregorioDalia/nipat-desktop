@@ -138,7 +138,11 @@ Lo schema 5 permette la revisione degli adattatori di presentazione,
 preservando gli script R vendorizzati. Lo schema 6 consente le modifiche
 revisionate ai quattro script noti e a `scientific/SHA256SUMS`, richiedendo
 `scientific_equivalence` con `reference_source_commit`, `report_path`,
-`report_sha256` e `runtime_image`. Il rapporto deve appartenere al bundle
+`report_sha256` e `runtime_image`. Dalla 0.8.30 è inoltre rivedibile il solo
+`scientific/vendor/NEWPAT/SNPcall/examples/output.txt`, aggiornato alle
+17 colonne di SNPcall 2.0: deve comparire nel delta con gli hash esatti
+prima/dopo. Gli input di esempio e gli altri asset scientifici restano protetti.
+Il rapporto deve appartenere al bundle
 `qualification-evidence.zip` della build accettata e confrontare sorgenti R
 esattamente corrispondenti al commit e all’immagine distribuiti. Il publisher
 verifica la baseline congelata contro il commit 0.8.5 e, dalla 0.8.30, anche

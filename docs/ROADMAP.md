@@ -1,9 +1,8 @@
 # Sviluppo e validazione
 
-La versione stabile di NIPAT Desktop è la **0.8.20**; il candidato corrente
-di sviluppo è la **0.8.30**, con integrazione di SNPcall 2.0 e revisione
-della presentazione dei risultati. Le [note 0.8.30](RELEASE_0.8.30.md)
-distinguono modifiche e verifiche. Il prodotto mantiene una CLI guidata e
+La versione stabile di NIPAT Desktop è la **0.8.30**, con integrazione
+di SNPcall 2.0 e revisione della presentazione dei risultati. Le
+[note 0.8.30](RELEASE_0.8.30.md) distinguono modifiche e verifiche. Il prodotto mantiene una CLI guidata e
 workflow automatici su Windows, macOS e Ubuntu. SNP usa il sorgente upstream
 2.0 congelato come riferimento; DNP, CPI e Contamination conservano la
 baseline numerica 0.8.5.
@@ -15,7 +14,7 @@ baseline numerica 0.8.5.
 | Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi degli utilizzi scientifici previsti. |
 | Tracciabilità | Collegare senza ambiguità nomi originali, identità interne, fasi e risultati. |
 | Uso delle risorse | Conservare la distinzione fra configurazione salvata, risorse effettive, suggerimenti e modifiche; Invio mantiene i valori correnti. |
-| Prestazioni | Qualificare la 0.8.30 con un unico budget di calcolo, anche nei batch SNP 2.0; conservare i blocchi DNP iniziali da 32 MiB / 64 loci e misurare tempi e RAM rispetto al riferimento scientifico di ciascun modulo. |
+| Prestazioni | Misurare la 0.8.30 su BAM reali con risorse fisse e un unico budget di calcolo, anche nei batch SNP 2.0; conservare i blocchi DNP iniziali da 32 MiB / 64 loci e confrontare tempi e RAM con il riferimento scientifico di ciascun modulo. |
 | Portabilità | Raccogliere prove reali Windows 10/11, Ubuntu e Mac Intel/Apple Silicon oltre ai controlli automatici. |
 | Interfaccia | Esporre fase, campione, tempo trascorso e attività anche senza diagnostica; usare avanzamento e tempo residuo solo quando misurabili o stimabili con dati sufficienti. |
 | GUI | Riutilizzare i contratti della CLI e gli eventi di avanzamento in una futura interfaccia grafica. |

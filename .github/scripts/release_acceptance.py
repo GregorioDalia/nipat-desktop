@@ -43,6 +43,7 @@ SNP2_CASES = dict.fromkeys(
     ("snp-varied-qualities", "snp-overlapping-windows", "snp-zero-coverage"), "snp-call")
 PRESENTATION_HELPER = "tests/r_optimization/presentation/check_plots.R"
 PRESENTATION_SOURCE = "src/nipat_scientific/plots.R"
+SNP2_EXAMPLE_OUTPUT = "scientific/vendor/NEWPAT/SNPcall/examples/output.txt"
 R_WORKFLOWS = {
     "scientific/vendor/DNPcall/DNPcall.R": "dnp-call",
     "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "cpi",
@@ -198,8 +199,13 @@ def verify_multibam_variants(case):
                     "Multi-BAM deterministic repeat is missing")
 
 
-def reviewable_path(path, *, reliability=False, multiplatform=False, revised_r=False):
+def reviewable_path(path, *, reliability=False, multiplatform=False, revised_r=False, version=None):
     if revised_r and path in set(R_WORKFLOWS) | {"scientific/SHA256SUMS"}:
+        return True
+    if revised_r and snp2_contract(version) and path == SNP2_EXAMPLE_OUTPUT:
+        # SNPcall 2.0 changes the bundled expected result from 9 to 17 columns.
+        # Its exact before/after bytes remain subject to the source delta review;
+        # input fixtures and all other scientific assets stay protected.
         return True
     if reliability:
         # The Python preparation, orchestration and packaging may evolve, but
@@ -442,7 +448,8 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                     and not PurePosixPath(path).is_absolute() and ".." not in PurePosixPath(path).parts
                     and "\\" not in path and not any(character.isspace() for character in path)
                     and PurePosixPath(path).suffix.casefold() != ".md"
-                    and reviewable_path(path, reliability=reliability, multiplatform=multiplatform, revised_r=revised_r),
+                    and reviewable_path(path, reliability=reliability, multiplatform=multiplatform,
+                                        revised_r=revised_r, version=version),
                     ("Only known scientific scripts and explicit operative sources can be reviewed" if revised_r
                      else "Only operative source changes outside protected vendored R can be reviewed" if multiplatform
                      else "Only explicit non-R operative source changes can be reviewed" if reliability
@@ -673,8 +680,9 @@ def verify_baseline(record, read_source):
     non-R operative changes without claiming operational equivalence to the
     historical manual observation. Schema 5 permits reviewed presentation adapters
     while preserving the vendored scientific R sources byte for byte. Schema 6
-    allows only the four known scientific scripts and their hash manifest to be
-    reviewed; separate evidence verification is mandatory before publication.
+    allows the four known scientific scripts and their hash manifest to be
+    reviewed, plus the bundled SNP example output from 0.8.30. Separate
+    evidence verification is mandatory before publication.
     """
     require(isinstance(record, dict) and type(record.get("schema_version")) is int
             and record["schema_version"] in (1, 2, 3, 4, 5, 6), "Unsupported acceptance schema")
@@ -729,7 +737,8 @@ def verify_baseline(record, read_source):
             if old == new:
                 unchanged += 1
                 continue
-            require(reviewable_path(path, reliability=reliability, multiplatform=multiplatform, revised_r=revised_r),
+            require(reviewable_path(path, reliability=reliability, multiplatform=multiplatform,
+                                    revised_r=revised_r, version=record["version"]),
                     f"Protected scientific or runtime source differs: {path}")
             changes.append({"path": path,
                             "before_sha256": hashlib.sha256(old).hexdigest() if old is not None else None,

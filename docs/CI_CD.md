@@ -1,7 +1,7 @@
 # Integrazione continua e distribuzione
 
 NIPAT verifica separatamente il client, il motore scientifico, gli installatori
-e il funzionamento sui dispositivi reali. La versione 0.8.20 distribuisce
+e il funzionamento sui dispositivi reali. La versione 0.8.30 distribuisce
 Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
@@ -44,8 +44,8 @@ prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
 ## Regressioni scientifiche
 
 Dalla 0.8.9 le modifiche R richiedono un confronto differenziale con i
-sorgenti congelati della 0.8.5. La candidata 0.8.30 usa invece il riferimento
-originale SNPcall 2.0 per SNP e mantiene NIPAT 0.8.5 per DNP, Contamination e
+sorgenti congelati della 0.8.5. Dalla 0.8.30 si usa invece il riferimento
+originale SNPcall 2.0 per SNP e si mantiene NIPAT 0.8.5 per DNP, Contamination e
 CPI. `scripts/verify_r_equivalence.py` esegue candidata e riferimento
 pertinente nello stesso runtime e conserva risultati, log e rapporto
 `r-equivalence.json`. Un errore o una differenza impedisce il completamento
@@ -53,7 +53,7 @@ del job scientifico. La build degli installatori applica lo stesso controllo
 prima dell'esportazione del runtime. I riferimenti di test non sono inclusi
 nel payload installato. I criteri sono descritti nel
 [piano di verifica 0.8.9](OPTIMIZATION_0.8.9.md) e nelle
-[note della candidata 0.8.30](RELEASE_0.8.30.md).
+[note della 0.8.30](RELEASE_0.8.30.md).
 
 Le tabelle esportate e i valori R non arrotondati devono coincidere con il
 rispettivo riferimento scientifico. Dalla 0.8.30, i grafici aggiornati sono
@@ -80,16 +80,16 @@ trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 Avviare **Installers (review build)** sul commit da distribuire, su `main`,
 `release/VERSIONE` o `release/VERSIONE-...`, con la stessa versione dichiarata
-dai sorgenti, ad esempio `release/0.8.20`. Il controllo
+dai sorgenti, ad esempio `release/0.8.30`. Il controllo
 `installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
 comune ai quattro pacchetti. La build produce:
 
 | Artefatto Actions | Pacchetto |
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`. |
-| `nipat-linux-setup` | `nipat-desktop_0.8.20_amd64.deb`. |
-| `nipat-macos-setup-arm64` | `NIPAT-0.8.20-macos-arm64.pkg`. |
-| `nipat-macos-setup-x86_64` | `NIPAT-0.8.20-macos-x86_64.pkg`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.30_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.30-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.30-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
 La release espone direttamente il file da installare per ciascuna piattaforma.
