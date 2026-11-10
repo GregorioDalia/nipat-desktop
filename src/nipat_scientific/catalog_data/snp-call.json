@@ -936,18 +936,19 @@
         "budget_authority": "shared R CPU/memory/process budget",
         "worker_internal_parallelism": 1,
         "coordinator": "single writer of workflow-state.json",
-        "failure": "stop active worker process groups and do not launch pending samples"
+        "failure": "stop active worker process groups and do not launch pending samples",
+        "state_collection": "read only after worker exit; retry read/JSON failures up to 20 times, 50 ms between attempts"
       },
       "description": {
-        "it": "Un piano di soli SNP indipendenti può usare un pool di campioni limitato dal budget comune R. Ogni interprete worker possiede il proprio passaggio e gruppo di processi; samtools e R restano entro quel gruppo e i pool R interni sono seriali. Il coordinatore conserva identità e ordine nello stato, propaga errori e interruzioni e ferma il lavoro attivo prima di terminare. Piani misti, campione singolo e modalità seriale mantengono il percorso ordinato.",
-        "en": "An independent SNP-only plan can use a sample pool bounded by the shared R budget. Each worker interpreter owns one step and process group; samtools and R remain within that group and internal R pools are serial. The coordinator preserves identity and order in state, propagates errors and cancellation and stops active work before exiting. Mixed plans, single samples and serial mode retain the ordered path."
+        "it": "Un piano di soli SNP indipendenti può usare un pool di campioni limitato dal budget comune R. Ogni interprete worker possiede il proprio passaggio e gruppo di processi; samtools e R restano entro quel gruppo e i pool R interni sono seriali. Il coordinatore conserva identità e ordine nello stato, propaga errori e interruzioni e ferma il lavoro attivo prima di terminare. Piani misti, campione singolo e modalità seriale mantengono il percorso ordinato. Lo stato del singolo worker viene letto dopo la sua uscita, con tentativi limitati per errori temporanei di lettura; gli errori persistenti conservano file e causa originale. Un errore di lettura durante la chiusura non sostituisce il guasto principale e non impedisce la finalizzazione degli altri campioni.",
+        "en": "An independent SNP-only plan can use a sample pool bounded by the shared R budget. Each worker interpreter owns one step and process group; samtools and R remain within that group and internal R pools are serial. The coordinator preserves identity and order in state, propagates errors and cancellation and stops active work before exiting. Mixed plans, single samples and serial mode retain the ordered path. Individual worker state is read after exit, with bounded retries for transient read failures; persistent errors retain the filename and original cause. A cleanup read error does not replace the primary failure or prevent the remaining samples from being finalized."
       },
       "evidence": {
         "path": "src/nipat_scientific/snp_parallel.py",
-        "sha256": "a32f5d4cbc34924645b948a0819dbac235478ec6459e7a3016616fc7b125de74",
+        "sha256": "731b60437925f9e388a48788093526f3de39f57b2541e178344f24052a099b0b",
         "source_lines": [
           1,
-          248
+          270
         ],
         "dependencies": [
           {

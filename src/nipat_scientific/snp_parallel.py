@@ -20,6 +20,8 @@ from nipat_scientific.errors import PlanExecutionError
 from nipat_scientific.parallel import THREAD_LIMITS
 
 _STARTED = time.monotonic()
+_STATE_READ_ATTEMPTS = 20
+_STATE_READ_DELAY = 0.05
 
 def _utc():
     return datetime.now(timezone.utc).isoformat()
@@ -79,17 +81,29 @@ def _stop_workers(active):
         log.close()
 
 
-def _merge_record(record, path):
-    if not path.exists():
-        return
-    try:
-        updated = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PlanExecutionError("execution.worker_state", "Cannot read the isolated SNP step state.") from exc
+def _merge_record(record, path, *, attempts=_STATE_READ_ATTEMPTS):
+    """Read a stopped worker's final record, without accepting a stale snapshot.
+
+    Host-backed mounts may briefly delay visibility of the last replacement.
+    Retry only read/decoding failures, with at most 0.95 seconds of delay.
+    Identity errors are permanent and must never be merged or retried.
+    """
+    for attempt in range(attempts):
+        try:
+            updated = json.loads(path.read_text(encoding="utf-8"))
+            break
+        except (OSError, ValueError) as exc:
+            if attempt + 1 == attempts:
+                raise PlanExecutionError(
+                    "execution.worker_state",
+                    f"Cannot read completed SNP step state {path.name} after {attempts} attempt(s): "
+                    f"{type(exc).__name__}: {exc}",
+                ) from exc
+            time.sleep(_STATE_READ_DELAY)
     if (not isinstance(updated, dict) or updated.get("id") != record["id"]
             or updated.get("workflow") != "snp-call"
             or updated.get("script_sha256") != record["script_sha256"]):
-        raise PlanExecutionError("execution.worker_state", "The isolated SNP step state has a different identity.")
+        raise PlanExecutionError("execution.worker_state", f"SNP step state {path.name} has a different identity.")
     record.clear()
     record.update(updated)
 
@@ -129,14 +143,16 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
             # Inspect all completed jobs before adding work: a failed sample
             # must not cause a fresh sample to start in the same polling cycle.
             for identifier, (process, record, record_path, log) in list(active.items()):
-                _merge_record(record, record_path)
                 code = process.poll()
                 if code is None:
                     continue
-                # The worker may have atomically committed its final record
-                # between the previous read and poll(); read after exit too.
-                _merge_record(record, record_path)
                 process.wait()
+                # Intermediate states are worker-owned and may be replaced on
+                # Windows/WSL host mounts. Progress already uses its own events;
+                # only read the final state once its writer has exited.
+                if code:
+                    state["exit_code"] = code if code > 0 else 128 - code
+                _merge_record(record, record_path)
                 log.close()
                 del active[identifier]
                 if code or record.get("status") != "succeeded":
@@ -167,6 +183,7 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
                     log.close()
                     raise
                 active[identifier] = (process, record, record_path, log)
+                record.update(status="running", started_utc=_utc())
                 next_index += 1
             if active:
                 time.sleep(0.05)
@@ -174,7 +191,12 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
     finally:
         _stop_workers(active)
         for _process, record, record_path, _log in active.values():
-            _merge_record(record, record_path)
+            try:
+                _merge_record(record, record_path, attempts=1)
+            except PlanExecutionError as exc:
+                # Keep the primary failure/cancellation and still finalize all
+                # siblings if a killed worker could not commit a readable state.
+                record["state_read_error"] = {"code": exc.code, "message": str(exc)}
             if record.get("status") in {"pending", "running"}:
                 record.update(status="cancelled", exit_code=cancellation.exit_code, finished_utc=_utc(),
                               error={"code": "execution.stopped", "message": "Stopped with the SNP batch."})
