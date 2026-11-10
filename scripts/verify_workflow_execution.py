@@ -547,12 +547,13 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
                     raise ValueError("The full plan lost the SNP result's sample identity.")
                 oracle = metadata / f"expected-{step_id}.tsv"
                 ref_count, alt_count = expected_counts
-                oracle.write_text(
-                    "chr\tpos\tReference\tAlternative\tN_Reference\tN_Alternative\tN_Altro\ttotal_count\tratio\n"
-                    + "".join(f"chrDnpSynthetic\t{position}\t{ref}\t{alt}\t{ref_count}\t{alt_count}\t0\t100\t{ref_count / 100}\n"
-                              for position, ref, alt in ((50, "A", "G"), (140, "T", "C"), (230, "G", "A"))),
-                    encoding="utf-8",
-                )
+                # Every template has central Phred40. Use the independent
+                # analytical2.0 oracle for counts, GL/GT and allele observations.
+                from verify_snp_workflow import _expected
+                _expected(oracle, [
+                    ("chrDnpSynthetic", position, ref, alt, ref_count, alt_count, 0, 100, ref_count / 100)
+                    for position, ref, alt in ((50, "A", "G"), (140, "T", "C"), (230, "G", "A"))
+                ])
                 compare_snp_outputs(oracle, _artifact(run, snp_artifacts[0]))
                 for artifact in snp_record["artifacts"]["preparation"]:
                     _artifact(run, artifact)

@@ -60,6 +60,28 @@ class PanelTests(unittest.TestCase):
             write_snp_bed(positions, destination)
             self.assertEqual(destination.read_text(encoding="utf-8"), "chr1\t98\t101\n")
 
+    def test_snp2_native_panel_coordinate_limits_and_alleles(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "SNPs.tsv"
+            source.write_text("chr\tpos\tref\talt\nchr1\t2\ta\tg\nchrX\t2147483646\tC\tT\n")
+            self.assertEqual(read_snp_positions(source), [("chr1", 2), ("chrX", 2147483646)])
+            for row in ("chr1\t1\tA\tG", "chr1\t2147483647\tA\tG",
+                        "chr:1\t10\tA\tG", "chr 1\t10\tA\tG", "chr1\t10\tA\tA",
+                        "chr1\t10\tAA\tG", "chr1\t10\tA\tN"):
+                source.write_text("chr\tpos\tref\talt\n" + row + "\n")
+                for for_bed in (False, True):
+                    with self.subTest(row=row, for_bed=for_bed), self.assertRaises(ValidationError):
+                        read_snp_positions(source, for_bed=for_bed)
+
+    def test_snp2_native_panel_rejects_duplicate_coordinates_and_extra_columns(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "SNPs.tsv"
+            for text in ("chr\tpos\tref\talt\nchr1\t10\tA\tG\nchr1\t10\tA\tT\n",
+                         "chr\tpos\tref\talt\textra\nchr1\t10\tA\tG\tignored\n"):
+                source.write_text(text)
+                with self.assertRaises(ValidationError):
+                    read_snp_positions(source)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -9,7 +9,7 @@ import unittest
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.plan import validate_plan
 from nipat_scientific.presentation import (
-    _copy_table, _filename, _unique_labels, finish_presentation,
+    _copy_table, _filename, _interpretation_notes, _unique_labels, finish_plan_presentation, finish_presentation,
     normalize_presentation, prepare_presentation, step_presentation,
     validate_request_presentation,
 )
@@ -79,6 +79,21 @@ class PresentationTests(unittest.TestCase):
             native = output / "SNPcall_output.txt"
             native.write_text("pos\tN_REF\n1\t010\n", encoding="utf-8")
             before = native.read_bytes()
+            config = json.loads((work / "presentation-config.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(config["plots"]), 5)
+            self.assertEqual(len(config["tables"]), 3)
+            for source, entry in config["tables"].items():
+                path = output / source
+                if path == native:
+                    continue
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("sample\tseconds\n sample_0001\t1.25\n" if source.endswith("resources.tsv")
+                                else "chr\tpos\tGT_sample_0001\n1\t1\tNA\n", encoding="utf-8")
+            for source, entry in config["plots"].items():
+                path = output / source
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"%PDF-native")
+                (output / "presentation" / entry["target"]).write_bytes(b"%PDF-readable")
             report = finish_presentation(request, root)
             self.assertEqual(report["status"], "complete")
             index = (root / report["index"]["path"]).read_text(encoding="utf-8")
@@ -89,6 +104,26 @@ class PresentationTests(unittest.TestCase):
             with readable.open(encoding="utf-8", newline="") as handle:
                 rows = list(csv.reader(handle, delimiter="\t"))
             self.assertEqual(rows, [["Sample", "pos", "N_REF"], ["<script>alert(1)<.pileup", "1", "010"]])
+
+    def test_resources_relabel_sample_without_changing_measurements(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = Path(tmp) / "resources.tsv", Path(tmp) / "readable.tsv"
+            source.write_text("sample\tseconds\tresident_MB_start\tresident_MB_end\n"
+                              "sample_0001\t1.2300\t123.456\t100.000\n", encoding="utf-8")
+            _copy_table(source, target, {"sample_0001": "Campione à.bam"})
+            self.assertEqual(target.read_text(encoding="utf-8").splitlines()[1],
+                             "Campione à.bam\t1.2300\t123.456\t100.000")
+
+    def test_result_notes_distinguish_units_missingness_and_coverage(self):
+        snp = _interpretation_notes("snp-call")
+        self.assertIn("log-verosimiglianze naturali", snp)
+        self.assertIn("N_REF / (N_REF + N_ALT)", snp)
+        self.assertIn("non la sola presenza di copertura", snp)
+        self.assertIn("non misurano il picco", snp)
+        self.assertIn("CPI_medianFF", _interpretation_notes("cpi"))
+        self.assertIn("0,025 corrisponde al 2,5%", _interpretation_notes("contamination"))
+        for workflow in ("snp-call", "dnp-call", "cpi", "contamination"):
+            self.assertIn("non equivale a zero", _interpretation_notes(workflow))
 
     def test_missing_plot_fails_visibly(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -107,6 +142,25 @@ class PresentationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValidationError, "Esportazione assente"):
                 finish_presentation(request, root)
             self.assertFalse((root / "work/presentation-report.json").exists())
+
+    def test_plan_index_links_complete_snp_comparison(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            folder = root / "snp_summary/group_0001"
+            folder.mkdir(parents=True)
+            records = {}
+            for key, name in (("genotypes", "merged_genotypes.tsv"), ("resources", "resources.tsv"),
+                              ("sample_labels", "sample_labels.tsv"), ("plot", "Unassigned_genotypes.pdf")):
+                path = folder / name
+                path.write_text("synthetic", encoding="utf-8")
+                records[key] = {"path": path.relative_to(root).as_posix()}
+            group = {"id": "group_0001", "samples": ["a", "b"], "plots": [records.pop("plot")], **records}
+            report = finish_plan_presentation({"presentation": {}},
+                                              {"status": "succeeded", "steps": [], "snp_summary": [group]}, root)
+            content = (root / report["index"]["path"]).read_text(encoding="utf-8")
+            self.assertIn("2 campioni", content)
+            self.assertIn("../snp_summary/group_0001/merged_genotypes.tsv", content)
+            self.assertIn("non la sola copertura", content)
 
     def test_reordered_plan_inputs_keep_identity_not_position(self):
         plan = {"presentation": {"samples": {"a": "A.bam", "b": "B.bam"}, "pairs": {}}}

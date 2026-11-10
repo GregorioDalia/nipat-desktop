@@ -39,8 +39,8 @@ def _absolute_path(value: object, label: str) -> Path:
 def prepare_snp(request: object) -> SnpPreparation:
     """Validate a request before writes and describe samtools/R execution.
 
-    The existing panel reader, three-base windows and mpileup options are
-    preserved. Indexes are supplied as read-only sidecars, never generated next
+    SNPcall 2.0 uses three-base windows, base qualities and uncapped depth.
+    Indexes are supplied as read-only sidecars, never generated next
     to user inputs. Only BAM mode writes the BED and later produces a pileup.
     """
     if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
@@ -108,7 +108,7 @@ def prepare_snp(request: object) -> SnpPreparation:
         pileup = generated_pileup
         command = [
             "samtools", "mpileup", "-f", str(reference), "-l", str(bed_file),
-            "--output-QNAME", "--no-output-ins", "--no-output-del", "--no-output-ends",
+            "--output-QNAME", "-d", "0", "--no-output-ins", "--no-output-del", "--no-output-ends",
             "-o", str(pileup), str(bam),
         ]
     return SnpPreparation(command, [

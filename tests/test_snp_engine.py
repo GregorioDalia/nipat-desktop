@@ -59,7 +59,7 @@ class SnpEngineTests(unittest.TestCase):
         self.assertEqual((self.work / "snp_regions.bed").read_text(), "chr1\t98\t101\n")
         self.assertEqual(prepared.preparation_command, [
             "samtools", "mpileup", "-f", str(self.reference), "-l", str(self.work / "snp_regions.bed"),
-            "--output-QNAME", "--no-output-ins", "--no-output-del", "--no-output-ends",
+            "--output-QNAME", "-d", "0", "--no-output-ins", "--no-output-del", "--no-output-ends",
             "-o", str(self.work / "pileup.txt"), str(self.bam),
         ])
         self.assertEqual(prepared.generated_pileup, self.work / "pileup.txt")
@@ -67,12 +67,23 @@ class SnpEngineTests(unittest.TestCase):
         self.assertEqual(prepared.native_arguments[1], str(prepared.generated_pileup))
         self.assertEqual(original, {path: path.read_bytes() for path in self.inputs.iterdir()})
 
-    def test_position_one_remains_valid_only_for_existing_pileup(self):
+    def test_position_one_is_invalid_for_both_modes_in_snp2(self):
         self.panel.write_text("pos\tref\talt\nchr1:1\tA\tC\n", encoding="utf-8")
-        with self.assertRaisesRegex(ValidationError, "posizione troppo bassa"):
-            prepare_snp(self.bam_request())
-        self.assert_no_preparation()
-        self.assertIsNone(prepare_snp(self.request).preparation_command)
+        for request in (self.request, self.bam_request()):
+            with self.assertRaisesRegex(ValidationError, "posizione fuori intervallo"):
+                prepare_snp(request)
+            self.assert_no_preparation()
+
+    def test_snp2_four_column_panel_and_legacy_normalize_identically(self):
+        prepared = prepare_snp(self.request)
+        normalized = (self.work / "SNPpanel.tsv").read_text()
+        self.assertEqual(normalized, "chr\tpos\tref\talt\nchr1\t100\tA\tC\n")
+        self.panel.write_text("chr\tpos\tref\talt\nchr1\t100\ta\tc\n", encoding="utf-8")
+        original = self.panel.read_bytes()
+        second = {**self.request, "work_dir": str(self.root / "work2"), "out_dir": str(self.root / "output2")}
+        prepare_snp(second)
+        self.assertEqual((self.root / "work2/SNPpanel.tsv").read_text(), normalized)
+        self.assertEqual(self.panel.read_bytes(), original)
 
     def test_schema_and_mode_mismatches_fail_before_writes(self):
         cases = [

@@ -399,3 +399,12 @@ docs/RELEASE_0.8.14.md
 docs/RELEASE_0.8.20.md
 docs/AUDIT_0.8.20.md
 installer/windows/collect-windows-security.ps1
+
+# SNPcall 2.0 integration and corrected scientific presentation (0.8.30).
+src/nipat_scientific/plots.R
+src/nipat_scientific/snp_summary.py
+src/nipat_scientific/snp_parallel.py
+docs/RELEASE_0.8.30.md
+tests/snp_output_helpers.py
+tests/test_snp_summary.py
+tests/test_snp_parallel.py

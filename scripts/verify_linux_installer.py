@@ -11,6 +11,7 @@ import csv
 import hashlib
 import io
 import json
+import math
 import os
 from pathlib import Path
 import platform
@@ -200,6 +201,12 @@ def check_automatic_plan(run_directory: Path, fixture: Path, manifest: dict,
         check_dnp_table(checked_artifact(root, artifact), fixture, sample)
     # In the synthetic SAMs, Other dinucleotides share the REF first base.
     snp_counts = (((21, 0), (11, 10), (1, 20)), ((1, 20), (13, 8), (21, 0)))
+    version = re.match(r"^(\d+)\.(\d+)\.(\d+)", manifest["version"])
+    require(version is not None, "Installed package has an invalid version.")
+    snp2 = tuple(map(int, version.groups())) >= (0, 8, 30)
+    allele_columns = ("REF", "ALT") if snp2 else ("Reference", "Alternative")
+    count_columns = (("N_REF", "N_ALT", "N_Other", "total_count") if snp2 else
+                     ("N_Reference", "N_Alternative", "N_Altro", "total_count"))
     for number, expected_counts in enumerate(snp_counts, 1):
         identifier = f"sample_{number:04d}"
         step = steps[f"snp_{number:04d}"]
@@ -213,10 +220,30 @@ def check_automatic_plan(run_directory: Path, fixture: Path, manifest: dict,
                 "Installed SNP loci differ from the synthetic design.")
         for position, alleles, counts in zip((50, 140, 230), (("A", "G"), ("T", "C"), ("G", "A")), expected_counts, strict=True):
             row = found[("chrDnpSynthetic", position)]
-            require((row["Reference"], row["Alternative"]) == alleles
-                    and tuple(int(row[name]) for name in ("N_Reference", "N_Alternative", "N_Altro", "total_count"))
+            require(tuple(row[name] for name in allele_columns) == alleles
+                    and tuple(int(row[name]) for name in count_columns)
                     == (*counts, 0, 21) and abs(float(row["ratio"]) - counts[0] / 21) < 1e-12,
                     "Installed SNP counts differ from the independent SAM oracle.")
+            if snp2:
+                require(set(row) == {"chr", "pos", "REF", "ALT", "N_REF", "N_ALT", "N_Other",
+                        "total_count", "ratio", "GL0", "GL1", "GL2", "GT", "reads_discarded_for_indels",
+                        "ratio_reads_discarded_for_indels", "combined_bases", "combined_counts"},
+                        "Installed SNPcall2.0 output does not have all17 scientific columns.")
+                # The committed SAM declares21 indel-free Phred40 observations.
+                error = 10 ** -4
+                likelihoods = (counts[0] * math.log1p(-error) + counts[1] * math.log(error),
+                               21 * math.log(0.5),
+                               counts[0] * math.log(error) + counts[1] * math.log1p(-error))
+                genotype = ("0/0", "0/1", "1/1")[max(range(3), key=likelihoods.__getitem__)]
+                observed = {base: count for base, count in sorted(zip(alleles, counts)) if count}
+                require(all(math.isclose(float(row[f"GL{index}"]), value, rel_tol=1e-12, abs_tol=1e-12)
+                            for index, value in enumerate(likelihoods)) and row["GT"] == genotype,
+                        "Installed SNP2 likelihoods or genotype differ from the independent Phred40 oracle.")
+                require(int(row["reads_discarded_for_indels"]) == 0
+                        and float(row["ratio_reads_discarded_for_indels"]) == 0
+                        and row["combined_bases"] == "-".join(observed)
+                        and row["combined_counts"] == "-".join(str(count) for count in observed.values()),
+                        "Installed SNP2 indel statistics or allele observations differ from the SAM oracle.")
         preparation = step["artifacts"]["preparation"]
         require(len(preparation) == 2 and {item["kind"] for item in preparation} == {"regions-bed", "pileup"}
                 and step["preparation_exit_code"] == 0 and (root / step["preparation_log"]).is_file(),

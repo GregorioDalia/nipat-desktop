@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import importlib.util
+import inspect
 import io
 import json
 import os
@@ -15,6 +16,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+from snp_output_helpers import write_snp_auxiliary
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -65,12 +67,12 @@ class EnginePackageTests(unittest.TestCase):
                          hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
         self.assertEqual(metadata["workflow_interfaces"], {
-            "contamination": "contamination-v1", "snp-call": "snp-call-v1", "dnp-call": "dnp-call-v1",
+            "contamination": "contamination-v1", "snp-call": "snp-call-v2", "dnp-call": "dnp-call-v1",
             "cpi": "cpi-v1",
         })
         self.assertEqual(metadata["plan_execution"], {
             "interface": "workflow-plan-execution-v1", "schema_version": 1,
-            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
+            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         self.assertEqual(metadata["scientific_validation"], {
@@ -78,9 +80,11 @@ class EnginePackageTests(unittest.TestCase):
             "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
             "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
             "snp_alleles": "uppercase-working-copy",
+            "snp_model": "SNPcall-2.0", "snp_output_columns": 17,
+            "snp_panel_formats": ["chr-pos-ref-alt", "legacy-chr:pos-ref-alt"],
         })
         hashes = metadata["preparation"]["file_sha256"]
-        self.assertEqual(len(hashes), 27)
+        self.assertEqual(len(hashes), 1 + len(engine.PREPARATION_FILES) + len(engine.CATALOG_FILES))
         self.assertIn("lib/nipat_scientific/performance.py", hashes)
         for name in ("scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "parallel.py", "parallel.R"):
             self.assertIn(f"lib/nipat_scientific/{name}", hashes)
@@ -800,6 +804,7 @@ class EnginePackageTests(unittest.TestCase):
             "Path(sys.argv[sys.argv.index('-o') + 1]).write_text('chr1\\t100\\tA\\t1\\t.\\tI\\tread1\\n')\n"
         )
         run = self.root / "plan-run"
+        environment["NIPAT_EXECUTION_MODE"] = "serial"
         result = self.relocated_command("execute-plan", "--plan", str(plan_file),
                                         "--run-dir", str(run), "--json", extra_env=environment)
         self.assertEqual(result.returncode, 37, result.stderr)
@@ -829,7 +834,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual([Path(command[0]).name for command in commands], ["samtools", "Rscript"])
         self.assertEqual(commands[0][1:], [
             "mpileup", "-f", request["reference"], "-l", request["work_dir"] + "/snp_regions.bed",
-            "--output-QNAME", "--no-output-ins", "--no-output-del", "--no-output-ends",
+            "--output-QNAME", "-d", "0", "--no-output-ins", "--no-output-del", "--no-output-ends",
             "-o", request["work_dir"] + "/pileup.txt", request["bam"],
         ])
         self.assertEqual(commands[1][1:], [
@@ -862,9 +867,11 @@ class EnginePackageTests(unittest.TestCase):
     def test_standalone_validated_output_has_hash_and_retained_nonfinite_warning(self):
         request_file, request = self.snp_request(mode="pileup")
         result = self.run_snp_request(request_file, self.snp_tools("sys.exit(99)\n",
+            "import csv\n" + inspect.getsource(write_snp_auxiliary) + "\n" +
             "Path(sys.argv[sys.argv.index('--out') + 1]).write_text("
-            "'chr\\tpos\\tReference\\tAlternative\\tN_Reference\\tN_Alternative\\tN_Altro\\ttotal_count\\tratio\\n'"
-            "'chr1\\t100\\tA\\tG\\t1\\t0\\t0\\t1\\tInf\\n')\n"))
+            "'chr\\tpos\\tREF\\tALT\\tN_REF\\tN_ALT\\tN_Other\\ttotal_count\\tratio\\tGL0\\tGL1\\tGL2\\tGT\\treads_discarded_for_indels\\tratio_reads_discarded_for_indels\\tcombined_bases\\tcombined_counts\\n'"
+            "'chr1\\t100\\tA\\tC\\t1\\t0\\t0\\t1\\tInf\\t-0.0001\\t-0.6931\\t-9.21\\t0/0\\t0\\t0\\tA\\t1\\n')\n"
+            "write_snp_auxiliary(Path(sys.argv[sys.argv.index('--out') + 1]).parent)\n"))
         self.assertEqual(result.returncode, 0, result.stderr)
         report = json.loads(Path(request["work_dir"], "scientific-validation.json").read_text())
         self.assertEqual(report["status"], "validated")
@@ -897,7 +904,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
 
     @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
-    def test_snp_success_without_usable_pileup_never_starts_r(self):
+    def test_snp_missing_pileup_fails_but_empty_pileup_reaches_zero_coverage_model(self):
         request_file, request = self.snp_request()
         environment = self.snp_tools(
             "if os.environ['SNP_TEST_PILEUP_MODE'] == 'empty':\n"
@@ -911,8 +918,9 @@ class EnginePackageTests(unittest.TestCase):
                 environment["SNP_TEST_PILEUP_MODE"] = mode
                 Path(environment["SNP_TEST_EVENTS"]).unlink(missing_ok=True)
                 result = self.run_snp_request(request_file, environment)
-                self.assertEqual(result.returncode, 2, result.stderr)
-                self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+                self.assertEqual(result.returncode, 37 if mode == "empty" else 2, result.stderr)
+                self.assertEqual([Path(c[0]).name for c in self.snp_events()],
+                                 ["samtools", "Rscript"] if mode == "empty" else ["samtools"])
                 self.assertEqual(list(Path(case["out_dir"]).iterdir()), [])
 
     @unittest.skipIf(os.name == "nt", "POSIX signals exercise the Linux container supervisor.")

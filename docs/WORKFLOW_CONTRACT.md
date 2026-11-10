@@ -224,7 +224,8 @@ e il percorso dello stato; `--json` scrive il resoconto completo su stdout,
 riservando stderr ai messaggi di avanzamento. Il codice di uscita non dipende
 dal formato di presentazione. Il descrittore del motore
 espone `plan_execution.interface: workflow-plan-execution-v1`, i workflow
-eseguibili `dnp-call`, `snp-call`, `contamination` e `cpi`, la pianificazione `sequential` e
+eseguibili `dnp-call`, `snp-call`, `contamination` e `cpi`, la pianificazione
+`dependency-order-with-bounded-independent-snp` e
 `resume: false`.
 
 La destinazione deve essere nuova, con directory padre già esistente:
@@ -244,9 +245,12 @@ in ciascun passaggio: un ordine diverso che rende gli alias incompatibili
 viene rifiutato. Un ID del piano, per esempio `cfDNA_a`, può essere diverso
 dall'alias `sample_0001`; la corrispondenza è conservata nei risultati.
 
-Le analisi vengono eseguite una per volta, nell'ordine derivato dalle
-dipendenze. `parallel: true` abilita esclusivamente il parallelismo interno
-di DNPcall sui campioni; non esegue contemporaneamente i passaggi del piano.
+I piani misti eseguono i passaggi nell'ordine derivato dalle dipendenze.
+Un piano composto soltanto da SNPcall indipendenti può eseguire più campioni
+contemporaneamente entro il budget comune; i worker campione mantengono
+seriali i propri pool R. La modalità `serial` impone un solo processo di
+calcolo. Il parametro storico DNP `parallel` resta accettato per compatibilità;
+la policy comune di esecuzione determina il parallelismo effettivo.
 Il motore passa le tabelle individuali DNPcall a Contamination e conserva
 il riferimento al campione e al passaggio produttore. Lo staging di
 Contamination usa `table_0001.txt`, `table_0002.txt` e successivi nell'ordine
@@ -269,12 +273,29 @@ lo stesso adattatore SNPcall delle analisi singole. La modalità BAM genera
 verifica il formato prima di avviare R. Errori o interruzioni di samtools non
 permettono di proseguire con R. La modalità pileup non esegue samtools.
 
+Dalla 0.8.30 il pannello normalizzato usa `chr`, `pos`, `ref`, `alt`; il
+precedente formato `pos=chr:posizione`, `ref`, `alt` resta un input accettato.
+Il comando samtools include `-d 0`, come SNPcall 2.0. R usa riferimento e
+qualità del pileup e raggruppa le osservazioni per SNP e QNAME.
+
 Ogni passaggio produce `output/SNPcall_output.txt`, senza rinominare o
 riscrivere i risultati scientifici. La tabella completata è associata all'ID
 campione in `artifacts.snp-tables`, con percorso relativo e SHA-256.
 I file preparati da NIPAT sono elencati in `artifacts.preparation`, con tipo
 `regions-bed` o `pileup`, percorso e SHA-256. Per un pileup importato questa
 lista è vuota: l'input non viene presentato come file generato dal motore.
+
+La tabella SNP 2.0 comprende conteggi `N_REF`, `N_ALT`, `N_Other`,
+log-likelihood `GL0`/`GL1`/`GL2`, `GT` e statistiche degli indel. Il nuovo
+schema non trasforma il risultato in una tabella DNP compatibile con CPI o
+Contamination: restano distinti coordinate e modello scientifico.
+
+Per campioni distinti con lo stesso pannello, riferimento e modalità, la
+finalizzazione crea `snp_summary/group_0001` e gruppi successivi, con genotipi
+uniti, risorse per campione, etichette e grafici dei genotipi mancanti e
+delle intersezioni. Analisi ripetute dello stesso campione non diventano
+individui aggiuntivi. Le tabelle individuali e i relativi checksum restano
+disponibili. L'UpSet considera assegnato un genotipo diverso da `NA`.
 
 ### Preparazione CPI e identità delle coppie
 

@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.executor import PlanExecutionError, execute_plan
+from snp_output_helpers import write_snp_auxiliary
 
 
 @unittest.skipUnless(os.name == "posix", "scientific execution runs inside the Linux image")
@@ -52,10 +53,11 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
             Path(command[command.index("-o") + 1]).write_bytes(self.pileup.read_bytes())
         else:
             Path(command[command.index("--out") + 1]).write_text(
-                "chr\tpos\tReference\tAlternative\tN_Reference\tN_Alternative\tN_Altro\ttotal_count\tratio\n"
-                "chr1\t10\tA\tG\t1\t1\t0\t2\t0.5\n"
-                "chr1\t15\tA\tT\t0\t0\t0\t0\tNA\n", encoding="utf-8",
+                "chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tratio\tGL0\tGL1\tGL2\tGT\treads_discarded_for_indels\tratio_reads_discarded_for_indels\tcombined_bases\tcombined_counts\n"
+                "chr1\t10\tA\tG\t1\t1\t0\t2\t0.5\t-9.21\t-1.386\t-9.21\t0/1\t0\t0\tA-G\t1-1\n"
+                "chr1\t15\tA\tT\t0\t0\t0\t0\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n", encoding="utf-8",
             )
+            write_snp_auxiliary(Path(command[command.index("--out") + 1]).parent)
         return 0
 
     def imported_pileup(self):
@@ -185,8 +187,8 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
         self.assertFalse((self.run / "steps/snp/command.log").exists())
         self.assertFalse((self.run / "steps/zzz_snp").exists())
 
-    def test_zero_exit_with_missing_empty_or_invalid_generated_pileup_prevents_r(self):
-        for content in (None, "", "chr1\t10\tA\t1\t.\tI\n"):
+    def test_zero_exit_with_missing_or_invalid_generated_pileup_prevents_r(self):
+        for content in (None, "chr1\t10\tA\t1\t.\tI\n"):
             with self.subTest(content=content):
                 self.run = self.root / f"invalid_{len(self.calls)}"
                 def invalid(command, cwd, log):
@@ -200,6 +202,25 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
                 self.assertEqual(result["exit_code"], 2)
                 self.assertTrue(all(call[0] == "samtools" for call in self.calls))
                 self.assertFalse((self.run / "steps/snp/command.log").exists())
+
+    def test_empty_generated_pileup_retains_every_panel_locus_as_unassigned(self):
+        def empty(command, cwd, log):
+            code = self.fake_process(command, cwd, log)
+            if command[0] == "samtools":
+                Path(command[command.index("-o") + 1]).write_text("")
+            else:
+                table = Path(command[command.index("--out") + 1])
+                header = table.read_text().splitlines()[0]
+                table.write_text(header + "\n" + "\n".join(
+                    f"chr1\t{position}\tA\t{alt}\t0\t0\t0\t0\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA"
+                    for position, alt in ((10, "G"), (15, "T"))) + "\n")
+                write_snp_auxiliary(table.parent)
+            return code
+        result = self.execute(empty)
+        self.assertEqual(result["status"], "succeeded", result.get("error"))
+        self.assertEqual([call[0] for call in self.calls], ["samtools", "Rscript"])
+        self.assertEqual(result["steps"][0]["artifacts"]["quality_warnings"], [])
+        self.assertEqual((self.run / "steps/snp/work/pileup.txt").stat().st_size, 0)
 
     def test_preparation_cancellation_blocks_other_independent_steps(self):
         self.add_independent_step()
@@ -258,9 +279,9 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
                     elif mutation == "header_only":
                         output.write_text(text.splitlines()[0] + "\n")
                     elif mutation == "column_missing":
-                        output.write_text(text.replace("N_Altro", "unknown"))
+                        output.write_text(text.replace("N_Other", "unknown"))
                     elif mutation == "duplicate_column":
-                        output.write_text(text.replace("\tratio\n", "\tratio\tratio\n"))
+                        output.write_text(text.replace("\tratio\tGL0", "\tratio\tratio"))
                     elif mutation == "short_row":
                         output.write_text(text + "chr1\t10\n")
                     elif mutation == "wrong_locus":

@@ -45,7 +45,7 @@ class DnpContaminationForm(WorkflowForm):
         )]
         if self.values.get("include_snp") == "2":
             fields.append(Field(
-                "snp_panel", "Lista SNP (pos, ref, alt)", "file",
+                "snp_panel", "Lista SNP (chr, pos, ref, alt)", "file",
                 check=lambda path: read_snp_positions(path, for_bed=True),
             ))
         return fields
@@ -429,7 +429,7 @@ class SnpBatchForm(WorkflowForm):
                           if mode == "3" else Field("bams", "BAM", "files"))
             fields.append(Field("reference", "File FASTA di riferimento",
                                 "file", check=check_reference))
-        fields += [Field("panel", "Lista SNP (pos, ref, alt)", "file",
+        fields += [Field("panel", "Lista SNP (chr, pos, ref, alt)", "file",
                          check=lambda path: read_snp_positions(path, for_bed=mode != "2")),
                    Field("run_name", "Nome nuova esecuzione (vuoto = automatico)", "run", required=False)]
         return fields
@@ -469,8 +469,8 @@ class SnpBatchForm(WorkflowForm):
 
     def review(self, *, dry_run: bool = False, performance_diagnostics: bool = False) -> bool:
         self.ui.message(
-            "Il workflow esegue SNPcall una volta per ciascun campione, in sequenza. "
-            "Una sola conferma avvia tutte le analisi; input, risultati e log restano separati. "
+            "Il workflow esegue SNPcall 2.0 per ciascun campione, rispettando la modalita' seriale o il limite di parallelismo scelto. "
+            "I risultati individuali sono affiancati da una tabella dei genotipi e grafici di confronto. Input, risultati e log restano identificati per campione. "
             "Un errore o un'interruzione arresta anche le analisi non ancora avviate.", kind="muted",
         )
         return super().review(dry_run=dry_run, performance_diagnostics=performance_diagnostics)

@@ -1,6 +1,6 @@
 # Controlli degli input e dei risultati
 
-NIPAT Desktop 0.8.9 controlla gli input nel livello Python prima di avviare
+NIPAT Desktop controlla gli input nel livello Python prima di avviare
 gli script R. I validatori sono condivisi dal client e dal motore scientifico
 incorporato nell'immagine. Il menu e la CLI diretta applicano gli stessi
 requisiti ai file selezionati; il motore ripete i controlli nell'ambiente
@@ -39,8 +39,8 @@ decimale, secondo il formato dello script.
 | Input | Controlli applicati |
 | --- | --- |
 | Pannello DNPcall | Cinque colonne; coordinate adiacenti con prima posizione almeno 2, per consentire la finestra precedente al sito; loci univoci; alleli di due basi A/C/G/T, normalizzati in maiuscolo nella copia di lavoro. |
-| Pannello SNPcall | Colonne `pos`, `ref`, `alt`; coordinate univoche; alleli distinti di una base A/C/G/T, normalizzati in maiuscolo. In modalità BAM la posizione deve permettere una finestra di tre basi. |
-| Pileup SNPcall | Almeno sette colonne con QNAME nella settima; cromosoma presente, posizione positiva e profondità non negativa su tutte le righe non vuote. |
+| Pannello SNPcall 2.0 | Colonne `chr`, `pos`, `ref`, `alt`; resta accettato il formato precedente `pos`, `ref`, `alt` con `pos=chr:posizione`. Coordinate univoche, posizione da 2 a 2147483646 in entrambe le modalità e cromosoma senza spazi o `:`; alleli distinti di una base A/C/G/T, normalizzati in maiuscolo. La copia di lavoro usa sempre quattro colonne. |
+| Pileup SNPcall | Almeno sette colonne samtools: riferimento nella terza, profondità nella quarta, basi nella quinta, qualità nella sesta e QNAME nella settima; cromosoma presente, posizione positiva e profondità non negativa su tutte le righe non vuote. Il file importato non può essere vuoto. |
 | Tabelle Contamination | Colonne richieste; coordinate positive e ordinate; loci univoci; `N_REF`, `N_ALT` e `N_Other` finiti, interi e non negativi. |
 | Tabelle CPI | Requisiti dei conteggi, `REF` e `ALT` dinucleotidi A/C/G/T e `total_count` intero non negativo. |
 | Frequenze CPI | Loci univoci; `Ref_f.pop` e `Alt_f.pop` finite comprese tra 0 e 1. La tabella deve contenere almeno un locus. |
@@ -92,6 +92,11 @@ Le segnalazioni di qualità conservano il risultato originale prodotto da R
 e indicano l'elemento da verificare. NIPAT non corregge automaticamente una
 stima scientifica e non applica nuovi filtri ai dati CPI in base alla stima
 Contamination.
+
+SNPcall 2.0 distingue anche `-Inf` nelle likelihood: una qualità Phred zero
+può produrre `log(0)`, previsto dal modello. `NaN` e `+Inf` nelle colonne GL
+non sono accettati. I conteggi e le coordinate del risultato devono
+corrispondere al pannello; i genotipi sono `0/0`, `0/1`, `1/1` oppure `NA`.
 
 Per un'analisi singola il resoconto è in
 `work/scientific-validation.json`. Nei piani automatici gli avvisi sono

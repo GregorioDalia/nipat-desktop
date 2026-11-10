@@ -158,7 +158,7 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("Bundled scientific manifest differs from this checkout.")
     if description.get("workflow_interfaces", {}).get("contamination") != "contamination-v1":
         raise ValueError("The engine lacks the complete Contamination interface.")
-    if description.get("workflow_interfaces", {}).get("snp-call") != "snp-call-v1":
+    if description.get("workflow_interfaces", {}).get("snp-call") != "snp-call-v2":
         raise ValueError("The engine lacks the complete SNPcall interface.")
     if description.get("workflow_interfaces", {}).get("dnp-call") != "dnp-call-v1":
         raise ValueError("The engine lacks the complete DNPcall interface.")
@@ -166,7 +166,7 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("The engine lacks the complete CPI interface.")
     if description.get("plan_execution") != {
         "interface": "workflow-plan-execution-v1", "schema_version": 1,
-        "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "sequential", "resume": False,
+        "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
     }:
         raise ValueError("Unexpected supported workflow plan execution interface.")
     if description.get("scientific_validation") != {
@@ -174,6 +174,9 @@ def check_metadata(identifier: str) -> dict:
         "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
         "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
         "snp_alleles": "uppercase-working-copy",
+        "snp_model": "SNPcall-2.0",
+        "snp_output_columns": 17,
+        "snp_panel_formats": ["chr-pos-ref-alt", "legacy-chr:pos-ref-alt"],
     }:
         raise ValueError("The image lacks the current semantic input/output contract.")
     preparation = description.get("preparation", {})
@@ -181,8 +184,8 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("Unexpected preparation metadata interface.")
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
     for name in (
-        "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py",
-        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
+        "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "snp_summary.py", "snp_parallel.py",
+        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "plots.R", "performance.py",
         "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "parallel.py", "parallel.R", "catalog_data/dnp-call.json",
         "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
     ):

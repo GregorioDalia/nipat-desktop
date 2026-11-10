@@ -1,7 +1,8 @@
-"""Compare optimized scientific R against the immutable NIPAT 0.8.5 reference.
+"""Compare scientific R with immutable NIPAT 0.8.5 and SNPcall 2.0 references.
 
 Both implementations run in the same immutable, locally built image. Complete
-table bytes, unrounded R objects and rasterized PDF pages are compared strictly.
+table bytes and unrounded R objects are compared strictly. Revised plots are
+rendered and bounded; candidate serial/parallel pixels must match exactly.
 Timings are descriptive observations, not a noisy CI performance threshold.
 Only generated or public synthetic inputs are used. No network is available to
 the execution containers, and source/input mounts are read-only.
@@ -28,6 +29,13 @@ import time
 PROJECT = Path(__file__).resolve().parents[1]
 BASELINE_COMMIT = "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5"
 BASELINE = Path("tests/reference_r/0.8.5")
+SNP_REFERENCE = {
+    "repository": "lpistacchia/NEWPAT",
+    "source_commit": "ce59f4beeeec710b1b42d425cb87d7aad729f71d",
+    "path": "SNPcall/SNPcall.R",
+    "frozen_path": "tests/reference_r/2.0/SNPcall.R",
+    "sha256": "855a96c897d1bcb8ce30b725baecfa739d01be323252da07554a63aa66965da4",
+}
 EXPECTED_REFERENCE = {
     "docker/scientific-runtime/verify-packages.R": "ef30c69555f6871f7c38c89baba5b52e1ef7d82fd02aaf206ae4568e2f686af7",
     "scientific/vendor/DNPcall/DNPcall.R": "d0600427d058a141da8683d98904c51be95ec09ebd5804ea879164d1f5ce7e36",
@@ -43,7 +51,7 @@ SCRIPTS = dict(zip(("dnp-call", "cpi", "snp-call", "contamination"), (
     "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
 )))
 SUPPORTING_SOURCES = tuple(f"src/nipat_scientific/{name}" for name in (
-    "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R", "parallel.R", "parallel.py",
+    "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R", "parallel.R", "parallel.py", "plots.R",
 ))
 PARALLEL_CASES = {"dnp-blocks-1", "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6",
                   "snp-edge", "cpi-shared-parents",
@@ -76,6 +84,17 @@ def verify_reference(project: Path = PROJECT) -> dict:
     if actual != EXPECTED_REFERENCE:
         raise ValueError("The frozen R reference was modified or is incomplete")
     return manifest
+
+
+def verify_snp_reference(project: Path = PROJECT) -> dict:
+    if digest(project / SNP_REFERENCE["frozen_path"]) != SNP_REFERENCE["sha256"]:
+        raise ValueError("The frozen SNPcall 2.0 reference was modified")
+    return dict(SNP_REFERENCE)
+
+
+def scientific_reference_path(workflow: str) -> Path:
+    return (Path(SNP_REFERENCE["frozen_path"]) if workflow == "snp-call"
+            else BASELINE / SCRIPTS[workflow])
 
 
 def mount(path: Path, destination: str, *, readonly: bool = False) -> str:
@@ -185,7 +204,40 @@ def compare_pdfs(reference: Path, candidate: Path, root: Path) -> dict[str, dict
             pages.append(page_hashes)
         if pages[0] != pages[1]:
             raise ValueError(f"Rendered scientific PDF differs: {name}")
-        evidence[name] = {"pages": len(pages[0]), "raster_dpi": 36, "page_sha256": pages[0]}
+        info = command(["pdfinfo", str(optimized[name])])
+        sizes = re.findall(r"Page size:\s+([0-9.]+) x ([0-9.]+) pts", info)
+        if len(sizes) != 1 or any(float(value) <= 0 or float(value) > 1440 for value in sizes[0]):
+            raise ValueError(f"Unbounded or missing PDF page dimensions: {optimized[name]}")
+        evidence[name] = {"pages": len(pages[0]), "raster_dpi": 36, "page_sha256": pages[0],
+                          "page_size_points": [float(value) for value in sizes[0]]}
+    return evidence
+
+
+def inspect_pdfs(candidate: Path, root: Path) -> dict[str, dict]:
+    """Render every revised PDF and reject empty or unbounded pages.
+
+    Historical plot pixels are deliberately not an oracle for approved bin and
+    sizing corrections. Boundary semantics are covered by the R plot helper;
+    parallel execution must still reproduce the candidate serial pixels.
+    """
+    evidence = {}
+    for number, path in enumerate(sorted(candidate.rglob("*.pdf"))):
+        if not path.read_bytes().startswith(b"%PDF-"):
+            raise ValueError(f"Invalid PDF: {path}")
+        info = command(["pdfinfo", str(path)])
+        sizes = re.findall(r"Page size:\s+([0-9.]+) x ([0-9.]+) pts", info)
+        if len(sizes) != 1 or any(float(value) <= 0 or float(value) > 1440 for value in sizes[0]):
+            raise ValueError(f"Unbounded or missing PDF page dimensions: {path}")
+        directory = root / str(number)
+        directory.mkdir(parents=True)
+        command(["pdftoppm", "-r", "36", str(path), str(directory / "page")])
+        pages = {item.name: digest(item) for item in directory.glob("page-*.ppm")}
+        if not pages:
+            raise ValueError(f"No rendered PDF pages: {path}")
+        evidence[path.relative_to(candidate).as_posix()] = {
+            "pages": len(pages), "raster_dpi": 36, "page_sha256": pages,
+            "page_size_points": [float(value) for value in sizes[0]],
+        }
     return evidence
 
 
@@ -535,9 +587,23 @@ def make_inputs(root: Path, image: str) -> Path:
     wide_lines = [line.rstrip("\n") + f"\tunused {index}\t{index}\tNA\n"
                   for index, line in enumerate(lines)]
     (inputs / "snp/pileup-wide.txt").write_text("".join(wide_lines), encoding="utf-8")
-    write_tsv(inputs / "snp/panel.tsv", ("pos", "ref", "alt"),
-              [("chrSynthetic:50", "A", "G"), ("chrSynthetic:120", "C", "T"),
-               ("chrSynthetic:180", "A", "C")])
+    write_tsv(inputs / "snp/panel.tsv", ("chr", "pos", "ref", "alt"),
+              [("chrSynthetic", 50, "A", "G"), ("chrSynthetic", 120, "C", "T"),
+               ("chrSynthetic", 180, "A", "C")])
+    varied = []
+    for index, line in enumerate(lines):
+        fields = line.rstrip("\n").split("\t")
+        fields[5] = "".join(chr(33 + quality) for quality in (13, 20, 30, 40, 50, 60, 70, 93))
+        varied.append("\t".join(fields) + "\n")
+    (inputs / "snp/pileup-qualities.txt").write_text("".join(varied), encoding="utf-8")
+    (inputs / "snp/pileup-empty.txt").write_text("", encoding="utf-8")
+    write_tsv(inputs / "snp/overlap-panel.tsv", ("chr", "pos", "ref", "alt"),
+              [("chrSynthetic", 50, "A", "G"), ("chrSynthetic", 51, "A", "T")])
+    # The same reads span two overlapping windows: each must remain attached
+    # to its SNP rather than being combined globally by QNAME as in 0.8.5.
+    overlap = [f"chrSynthetic\t{position}\tA\t4\t{bases}\tI?5I\tshared,ref,alt,other\n"
+               for position, bases in ((49, "...."), (50, ".GGT"), (51, "T.TG"), (52, "...."))]
+    (inputs / "snp/pileup-overlap.txt").write_text("".join(overlap), encoding="utf-8")
 
     cpi = inputs / "cpi"
     (cpi / "samples").mkdir()
@@ -601,6 +667,9 @@ def cases() -> list[Case]:
         Case("dnp-varied-qualities", "dnp-call", dnp, ("/inputs/dnp/Quality.bam",)),
         Case("snp-edge", "snp-call", ("--pileup", "/inputs/snp/pileup.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
         Case("snp-extra-columns", "snp-call", ("--pileup", "/inputs/snp/pileup-wide.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
+        Case("snp-varied-qualities", "snp-call", ("--pileup", "/inputs/snp/pileup-qualities.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
+        Case("snp-overlapping-windows", "snp-call", ("--pileup", "/inputs/snp/pileup-overlap.txt", "--snplist", "/inputs/snp/overlap-panel.tsv", "--out", "output/SNPcall_output.txt")),
+        Case("snp-zero-coverage", "snp-call", ("--pileup", "/inputs/snp/pileup-empty.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
         Case("cpi-all", "cpi", cpi),
         Case("cpi-panels", "cpi", (*cpi, "--cutoff_map", "Full=/inputs/cpi/full.tsv,Subset=/inputs/cpi/subset.tsv")),
         Case("cpi-zero-error", "cpi", (*cpi, "--err_const", "0")),
@@ -641,6 +710,8 @@ def verify_case(root: Path, image: str, inputs: Path, case: Case) -> dict:
     executions = {"reference": None, "candidate": None}
     if case.name in PARALLEL_CASES:
         executions.update(PARALLEL_VARIANTS)
+    else:
+        executions["manual-2"] = PARALLEL_VARIANTS["manual-2"]
     comparisons = {}
     for variant, execution in executions.items():
         destination = case_dir / variant
@@ -650,7 +721,7 @@ def verify_case(root: Path, image: str, inputs: Path, case: Case) -> dict:
         path = Path(SCRIPTS[case.workflow])
         kind = "reference" if variant == "reference" else "candidate"
         if kind == "reference":
-            path = BASELINE / path
+            path = scientific_reference_path(case.workflow)
         started = time.monotonic()
         run(image, ["Rscript", "/repo/tests/r_optimization/capture.R", *case.arguments],
             inputs=inputs, results=destination,
@@ -663,9 +734,19 @@ def verify_case(root: Path, image: str, inputs: Path, case: Case) -> dict:
         run(image, ["Rscript", "/repo/tests/r_optimization/compare.R",
                     "/inputs/reference/scientific-values.rds", f"/inputs/{variant}/scientific-values.rds"],
             inputs=case_dir, results=case_dir, log=case_dir / f"{variant}-unrounded-comparison.log")
-        plots = compare_pdfs(case_dir / "reference/output", destination / "output", case_dir / f"rendered-{variant}")
+        plots = (inspect_pdfs(destination / "output", case_dir / f"rendered-{variant}")
+                 if variant == "candidate" else
+                 compare_pdfs(case_dir / "candidate/output", destination / "output", case_dir / f"rendered-{variant}"))
         comparison = {"status": "passed", "table_sha256": table_hashes,
-                      "unrounded_r_values": "identical", "plots": plots}
+                      "unrounded_r_values": "identical", "plots": plots,
+                      "plots_comparison": ("renderable-and-bounded" if variant == "candidate"
+                                           else "candidate-serial-exact-pixels")}
+        configured = execution or {"NIPAT_EXECUTION_MODE": "serial", "NIPAT_MAX_WORKERS": ""}
+        cap = configured.get("NIPAT_MAX_WORKERS")
+        comparison["execution_configuration"] = {
+            "requested_mode": configured["NIPAT_EXECUTION_MODE"],
+            "requested_max_workers": int(cap) if cap else None,
+        }
         if case.compare_pileup:
             comparison.update({"candidate_environment": dict(case.candidate_environment),
                 "pileup": compare_pileup(case_dir / "reference/mpileup.txt", destination / "mpileup.txt"),
@@ -683,15 +764,18 @@ def verify_case(root: Path, image: str, inputs: Path, case: Case) -> dict:
             comparison["deterministic_repeat_of"] = "manual-4"
         comparisons[variant] = comparison
         print(f"PASS: {case.name}/{variant}; exact tables, unrounded R values and {len(plots)} PDF(s)", flush=True)
-    return {"case": case.name, "workflow": case.workflow, **comparisons["candidate"],
+    return {"case": case.name, "workflow": case.workflow,
+            "scientific_reference": "SNPcall 2.0" if case.workflow == "snp-call" else "NIPAT 0.8.5",
+            **comparisons["candidate"],
             "elapsed_seconds_including_container": timings,
             "execution_variants": comparisons}
 
 
 def verify(root: Path, image: str) -> dict:
     reference = verify_reference()
-    if shutil.which("pdftoppm") is None:
-        raise ValueError("pdftoppm (Poppler) is required for exact PDF rendering comparisons")
+    snp_reference = verify_snp_reference()
+    if any(shutil.which(tool) is None for tool in ("pdftoppm", "pdfinfo")):
+        raise ValueError("pdftoppm and pdfinfo (Poppler) are required for PDF rendering checks")
     candidate_hashes = verify_image_sources(image, root)
     supporting_hashes = verify_supporting_sources(image, root)
     inputs = make_inputs(root, image)
@@ -729,7 +813,7 @@ def verify(root: Path, image: str) -> dict:
     performance = root / "performance-observations.tsv"
     if not performance.is_file():
         raise ValueError("Synthetic performance observations are missing")
-    return {"schema_version": 1, "status": "passed", "reference": reference,
+    return {"schema_version": 1, "status": "passed", "reference": reference, "snp_reference": snp_reference,
             "candidate_r_sha256": candidate_hashes, "supporting_source_sha256": supporting_hashes,
             "runtime_image": image,
             "parallel_qualification": {"workflows": sorted(qualified),
@@ -738,7 +822,8 @@ def verify(root: Path, image: str) -> dict:
                                        "distinct_worker_cases": sorted(PARALLEL_CASES - CONCURRENT_CASES),
                                        "container_limits": {"cpus": 4, "memory_gib": 8}},
             "comparison": {"table_bytes": "exact", "unrounded_r": "identical",
-                           "pdf_pixels": "exact", "pdf_metadata": "excluded"},
+                           "pdf_pixels": "candidate-serial-vs-parallel", "pdf_metadata": "excluded",
+                           "pdf_reference": "structural-and-reviewed-presentation"},
             "timing_scope": "single observations; includes capture instrumentation and container startup; no speed claim",
             "inputs_unchanged": True, "input_sha256": input_hashes, "cases": results, "helpers": helpers,
             "indexed_pileup": {"file": indexed_report.relative_to(root).as_posix(),

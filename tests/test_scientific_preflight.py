@@ -123,7 +123,7 @@ class ScientificPreflightTests(unittest.TestCase):
                    "work_dir": str(self.root / "run/work"), "out_dir": str(self.root / "run/output")}
         prepared = prepare_snp(request)
         normalized = Path(prepared.native_arguments[3])
-        self.assertEqual(normalized.read_text(), "pos\tref\talt\nchr1:10\tA\tG\n")
+        self.assertEqual(normalized.read_text(), "chr\tpos\tref\talt\nchr1\t10\tA\tG\n")
         self.assertEqual(self.table.read_bytes(), original)
         report = json.loads((self.root / "run/work/input-validation.json").read_text())
         self.assertEqual(report["warnings"], [])

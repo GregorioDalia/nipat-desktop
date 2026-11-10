@@ -444,16 +444,15 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertEqual(arguments["reference"], self.reference)
         self.assertIsNone(arguments["pileups"])
 
-    def test_snp_batch_rechecks_panel_when_switching_from_pileup_to_bam(self):
+    def test_snp_batch_rejects_position_one_before_review_in_pileup_mode(self):
         edge_panel = self.file("position-one.tsv", "pos\tref\talt\nchr1:1\tA\tC\n")
         status, output = self.invoke([
-            "W", "4", "2", self.pileup, "", edge_panel, "",
-            "2", "1", "1", self.bam, "", self.reference, self.snp_panel,
+            "W", "4", "2", self.pileup, "", edge_panel, self.snp_panel, "",
             "1", "0", "0",
         ])
         self.assertEqual(status, 0)
         self.assertEqual(self.workflows.snp_batch.call_args.kwargs["panel"], self.snp_panel)
-        self.assertIn("La lista SNP precedente non e' compatibile", output)
+        self.assertIn("posizione fuori intervallo", output)
 
     def test_snp_batch_cancel_and_dry_run_never_claim_scientific_results(self):
         answers = ["W", "4", "2", self.pileup, "", self.snp_panel, ""]

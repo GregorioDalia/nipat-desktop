@@ -33,6 +33,32 @@ class REquivalenceTests(unittest.TestCase):
         self.assertEqual(result["source_commit"], "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5")
         self.assertEqual(len(result["files"]), 6)
 
+    def test_snp_reference_is_independently_pinned_to_complete_20_source(self):
+        result = verification.verify_snp_reference()
+        self.assertEqual(result["source_commit"], "ce59f4beeeec710b1b42d425cb87d7aad729f71d")
+        self.assertEqual(verification.scientific_reference_path("snp-call"),
+                         Path("tests/reference_r/2.0/SNPcall.R"))
+        self.assertTrue(verification.scientific_reference_path("dnp-call").is_relative_to(
+            Path("tests/reference_r/0.8.5")))
+        frozen = self.file(result["frozen_path"], "# altered oracle\n")
+        with self.assertRaisesRegex(ValueError, "SNPcall 2.0 reference was modified"):
+            verification.verify_snp_reference(self.root)
+
+    def test_revised_plot_gate_requires_renderable_bounded_pdf(self):
+        self.file("candidate/plot.pdf", "%PDF-1.4\n")
+        def render(arguments):
+            if arguments[0] == "pdfinfo":
+                return "Page size: 792 x 360 pts\n"
+            Path(arguments[-1] + "-1.ppm").write_bytes(b"P6\n1 1\n255\n\x00\x00\x00")
+            return ""
+        with patch.object(verification, "command", side_effect=render):
+            result = verification.inspect_pdfs(self.root / "candidate", self.root / "rendered")
+        self.assertEqual(result["plot.pdf"]["pages"], 1)
+        self.assertEqual(result["plot.pdf"]["page_size_points"], [792, 360])
+        with patch.object(verification, "command", return_value="Page size: 72000 x 360 pts\n"):
+            with self.assertRaisesRegex(ValueError, "Unbounded"):
+                verification.inspect_pdfs(self.root / "candidate", self.root / "invalid")
+
     def test_editing_both_reference_and_manifest_cannot_redefine_oracle(self):
         shutil.copytree(PROJECT / verification.BASELINE, self.root / verification.BASELINE)
         original = self.root / verification.BASELINE
@@ -112,6 +138,8 @@ class REquivalenceTests(unittest.TestCase):
         self.file("candidate/plot.pdf", "%PDF-1.4\nmetadata=second\n")
 
         def render(arguments):
+            if arguments[0] == "pdfinfo":
+                return "Page size: 792 x 360 pts\n"
             Path(arguments[-1] + "-1.ppm").write_bytes(b"P6\n1 1\n255\n\x00\x00\x00")
             return ""
 
@@ -143,6 +171,8 @@ class REquivalenceTests(unittest.TestCase):
         self.assertTrue(any(case.name == "cpi-zero-error" for case in cases))
         self.assertTrue(any(case.name == "dnp-varied-qualities" for case in cases))
         self.assertTrue(any(case.name == "snp-extra-columns" for case in cases))
+        self.assertTrue({"snp-varied-qualities", "snp-overlapping-windows", "snp-zero-coverage"}
+                        <= {case.name for case in cases})
         shared = next(case for case in cases if case.name == "cpi-shared-parents")
         pairs = shared.arguments[shared.arguments.index("--pairs") + 1].split(",")
         self.assertEqual(len(pairs), len(set(pairs)))

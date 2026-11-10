@@ -1,11 +1,12 @@
 # Sviluppo e validazione
 
-La versione stabile di NIPAT Desktop è la 0.8.9; il candidato corrente di
-sviluppo è la **0.8.12**, con parallelismo interno ai quattro programmi R e
-blocchi DNP configurabili. La [guida 0.8.12](PARALLELISMO_0.8.12.md) descrive
-impostazioni e limiti. Il prodotto mantiene una CLI guidata e workflow
-automatici su Windows, macOS e Ubuntu; la baseline scientifica resta la
-0.8.5 congelata, non l'ultimo candidato di prestazioni.
+La versione stabile di NIPAT Desktop è la **0.8.20**; il candidato corrente
+di sviluppo è la **0.8.30**, con integrazione di SNPcall 2.0 e revisione
+della presentazione dei risultati. Le [note 0.8.30](RELEASE_0.8.30.md)
+distinguono modifiche e verifiche. Il prodotto mantiene una CLI guidata e
+workflow automatici su Windows, macOS e Ubuntu. SNP usa il sorgente upstream
+2.0 congelato come riferimento; DNP, CPI e Contamination conservano la
+baseline numerica 0.8.5.
 
 ## Priorità
 
@@ -14,13 +15,13 @@ automatici su Windows, macOS e Ubuntu; la baseline scientifica resta la
 | Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi degli utilizzi scientifici previsti. |
 | Tracciabilità | Collegare senza ambiguità nomi originali, identità interne, fasi e risultati. |
 | Uso delle risorse | Conservare la distinzione fra configurazione salvata, risorse effettive, suggerimenti e modifiche; Invio mantiene i valori correnti. |
-| Prestazioni | Qualificare il parallelismo R della 0.8.12 su tutti i moduli, con un unico budget di calcolo e blocchi DNP iniziali da 32 MiB / 64 loci; misurare tempi e RAM senza modificare i risultati. |
+| Prestazioni | Qualificare la 0.8.30 con un unico budget di calcolo, anche nei batch SNP 2.0; conservare i blocchi DNP iniziali da 32 MiB / 64 loci e misurare tempi e RAM rispetto al riferimento scientifico di ciascun modulo. |
 | Portabilità | Raccogliere prove reali Windows 10/11, Ubuntu e Mac Intel/Apple Silicon oltre ai controlli automatici. |
 | Interfaccia | Esporre fase, campione, tempo trascorso e attività anche senza diagnostica; usare avanzamento e tempo residuo solo quando misurabili o stimabili con dati sufficienti. |
 | GUI | Riutilizzare i contratti della CLI e gli eventi di avanzamento in una futura interfaccia grafica. |
 | Lingue | Estendere italiano e inglese dal catalogo scientifico all'interfaccia e alla documentazione, senza duplicare le regole applicative. |
 
-## Candidato 0.8.12
+## Parallelismo introdotto nella 0.8.12
 
 La modalità iniziale è automatica, con scelta seriale e massimo manuale dei
 processi R di calcolo. CPU della VM, quota del container e memoria disponibile
@@ -59,10 +60,10 @@ blocchi, QNAME ripetuti, indel, alta copertura, ordine dei risultati e annullame
 Il core scientifico resta R; Windows conserva WSL2, macOS Lima e Linux Docker
 Engine.
 
-SNP 2.0 e un ulteriore modulo scientifico sono attesi come nuovi sorgenti.
-La loro integrazione e ottimizzazione saranno definite dopo averne esaminato
-script e contratti. L'attuale preparazione SNPcall da BAM non determina le
-scelte sulla futura versione del modulo.
+La 0.8.30 integra SNPcall 2.0 dopo l'esame del nuovo sorgente e del suo
+contratto: qualità, likelihood, genotipi, raggruppamento per SNP e QNAME,
+statistiche degli indel e riepiloghi. L'ulteriore modulo scientifico resta
+separato, in attesa di un sorgente e di requisiti sufficienti per integrarlo.
 
 ## Metodo di verifica
 

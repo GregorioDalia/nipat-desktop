@@ -471,11 +471,13 @@ class SnpReferenceTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.expected = Path(self.temp.name) / 'expected.txt'
         self.actual = Path(self.temp.name) / 'actual.txt'
-        self.columns = ['chr', 'pos', 'Reference', 'Alternative', 'N_Reference',
-                        'N_Alternative', 'N_Altro', 'total_count', 'ratio']
+        self.columns = ['chr', 'pos', 'REF', 'ALT', 'N_REF', 'N_ALT', 'N_Other',
+                        'total_count', 'ratio', 'GL0', 'GL1', 'GL2', 'GT',
+                        'reads_discarded_for_indels', 'ratio_reads_discarded_for_indels',
+                        'combined_bases', 'combined_counts']
         self.rows = [
-            ['chr1', '100', 'A', 'C', '95', '5', '1', '101', '0.95'],
-            ['chr1', '200', 'T', 'G', '80', '20', '0', '100', '0.8'],
+            ['chr1', '100', 'A', 'C', '95', '5', '1', '101', '0.95', '-10', '-20', '-30', '0/0', '0', '0', 'A-C-G', '95-5-1'],
+            ['chr1', '200', 'T', 'G', '80', '20', '0', '100', '0.8', '-20', '-10', '-30', '0/1', '0', '0', 'G-T', '20-80'],
         ]
         self.write(self.expected, self.rows)
 
@@ -487,7 +489,7 @@ class SnpReferenceTests(unittest.TestCase):
 
     def test_comparison_is_numeric_and_independent_of_row_order(self):
         actual = [row[:] for row in reversed(self.rows)]
-        actual[0][-1] = '0.80000000000000004'
+        actual[0][8] = '0.80000000000000004'
         self.write(self.actual, actual)
         self.assertEqual(compare_snp_outputs(self.expected, self.actual), 2)
 
@@ -495,7 +497,7 @@ class SnpReferenceTests(unittest.TestCase):
         actual = [row[:] for row in self.rows]
         actual[0][4] = '96'
         self.write(self.actual, actual)
-        with self.assertRaisesRegex(ValidationError, 'N_Reference'):
+        with self.assertRaisesRegex(ValidationError, 'N_REF'):
             compare_snp_outputs(self.expected, self.actual)
 
     def test_detects_duplicate_or_missing_sites(self):
@@ -506,8 +508,30 @@ class SnpReferenceTests(unittest.TestCase):
 
     def test_detects_non_finite_ratio(self):
         actual = [row[:] for row in self.rows]
-        actual[0][-1] = 'nan'
+        actual[0][8] = 'nan'
         self.write(self.actual, actual)
+        with self.assertRaisesRegex(ValidationError, 'ratio'):
+            compare_snp_outputs(self.expected, self.actual)
+
+    def test_every_new_scientific_field_is_compared(self):
+        changes = {9: '-10.1', 10: '-19.9', 11: '-29.9', 12: '1/1',
+                   13: '1', 14: '0.01', 15: 'A-C-T', 16: '94-6-1'}
+        for index, value in changes.items():
+            with self.subTest(column=self.columns[index]):
+                actual = [row[:] for row in self.rows]
+                actual[0][index] = value
+                self.write(self.actual, actual)
+                with self.assertRaisesRegex(ValidationError, self.columns[index]):
+                    compare_snp_outputs(self.expected, self.actual)
+
+    def test_missing_values_and_infinite_likelihoods_keep_their_meaning(self):
+        self.rows[0][8:13] = ['NA', '-Inf', '-Inf', '-Inf', 'NA']
+        self.write(self.expected, self.rows)
+        self.write(self.actual, self.rows)
+        self.assertEqual(compare_snp_outputs(self.expected, self.actual), 2)
+        changed = [row[:] for row in self.rows]
+        changed[0][8] = '0'
+        self.write(self.actual, changed)
         with self.assertRaisesRegex(ValidationError, 'ratio'):
             compare_snp_outputs(self.expected, self.actual)
 

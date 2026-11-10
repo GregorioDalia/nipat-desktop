@@ -31,6 +31,18 @@ SCIENTIFIC_RESEARCH_FIELDS = MULTIPLATFORM_RESEARCH_FIELDS | {"scientific_equiva
 REVISED_R_SOURCE_SCOPE = "reviewed-operative-changes-with-tested-r-equivalence-v1"
 R_REFERENCE_COMMIT = "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5"
 R_REFERENCE_ROOT = "tests/reference_r/0.8.5"
+SNP2_REFERENCE = {
+    "repository": "lpistacchia/NEWPAT",
+    "source_commit": "ce59f4beeeec710b1b42d425cb87d7aad729f71d",
+    "path": "SNPcall/SNPcall.R",
+    "frozen_path": "tests/reference_r/2.0/SNPcall.R",
+    # Independently pinned upstream bytes, never supplied by the candidate report.
+    "sha256": "855a96c897d1bcb8ce30b725baecfa739d01be323252da07554a63aa66965da4",
+}
+SNP2_CASES = dict.fromkeys(
+    ("snp-varied-qualities", "snp-overlapping-windows", "snp-zero-coverage"), "snp-call")
+PRESENTATION_HELPER = "tests/r_optimization/presentation/check_plots.R"
+PRESENTATION_SOURCE = "src/nipat_scientific/plots.R"
 R_WORKFLOWS = {
     "scientific/vendor/DNPcall/DNPcall.R": "dnp-call",
     "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "cpi",
@@ -114,6 +126,43 @@ def revised_r_contract(version):
 def audited_r_contract(version):
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version or "")
     return bool(match and tuple(map(int, match.groups())) >= (0, 8, 20))
+
+
+def snp2_contract(version):
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(?:a|b|rc)[0-9]+)?", version or "")
+    return bool(match and tuple(map(int, match.groups())) >= (0, 8, 30))
+
+
+def verify_presentation_variants(case):
+    """Bind corrected plots to serial results and retained parallel renderings."""
+    variants = case.get("execution_variants")
+    require(isinstance(variants, dict) and "candidate" in variants,
+            "Scientific presentation execution variants are missing")
+    require(case.get("plots_comparison") == "renderable-and-bounded",
+            "Scientific presentation must identify structural serial validation")
+    if case["plots"]:
+        require(len(variants) >= 2,
+                "Scientific PDF evidence lacks a serial-versus-parallel comparison")
+    for name, variant in variants.items():
+        require(isinstance(name, str) and bool(name) and isinstance(variant, dict)
+                and variant.get("status") == "passed"
+                and variant.get("unrounded_r_values") == "identical"
+                and variant.get("table_sha256") == case["table_sha256"]
+                and variant.get("plots") == case["plots"],
+                "Scientific presentation variant differs from serial scientific results")
+        expected = "renderable-and-bounded" if name == "candidate" else "candidate-serial-exact-pixels"
+        require(variant.get("plots_comparison") == expected,
+                "Scientific presentation variant has an unsupported PDF comparison claim")
+        configuration = variant.get("execution_configuration")
+        require(isinstance(configuration, dict)
+                and configuration.get("requested_mode") == ("serial" if name == "candidate" else "auto")
+                and (configuration.get("requested_max_workers") is None
+                     or type(configuration["requested_max_workers"]) is int
+                     and configuration["requested_max_workers"] >= 1),
+                "Scientific presentation variant has no matching execution configuration")
+        if name == "candidate":
+            require(configuration.get("requested_max_workers") is None,
+                    "Serial scientific presentation has conflicting execution settings")
 
 
 def verify_multibam_variants(case):
@@ -478,8 +527,14 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
             and report.get("inputs_unchanged") is True
             and report.get("runtime_image") == evidence["runtime_image"],
             "Scientific equivalence did not pass in the packaged image with unchanged inputs")
-    require(report.get("comparison") == {"table_bytes": "exact", "unrounded_r": "identical",
-                                       "pdf_pixels": "exact", "pdf_metadata": "excluded"},
+    snp2 = snp2_contract(record["version"])
+    audited = audited_r_contract(record["version"]) or snp2
+    comparison_policy = {"table_bytes": "exact", "unrounded_r": "identical",
+                         "pdf_pixels": "exact", "pdf_metadata": "excluded"}
+    if snp2:
+        comparison_policy.update(pdf_pixels="candidate-serial-vs-parallel",
+                                 pdf_reference="structural-and-reviewed-presentation")
+    require(report.get("comparison") == comparison_policy,
             "Scientific equivalence must include exact tables, unrounded R values and PDF pixels")
 
     def source(commit, path):
@@ -517,6 +572,16 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
     except (ValueError, UnicodeError) as error:
         raise ValueError("Invalid frozen scientific reference manifest") from error
     require(frozen_manifest == reference, "Scientific report differs from the candidate's frozen reference manifest")
+    if snp2:
+        require(report.get("snp_reference") == SNP2_REFERENCE,
+                "Scientific report does not identify the immutable SNPcall 2.0 source")
+        require(hashlib.sha256(source(commit, SNP2_REFERENCE["frozen_path"])).hexdigest()
+                == SNP2_REFERENCE["sha256"],
+                "Frozen SNPcall 2.0 reference differs from the pinned upstream bytes")
+        supporting = report.get("supporting_source_sha256")
+        require(isinstance(supporting, dict) and supporting.get(PRESENTATION_SOURCE)
+                == hashlib.sha256(source(commit, PRESENTATION_SOURCE)).hexdigest(),
+                "Scientific presentation evidence used different plotting sources")
     candidate_hashes = {path: hashlib.sha256(source(commit, path)).hexdigest() for path in R_WORKFLOWS}
     require(report.get("candidate_r_sha256") == candidate_hashes,
             "Scientific equivalence was performed on different candidate R sources")
@@ -534,7 +599,7 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
     require(isinstance(cases, list) and all(isinstance(case, dict) for case in cases),
             "Scientific differential cases are missing")
     names = [case.get("case") for case in cases]
-    required_cases = {**R_CASES, **(R_AUDIT_CASES if audited_r_contract(record["version"]) else {})}
+    required_cases = {**R_CASES, **(R_AUDIT_CASES if audited else {}), **(SNP2_CASES if snp2 else {})}
     require(all(isinstance(name, str) and name for name in names) and len(set(names)) == len(names)
             and set(required_cases) <= set(names), "Required scientific differential cases are missing or duplicated")
     plots_verified = 0
@@ -543,6 +608,10 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                 and case.get("workflow") in set(R_WORKFLOWS.values())
                 and (case["case"] not in required_cases or case["workflow"] == required_cases[case["case"]]),
                 "A scientific differential case failed or has a different workflow")
+        if snp2:
+            expected_reference = "SNPcall 2.0" if case["workflow"] == "snp-call" else "NIPAT 0.8.5"
+            require(case.get("scientific_reference") == expected_reference,
+                    "Scientific differential case used the wrong algorithm reference")
         tables = case.get("table_sha256")
         require(isinstance(tables, dict) and tables
                 and all(safe_evidence_path(name) and valid_digest(value) for name, value in tables.items()),
@@ -560,8 +629,15 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                     and all(safe_evidence_path(page) and valid_digest(value)
                             for page, value in plot["page_sha256"].items()),
                     "Scientific PDF pixel comparison evidence is incomplete")
+            if snp2:
+                dimensions = plot.get("page_size_points")
+                require(isinstance(dimensions, list) and len(dimensions) == 2
+                        and all(type(value) in (int, float) and 0 < value <= 1440 for value in dimensions),
+                        "Scientific PDF dimensions are missing or exceed the reviewed presentation bounds")
             plots_verified += 1
-        if audited_r_contract(record["version"]) and case["case"] in R_MULTIBAM_PDFS:
+        if snp2:
+            verify_presentation_variants(case)
+        if audited and case["case"] in R_MULTIBAM_PDFS:
             require(len(plots) >= R_MULTIBAM_PDFS[case["case"]],
                     "Multi-BAM PDF comparisons are incomplete")
             verify_multibam_variants(case)
@@ -570,7 +646,8 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
     require(isinstance(helpers, list) and all(isinstance(item, dict) for item in helpers),
             "Scientific focused comparisons are missing")
     paths = [item.get("path") for item in helpers]
-    required_helpers = R_HELPERS | (R_AUDIT_HELPERS if audited_r_contract(record["version"]) else set())
+    required_helpers = (R_HELPERS | (R_AUDIT_HELPERS if audited else set())
+                        | ({PRESENTATION_HELPER} if snp2 else set()))
     require(all(safe_evidence_path(path) and path.startswith("tests/r_optimization/") for path in paths)
             and len(set(paths)) == len(paths) and required_helpers <= set(paths),
             "Required scientific focused comparisons are missing or duplicated")
@@ -579,6 +656,7 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                 hashlib.sha256(source(commit, helper["path"])).hexdigest(),
                 "Scientific focused comparison failed or used different test sources")
     return {"source_commit": commit, "reference_source_commit": R_REFERENCE_COMMIT,
+            **({"snp_reference": SNP2_REFERENCE} if snp2 else {}),
             "runtime_image": evidence["runtime_image"], "report_sha256": evidence["report_sha256"],
             "candidate_r_sha256": candidate_hashes, "cases_verified": len(cases),
             "focused_scripts_verified": len(helpers), "pdfs_verified": plots_verified,

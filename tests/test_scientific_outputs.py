@@ -6,6 +6,7 @@ import unittest
 
 from nipat_scientific.errors import PlanExecutionError
 from nipat_scientific.outputs import validate_standalone_outputs
+from snp_output_helpers import write_snp_auxiliary
 
 
 class ScientificOutputTests(unittest.TestCase):
@@ -22,8 +23,11 @@ class ScientificOutputTests(unittest.TestCase):
 
     def snp(self, ratio, ref=1):
         path = self.output / "SNPcall_output.txt"
-        path.write_text("chr\tpos\tReference\tAlternative\tN_Reference\tN_Alternative\tN_Altro\ttotal_count\tratio\n"
-                        f"chr1\t10\tA\tG\t{ref}\t0\t0\t{ref}\t{ratio}\n", encoding="utf-8")
+        path.write_text("chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tratio\tGL0\tGL1\tGL2\tGT\treads_discarded_for_indels\tratio_reads_discarded_for_indels\tcombined_bases\tcombined_counts\n"
+                        f"chr1\t10\tA\tG\t{ref}\t0\t0\t{ref}\t{ratio}\t"
+                        + ("-0.0001\t-0.6931\t-9.21\t0/0" if ref else "NA\tNA\tNA\tNA")
+                        + "\t0\t0\tNA\tNA\n", encoding="utf-8")
+        write_snp_auxiliary(self.output)
         return path
 
     def test_expected_na_and_anomalous_estimates_have_distinct_outcomes(self):
@@ -51,6 +55,43 @@ class ScientificOutputTests(unittest.TestCase):
         path.unlink()
         with self.assertRaises(PlanExecutionError):
             validate_standalone_outputs(self.request)
+
+    def test_snp2_q_zero_negative_infinity_is_valid_but_nan_and_positive_infinity_fail(self):
+        path = self.snp("1")
+        template = path.read_text()
+        path.write_text(template.replace("-0.0001", "-Inf"))
+        self.assertEqual(validate_standalone_outputs(self.request)["quality_warnings"], [])
+        for value in ("NaN", "Inf", "nonnumeric"):
+            path.write_text(template.replace("-0.0001", value))
+            with self.subTest(value=value), self.assertRaises(PlanExecutionError):
+                validate_standalone_outputs(self.request)
+
+    def test_snp2_alleles_and_unassigned_genotype_contract_are_checked(self):
+        path = self.snp("1")
+        template = path.read_text()
+        for changed in (template.replace("chr1\t10\tA\tG", "chr1\t10\tA\tT"),
+                        template.replace("0/0", "0|1"),
+                        template.replace("\t1\t0\t0\t1\t1\t", "\t9\t0\t1\t10\t1\t")):
+            path.write_text(changed)
+            with self.assertRaises(PlanExecutionError):
+                validate_standalone_outputs(self.request)
+        # At exactly 10% Other, counts and GL stay available while GT is NA.
+        path.write_text(template.replace("\t1\t0\t0\t1\t1\t", "\t9\t0\t1\t10\t1\t").replace("0/0", "NA"))
+        write_snp_auxiliary(self.output)
+        self.assertEqual(validate_standalone_outputs(self.request)["quality_warnings"], [])
+
+    def test_snp2_missing_plots_resources_or_inconsistent_genotypes_are_rejected(self):
+        for mutation in ("plot", "resources", "genotypes"):
+            self.snp("1")
+            if mutation == "plot":
+                (self.output / "plots/sample_0001/sample_0001_Ref_read_count.pdf").unlink()
+            elif mutation == "resources":
+                (self.output / "summary/resources.tsv").unlink()
+            else:
+                path = self.output / "summary/SNPcall_AllGenotypes.txt"
+                path.write_text(path.read_text().replace("0/0", "1/1"))
+            with self.subTest(mutation=mutation), self.assertRaises(PlanExecutionError):
+                validate_standalone_outputs(self.request)
 
     def test_contamination_summary_and_site_rows_must_agree(self):
         request = {"workflow": "contamination", "samples": [{"name": "sample.txt"}],

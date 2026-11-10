@@ -1,131 +1,143 @@
 #!/usr/bin/env Rscript
-# Compare pileup parsing and read aggregation with the frozen 0.8.5 source.
-suppressPackageStartupMessages({library(dplyr); library(tidyr); library(stringr)})
-arguments <- commandArgs(trailingOnly=TRUE)
+# Full-table differential tests against the byte-identical SNPcall 2.0 core.
+arguments <- commandArgs(trailingOnly = TRUE)
 if (length(arguments) != 1L) stop("Expected one repository root argument")
-repository <- normalizePath(arguments[[1]], mustWork=TRUE)
-relative <- "scientific/vendor/NEWPAT/SNPcall/SNPcall.R"
-paths <- c(reference=file.path(repository, "tests/reference_r/0.8.5", relative),
-           candidate=file.path(repository, relative))
-extract <- function(path) {
-  lines <- readLines(path, warn=FALSE)
-  start <- which(trimws(lines) == 'cat(">> reading pileup...\\n")')
-  end <- which(trimws(lines) == "# extract the text between pipes and remove the first and last pipe")
-  stopifnot(length(start) == 1L, length(end) == 1L, start < end)
-  parse(text=lines[seq.int(start, end-1L)])
+repository <- normalizePath(arguments[[1L]], mustWork = TRUE)
+Sys.setenv(NIPAT_PARALLEL_HELPER = file.path(repository, "src/nipat_scientific/parallel.R"))
+load_core <- function(path, upstream = FALSE) {
+  environment <- new.env(parent = globalenv())
+  expressions <- parse(file = path)
+  if (upstream) expressions <- Filter(function(x) !identical(x, quote(main())), expressions)
+  for (expression in expressions) eval(expression, environment)
+  environment
 }
-blocks <- lapply(paths, extract)
-source(Sys.getenv("NIPAT_PARALLEL_HELPER",
-                  unset=file.path(repository, "src/nipat_scientific/parallel.R")))
-candidate_expressions <- parse(file=paths[["candidate"]])
-group_definition <- Filter(function(expression) {
-  is.call(expression) && identical(expression[[1L]], as.name("<-")) &&
-    identical(expression[[2L]], as.name("nipat_snp_group_reads"))
-}, candidate_expressions)
-stopifnot(length(group_definition) == 1L)
-eval(group_definition[[1L]], globalenv())
-
-# readr uses its own thread pool, independent of the BLAS/OpenMP limits. Check
-# the real panel-reading call with a conflicting user option, then compare its
-# parsed values and row order against the frozen reference.
-local({
-  settings <- options(readr.num_threads=8L)
-  on.exit(options(settings), add=TRUE)
-  path <- tempfile(fileext=".tsv")
-  on.exit(unlink(path), add=TRUE)
-  writeLines(c("chr\tpos1\tpos2", "chr2\t120\t120", "chr1\t50\t50"), path)
-  panel_assignment <- function(path) {
-    expressions <- Filter(function(expression) {
-      is.call(expression) && identical(expression[[1L]], as.name("<-")) &&
-        identical(expression[[2L]], as.name("fake_DNP"))
-    }, parse(file=path))
-    stopifnot(length(expressions) == 1L)
-    expressions[[1L]]
-  }
-  evaluate_panel <- function(expression) {
-    values <- new.env(parent=globalenv())
-    values$snplist_file <- path
-    eval(expression, values)
-    as.data.frame(values$fake_DNP)
-  }
-  reference <- evaluate_panel(panel_assignment(paths[["reference"]]))
-  trace("read_tsv", where=asNamespace("readr"), print=FALSE,
-        tracer=quote(stopifnot(identical(num_threads, 1L))))
-  on.exit(untrace("read_tsv", where=asNamespace("readr")), add=TRUE)
-  candidate <- evaluate_panel(panel_assignment(paths[["candidate"]]))
-  stopifnot(identical(reference, candidate))
-})
-
-row <- function(position, bases, names, chromosome="chr1", extra=NULL) {
-  paste(c(chromosome, position, "A", nchar(bases), bases,
-          paste(rep("I", nchar(bases)), collapse=""), names, extra), collapse="\t")
+reference <- load_core(file.path(repository, "tests/reference_r/2.0/SNPcall.R"), TRUE)
+candidate <- load_core(file.path(repository, "scientific/vendor/NEWPAT/SNPcall/SNPcall.R"))
+root <- tempfile("snp2-regression-")
+dir.create(root)
+row <- function(position, bases, names, qualities = NULL, chromosome = "chr1", extra = NULL) {
+  count <- length(strsplit(names, ",", fixed = TRUE)[[1L]])
+  if (is.null(qualities)) qualities <- paste(rep("I", count), collapse = "")
+  paste(c(chromosome, position, "A", count, bases, qualities, names, extra), collapse = "\t")
 }
-ordinary <- vapply(49:51, function(position) row(position, ".,gT", "a,B,r@skip,shared"), "")
-cases <- list(
-  ordinary=ordinary,
-  shared_across_windows=c(ordinary, vapply(119:121, function(position)
-    row(position, ".,gT", "z,Z,r-1,shared"), "")),
-  extra_columns=vapply(49:51, function(position)
-    row(position, ".,gT", "a,B,r@skip,shared", extra=c("unused text", 123, "NA")), ""),
-  numeric_names=vapply(49:51, function(position) row(position, ".", "100", "1"), ""),
-  short_and_flank_indels=c(
-    row(49, ".,.*.", "all,reverse,left,flank,single"),
-    row(50, "GT...", "all,reverse,left,flank,right"),
-    row(51, ".,...", "all,reverse,flank,right,other-single")
-  ),
-  coordinate_at=vapply(49:51, function(position) row(position, ".,", "a,b", "chr@1"), ""),
-  empty_name=vapply(49:51, function(position) row(position, ".,G", "a,,b"), ""),
-  missing_name=vapply(49:51, function(position) row(position, ".", "NA"), ""),
-  whitespace_name=vapply(49:51, function(position) row(position, ".,", "read name,b"), ""),
-  mismatched_lengths=vapply(49:51, function(position) row(position, ".,", "a,b,c"), ""),
-  unicode_names=vapply(49:51, function(position) row(position, ".,", "\u00e9,Z"), "")
+window <- function(center, center_bases, names, qualities = NULL, chromosome = "chr1") {
+  count <- length(strsplit(names, ",", fixed = TRUE)[[1L]])
+  flank <- paste(rep(".", count), collapse = "")
+  c(row(center - 1L, flank, names, chromosome = chromosome),
+    row(center, center_bases, names, qualities, chromosome),
+    row(center + 1L, flank, names, chromosome = chromosome))
+}
+panel <- function(positions = 50L, chromosome = "chr1") {
+  data.frame(chr = chromosome, pos = positions, ref = "A", alt = "G")
+}
+names_100 <- paste(sprintf("read_%03d", seq_len(100L)), collapse = ",")
+base_cases <- list(
+  ordinary = list(panel(), window(50L, ".,gT", "a,B,r@skip,shared")),
+  shared_distant_windows = list(panel(c(50L, 120L)), c(
+    window(50L, "..GG", "a,b,c,shared"), window(120L, "GG..", "a,b,c,shared"))),
+  shared_overlapping_windows = list(panel(c(50L, 51L)),
+    vapply(49:52, function(p) row(p, ".G", "shared1,shared2"), "")),
+  mixed_qualities = list(panel(), window(50L, "....GG", "a,b,c,d,e,f", "!#5I?~")),
+  other_below_threshold = list(panel(), window(50L,
+    paste0(strrep("A", 81L), strrep("G", 10L), strrep("T", 9L)), names_100)),
+  other_at_threshold = list(panel(), window(50L,
+    paste0(strrep("A", 80L), strrep("G", 10L), strrep("T", 10L)), names_100)),
+  reference_only = list(panel(), window(50L, "....", "a,b,c,d")),
+  alternative_only = list(panel(), window(50L, "GGGG", "a,b,c,d")),
+  other_only = list(panel(), window(50L, "TTTT", "a,b,c,d")),
+  center_and_flank_indels = list(panel(), c(
+    row(49L, "..*..", "a,b,c,d,e"), row(50L, "AG.A+1A-2", "a,b,c,d,e"),
+    row(51L, ".....", "a,b,c,d,e"))),
+  incomplete_reads = list(panel(), c(
+    row(49L, "...", "complete,left,single"), row(50L, "GG.", "complete,left,right"),
+    row(51L, ".G", "complete,right"))),
+  absent_panel_locus = list(panel(c(50L, 120L)), window(50L, "..GG", "a,b,c,d")),
+  off_panel_observations = list(panel(), c(window(50L, "..GG", "a,b,c,d"),
+    window(120L, "TTTT", "a,b,c,d"))),
+  optional_columns = list(panel(), vapply(49:51, function(p)
+    row(p, "..GG", "a,b,c,d", extra = c("unused text", 123, "NA")), "")),
+  numeric_qnames = list(panel(chromosome = "1"),
+    window(50L, "..G", "100,101,102", chromosome = "1")),
+  coordinate_at = list(panel(chromosome = "chr@1"),
+    window(50L, ".G", "a,b", chromosome = "chr@1")),
+  empty_qname = list(panel(), window(50L, ".G.", "a,,b")),
+  missing_qname = list(panel(), window(50L, ".", "NA")),
+  whitespace_qname = list(panel(), window(50L, ".G", "read name,b")),
+  unicode_qnames = list(panel(), window(50L, ".G", "\u00e9,Z")),
+  invalid_quality_length = list(panel(), window(50L, "..G", "a,b,c", "II")),
+  duplicate_read_observations = list(panel(), window(50L, "..G", "a,a,b")),
+  interleaved_groups = list(panel(c(50L, 51L, 120L)), c(
+    vapply(49:52, function(p) row(p, strrep(".G", 50L), names_100), ""),
+    window(120L, strrep("G.", 50L), names_100)))
 )
-# Interleaved reads shared across many windows must retain their complete
-# coordinate paths; partitioning by locus would change the scientific result.
-cases$interleaved_global_names <- unlist(lapply(c(50L, 120L, 180L), function(center) {
-  qnames <- sprintf("read_%02d", c(seq(1L, 63L, 2L), seq(2L, 64L, 2L)))
-  vapply((center-1L):(center+1L), function(position) row(
-    position, paste(rep(c(".", ",", "G", "t"), 16L), collapse=""),
-    paste(qnames, collapse=",")), "")
-}), use.names=FALSE)
+configurations <- list(serial = c("serial", "4"), auto2 = c("auto", "2"),
+                       auto4 = c("auto", "4"), repeat4 = c("auto", "4"))
+evaluate <- function(environment, pileup, snplist) {
+  tryCatch({
+    invisible(capture.output(result <- suppressMessages(suppressWarnings(
+      environment$call_sample(pileup, snplist)))))
+    list(ok = TRUE, result = result)
+  }, error = function(error) list(ok = FALSE, message = conditionMessage(error)))
+}
 original_locale <- Sys.getlocale("LC_COLLATE")
 comparisons <- 0L
-configurations <- list(
-  serial=list(mode="serial", workers="4"),
-  two=list(mode="auto", workers="2"),
-  four=list(mode="auto", workers="4"),
-  four_repeat=list(mode="auto", workers="4")
-)
-for (locale in unique(c(original_locale, "C", "C.UTF-8", "en_US.UTF-8"))) {
+results <- list()
+for (locale in unique(c(original_locale, "C", "C.UTF-8"))) {
   selected <- suppressWarnings(Sys.setlocale("LC_COLLATE", locale))
   if (!nzchar(selected)) next
-  for (name in names(cases)) {
-    path <- tempfile(fileext=".pileup")
-    writeLines(cases[[name]], path, useBytes=TRUE)
-    evaluate <- function(block) {
-      environment <- new.env(parent=globalenv())
-      environment$pileup_file <- path
-      tryCatch({
-        invisible(capture.output(suppressMessages(suppressWarnings(eval(block, environment)))))
-        list(ok=TRUE, result=environment$df_count2)
-      }, error=function(error) list(ok=FALSE, class=class(error), message=conditionMessage(error)))
-    }
-    reference <- evaluate(blocks$reference)
-    for (configuration in names(configurations)) {
-      settings <- configurations[[configuration]]
-      Sys.setenv(NIPAT_EXECUTION_MODE=settings$mode, NIPAT_MAX_WORKERS=settings$workers)
-      candidate <- evaluate(blocks$candidate)
-      if (!identical(reference, candidate)) {
-        print(list(reference=reference, candidate=candidate))
-        stop("SNP pileup mismatch: ", locale, " / ", name, " / ", configuration)
+  for (name in names(base_cases)) {
+    case <- base_cases[[name]]
+    snplist <- file.path(root, paste0(name, ".tsv"))
+    pileup <- file.path(root, paste0(name, ".pileup"))
+    write.table(case[[1L]], snplist, quote = FALSE, sep = "\t", row.names = FALSE)
+    writeLines(case[[2L]], pileup, useBytes = TRUE)
+    expected <- evaluate(reference, pileup, snplist)
+    for (configuration in configurations) {
+      Sys.setenv(NIPAT_EXECUTION_MODE = configuration[[1L]], NIPAT_MAX_WORKERS = configuration[[2L]])
+      actual <- evaluate(candidate, pileup, snplist)
+      if (expected$ok != actual$ok || (expected$ok && !identical(expected$result, actual$result))) {
+        print(list(reference = expected, candidate = actual))
+        stop("SNP 2.0 mismatch: ", name, " / ", locale, " / ", paste(configuration, collapse = ":"))
       }
       comparisons <- comparisons + 1L
     }
-    unlink(path)
-    if (!reference$ok && !name %in% c("whitespace_name", "mismatched_lengths")) {
-      stop("Unexpected failure in SNP reference: ", name, ": ", reference$message)
-    }
+    if (!expected$ok && !name %in% c("whitespace_qname", "invalid_quality_length", "duplicate_read_observations"))
+      stop("Unexpected oracle failure: ", name, ": ", expected$message)
+    results[[name]] <- expected$result
   }
 }
 Sys.setlocale("LC_COLLATE", original_locale)
-cat("PASS SNP pileup transformations:", comparisons, "strict comparisons\n")
+# Independent assertions prevent an accidentally empty oracle comparison.
+stopifnot(results$shared_distant_windows$total_count == c(4L, 4L))
+stopifnot(results$shared_overlapping_windows$total_count == c(2L, 2L))
+stopifnot(results$other_below_threshold$GT == "0/1", is.na(results$other_at_threshold$GT))
+stopifnot(results$reference_only$GT == "0/0", results$alternative_only$GT == "1/1")
+stopifnot(is.na(results$other_only$GT), is.na(results$other_only$GL0))
+stopifnot(results$center_and_flank_indels$N_REF == 1L,
+          results$center_and_flank_indels$N_ALT == 1L,
+          results$center_and_flank_indels$reads_discarded_for_indels == 2L,
+          results$center_and_flank_indels$ratio_reads_discarded_for_indels == 2 / 5)
+# Empty whole-sample input uses the upstream worker fallback, including NA
+# indel statistics; the upstream call_sample itself never receives this input.
+empty <- file.path(root, "empty.pileup")
+file.create(empty)
+snplist <- file.path(root, "empty.tsv")
+write.table(panel(c(50L, 120L)), snplist, sep = "\t", quote = FALSE, row.names = FALSE)
+zero <- candidate$call_sample(empty, snplist)
+stopifnot(identical(zero$total_count, c(0L, 0L)), all(is.na(zero$GT)),
+          all(is.na(zero$ratio)), all(is.na(zero$reads_discarded_for_indels)))
+writeLines("chr1\t50\tA\t0\t*\t*\t*", empty)
+stopifnot(identical(zero, candidate$call_sample(empty, snplist)))
+legacy <- file.path(root, "legacy.tsv")
+writeLines(c("pos\tref\talt", "chr1:50\tA\tG"), legacy)
+ordinary <- file.path(root, "reference_only.pileup")
+stopifnot(identical(results$reference_only, candidate$call_sample(ordinary, legacy)))
+# readr's own thread pool must respect the same serial/resource budget.
+settings <- options(readr.num_threads = 8L)
+trace("read_tsv", where = asNamespace("readr"), print = FALSE,
+      tracer = quote(stopifnot(identical(num_threads, 1L))))
+invisible(candidate$call_sample(ordinary, legacy))
+untrace("read_tsv", where = asNamespace("readr"))
+options(settings)
+unlink(root, recursive = TRUE)
+cat("PASS SNP 2.0 tables:", comparisons, "strict oracle comparisons and edge assertions\n")
