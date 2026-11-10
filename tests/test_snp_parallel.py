@@ -1,5 +1,6 @@
 """Exercise bounded SNP worker processes, state ownership and descendant cleanup."""
 
+import errno
 import json
 import os
 from pathlib import Path
@@ -10,11 +11,11 @@ import tempfile
 import textwrap
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from nipat_scientific.executor import _atomic_json, _Cancellation, execute_plan
 from nipat_scientific.parallel import THREAD_LIMITS
-from nipat_scientific.snp_parallel import execute_independent_snp_steps
+from nipat_scientific.snp_parallel import _kill_group, execute_independent_snp_steps
 
 
 FAKE_R = r'''
@@ -132,6 +133,98 @@ class SnpParallelTests(unittest.TestCase):
                                      atomic_json=_atomic_json))
             budget.assert_not_called()
 
+    def test_darwin_exited_group_permission_error_does_not_mask_the_primary_failure(self):
+        for platform, returncode in (("darwin", 0), ("darwin", 17), ("darwin", None), ("linux", 0)):
+            with self.subTest(platform=platform, returncode=returncode):
+                worker = Mock(pid=123, poll=Mock(return_value=returncode))
+                with patch("nipat_scientific.snp_parallel.sys.platform", platform), \
+                        patch("nipat_scientific.snp_parallel.os.killpg", side_effect=PermissionError(errno.EPERM, "no signalable members")):
+                    if platform == "darwin" and returncode is not None:
+                        _kill_group(worker, signal.SIGTERM)
+                    else:
+                        with self.assertRaises(PermissionError):
+                            _kill_group(worker, signal.SIGTERM)
+
+    def test_state_replacement_during_worker_execution_cannot_abort_the_batch(self):
+        # A host-mounted filesystem need not let the coordinator open a record
+        # while its worker is replacing it. Model that condition at the read
+        # boundary, with real worker processes and independently checked tables.
+        original_popen = subprocess.Popen
+        original_read = Path.read_text
+        workers = {}
+
+        def start(command, *args, **kwargs):
+            process = original_popen(command, *args, **kwargs)
+            if "--worker" in command:
+                identifier = Path(command[-1]).stem.removeprefix("job-")
+                workers[f"state-{identifier}.json"] = process
+            return process
+
+        def read(path, *args, **kwargs):
+            process = workers.get(path.name)
+            if process is not None and process.poll() is None:
+                raise PermissionError(errno.EACCES, "record is being replaced", str(path))
+            return original_read(path, *args, **kwargs)
+
+        run = self.root / "concurrent-replacement"
+        with patch("nipat_scientific.snp_parallel.subprocess.Popen", side_effect=start), \
+                patch.object(Path, "read_text", read):
+            state = self.execute(run)
+        self.assertEqual(state["status"], "succeeded", state)
+        self.assertEqual(len(self.table_values(state, run)), 3)
+        self.assertTrue(all(process.poll() == 0 for process in workers.values()))
+
+    def test_final_state_visibility_recovers_without_restarting_workers(self):
+        original_read = Path.read_text
+        failures = {}
+
+        def read(path, *args, **kwargs):
+            if path.name.startswith("state-snp"):
+                attempt = failures.get(path.name, 0)
+                failures[path.name] = attempt + 1
+                if attempt == 0:
+                    raise FileNotFoundError(errno.ENOENT, "record temporarily unavailable", str(path))
+                if attempt == 1:
+                    return ""  # temporarily incomplete content must not be merged
+            return original_read(path, *args, **kwargs)
+
+        run = self.root / "delayed-visibility"
+        with patch.object(Path, "read_text", read):
+            state = self.execute(run)
+        self.assertEqual(state["status"], "succeeded", state)
+        self.assertEqual(len(self.table_values(state, run)), 3)
+        self.assertEqual(len(list((run / "parallel/snp").glob("job-*.json"))), 3)
+        self.assertEqual(set(failures), {"state-snp0.json", "state-snp1.json", "state-snp2.json"})
+
+    def test_unreadable_final_state_fails_with_details_and_preserves_cleanup(self):
+        original_read = Path.read_text
+        for failure in ("missing", "malformed", "wrong-identity"):
+            with self.subTest(failure=failure):
+                def read(path, *args, **kwargs):
+                    if path.name == "state-snp0.json":
+                        if failure == "missing":
+                            raise FileNotFoundError(errno.ENOENT, "record never became readable", str(path))
+                        if failure == "malformed":
+                            return "{broken"
+                        record = json.loads(original_read(path, *args, **kwargs))
+                        record["id"] = "another-sample"
+                        return json.dumps(record)
+                    return original_read(path, *args, **kwargs)
+
+                run = self.root / failure
+                with patch.object(Path, "read_text", read):
+                    state = self.execute(run, NIPAT_MAX_WORKERS="2")
+                self.assertEqual(state["status"], "failed", state)
+                self.assertEqual(state["error"]["code"], "execution.worker_state", state["error"])
+                self.assertIn("state-snp0.json", state["error"]["message"])
+                if failure != "wrong-identity":
+                    self.assertIn("FileNotFoundError" if failure == "missing" else "JSONDecodeError",
+                                  state["error"]["message"])
+                self.assertEqual(state, json.loads((run / "workflow-state.json").read_text()))
+                self.assertTrue(all(item["status"] not in {"pending", "running"}
+                                    for item in state["steps"]))
+                self.assertFalse((run / "snp_summary").exists())
+
     def test_insufficient_shared_budget_falls_back_to_serial_execution(self):
         run = self.root / "limited"
         with patch("nipat_scientific.snp_parallel._query_budget", return_value={"workers": 1, "tasks": 3, "reason": "memory"}):
@@ -159,6 +252,28 @@ class SnpParallelTests(unittest.TestCase):
         self.assertEqual(state["steps"][0]["exit_code"], 17)
         self.assertEqual(state["steps"][1]["status"], "cancelled")
         self.assertEqual(state["steps"][2]["status"], "blocked")
+        self.assertFalse((run / "steps/snp2").exists())
+        self.assert_descendants_stopped(run)
+
+    def test_cleanup_read_error_preserves_original_worker_failure_and_stops_siblings(self):
+        original_read = Path.read_text
+
+        def read(path, *args, **kwargs):
+            if path.name == "state-snp1.json":
+                raise PermissionError(errno.EACCES, "cancelled sibling state unavailable", str(path))
+            return original_read(path, *args, **kwargs)
+
+        run = self.root / "failed-with-unreadable-sibling"
+        with patch.object(Path, "read_text", read):
+            state = self.execute(run, NIPAT_MAX_WORKERS="2", SNP_FIXTURE_MODE="fail")
+        self.assertEqual(state["status"], "failed", state)
+        self.assertEqual(state["exit_code"], 17)
+        self.assertEqual(state["error"]["code"], "execution.process")
+        self.assertEqual([item["status"] for item in state["steps"]], ["failed", "cancelled", "blocked"])
+        diagnostic = state["steps"][1]["state_read_error"]
+        self.assertEqual(diagnostic["code"], "execution.worker_state")
+        self.assertIn("PermissionError", diagnostic["message"])
+        self.assertEqual(state, json.loads((run / "workflow-state.json").read_text()))
         self.assertFalse((run / "steps/snp2").exists())
         self.assert_descendants_stopped(run)
 
