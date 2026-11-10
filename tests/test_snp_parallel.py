@@ -128,8 +128,8 @@ class SnpParallelTests(unittest.TestCase):
         with patch("nipat_scientific.snp_parallel._query_budget") as budget:
             for environment, plan in scenarios:
                 with self.subTest(environment=environment, plan=plan), patch.dict(os.environ, {**self.environment, **environment}):
-                    self.assertFalse(execute_independent_snp_steps(plan, {}, self.root / "unused", {}, {}, _Cancellation(),
-                                     step_runner=None, atomic_json=_atomic_json))
+                    self.assertFalse(execute_independent_snp_steps(plan, {}, self.root / "unused", {}, _Cancellation(),
+                                     atomic_json=_atomic_json))
             budget.assert_not_called()
 
     def test_insufficient_shared_budget_falls_back_to_serial_execution(self):

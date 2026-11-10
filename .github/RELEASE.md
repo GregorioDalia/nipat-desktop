@@ -126,8 +126,9 @@ Una distribuzione per ricerca richiede:
   `reviewed-operative-changes-with-tested-r-equivalence-v1` nello schema 6
   (`reviewed-operative-changes-with-unchanged-vendored-r-v1` nello schema 5);
 - R vendorizzato invariato nello schema 5; nello schema 6, revisione esplicita
-  dei quattro script e confronto con il riferimento congelato 0.8.5; regressioni
-  della candidata e rapporto permanente
+  dei quattro script e confronto con i riferimenti congelati applicabili:
+  dalla 0.8.30, SNPcall 2.0 per SNP e NIPAT 0.8.5 per gli altri tre moduli;
+  regressioni della candidata e rapporto permanente
   di qualificazione, con prova dell'aggiornamento Ubuntu;
 - `macos_validation` distinto per `arm64` e `x86_64`: `passed` con evidenze
   HTTPS oppure `not-performed` con elenco vuoto;
@@ -140,12 +141,18 @@ revisionate ai quattro script noti e a `scientific/SHA256SUMS`, richiedendo
 `report_sha256` e `runtime_image`. Il rapporto deve appartenere al bundle
 `qualification-evidence.zip` della build accettata e confrontare sorgenti R
 esattamente corrispondenti al commit e all’immagine distribuiti. Il publisher
-verifica la baseline congelata contro il commit 0.8.5, tutti i casi differenziali
-richiesti, i controlli mirati, le tabelle, i valori non arrotondati e i rendering
-PDF; conserva l’esito in `scientific-equivalence-check.json`. Il confronto
-verifica i byte Git,
-non si limita a leggere gli hash dichiarati. Gli schemi precedenti rimangono
-utilizzati per le rispettive release storiche. Il
+verifica la baseline congelata contro il commit 0.8.5 e, dalla 0.8.30, anche
+i byte del sorgente SNPcall 2.0 identificato nel rapporto. Il campo
+`reference_source_commit` continua a identificare la baseline NIPAT 0.8.5;
+il riferimento SNP distinto è conservato in `snp_reference` nel rapporto.
+Tabelle e valori R non arrotondati devono coincidere con il riferimento
+scientifico pertinente. Dalla 0.8.30 i PDF aggiornati richiedono verifiche
+di contenuto e dimensioni, i controlli mirati degli istogrammi e rendering
+identici tra le modalità seriale e parallele della candidata. Le release
+precedenti mantengono il confronto dei rendering con la propria baseline.
+L’esito è conservato in `scientific-equivalence-check.json`. Il confronto
+verifica i byte Git, non si limita a leggere gli hash dichiarati. Gli schemi
+precedenti rimangono utilizzati per le rispettive release storiche. Il
 [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) descrive
 prove e registrazione senza trasformare i casi non svolti in esiti positivi.
 

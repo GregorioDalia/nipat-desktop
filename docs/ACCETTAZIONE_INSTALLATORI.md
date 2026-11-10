@@ -1,6 +1,6 @@
 # Accettazione degli installatori
 
-NIPAT Desktop 0.8.9 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+NIPAT Desktop 0.8.20 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
 macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
 identifica commit, build e checksum; distingue prove automatiche,
 osservazioni sui dispositivi e validazione scientifica di dominio.
@@ -37,11 +37,18 @@ dello schema 5 e un riferimento aggiuntivo alle evidenze scientifiche:
 
 Lo schema 5 continua a richiedere script R vendorizzati invariati. Dalla
 0.8.9 lo schema 6 permette la revisione dei quattro script R identificati e
-del relativo manifest, mantenendo immutabile il riferimento 0.8.5. Il publisher
+del relativo manifest, mantenendo immutabile il riferimento 0.8.5. Dalla
+0.8.30, SNP usa il sorgente originale congelato di SNPcall 2.0; DNP,
+Contamination e CPI mantengono il riferimento NIPAT 0.8.5. Il rapporto
+scientifico identifica separatamente il riferimento SNP. Il publisher
 verifica i byte Git prima/dopo, il rapporto conservato nel bundle della build,
 l’identità dell’immagine distribuita e gli hash dei sorgenti sottoposti ai test.
-Richiede i confronti completi per tutti i quattro moduli: tabelle esatte, valori
-R non arrotondati identici e rendering PDF esatto, oltre ai controlli mirati.
+Richiede i confronti completi per tutti i quattro moduli: tabelle esatte e
+valori R non arrotondati identici al riferimento pertinente. Dalla 0.8.30,
+la presentazione aggiornata è verificata per contenuto e dimensioni dei PDF,
+classi degli istogrammi e rendering identico tra esecuzione seriale e
+parallela della candidata. Per le versioni precedenti resta richiesto il
+rendering esatto rispetto alla baseline, oltre ai controlli mirati.
 Il risultato è conservato in `scientific-equivalence-check.json`.
 Il publisher confronta file e hash effettivi dei commit;
 una differenza non dichiarata o un rapporto riferito ad altri pacchetti
@@ -53,8 +60,10 @@ una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
 Usare una build manuale **Installers (review build)** completata sul commit
 revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
 i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
-di build diverse. Le [note 0.8.9](RELEASE_0.8.9.md) descrivono le funzionalità;
-i risultati di qualificazione devono riferirsi ai pacchetti esatti.
+di build diverse. Consultare le note della versione da qualificare, incluse
+quelle della [stabile 0.8.20](RELEASE_0.8.20.md) e della
+[candidata 0.8.30](RELEASE_0.8.30.md); i risultati di qualificazione devono
+riferirsi ai pacchetti esatti.
 
 La sequenza è: costruire, raccogliere evidenze, revisionare il record,
 integrare sorgenti e record in `main` conservando il commit compilato,

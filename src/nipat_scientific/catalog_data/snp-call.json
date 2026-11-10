@@ -944,10 +944,10 @@
       },
       "evidence": {
         "path": "src/nipat_scientific/snp_parallel.py",
-        "sha256": "436a6506604ebd28d62ad36e15fc01fb4226bf7d1a00546132ccd3e57360fcfb",
+        "sha256": "a32f5d4cbc34924645b948a0819dbac235478ec6459e7a3016616fc7b125de74",
         "source_lines": [
           1,
-          249
+          248
         ],
         "dependencies": [
           {
@@ -968,10 +968,10 @@
           },
           {
             "path": "src/nipat_scientific/executor.py",
-            "sha256": "a56b1c4fc150f6d019d59cc37f8debeda209cf62a4864942544d8fc63a150dd4",
+            "sha256": "f551c1bed78daa05f91a286ee5772fa301ad3f2ab69cbe85e1487aef19da15a2",
             "source_lines": [
               1,
-              493
+              492
             ]
           }
         ]

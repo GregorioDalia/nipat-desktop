@@ -43,14 +43,23 @@ prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
 
 ## Regressioni scientifiche
 
-Le modifiche R della 0.8.9 richiedono anche un confronto differenziale con i
-sorgenti congelati della 0.8.5. `scripts/verify_r_equivalence.py` esegue le
-due versioni nello stesso runtime e conserva risultati, log e rapporto
+Dalla 0.8.9 le modifiche R richiedono un confronto differenziale con i
+sorgenti congelati della 0.8.5. La candidata 0.8.30 usa invece il riferimento
+originale SNPcall 2.0 per SNP e mantiene NIPAT 0.8.5 per DNP, Contamination e
+CPI. `scripts/verify_r_equivalence.py` esegue candidata e riferimento
+pertinente nello stesso runtime e conserva risultati, log e rapporto
 `r-equivalence.json`. Un errore o una differenza impedisce il completamento
 del job scientifico. La build degli installatori applica lo stesso controllo
 prima dell'esportazione del runtime. I riferimenti di test non sono inclusi
 nel payload installato. I criteri sono descritti nel
-[piano di verifica 0.8.9](OPTIMIZATION_0.8.9.md).
+[piano di verifica 0.8.9](OPTIMIZATION_0.8.9.md) e nelle
+[note della candidata 0.8.30](RELEASE_0.8.30.md).
+
+Le tabelle esportate e i valori R non arrotondati devono coincidere con il
+rispettivo riferimento scientifico. Dalla 0.8.30, i grafici aggiornati sono
+verificati per contenuto, dimensioni e classi degli istogrammi; i rendering
+devono essere identici tra le modalità seriale e parallele della candidata.
+Le versioni precedenti conservano il confronto esatto con i PDF della baseline.
 
 Il container contiene R, samtools, gli script scientifici, gli adattatori e
 l'orchestrazione. Il client verifica i contratti e non monta gli script R

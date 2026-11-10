@@ -1,9 +1,8 @@
 # NIPAT Desktop 0.8.30
 
 Questa versione integra SNPcall 2.0 e corregge la presentazione dei risultati
-scientifici. Il codice è candidato alla qualificazione: la release stabile
-pubblicata resta la 0.8.20 finché gli installer della nuova versione non sono
-stati costruiti e verificati.
+scientifici. Gli installer sono pubblicati dopo la qualificazione del codice,
+dei pacchetti e delle rispettive evidenze.
 
 ## SNPcall 2.0
 
@@ -28,7 +27,7 @@ indel conta la base centrale, mentre l'esclusione della lettura considera
 l'intera finestra. Copertura zero e stima mancante sono rappresentate
 distintamente.
 
-Le ottimizzazioni mantengono il modello della ricercatrice: lettura delle sole
+Le ottimizzazioni mantengono il modello scientifico originale: lettura delle sole
 colonne necessarie, aggregazione delle osservazioni e processi entro il budget
 CPU/memoria. La modalità seriale resta disponibile. I risultati possono
 differire dal vecchio SNP di NIPAT perché il modello scientifico è cambiato;
