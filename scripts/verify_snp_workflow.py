@@ -14,6 +14,7 @@ from pathlib import Path
 import shutil
 from unittest.mock import patch
 
+from nipat.execution.options import ExecutionOptions
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
 from nipat.paths import ProjectLayout
@@ -240,6 +241,79 @@ def _deep_sample(identifier: str, root: Path, *, run_container) -> tuple[Path, P
     return generated / "work/sample.bam", panel, expected
 
 
+def _batch_snapshot(parent: Path, *, options: ExecutionOptions, count: int) -> dict[str, bytes]:
+    """Compare scientific bytes and require complete, bounded worker evidence."""
+    run = parent / "output/workflow"
+    state = _state(run)
+    result = {step["id"]: _artifact(run, step["artifacts"]["snp-tables"][0]).read_bytes()
+              for step in state["steps"]}
+    result["genotypes"] = _artifact(run, state["snp_summary"][0]["genotypes"]).read_bytes()
+    directory = run / "parallel/snp"
+    if options.execution_mode == "serial":
+        if "snp_parallel" in state or directory.exists():
+            raise ValueError("Serial SNP qualification launched a parallel coordinator.")
+        return result
+    workers = state.get("snp_parallel", {}).get("workers", 0)
+    if not 2 <= workers <= min(count, options.max_workers or count):
+        raise ValueError("SNP qualification did not exercise a bounded parallel batch.")
+    for step in state["steps"]:
+        worker = json.loads((directory / f"state-{step['id']}.json").read_text(encoding="utf-8"))
+        if worker != step:
+            raise ValueError("The SNP coordinator did not retain the final worker record.")
+    events = [json.loads(line) for path in directory.glob("worker-*.jsonl")
+              for line in path.read_text(encoding="utf-8").splitlines()]
+    started = [event for event in events if event["event"] == "task-start"]
+    ended = [event for event in events if event["event"] == "task-end"]
+    if (sorted(event["task_index"] for event in started) != list(range(1, count + 1))
+            or sorted(event["task_index"] for event in ended) != list(range(1, count + 1))
+            or any(event["outcome"] != "succeeded" for event in ended)):
+        raise ValueError("SNP worker evidence lost, duplicated or failed a sample.")
+    active = 0
+    for _timestamp, change in sorted(
+        [(event["observed_at_unix"], 1) for event in started]
+        + [(event["observed_at_unix"], -1) for event in ended]
+    ):
+        active += change
+        if not 0 <= active <= workers:
+            raise ValueError("SNP workers exceeded the shared process budget.")
+    if active:
+        raise ValueError("SNP qualification left an unfinished worker.")
+    return result
+
+
+def _check_batch_modes(root: Path, layout: ProjectLayout, inputs: Path,
+                       selected: list[tuple[Path, Path]]) -> None:
+    """Run the packaged R/samtools on 2/3/5 paths, reusing three allele fixtures."""
+    expanded = list(selected)
+    for index, (source, oracle) in enumerate(selected[:2], start=4):
+        alias = root / f"SNP batch alias {index}" / source.name
+        alias.parent.mkdir()
+        shutil.copyfile(source, alias)
+        expanded.append((alias, oracle))
+    originals = {path: path.read_bytes() for path, _oracle in expanded}
+    references = {}
+    scenarios = [(count, mode, cap, 1) for count in (2, 3, 5)
+                 for mode, cap in (("serial", None), ("auto", 2))]
+    scenarios.extend((3, "auto", None, repeat) for repeat in (1, 2))
+    for count, mode, cap, repeat in scenarios:
+        options = ExecutionOptions(execution_mode=mode, max_workers=cap)
+        workflows = Workflows(layout, DockerComposeRunner(layout, options=options))
+        candidates = expanded[:count]
+        name = f"snp-{count}bam-{mode}-cap{cap or 'default'}-r{repeat}"
+        batch = workflows.snp_batch(bams=[source for source, _oracle in candidates],
+                                    reference=inputs / "reference.fa", panel=inputs / "SNPlist.tsv",
+                                    run_name=name)
+        _snp_steps(batch, layout, candidates, mode="bam")
+        snapshot = _batch_snapshot(batch, options=options, count=count)
+        if mode == "serial":
+            references[count] = snapshot
+        elif snapshot != references[count]:
+            raise ValueError(f"Scientific SNP tables or aggregate genotypes changed: {name}")
+        print(f"PASS: {name}; 17-column independent oracle, final worker states and exact table parity.", flush=True)
+    if any(path.read_bytes() != content for path, content in originals.items()):
+        raise ValueError("SNP batch mode qualification changed an input BAM.")
+
+
 def _failed_snp_plan(identifier: str, root: Path, inputs: Path, *, run_container) -> None:
     """Qualify serial fail-fast and bounded parallel sibling cancellation separately."""
     broken = root / "SNP plan failure inputs"
@@ -336,6 +410,8 @@ def check_snp_plans(identifier: str, root: Path, inputs: Path, expected: Path,
             raise ValueError("SNP plan normalization modified the original panel.")
         if any(path.read_bytes() != content for path, content in old_run.items()):
             raise ValueError("Reusing SNP intermediates changed a completed run.")
+
+        _check_batch_modes(root, layout, inputs, selected)
 
         deep_bam, deep_panel, deep_expected = _deep_sample(identifier, root, run_container=run_container)
         deep_run = workflows.snp_call(bam=deep_bam, reference=inputs / "reference.fa",

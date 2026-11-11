@@ -6,12 +6,12 @@ non occorre scaricarla separatamente o importarla manualmente.
 
 I [download per piattaforma](../README.md#download) sono disponibili nel README.
 La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
-conserva tutte le versioni. La versione stabile 0.8.30 integra SNPcall 2.0
-come nuovo riferimento scientifico per SNP e mantiene la 0.8.5 per DNP,
-Contamination e CPI. Corregge la presentazione dei quattro moduli e conserva
-esecuzione seriale e parallelismo entro un budget comune. Funzionalità,
+conserva tutte le versioni. La versione stabile 0.8.35 include SNPcall 2.0,
+corregge la lettura dello stato dei processi SNP paralleli e amplia le
+verifiche dei batch. Mantiene la baseline 0.8.5 per DNP, Contamination e CPI,
+la presentazione corretta nella 0.8.30 e il budget comune di parallelismo. Funzionalità,
 aggiornamento e limiti delle verifiche sono descritti nelle
-[note di rilascio](RELEASE_0.8.30.md). La
+[note di rilascio](RELEASE_0.8.35.md). La
 [diagnostica delle prestazioni](PERFORMANCE.md) resta facoltativa e disattivata
 per impostazione predefinita.
 Scegliere l'installatore nella sezione Assets. Gli archivi **Source code**
@@ -70,7 +70,7 @@ Le installazioni sperimentali hanno identità separata e non vengono rimosse.
 Installare il `.deb` con il gestore pacchetti oppure, nella cartella del download:
 
 ```bash
-sudo apt install ./nipat-desktop_0.8.30_amd64.deb
+sudo apt install ./nipat-desktop_0.8.35_amd64.deb
 ```
 
 APT installa le dipendenze mancanti dai repository configurati, inclusi Python,
@@ -117,7 +117,7 @@ Chiudere le analisi prima di aggiornare; dati e risultati restano nelle loro
 cartelle. La guida del proprio sistema descrive il passaggio all'installatore.
 
 Chi usa la 0.8.5 o la 0.8.20 può selezionare **Verifica aggiornamenti** per
-scaricare il pacchetto ufficiale 0.8.30 compatibile e seguire la procedura del proprio sistema.
+scaricare il pacchetto ufficiale 0.8.35 compatibile e seguire la procedura del proprio sistema.
 Il download manuale dalla release resta disponibile. La verifica usa il numero
 di versione, non il commit: una build diversa con lo stesso numero non è un
 aggiornamento. Prima della pubblicazione i candidati sono distinti da commit,

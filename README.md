@@ -10,11 +10,12 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.30.** Integra SNPcall 2.0 di NEWPAT, con
-conteggi, likelihood basate sulle qualità, genotipi, statistiche degli indel
-e riepiloghi di più campioni. Corregge gli istogrammi includendo gli zeri
-e allineando le etichette agli intervalli; migliora la presentazione dei
-risultati dei quattro moduli.
+**Versione stabile: 0.8.35.** Include SNPcall 2.0 di NEWPAT e corregge
+la lettura dello stato dei processi nei batch SNP paralleli. La qualificazione
+verifica batch con 2, 3 e 5 BAM, risultati identici tra esecuzione seriale
+e parallela e diagnostica degli errori senza perdere la causa originale.
+Restano disponibili conteggi, likelihood basate sulle qualità, genotipi,
+statistiche degli indel e riepiloghi di più campioni.
 
 Sono disponibili esecuzione seriale, scelta automatica del parallelismo e
 un massimo configurabile di processi. I batch SNP e i blocchi DNP di più
@@ -25,8 +26,8 @@ resta facoltativa.
 Per SNP il riferimento scientifico è ora la versione upstream 2.0 congelata;
 DNP, Contamination e CPI mantengono la
 [baseline numerica 0.8.5](docs/OPTIMIZATION_0.8.9.md). I risultati SNP possono
-quindi differire da quelli delle versioni precedenti di NIPAT.
-Le [note della 0.8.30](docs/RELEASE_0.8.30.md) descrivono funzionalità,
+quindi differire da quelli delle versioni di NIPAT precedenti alla 0.8.30.
+Le [note della 0.8.35](docs/RELEASE_0.8.35.md) descrivono funzionalità,
 aggiornamento e limiti delle verifiche.
 
 ## Download
@@ -35,14 +36,14 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.30 |
+| Sistema | Versione stabile 0.8.35 |
 | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.30/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.30/NIPAT-0.8.30-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.30/NIPAT-0.8.30-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.30/nipat-desktop_0.8.30_amd64.deb) |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/NIPAT-0.8.35-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/NIPAT-0.8.35-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/nipat-desktop_0.8.35_amd64.deb) |
 
-La pagina della [release 0.8.30](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.30)
+La pagina della [release 0.8.35](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.35)
 riporta note, checksum e verifiche dei pacchetti. Le
 [release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
 restano disponibili. La
@@ -311,7 +312,8 @@ indipendenti e problemi riproducibili.
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
 - [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
-- [Note della versione stabile 0.8.30](docs/RELEASE_0.8.30.md)
+- [Note della versione stabile 0.8.35](docs/RELEASE_0.8.35.md)
+- [Integrazione SNPcall 2.0 nella versione 0.8.30](docs/RELEASE_0.8.30.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Controlli degli input e dei risultati](docs/INPUT_VALIDATION.md)

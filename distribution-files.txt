@@ -408,3 +408,6 @@ docs/RELEASE_0.8.30.md
 tests/snp_output_helpers.py
 tests/test_snp_summary.py
 tests/test_snp_parallel.py
+
+# SNP batch state recovery and expanded package qualification (0.8.35).
+docs/RELEASE_0.8.35.md
