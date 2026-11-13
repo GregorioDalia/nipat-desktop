@@ -264,12 +264,45 @@ Start. Conservare questi file della cartella applicativa:
 - `.runtime\installer\state.json`: fase ed errore registrati;
 - `.runtime\backend.json`: configurazione attivata, se presente.
 
+Le versioni con diagnostica esplicita conservano anche `doctor.stdout.log`,
+`doctor.stderr.log`, `self-test.stdout.log`, `self-test.stderr.log` e i rispettivi
+file `*.exit-code.txt` in `.runtime\installer`. Questi file descrivono l'ultimo
+controllo concluso. Un messaggio su stderr non equivale da solo a un fallimento:
+il bootstrap considera il codice di uscita e conserva entrambi gli stream.
+
 Non modificare questi file per forzare lo stato `ready`. I registri di recupero
 e il backup selettivo hanno scopi distinti; nessuno costituisce una copia
 completa dell'installazione. Inno Setup copia i file applicativi prima della
 preparazione del runtime:
 un errore lascia l'applicazione bloccata fino al completamento del setup,
 anche se la distribuzione precedente è ancora presente.
+
+### Riparazione dell'autotest CPIN della 0.8.50
+
+Il setup ufficiale 0.8.50 contiene un difetto nell'avvio di
+`scripts/verify_cpin_update.py`: il Python incorporato non aggiunge automaticamente
+la cartella dello script ai percorsi di importazione. Il controllo può quindi
+terminare con `ModuleNotFoundError: No module named 'verify_contamination_update'`.
+Il transcript delle versioni precedenti può omettere questo dettaglio.
+
+Lo script [repair-0850-self-test.ps1](../scripts/windows/repair-0850-self-test.ps1)
+applica una correzione locale soltanto al verificatore conosciuto della release
+ufficiale. Verifica versione e hash, conserva backup e ricevuta separata e ripete
+la preparazione completa con i controlli originali. Usarlo da PowerShell normale,
+senza elevazione, indicando il commit immutabile da cui è stato scaricato tramite
+`-HotfixSourceCommit`. Dati, risultati e manifest della release restano intatti.
+Lo stato `ready` viene scritto esclusivamente dal bootstrap dopo il successo.
+
+L'installazione risultante è **0.8.50 con correzione locale**. La ricevuta distingue
+il pacchetto originario dalla correzione; non riscrive l'inventario per dichiarare
+che il file modificato appartenga al setup originale. La funzione di manutenzione
+«recupera» rileva questa differenza. Rieseguire l'EXE 0.8.50 originale ripristina
+il verificatore difettoso; un successivo installer ufficiale corretto sostituisce
+la riparazione locale.
+
+La verifica del payload ora avvia tutti e cinque i verificatori con `--help`
+usando il Python incorporato. Questo controllo rapido intercetta import mancanti
+prima della distribuzione, senza ripetere i calcoli scientifici.
 
 ## Manutenzione dei componenti installati
 

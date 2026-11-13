@@ -145,10 +145,9 @@ try {
         $python = Install-NipatPython $project
         Save-NipatPhase 'verifying_installation'
         Complete-NipatRuntimeActivation $project $statePath $state $configuration {
-            & $python -m nipat doctor --runtime
-            if ($LASTEXITCODE -ne 0) { throw 'Controllo runtime non superato. Consultare setup.log e riprovare dal menu Start.' }
-            & $python -m nipat self-test
-            if ($LASTEXITCODE -ne 0) { throw "Autotest non superati. Consultare setup.log e i risultati in $env:NIPAT_RUNS_DIR; riaprire il setup dopo la correzione." }
+            $checkLogs = Split-Path -Parent $statePath
+            Invoke-NipatSetupCheck $python @('-X', 'utf8', '-u', '-m', 'nipat', 'doctor', '--runtime') $checkLogs 'doctor'
+            Invoke-NipatSetupCheck $python @('-X', 'utf8', '-u', '-m', 'nipat', 'self-test') $checkLogs 'self-test'
         }
         Unregister-NipatResume
         Write-Host ($profile.display_name + ' e pronto. Apri ' + $profile.display_name + ' dal menu Start per scegliere un analisi.')

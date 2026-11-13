@@ -185,6 +185,29 @@ try {
     Assert-Test ((ConvertTo-NipatNativeArgument '') -ceq '""') 'native empty argument'
     Assert-Test ((ConvertTo-NipatNativeArgument 'C:\a b\') -ceq '"C:\a b\\"') 'native path space and trailing slash'
     Assert-Test ((ConvertTo-NipatNativeArgument 'a"b') -ceq '"a\"b"') 'native embedded quote'
+    $checkLogs = Join-Path $temporary 'setup checks with spaces'
+    $checkExecutable = (Get-Process -Id $PID).Path
+    $checkScript = "[Console]::OutputEncoding = [Text.Encoding]::UTF8; [Console]::WriteLine('before'); [Console]::Error.WriteLine('warning'); [Console]::WriteLine([char]0x00E9); [Console]::WriteLine('after'); exit 0"
+    Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', $checkScript) $checkLogs 'doctor' 6> $null
+    $checkOutput = [IO.File]::ReadAllText((Join-Path $checkLogs 'doctor.stdout.log'))
+    Assert-Test ($checkOutput.Contains('before') -and $checkOutput.Contains('after')) 'setup stdout is retained through completion'
+    Assert-Test ($checkOutput.Contains([string][char]0x00E9)) 'setup diagnostics preserve Unicode output'
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'doctor.stderr.log')).Trim() -ceq 'warning') 'setup stderr is retained even on success'
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'doctor.exit-code.txt')).Trim() -ceq '0') 'stderr alone does not fail a successful setup check'
+    # Both streams exceed a pipe buffer: sequential draining would deadlock.
+    $checkScript = "[Console]::Out.Write(('o' * 70000)); [Console]::Error.Write(('e' * 70000)); exit 7"
+    $checkError = ''
+    try {
+        Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', $checkScript) $checkLogs 'self-test' 6> $null
+    } catch { $checkError = $_.Exception.Message }
+    Assert-Test ($checkError.Contains('codice 7') -and $checkError.Contains('self-test.stderr.log')) 'setup failure preserves its native exit code and diagnostic path'
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.stdout.log')) -ceq ('o' * 70000)) 'failed setup check retains all stdout'
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.stderr.log')) -ceq ('e' * 70000)) 'failed setup check retains all stderr'
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.exit-code.txt')).Trim() -ceq '7') 'failed setup exit code is saved separately'
+    Assert-Rejected {
+        Invoke-NipatSetupCheck (Join-Path $temporary 'missing.exe') @() $checkLogs 'doctor' 6> $null
+    } 'setup launch failure cannot reuse a successful prior exit code'
+    Assert-Test (-not (Test-Path -LiteralPath (Join-Path $checkLogs 'doctor.exit-code.txt'))) 'launch failure removes stale exit-code evidence'
     $script:NipatWsl = (Get-Process -Id $PID).Path
     $probe = Invoke-NipatWsl @('-NoLogo', '-NoProfile', '-Command', "[Console]::Error.WriteLine('warning'); [Console]::WriteLine('marker'); exit 0") -TimeoutSeconds 20
     Assert-Test ($probe.Text -ceq 'marker' -and $probe.ErrorText -ceq 'warning') 'native stderr warning does not corrupt marker output'

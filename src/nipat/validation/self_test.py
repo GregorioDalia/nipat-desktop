@@ -112,7 +112,7 @@ def run_self_tests(layout: ProjectLayout) -> None:
         print(f"\nAutotest {label}", flush=True)
         try:
             subprocess.run(
-                [sys.executable, str(script)], cwd=layout.project_dir,
+                [sys.executable, "-X", "utf8", "-u", str(script)], cwd=layout.project_dir,
                 env=environment, check=True,
             )
         except (OSError, subprocess.CalledProcessError) as exc:

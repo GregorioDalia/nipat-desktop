@@ -184,8 +184,9 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
     cwd = work / "working directory è"
     cwd.mkdir()
 
-    def invoke(name: str, args: list, stdin: str | None = None) -> str:
-        command = [sys.executable, "-B", "-X", "utf8", "-m", "nipat", *map(str, args)]
+    def invoke(name: str, args: list, stdin: str | None = None, *, script: Path | None = None) -> str:
+        entrypoint = [str(script)] if script is not None else ["-m", "nipat"]
+        command = [sys.executable, "-B", "-X", "utf8", *entrypoint, *map(str, args)]
         result = subprocess.run(command, input=stdin, capture_output=True, text=True,
                                 encoding="utf-8", errors="replace", cwd=cwd, env=environment, timeout=120)
         (logs / f"{name}.log").write_text(json.dumps(command, ensure_ascii=False) + "\n" +
@@ -194,6 +195,14 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
         return result.stdout
 
     require(invoke("version", ["--version"]).strip() == f"NIPAT {manifest['version']}", "Wrong packaged version.")
+    # Use the real embedded interpreter's ._pth, exactly as self-test does.
+    # --help verifies every packaged entrypoint/import without starting WSL or R.
+    for filename in ("verify_snp_example.py", "verify_cpi_update.py", "verify_contamination_update.py",
+                     "verify_cpin_update.py", "verify_input_modes.py"):
+        script = app / "scripts" / filename
+        require(script.is_file(), f"Packaged self-test verifier is missing: {filename}")
+        help_text = invoke(f"self-test-{script.stem}", ["--help"], script=script)
+        require("--help" in help_text, f"Packaged self-test help is missing: {filename}")
     catalog = json.loads(invoke("catalog", ["parameters", "--json"]))
     require(set(catalog["workflows"]) ==
             {"dnp-call", "snp-call", "contamination", "cpi", "cpin"}, "Incomplete packaged scientific catalog.")
