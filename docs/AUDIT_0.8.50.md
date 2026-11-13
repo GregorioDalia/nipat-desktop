@@ -25,6 +25,17 @@ alla candidata.
 
 ## Prestazioni e manutenzione
 
+Il collaudo degli installer ha inoltre evidenziato tre problemi operativi.
+Le evidenze dei test Docker ora sono scritte con UID/GID del runner, conservando
+i permessi riservati dei file. I test dell'avanzamento usano un orologio
+deterministico, mantenendo thread reali e i casi di successo, errore e annullamento.
+Per una terminazione 137/-9, la diagnosi ricontrolla brevemente lo stato Docker
+prima della rimozione del container: accetta un eventuale flag OOM tardivo solo
+per la stessa identità verificata, entro un budget di due secondi.
+Senza quel flag, la causa resta non confermata; il codice 137 da solo non prova
+un esaurimento della memoria. Il test di integrazione continua a richiedere
+la conferma esplicita di Docker per l'OOM provocato intenzionalmente.
+
 La preparazione CPI/CPIN conserva una cache limitata al singolo preflight per
 evitare nuove scansioni delle tabelle dei genitori condivisi. La cache non
 persiste tra esecuzioni e non sostituisce la convalida nel runtime.

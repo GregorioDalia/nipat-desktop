@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import time
 from typing import Any
 
 from nipat.errors import RuntimeExecutionError, ValidationError
@@ -31,7 +32,8 @@ _INSPECT_FORMAT = (
 )
 
 
-def inspect_container(runner, name: str, expected_labels: dict[str, str]) -> dict[str, Any]:
+def inspect_container(runner, name: str, expected_labels: dict[str, str], *,
+                      timeout: float = 15) -> dict[str, Any]:
     observation: dict[str, Any] = {
         "observed_at": utc_now(), "availability": "unavailable", "owned": False,
     }
@@ -42,7 +44,7 @@ def inspect_container(runner, name: str, expected_labels: dict[str, str]) -> dic
         )
         result = subprocess.run(
             argv, env=runner._environment(), capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=15, check=False,
+            encoding="utf-8", errors="replace", timeout=timeout, check=False,
             stdin=subprocess.DEVNULL, **cleanup_process_options(),
         )
         if result.returncode:
@@ -92,6 +94,40 @@ def inspect_container(runner, name: str, expected_labels: dict[str, str]) -> dic
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, RecursionError,
             RuntimeExecutionError, ValidationError):
         observation["reason"] = "observation_unavailable"
+    return observation
+
+
+def settle_oom_observation(runner, name: str, expected_labels: dict[str, str],
+                           observation: dict[str, Any], returncode: int | None) -> dict[str, Any]:
+    """Briefly recheck a terminal SIGKILL before removing its owned container.
+
+    Docker may deliver an OOM flag after the exit notification. Never infer it
+    from 137 or replace a verified observation with unavailable/replaced state.
+    The five attempts share a two-second budget, including inspection timeouts.
+    """
+    state = observation.get("state", {})
+    identifier = observation.get("container_id", "")
+    if (returncode not in (137, -9) or observation.get("owned") is not True
+            or observation.get("availability") != "available"
+            or state.get("status") not in {"exited", "dead"}
+            or state.get("oom_killed") is not False
+            or not isinstance(identifier, str) or not _ID.fullmatch(identifier)):
+        return observation
+    deadline = time.monotonic() + 2.0
+    for _ in range(5):
+        if deadline - time.monotonic() <= 0.2:
+            break
+        time.sleep(0.2)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        updated = inspect_container(runner, name, expected_labels, timeout=remaining)
+        if (updated.get("owned") is not True or updated.get("container_id") != identifier
+                or updated.get("state", {}).get("status") not in {"exited", "dead"}):
+            break
+        observation = updated
+        if updated["state"].get("oom_killed") is True:
+            break
     return observation
 
 
