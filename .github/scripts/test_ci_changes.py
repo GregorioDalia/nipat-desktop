@@ -43,6 +43,33 @@ class ScientificSelection(unittest.TestCase):
         self.write("docs/usage.md", "usage\n")
         self.assertFalse(self.selected())
 
+    def test_publisher_workflow_requires_packaging_without_scientific_or_runtime_checks(self):
+        self.write(".github/workflows/publish-windows-release.yml", "updated publication policy\n")
+        decision, _ = changes.layer_decision(self.base, self.commit(), repository=self.root)
+        self.assertEqual(decision, {
+            "client": False, "scientific": False, "runtime": False, "packaging": True,
+        })
+
+    def test_other_workflows_and_selection_policy_require_every_layer(self):
+        for name in (
+            ".github/workflows/ci.yml", ".github/workflows/windows-installer.yml",
+            ".github/workflows/previously-unknown.yml", ".github/workflows/security-monitoring.yml",
+            ".github/scripts/ci_changes.py", ".github/scripts/test_ci_changes.py",
+        ):
+            with self.subTest(path=name):
+                self.write(name, "updated workflow or selection policy\n")
+                head = self.commit()
+                decision, _ = changes.layer_decision(self.base, head, repository=self.root)
+                self.assertEqual(decision, dict.fromkeys(changes.LAYERS, True))
+                self.base = head
+
+    def test_publisher_change_cannot_hide_a_scientific_change(self):
+        self.write(".github/workflows/publish-windows-release.yml", "updated publication policy\n")
+        self.write("scientific/panel.txt", "changed scientific input\n")
+        decision, _ = changes.layer_decision(self.base, self.commit(), repository=self.root)
+        self.assertTrue(decision["scientific"])
+        self.assertTrue(decision["packaging"])
+
     def test_deleting_scientific_input_requires_integration(self):
         (self.root / "scientific/panel.txt").unlink()
         self.assertTrue(self.selected())

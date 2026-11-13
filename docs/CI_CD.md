@@ -11,7 +11,7 @@ Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 | --- | --- | --- |
 | [CI](../.github/workflows/ci.yml) | Push, pull request, avvio manuale. | Test del client e dei contratti, controlli dei sorgenti e della documentazione, componenti di piattaforma e regressioni scientifiche applicabili. |
 | [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale su un commit revisionato. | Quattro installatori con manifest, checksum e rapporti; nessuna pubblicazione automatica. |
-| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Preparazione di una bozza o pubblicazione separata dei pacchetti accettati, senza ricompilarli. |
+| [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Bozza e pubblicazione dei pacchetti accettati, in fasi separate oppure in un'unica esecuzione esplicita, senza ricompilarli. |
 | [Published runtime security report](../.github/workflows/security-monitoring.yml) | Pianificazione e avvio manuale. | Inventari e segnalazioni sulle immagini pubblicate, da esaminare separatamente. |
 
 La CI seleziona i controlli in base ai file modificati. Contratti, runtime,
@@ -20,6 +20,10 @@ disponibile non viene interpretato come una modifica della sola documentazione.
 Il controllo aggregato `required` verifica l'esito dei job richiesti.
 I controlli della pull request rimangono attivi quando il push viene deduplicato.
 Gli installatori completi vengono costruiti su richiesta, non a ogni push.
+Una modifica al solo workflow di pubblicazione richiede i controlli di packaging
+e i controlli rapidi obbligatori; non riesegue il runtime scientifico. Le modifiche
+al selettore, alla CI, alla build o a workflow non riconosciuti conservano tutti
+i livelli. Una modifica scientifica concomitante riattiva sempre quel livello.
 
 ## Copertura e limiti
 
@@ -106,6 +110,13 @@ comune ai quattro pacchetti. La build produce:
 | `nipat-macos-setup-x86_64` | `NIPAT-0.8.50-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
+I controlli Windows e il runtime Linux partono in parallelo dopo la verifica
+della sorgente. Il compilatore Windows attende entrambi; il controllo finale
+richiede il successo di tutti e quattro gli installer. Sul profilo temporale
+riportato sotto, la sovrapposizione eliminerebbe circa 3 min 34 s dal percorso
+critico, da confermare con una build completa. Se Windows fallisce, il ramo
+Linux può consumare ulteriore tempo di esecuzione, ma la pubblicazione resta bloccata.
+
 La release espone direttamente il file da installare per ciascuna piattaforma.
 I pacchetti **Source code** non contengono l'ambiente pronto all'uso. Gli archivi
 del runtime e i rapporti servono a verifica e recupero, non richiedono operazioni
@@ -146,7 +157,9 @@ non sostituiscono quelle di interazione Finder o delle policy del dispositivo.
 
 Sorgenti e record di accettazione vengono integrati in `main` conservando il
 commit compilato. Il publisher crea una bozza con gli stessi byte verificati;
-un secondo avvio pubblica quella bozza dopo averne ricontrollato i contenuti.
+`prepare-and-publish` prepara e pubblica in un'unica esecuzione esplicita,
+ricontrollando la bozza prima della pubblicazione. In alternativa, `prepare`
+e `publish` mantengono le due fasi separate per esaminare la bozza.
 `stable` identifica la release ufficiale e `Latest`; `testing` una pre-release.
 La scelta non dichiara una validazione scientifica generale.
 
@@ -157,3 +170,45 @@ Per ricerca pre-1.0 sono ammessi scenari desktop non ancora eseguiti, dichiarati
 nel record; la [procedura di pubblicazione](../.github/RELEASE.md) specifica
 le evidenze richieste e la [scheda di validazione](VALIDAZIONE.md) raccoglie
 le osservazioni dei ricercatori.
+
+## Tempi e gestione dei rilanci
+
+La [build 43430275209](https://github.com/GregorioDalia/nipat-desktop/actions/runs/43430275209)
+del 13 novembre 2026 permette di distinguere il costo di un ciclo dai tentativi
+ripetuti. Queste sono misure di quella esecuzione, non soglie garantite:
+
+| Fase sul percorso critico | Durata |
+| --- | --- |
+| Identificazione sorgente | 21 s |
+| Controlli Windows | 3 min 34 s |
+| Runtime Linux, regressioni ed esportazione | 19 min 54 s |
+| Quattro installer in parallelo | 5 min 48 s |
+| Raccolta e controllo finale | 2 min 32 s |
+| Avvio dei job e intervalli | 16 s |
+| **Totale** | **32 min 25 s** |
+
+Nel job Linux, i controlli scientifici richiedevano 13 min 55 s, i test Python
+53 s e le guardie della release 3 s. Il fallimento finale riguardava il limite
+dei file delle evidenze, dopo il completamento dei quattro installer. I sette
+tentativi di build della candidata precedenti alla correzione finale totalizzavano
+75 min 45 s di esecuzione; le CI parallele non vanno sommate a questo valore
+come attesa dell'operatore.
+
+Il preflight delle evidenze scientifiche usa lo stesso lettore e gli stessi
+limiti dell'archivio finale, prima dell'esportazione e del packaging. Non attesta
+gli installer ancora da costruire: il controllo completo finale resta richiesto.
+Sulle evidenze reali del tentativo fallito ha letto 3.602 file in 1,34 s e avrebbe
+intercettato il precedente limite circa 12 minuti prima. Non riduce in modo
+significativo la durata di una build già corretta.
+
+Congelare la candidata prima della build e completare i controlli locali pertinenti.
+Creare il ramo di accettazione quando il record è disponibile, evitando una nuova
+CI completa su un ramo provvisorio senza modifiche. Per un guasto transitorio su
+uno stesso commit usare il rilancio dei soli job falliti; una correzione dei sorgenti
+richiede evidenze corrispondenti alla nuova candidata. La modalità combinata di
+pubblicazione evita il secondo download e la seconda qualificazione locale degli
+stessi pacchetti, mantenendo la verifica dei contenuti della bozza.
+
+Il riuso della qualificazione tra CI e build non è ancora implementato: richiede
+un contratto che identifichi sorgenti, verificatori, fixture, dipendenze e immagine
+esatti. Il numero dei test, da solo, non motiva l'eliminazione di controlli numerici.

@@ -39,7 +39,8 @@ jobs:
     # The release verifier binds the jobs API display name to this stable identity.
     name: windows-checks
     needs: release-source
-    # Run the quick Windows checks before exporting the large Linux runtime assets.
+    # Independent Windows and Linux checks overlap; their installer consumers
+    # still require every producer to succeed before assembling the release.
     runs-on: windows-2022
     timeout-minutes: 15
     env:
@@ -81,7 +82,7 @@ jobs:
           if-no-files-found: error
 
   linux-runtime:
-    needs: windows-checks
+    needs: release-source
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
@@ -185,6 +186,20 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_r_equivalence.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Preflight scientific evidence before building installers
+        # These complete check directories dominate the eventual bundle. Platform
+        # reports and the selected self-test logs are checked in the final bundle.
+        run: |
+          python .github/scripts/qualification_evidence.py --preflight \
+            --source engine "$RUNNER_TEMP/nipat-engine-check" \
+            --source presentation "$RUNNER_TEMP/nipat-presentation-check" \
+            --source performance "$RUNNER_TEMP/nipat-performance-check" \
+            --source native-r "$RUNNER_TEMP/nipat-native-r-check" \
+            --source five-modules "$RUNNER_TEMP/nipat-five-modules-check" \
+            --source r-equivalence "$RUNNER_TEMP/nipat-r-equivalence-check" \
+            --source quality build/quality \
+            --source synthetic-fixtures tests/fixtures \
+            --redact-root "$GITHUB_WORKSPACE" --redact-root "$RUNNER_TEMP"
       - name: Build dedicated WSL filesystem from pinned dependencies
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:

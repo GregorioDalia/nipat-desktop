@@ -1,8 +1,11 @@
 import copy
+from contextlib import nullcontext
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -41,6 +44,52 @@ class QualificationEvidenceTests(unittest.TestCase):
             self.assertIn(b"${CI_WORKSPACE}/fixture.txt", handle.read("science/command.log"))
             self.assertIn(b"0.602,0.602", handle.read("science/result.csv"))
             self.assertEqual(json.loads(handle.read("science/samples.jsonl"))["memory_bytes"], 1048576)
+
+    def test_preflight_matches_final_sanitized_evidence_without_writing_a_bundle(self):
+        before = set(self.root.rglob("*"))
+        result = qualification.preflight({"science": self.source}, {"/private/runner": "${CI_WORKSPACE}"})
+        self.assertEqual(result, {"entries": len(self.descriptor["entries"]),
+                                 "expanded_bytes": sum(entry["size"] for entry in self.descriptor["entries"])})
+        self.assertEqual(set(self.root.rglob("*")), before)
+
+    def test_preflight_and_build_reject_the_same_invalid_evidence(self):
+        for kind in ("entry-count", "expanded-bytes", "file-size", "invalid-utf8", "symlink", "unreadable"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = root / "source"
+                source.mkdir()
+                sample = source / "sample.txt"
+                sample.write_text("synthetic evidence\n", encoding="utf-8")
+                if kind == "invalid-utf8":
+                    sample.write_bytes(b"\xff")
+                limit = {"entry-count": "MAX_ENTRIES", "expanded-bytes": "MAX_TOTAL", "file-size": "MAX_FILE"}.get(kind)
+                if limit:
+                    setting = patch.object(qualification, limit, 0)
+                elif kind == "unreadable":
+                    setting = patch.object(Path, "read_bytes", side_effect=PermissionError("unreadable evidence"))
+                elif kind == "symlink":
+                    setting = patch.object(Path, "is_symlink", lambda path: path == sample)
+                else:
+                    setting = nullcontext()
+                with setting:
+                    errors = []
+                    for operation in (lambda: qualification.preflight({"science": source}),
+                                      lambda: qualification.build(root / "output", self.installer_set, {"science": source})):
+                        with self.assertRaises((ValueError, OSError)) as raised:
+                            operation()
+                        errors.append((type(raised.exception), str(raised.exception)))
+                    self.assertEqual(errors[0], errors[1])
+                self.assertFalse((root / "output" / qualification.ARCHIVE).exists())
+                self.assertFalse((root / "output" / qualification.DESCRIPTOR).exists())
+
+    def test_preflight_cli_requires_no_installer_identity_and_still_rejects_invalid_evidence(self):
+        command = [sys.executable, str(Path(qualification.__file__)), "--preflight", "--source", "science", str(self.source)]
+        accepted = subprocess.run(command, capture_output=True, text=True)
+        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertIn("Final installer-bound verification remains required", accepted.stdout)
+        (self.source / "invalid.log").write_bytes(b"\xff")
+        rejected = subprocess.run(command, capture_output=True, text=True)
+        self.assertNotEqual(rejected.returncode, 0)
 
     def test_official_mac_release_evidence_binds_both_package_hashes(self):
         record = dict(self.installer_set, version="0.8.2", macos_arm64={"sha256": "e" * 64},

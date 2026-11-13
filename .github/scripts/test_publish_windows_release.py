@@ -1,13 +1,15 @@
 import copy
+from contextlib import ExitStack
 import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from types import SimpleNamespace
 import zipfile
 
@@ -580,17 +582,18 @@ class ReleaseGuards(unittest.TestCase):
         tag.assert_not_called()
 
     def test_publication_requires_manual_main_workflow_before_any_api_or_command(self):
-        for settings in ({}, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/feature/test",
-                              "GITHUB_EVENT_NAME": "workflow_dispatch"},
-                         {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
-                          "GITHUB_EVENT_NAME": "push"}):
-            with self.subTest(settings=settings), patch.dict(os.environ, settings, clear=True), \
-                    patch("sys.argv", ["publisher", "--run-id", "123", "--source-commit", COMMIT]), \
-                    patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
-                with self.assertRaisesRegex(ValueError, "manual workflow"):
-                    publisher.main()
-                command.assert_not_called()
-                api.assert_not_called()
+        for operation in ("prepare", "prepare-and-publish"):
+            for settings in ({}, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/feature/test",
+                                  "GITHUB_EVENT_NAME": "workflow_dispatch"},
+                             {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                              "GITHUB_EVENT_NAME": "push"}):
+                with self.subTest(operation=operation, settings=settings), patch.dict(os.environ, settings, clear=True), \
+                        patch("sys.argv", ["publisher", "--operation", operation, "--run-id", "123", "--source-commit", COMMIT]), \
+                        patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
+                    with self.assertRaisesRegex(ValueError, "manual workflow"):
+                        publisher.main()
+                    command.assert_not_called()
+                    api.assert_not_called()
 
     def test_source_snapshot_uses_built_commit_when_publication_docs_changed(self):
         repository = self.root / "git-source"
@@ -1136,6 +1139,165 @@ class ReleaseGuards(unittest.TestCase):
         self.assertTrue(result["draft"])
         command.assert_not_called()
         create.assert_not_called()
+
+    def run_single_pass_publication(self, *, tamper=None, qualification_error=False, upload_error=False, decision=None):
+        """Exercise main, package qualification and both phases with a fake remote."""
+        linux, evidence, actual, validator, record = self.multiplatform_fixture()
+        if decision is not None:
+            record["decision"] = decision
+        fixtures = {"nipat-windows-setup": self.setup, "nipat-runtime-assets": self.runtime,
+                    "nipat-linux-setup": linux, "nipat-installer-set-evidence": evidence,
+                    **{f"nipat-macos-setup-{arch}": path for arch, path in self.native_directories.items()}}
+        self.single_pass = state = {"downloads": [], "mutations": [], "reads": 0, "release": None}
+        version = self.manifest["version"]
+        run = {"id": 123, "head_sha": COMMIT, "status": "completed", "conclusion": "success",
+               "event": "workflow_dispatch", "path": ".github/workflows/windows-installer.yml",
+               "repository": {"full_name": publisher.REPO}, "head_repository": {"full_name": publisher.REPO},
+               "html_url": f"https://github.com/{publisher.REPO}/actions/runs/123"}
+
+        def command(*args):
+            if args == ("git", "rev-parse", "HEAD"):
+                return "b" * 40
+            if args[:3] == ("gh", "run", "download"):
+                for index, value in enumerate(args):
+                    if value == "--name":
+                        name = args[index + 1]
+                        state["downloads"].append(name)
+                        shutil.copytree(fixtures[name], Path(args[-1]) / name)
+                return ""
+            if args[:3] == ("gh", "release", "upload"):
+                state["mutations"].append("upload")
+                if upload_error:
+                    raise OSError("Upload interrupted")
+                for value in args[4:args.index("--repo")]:
+                    path = Path(value)
+                    state["release"]["assets"].append({"name": path.name, "state": "uploaded",
+                        "size": path.stat().st_size, "digest": "sha256:" + publisher.sha256(path)})
+                return ""
+            if args[:3] == ("gh", "api", f"repos/{publisher.REPO}/releases?per_page=100"):
+                return "[]"
+            if args[:3] == ("gh", "api", f"repos/{publisher.REPO}/releases"):
+                self.assertEqual(args[3:5], ("--method", "POST"))
+                state["mutations"].append("create")
+                state["release"] = dict(json.loads(Path(args[-1]).read_text()), id=42, assets=[],
+                    html_url=f"https://github.com/{publisher.REPO}/releases/tag/v{version}")
+                return json.dumps(state["release"])
+            if args[:3] == ("gh", "api", f"repos/{publisher.REPO}/releases/42"):
+                self.assertEqual(args[3:5], ("--method", "PATCH"))
+                state["mutations"].append("publish")
+                payload = json.loads(Path(args[-1]).read_text())
+                self.assertEqual(payload, {"draft": False, "prerelease": False, "make_latest": "true"})
+                state["release"].update(payload)
+                return json.dumps(state["release"])
+            raise AssertionError(args)
+
+        def api(path):
+            if path == "actions/runs/123":
+                return run
+            if path == "actions/runs/123/jobs?per_page=100":
+                return {"jobs": [{"name": name, "conclusion": "success"}
+                                 for name in publisher.required_build_jobs(version)]}
+            if path == f"git/matching-refs/tags/v{version}":
+                return ([{"ref": f"refs/tags/v{version}", "object": {"type": "commit", "sha": COMMIT}}]
+                        if "publish" in state["mutations"] else [])
+            if path == "releases/42":
+                state["reads"] += 1
+                if state["reads"] == 2 and tamper:
+                    tamper(state["release"])
+                return copy.deepcopy(state["release"])
+            if path == "releases/latest":
+                return copy.deepcopy(state["release"])
+            raise AssertionError(path)
+
+        original_load, original_prepare = publisher.load_module, publisher.prepare_assets
+        qualification = original_load("single_pass_qualification", Path(__file__).with_name("qualification_evidence.py"))
+        def load(name, path):
+            if path.name == "release_acceptance.py":
+                return validator
+            if path.name == "qualification_evidence.py":
+                return qualification
+            if path.name == "verify_installer_set.py":
+                return SimpleNamespace(verify_set=verify_set,
+                    requires_windows_audit=original_load(name, path).requires_windows_audit)
+            return original_load(name, path)
+
+        with ExitStack() as stack:
+            stack.enter_context(patch("sys.argv", ["publisher", "--operation", "prepare-and-publish", "--run-id", "123",
+                "--source-commit", COMMIT, "--channel", "stable"]))
+            stack.enter_context(patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO,
+                "GITHUB_REF": "refs/heads/main", "GITHUB_EVENT_NAME": "workflow_dispatch"}, clear=True))
+            stack.enter_context(patch.object(publisher.subprocess, "run"))
+            stack.enter_context(patch.object(publisher, "committed_version", return_value=version))
+            stack.enter_context(patch.object(publisher, "source_bytes", side_effect=lambda commit, path:
+                json.dumps(record).encode() if path.startswith(".github/release-acceptance/") else b"reviewed notes"))
+            stack.enter_context(patch.object(publisher, "command", side_effect=command))
+            stack.enter_context(patch.object(publisher, "api", side_effect=api))
+            stack.enter_context(patch.object(publisher, "extract_build_source"))
+            stack.enter_context(patch.object(publisher, "load_module", side_effect=load))
+            stack.enter_context(patch.object(publisher, "prepare_assets", side_effect=lambda *a, **kw:
+                original_prepare(*a, **kw, read_source=lambda commit, name: self.sources[name])))
+            stack.enter_context(patch.object(validator, "verify_baseline", return_value={"verified": True}))
+            verify_set = Mock(return_value={key: value for key, value in actual.items() if not key.startswith("macos_")})
+            verify_bundle = stack.enter_context(patch.object(qualification, "verify", wraps=qualification.verify))
+            if qualification_error:
+                verify_bundle.side_effect = ValueError("Qualification mismatch")
+            phases = stack.enter_context(patch.object(publisher, "process_release", wraps=publisher.process_release))
+            try:
+                publisher.main()
+            finally:
+                state.update(set_verifications=verify_set.call_count, bundle_verifications=verify_bundle.call_count,
+                             phases=[call.args[0] for call in phases.call_args_list])
+        self.assertCountEqual(state["downloads"], fixtures)
+
+    def test_single_pass_downloads_and_qualifies_once_then_publishes_exact_draft(self):
+        self.run_single_pass_publication()
+        self.assertEqual(self.single_pass["set_verifications"], 1)
+        self.assertEqual(self.single_pass["bundle_verifications"], 1)
+        self.assertEqual(self.single_pass["phases"], ["prepare", "publish"])
+        self.assertEqual(self.single_pass["mutations"], ["create", "upload", "publish"])
+        self.assertFalse(self.single_pass["release"]["draft"])
+
+    def test_single_pass_does_not_prepare_or_publish_failed_qualification(self):
+        with self.assertRaisesRegex(ValueError, "Qualification mismatch"):
+            self.run_single_pass_publication(qualification_error=True)
+        self.assertEqual(self.single_pass["phases"], [])
+        self.assertEqual(self.single_pass["mutations"], [])
+
+    def test_single_pass_does_not_download_without_approved_acceptance(self):
+        with self.assertRaisesRegex(ValueError, "pending, rejected"):
+            self.run_single_pass_publication(decision="pending")
+        self.assertEqual(self.single_pass["downloads"], [])
+        self.assertEqual(self.single_pass["mutations"], [])
+
+    def test_single_pass_does_not_publish_after_interrupted_preparation(self):
+        with self.assertRaisesRegex(OSError, "Upload interrupted"):
+            self.run_single_pass_publication(upload_error=True)
+        self.assertEqual(self.single_pass["phases"], ["prepare"])
+        self.assertEqual(self.single_pass["mutations"], ["create", "upload"])
+
+    def test_single_pass_cannot_reuse_a_different_preparation_commit(self):
+        with patch("sys.argv", ["publisher", "--operation", "prepare-and-publish", "--run-id", "123",
+                "--source-commit", COMMIT, "--preparation-commit", "c" * 40]), \
+                patch.dict(os.environ, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/main",
+                                       "GITHUB_EVENT_NAME": "workflow_dispatch"}, clear=True), \
+                patch.object(publisher, "command", return_value="b" * 40) as command, \
+                patch.object(publisher, "api") as api:
+            with self.assertRaisesRegex(ValueError, "leave preparation_commit empty"):
+                publisher.main()
+        command.assert_called_once_with("git", "rev-parse", "HEAD")
+        api.assert_not_called()
+
+    def test_single_pass_rechecks_uploaded_digest_before_publication(self):
+        with self.assertRaisesRegex(ValueError, "integrity mismatch"):
+            self.run_single_pass_publication(tamper=lambda release:
+                release["assets"][0].update(digest="sha256:" + "0" * 64))
+        self.assertEqual(self.single_pass["phases"], ["prepare", "publish"])
+        self.assertEqual(self.single_pass["mutations"], ["create", "upload"])
+
+    def test_single_pass_rejects_replaced_draft_identity_before_publication(self):
+        with self.assertRaisesRegex(ValueError, "Unexpected draft release ID"):
+            self.run_single_pass_publication(tamper=lambda release: release.update(id=99))
+        self.assertEqual(self.single_pass["mutations"], ["create", "upload"])
 
     def test_publish_requires_explicit_draft_and_preparation_identity_before_network(self):
         for additional in ([], ["--draft-release-id", "42"], ["--preparation-commit", "b" * 40]):

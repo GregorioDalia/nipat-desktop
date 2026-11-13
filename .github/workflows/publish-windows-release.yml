@@ -4,13 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Prepare a private draft, or explicitly publish the reviewed draft
+        description: Prepare a private draft, publish it, or prepare-and-publish in one verified run
         required: true
         default: prepare
         type: choice
         options:
           - prepare
           - publish
+          - prepare-and-publish
       run_id:
         description: Successful installer build run ID (Windows, Ubuntu, and both macOS architectures for 0.8.2+)
         required: true
@@ -20,11 +21,11 @@ on:
         required: true
         type: string
       draft_release_id:
-        description: Exact draft ID (required for publish; optional resume for prepare)
+        description: Exact draft ID (required for publish; optional resume when preparing)
         required: false
         type: string
       preparation_commit:
-        description: Exact preparation commit from the prepare summary (required for publish; empty for prepare)
+        description: Exact preparation commit from the prepare summary (required for publish; empty when preparing)
         required: false
         type: string
       channel:
