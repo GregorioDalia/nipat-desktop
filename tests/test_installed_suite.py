@@ -73,7 +73,8 @@ class InstalledSuiteTests(unittest.TestCase):
         self.assertEqual(command[command.index("--runs-dir") + 1], str(self.driver.runs))
         self.assertEqual(command[command.index("--max-workers") + 1], "2")
         self.assertLess(command.index("--scientific-config"), command.index("cpi"))
-        self.assertIn(str(self.app / "scripts/windows/run.ps1"), command)
+        self.assertEqual(Path(command[command.index("-File") + 1]),
+                         self.app.resolve() / "scripts/windows/run.ps1")
 
     def test_fixtures_verify_bytes_and_refuse_path_escape(self):
         content = "chr\tpos\nchr1\t2\n"

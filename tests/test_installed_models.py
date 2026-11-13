@@ -149,6 +149,8 @@ class InstalledModelsTests(unittest.TestCase):
         environment = {**os.environ, "PYTHONPATH": str(ROOT / "src"), "NIPAT_PROJECT_DIR": str(ROOT),
                        "NIPAT_WORKSPACE_DIR": str(self.root), "NIPAT_DATA_DIR": str(self.root / "data"),
                        "NIPAT_RUNS_DIR": str(self.root / "runs"), "NIPAT_BACKEND": "native"}
+        if os.name == "nt":
+            environment.update(NIPAT_BACKEND="wsl", NIPAT_WSL_DISTRO="NIPAT-Desktop-test")
         for case in (item for item in cases if item.get("expect_failure")):
             with self.subTest(case=case["id"]):
                 result = subprocess.run([sys.executable, "-m", "nipat", "--dry-run", *map(str, case["args"]),
