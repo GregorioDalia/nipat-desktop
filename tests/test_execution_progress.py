@@ -2,6 +2,7 @@
 from contextlib import redirect_stdout
 from dataclasses import replace
 import io
+from itertools import chain, repeat
 import json
 from pathlib import Path
 import tempfile
@@ -90,17 +91,21 @@ class ProgressReaderTests(unittest.TestCase):
 
     def test_quiet_heartbeat_survives_bad_callback_and_joins_on_cancel(self):
         received, ready = [], threading.Event()
+        # Advance the injected clock after construction, independently of host
+        # timer resolution; the observer and callback still use a real thread.
+        timestamps = chain([10.0], repeat(19.0))
         def callback(state):
             received.append(state)
             if len(received) >= 2:
                 ready.set()
             raise ValueError("GUI unavailable")
-        observer = ProgressObserver(self.root, callback, interval=.01)
+        observer = ProgressObserver(self.root, callback, interval=.01,
+                                    clock=lambda: next(timestamps))
         observer.start()
         self.assertTrue(ready.wait(2))
         observer.stop("cancelled")
         self.assertFalse(observer._thread.is_alive())
-        self.assertGreater(received[-1].elapsed_seconds, 0)
+        self.assertEqual(received[-1].elapsed_seconds, 9.0)
         self.assertEqual(received[-1].status, "cancelled")
 
     def test_render_actual_counts_throttle_and_sanitize_without_eta(self):
@@ -150,6 +155,9 @@ class QuietRunnerProgressTests(unittest.TestCase):
                 run.mkdir(parents=True)
                 layout = ProjectLayout(project, root, root / "data", root / "runs", project / "compose.yaml")
                 snapshots, ready, observers, order = [], threading.Event(), [], []
+                # Windows may complete both callbacks within one monotonic
+                # timer tick. Keep real heartbeat scheduling but control time.
+                timestamps = chain([10.0], repeat(19.0))
                 def callback(snapshot):
                     snapshots.append(snapshot)
                     if len(snapshots) >= 2:
@@ -157,7 +165,8 @@ class QuietRunnerProgressTests(unittest.TestCase):
                     if snapshot.status != "running":
                         order.append("progress-stopped")
                 def factory(*args):
-                    observer = ProgressObserver(*args, interval=.01)
+                    observer = ProgressObserver(*args, interval=.01,
+                                                clock=lambda: next(timestamps))
                     observers.append(observer)
                     return observer
                 class QuietStream(io.StringIO):
@@ -197,6 +206,6 @@ class QuietRunnerProgressTests(unittest.TestCase):
                 self.assertEqual(order, ["cleanup", "progress-stopped"])
                 self.assertFalse(observers[0]._thread.is_alive())
                 self.assertEqual(snapshots[-1].status, "cancelled" if interrupted else "failed" if code else "succeeded")
-                self.assertGreater(snapshots[-1].elapsed_seconds, 0)
+                self.assertEqual(snapshots[-1].elapsed_seconds, 9.0)
                 self.assertIn("NIPAT_PROGRESS_DIR=/workspace/runs/case/progress", launched.call_args.args[0])
                 self.assertEqual(runner._record.data["commands"][0]["progress"]["directory"], "progress")
