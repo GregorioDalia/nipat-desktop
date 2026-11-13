@@ -1,9 +1,9 @@
 # Validazione tecnica e di dominio
 
 Questa scheda registra separatamente installazione, esecuzione e concordanza
-scientifica di **NIPAT Desktop 0.8.9**. Identificare sempre versione,
-commit, pacchetto e piattaforma realmente provati. Le evidenze delle versioni
-precedenti restano storiche e non attestano automaticamente la candidata.
+scientifica di NIPAT Desktop. Identificare versione, commit, pacchetto e
+piattaforma effettivamente provati. Per iniziare su Windows è disponibile il
+[collaudo sintetico dell'installazione](COLLAUDO_INSTALLAZIONE.md).
 
 La prova può procedere per incrementi: registrare ciò che è stato eseguito
 e ciò che rimane da verificare, senza considerare un caso non eseguito come
@@ -140,8 +140,9 @@ Documentare almeno le condizioni rilevanti per l'uso previsto:
 | DNPcall | Uno e più BAM; lista e argomenti ripetuti; modalità seriale e parallela; corrispondenza tra alias, conteggi e genotipi. |
 | SNPcall 2.0 | BAM e pileup compatibile dello stesso caso; conteggi REF/ALT/altre basi, qualità e likelihood, genotipi e soglia del 10% di altre basi, indel centrali e laterali, finestre sovrapposte, loci senza copertura; uno e più campioni. |
 | Contamination | Singoli file e cartella con gli stessi input; presenza e assenza di `ratio_REF_ALT`; nessun sito informativo. |
-| CPI | Coppie appropriate; prefissi configurati; ALL, pannello singolo e più cutoff; nessun sito informativo. |
-| Workflow automatici | Composizioni DNPcall/Contamination/CPI; campioni condivisi fra coppie; SNPcall indipendente e batch; corrispondenza fra piano, campioni, output e analisi separate; passaggi bloccati dopo errore o interruzione. |
+| CPI prenatale | Coppie esplicite e frequenze compatibili; ALL, pannello singolo e più cutoff; frazione fetale, curva CPI e caso senza siti informativi. |
+| CPIN postnatale | Terne esplicite; frequenze e loci SNP o DNP; trasmissione compatibile, mismatch e caso senza siti informativi. |
+| Workflow automatici | Rami DNP/SNP verso Contamination, CPI e CPIN; coppie e terne; SNPcall indipendente e batch; corrispondenza fra piano, campioni, output e analisi separate; passaggi bloccati dopo errore o interruzione. |
 | Robustezza | Percorsi con spazi, input fuori dal progetto, risultati in una destinazione scelta; file mancanti, codifica errata, intestazioni duplicate, conteggi non validi e nomi in conflitto. |
 | Utilizzo | Salvataggio e ripristino delle preferenze; persistenza dopo la riapertura; correzione per la singola analisi; campioni, coppie e run sempre selezionati esplicitamente; annullamento, riepilogo, apertura dei risultati e recupero dopo errore. |
 
@@ -159,17 +160,15 @@ distinti i risultati delle etichette selezionate.
 
 Per i pannelli SNP confrontare anche rappresentazioni equivalenti in maiuscolo
 e minuscolo: la normalizzazione deve lasciare invariati i conteggi e il file
-originale. Confrontare anche il pannello nuovo a quattro colonne con quello
-precedente a tre colonne equivalente. Per SNP 2.0 il riferimento è il sorgente
-upstream congelato, non l'algoritmo SNP della 0.8.5: il raggruppamento per
-SNP/QNAME, le qualità e l'assenza del limite di profondità possono cambiare
-legittimamente i risultati. Gli altri tre moduli conservano la baseline
-numerica 0.8.5. Per i grafici verificare zero, valori ai confini delle classi,
-`NA`, campioni distinti e leggibilità con molti loci.
-Provare tabelle con conteggi negativi, loci duplicati e frequenze
-non finite: devono essere rifiutate prima di R. Registrare separatamente gli
-avvisi che mantengono i valori forniti, come frequenze zero o rapporti
-incoerenti con i conteggi; il loro significato va valutato nel caso scientifico.
+originale. Confrontare anche le due rappresentazioni equivalenti dei pannelli
+SNP descritte nei [controlli degli input](INPUT_VALIDATION.md).
+Per le regressioni, usare il riferimento indicato per ciascun modulo nei
+[componenti scientifici](../scientific/README.md#provenienza-e-identità).
+Per i grafici verificare zero, classi ai confini, `NA`, identità dei campioni
+e leggibilità con molti loci.
+Provare tabelle con conteggi negativi, loci duplicati e frequenze zero o non
+finite. NIPAT deve rifiutarle prima di avviare R. Registrare separatamente gli
+avvisi che mantengono i valori forniti, come rapporti incoerenti con i conteggi.
 
 Provare Ctrl+C attraverso il collegamento installato, oltre che dalla CLI.
 Dopo un fallimento, verificare che **Ultima esecuzione** mostri il run fallito
@@ -179,8 +178,8 @@ alterare i record storici.
 
 Distinguere un errore del programma da un risultato scientifico inatteso.
 Un valore `NA` in assenza di siti informativi può essere corretto.
-Per DNPcall verificare anche gli output, poiché lo script R non propaga
-esplicitamente tutti gli errori della propria chiamata interna a samtools.
+Per DNPcall verificare che l'esito di samtools e gli output attesi siano
+coerenti con il run registrato.
 Gli stati e i limiti dei record sono descritti in [ESECUZIONI.md](ESECUZIONI.md).
 
 ## Verifica dell'isolamento e degli aggiornamenti

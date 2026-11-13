@@ -16,7 +16,7 @@ motore Docker consumano parte della memoria dell'ambiente.
 
 ## Consultare e scegliere i valori
 
-Nel menu **Configura → Risorse e provenienza**, aprire la gestione delle risorse. La schermata mostra
+Aprire **Configura → Risorse, prestazioni e provenienza**. La schermata mostra
 valori configurati ed effettivi, quando rilevabili. I suggerimenti si basano
 sulle risorse del dispositivo e lasciano spazio al sistema operativo; non
 stimano la memoria necessaria a uno specifico BAM o pannello.
@@ -113,24 +113,24 @@ Le opzioni sono esplicite anche negli script automatizzati.
 
 Il backup indicato dall'applicazione è un file JSON che conserva percorso,
 hash e contenuto precedente codificato in base64, compresa l'eventuale assenza
-del file. Non va copiato direttamente al posto di `.wslconfig` o del file Lima.
-La 0.8.9 non include un comando di ripristino guidato. Conservare il backup
-per diagnosi e recupero della configurazione precedente.
+del file. Conservare il backup per diagnosi e recupero manuale della
+configurazione. Il JSON del backup è un record, mentre WSL e Lima leggono
+il contenuto della configurazione nel proprio formato.
 
 ## Velocità di DNPcall
 
 La dimensione del BAM compresso non determina da sola durata o RAM necessarie.
 Contano letture, copertura, pannello, disco, processore e ambiente di esecuzione.
-Il comando DNPcall distribuito usa `samtools mpileup -l` senza `-r`: legge
-il BAM in sequenza filtrando le posizioni richieste. La documentazione di
-[samtools 1.21](https://www.htslib.org/doc/1.21/samtools-mpileup.html) distingue
-questa modalità dall'accesso indicizzato per regione.
+Se tutti i BAM hanno un indice utilizzabile, i dizionari sono compatibili e
+i cromosomi sono separabili, DNPcall può preparare il pileup per cromosoma.
+Negli altri casi usa il percorso non partizionato. Il calcolo R distribuisce
+i blocchi di uno o più campioni entro un budget comune, che vale anche per
+la preparazione del pileup.
 
-Il pileup viene poi caricato in R ed espanso in tabelle per elaborare le letture.
-L'opzione parallela distribuisce questa elaborazione tra campioni; non divide
-un singolo BAM tra più worker e non parallelizza la preparazione del pileup.
-Più CPU non garantiscono quindi un'accelerazione proporzionale. Più RAM può
-evitare un arresto o pressione sulla memoria, ma non elimina il lavoro di lettura.
+I tempi dipendono anche da lettura e I/O. Confrontare richieste identiche e
+leggere strategia, tempi e worker osservati in `work/dnp-pileup.json` e
+`work/dnp-blocks.json`. La [guida alle prestazioni](PERFORMANCE.md) descrive
+come interpretarli.
 
 Gli export con etichette originali aggiungono una seconda resa dei grafici.
 Il tempo totale del run comprende questo costo; i tempi stampati dal solo R

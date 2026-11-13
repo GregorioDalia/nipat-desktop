@@ -20,9 +20,8 @@ Le analisi singole restano disponibili tramite `execute`.
 La CLI desktop `workflow analyze` e il menu **W → 5** compongono i rami DNP,
 SNP o entrambi, anche da tabelle già disponibili. Ogni ramo può eseguire
 qualsiasi sottoinsieme di Contamination, CPI e CPIN; i due rami possono
-scegliere analisi diverse. Queste opzioni non richiedono la scrittura del JSON.
-Il contratto qui descritto corrisponde allo sviluppo 0.8.50; non implica
-che sia stato pubblicato un installer di questa versione.
+scegliere analisi diverse. Il client genera il JSON a partire dagli input
+confermati nel menu o dagli argomenti della CLI.
 
 Prima dell'avvio di ciascun script R, il motore esegue anche i controlli
 sul contenuto degli input descritti in [INPUT_VALIDATION.md](INPUT_VALIDATION.md).
@@ -317,8 +316,8 @@ lo stesso adattatore SNPcall delle analisi singole. La modalità BAM genera
 verifica il formato prima di avviare R. Errori o interruzioni di samtools non
 permettono di proseguire con R. La modalità pileup non esegue samtools.
 
-Dalla 0.8.30 il pannello normalizzato usa `chr`, `pos`, `ref`, `alt`; il
-precedente formato `pos=chr:posizione`, `ref`, `alt` resta un input accettato.
+Il pannello normalizzato usa `chr`, `pos`, `ref` e `alt`. L'input può
+anche usare tre colonne, con `pos=chr:posizione`, `ref` e `alt`.
 Per default samtools usa `-d 0`, come SNPcall 2.0; `max_depth` e gli altri
 parametri di acquisizione sono configurabili. R usa riferimento e qualità
 del pileup e raggruppa le osservazioni per SNP e QNAME. Una modifica dei

@@ -22,51 +22,16 @@ ispezionabile: le analisi eseguono le copie contenute nell'immagine verificata.
 
 ## Provenienza e identità
 
-CPI, Contamination e CPIN derivano dal
-[commit NEWPAT `9c2a8be60afcb944153710da6a61cd0559e2b4cf`](https://github.com/lpistacchia/NEWPAT/tree/9c2a8be60afcb944153710da6a61cd0559e2b4cf).
-Le copie upstream immutabili sono in `tests/reference_r/NEWPAT_20261113`.
-La [guida 0.8.50](../docs/DEVELOPMENT_0.8.50.md) documenta parametri,
-modifiche del modello e workflow; questa revisione è di sviluppo, non pubblicata.
-SNPcall 2.0 deriva dal
-[commit NEWPAT `ce59f4beeeec710b1b42d425cb87d7aad729f71d`](https://github.com/lpistacchia/NEWPAT/tree/ce59f4beeeec710b1b42d425cb87d7aad729f71d/SNPcall),
-blob `7a2e01e94c9e278af52aa861646fec3b16df8b1c`. Il sorgente upstream
-originale è congelato in `tests/reference_r/2.0/SNPcall.R`, SHA-256
-`855a96c897d1bcb8ce30b725baecfa739d01be323252da07554a63aa66965da4`.
-La copia operativa mantiene l'adattatore pileup NIPAT, il budget comune e
-gli export del prodotto. DNPcall è identificato dai byte conservati nel
-repository e dal manifest seguente.
-
-La revisione di sviluppo **0.8.14** limita esplicitamente a un thread il
-lettore readr di SNPcall, applica i limiti dei thread anche all'avvio nativo
-del motore e riduce operazioni duplicate nel riepilogo CPI e nella lettura
-dei blocchi DNP. La [guida 0.8.14](../docs/OPTIMIZATIONS_0.8.14.md) descrive
-il perimetro e lo stato delle verifiche.
-
-La **0.8.13** ha esteso alla preparazione del pileup DNP il budget comune
-introdotto dalla **0.8.12** per i quattro programmi R. L'acquisizione può
-distribuire cromosomi completi fra processi samtools, prima di avviare il
-calcolo R; le due fasi condividono il limite dei processi. I blocchi R
-conservano i valori iniziali di 32 MiB e 64 loci. La
-[guida al pileup](../docs/PILEUP_0.8.13.md) e la
-[guida al parallelismo R](../docs/PARALLELISMO_0.8.12.md) documentano queste
-basi. I file conservano attribuzioni e licenze e indicano le modifiche NIPAT.
-
-Per **DNPcall** il riferimento numerico rimane **NIPAT v0.8.5**, commit
-`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copia congelata in
-`tests/reference_r/0.8.5`. SNPcall usa il riferimento upstream 2.0 congelato.
-CPI, Contamination e CPIN sono confrontati con NEWPAT 20261113 e con oracoli
-analitici indipendenti. Il filtro Other di Contamination è cambiato per
-richiesta scientifica; l'equivalenza con il precedente algoritmo non è
-un criterio valido per queste nuove analisi. I riferimenti storici restano
-immutabili. Le correzioni dei grafici hanno verifiche proprie.
-
-| Componente | SHA-256 |
+| Analisi | Riferimento per la regressione |
 | --- | --- |
-| DNPcall | `4904721e258190ace5cb0fc7df367c0d6f2f68abfc5d794aea83ed0a43db2088` |
-| SNPcall | `e27981da3e4c061068f1d17751e45223674b1a1fa01c177f1c5f858162f62c73` |
-| Contamination | `3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0` |
-| CPI | `d5a7518e5d4b41a2c1b2a780c186595edc617a0963ff7cdb63843f202f1c4f10` |
-| CPIN | `cac401d40ed7b137d49d22e0ef99ef891a0bce5661e3df6ccc8a8c8b1cf9ae49` |
+| DNPcall | NIPAT 0.8.5, commit `eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`. Copia in `tests/reference_r/0.8.5`. |
+| SNPcall | [NEWPAT SNPcall 2.0](https://github.com/lpistacchia/NEWPAT/tree/ce59f4beeeec710b1b42d425cb87d7aad729f71d/SNPcall), blob `7a2e01e94c9e278af52aa861646fec3b16df8b1c`. Copia in `tests/reference_r/2.0/SNPcall.R`, SHA-256 `855a96c897d1bcb8ce30b725baecfa739d01be323252da07554a63aa66965da4`. |
+| Contamination, CPI e CPIN | [NEWPAT](https://github.com/lpistacchia/NEWPAT/tree/9c2a8be60afcb944153710da6a61cd0559e2b4cf) e oracoli analitici. Copie dei sorgenti upstream in `tests/reference_r/NEWPAT_20261113`. |
+
+Il [manifest scientifico](SHA256SUMS) contiene gli hash degli script operativi.
+I riferimenti congelati servono ai test e identificano il modello con cui
+confrontare una build. Gli adattamenti di esecuzione e presentazione sono
+descritti nei contratti qui sotto.
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate
@@ -99,17 +64,16 @@ sono concatenate nell'ordine `@SQ` del BAM, indipendentemente dall'ordine di
 completamento; solo dopo iniziano indice globale e calcolo R.
 L'indice seleziona il cromosoma e il BED filtra le posizioni durante la
 scansione: questo percorso può leggere più allineamenti della preselezione
-multi-regione `view -M -L` della 0.8.12, soprattutto con pannelli sparsi su BAM
-genomici. Il beneficio prestazionale deve quindi essere misurato sugli input
-reali, non dedotto dal solo numero di processi.
+multi-regione `view -M -L`, soprattutto con pannelli sparsi su BAM
+genomici. Valutare il beneficio sugli input rappresentativi misurando
+acquisizione, calcolo R e durata complessiva.
 
 Il percorso non partizionabile esegue un processo samtools alla volta:
 seleziona su disco gli input con indice e li passa, insieme agli input senza
 indice e nell'ordine originale, a un unico mpileup. Un indice presente ma
-danneggiato continua a interrompere l'analisi. L'API interna dell'helper senza
-budget conserva il percorso 0.8.12 per i confronti di regressione; il programma
-R distribuito passa sempre il budget. La modalità seriale limita anche
-l'acquisizione a un processo di calcolo alla volta.
+danneggiato interrompe l'analisi. Il programma R distribuito passa il
+budget all'helper. In modalità seriale il budget limita anche l'acquisizione
+a un processo di calcolo alla volta.
 
 Gli intermedi grandi restano sul disco Linux temporaneo del runtime.
 `work/dnp-pileup.json` registra strategia, budget, task, processi osservati e
@@ -119,7 +83,7 @@ BED e pileup sono rimossi al termine, mentre il client gestisce la pulizia
 del volume dell'esecuzione. La verifica degli output resta parte del
 completamento del workflow.
 
-La lettura dei blocchi 0.8.14 riunisce in un'unica operazione le righe
+La lettura dei blocchi riunisce in un'unica operazione le righe
 richieste adiacenti nei byte del file. Conserva ordine, ripetizioni e salti
 della richiesta; non ordina né deduplica le righe. L'indice globale e
 l'inferenza dei tipi restano comuni all'intero pileup.
@@ -131,8 +95,8 @@ accettare un pileup già disponibile oppure un BAM e il riferimento FASTA.
 In quest'ultimo caso il motore genera finestre BED di tre basi ed esegue
 samtools prima di R; un errore di samtools interrompe il workflow. Come
 nell'upstream 2.0, `-d 0` elimina il limite predefinito di profondità. Il
-pannello nuovo ha colonne `chr`, `pos`, `ref`, `alt`; il formato precedente
-`pos=chr:posizione`, `ref`, `alt` viene normalizzato in quattro colonne.
+pannello usa `chr`, `pos`, `ref` e `alt`. La variante a tre colonne,
+`pos=chr:posizione`, `ref` e `alt`, viene normalizzata in quattro colonne.
 Entrambi richiedono posizioni da 2 a 2147483646.
 
 Il risultato è `output/SNPcall_output.txt`, con 17 colonne: coordinate e
@@ -158,8 +122,7 @@ una tabella dei genotipi e riepiloghi con valori mancanti espliciti. I run
 con più campioni includono la copertura condivisa. I tempi R e la memoria
 residente iniziale/finale sono misure distinte dal tempo complessivo del
 workflow e dal picco di memoria del container.
-Dalla 0.8.14 la lettura del
-pannello specifica `num_threads = 1L`: il lettore non sceglie autonomamente
+La lettura del pannello specifica `num_threads = 1L`: il lettore non sceglie autonomamente
 un numero di thread aggiuntivi rispetto al budget di calcolo.
 
 ### Contamination
@@ -208,18 +171,17 @@ calcoli e limiti:
 - [SNPcall da BAM](../tests/fixtures/snp_engine/README.md);
 - [Contamination](../tests/fixtures/contamination/README.md);
 - [CPI](../tests/fixtures/cpi/README.md) e [costante d'errore CPI](../tests/fixtures/cpi_engine/README.md);
-- [CPIN](../tests/fixtures/cpin/README.md) e [modelli aggiornati](../tests/fixtures/five_modules/README.md).
+- [CPIN](../tests/fixtures/cpin/README.md) e [modelli e oracoli](../tests/fixtures/five_modules/README.md).
 
 Qualsiasi modifica ai sorgenti scientifici richiede una revisione dedicata,
 provenienza verificabile, aggiornamento del manifest e regressioni pertinenti.
 La verifica differenziale `scripts/verify_r_equivalence.py` confronta i
 candidati con i riferimenti immutabili nello stesso runtime: SNPcall 2.0
 per SNP, NIPAT 0.8.5 per DNP. `scripts/verify_five_modules.py` verifica
-CPI, Contamination e CPIN contro NEWPAT 20261113, per SNP e DNP. Confronta tabelle complete e
-valori non arrotondati; i grafici corretti hanno controlli di presentazione
-dedicati, senza imporre l'identità visiva con un istogramma difettoso.
-I confronti sono obbligatori
-nella CI scientifica e prima del confezionamento degli installatori.
+CPI, Contamination e CPIN contro NEWPAT e oracoli analitici, per SNP e DNP.
+I verificatori confrontano tabelle e valori non arrotondati, con controlli
+dedicati ai grafici. CI scientifica e build degli installatori richiedono
+i rapporti di verifica.
 La corrispondenza degli hash o degli esempi non sostituisce la validazione
 di dominio con input indipendenti.
 

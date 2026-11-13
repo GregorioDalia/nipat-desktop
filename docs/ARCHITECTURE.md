@@ -39,8 +39,7 @@ con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
 `workflow analyze`: DNPcall e/o SNPcall alimentano qualsiasi sottoinsieme di
 Contamination, CPI e CPIN, con selezioni indipendenti per SNP e DNP. Il piano
 può partire anche da pileup SNP o tabelle importate. Restano disponibili i
-cinque comandi singoli, i preset DNP e il batch SNP. Questo documento descrive
-la versione 0.8.50.
+cinque comandi singoli, i preset DNP e il batch SNP.
 
 ### Confini dei workflow automatici
 

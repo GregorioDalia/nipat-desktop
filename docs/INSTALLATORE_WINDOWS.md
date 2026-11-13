@@ -5,11 +5,10 @@ i componenti di avvio, il filesystem WSL e l'immagine scientifica. Il file
 `NIPAT-Setup.exe` è autosufficiente per i componenti NIPAT: non occorre
 scaricare archivi runtime separati o creare una cartella `assets`.
 
-Questo documento descrive **NIPAT Desktop 0.8.30**. Scaricare `NIPAT-Setup.exe`
-dalla pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-Le [note della versione](RELEASE_0.8.30.md) distinguono controlli automatici,
-prove desktop e valutazione di dominio. Il setup aggiorna le installazioni
-NIPAT Desktop riconosciute e conserva i percorsi scelti dall'utente.
+Scaricare `NIPAT-Setup.exe` dagli asset dell'[ultima release stabile](https://github.com/GregorioDalia/nipat-desktop/releases/latest).
+Il setup aggiorna le installazioni NIPAT Desktop riconosciute e conserva
+i percorsi scelti dall'utente. Per verificare una preparazione conclusa,
+usare il [collaudo automatico](COLLAUDO_INSTALLAZIONE.md).
 
 ## Requisiti e installazione
 
@@ -19,12 +18,9 @@ Windows Server, Windows ARM, Windows a 32 bit e build Windows 10 precedenti
 non sono supportati. Il setup legge edizione, build e architettura prima di
 preparare l'ambiente; il controllo non dipende dalla lingua del sistema.
 
-**Windows 10 Pro 22H2, build 19045.6466**, rientra in questo target.
-Il numero `6466` indica la revisione dell'aggiornamento cumulativo: il setup
-controlla la build `19045`, senza imporre quella specifica revisione o escludere
-gli aggiornamenti successivi della stessa build. L'idoneità del sistema al
-controllo iniziale non attesta che l'installazione o il runtime siano già stati
-collaudati su tale configurazione.
+Il controllo Windows 10 usa la build `19045`. La revisione del cumulativo,
+riportata dopo il punto, può variare. La disponibilità effettiva di WSL2
+va verificata sul dispositivo.
 
 La disponibilità di WSL viene rilevata sul dispositivo. Il setup distingue
 un componente utilizzabile da prerequisiti mancanti o non pronti e avvia
@@ -55,13 +51,11 @@ Il setup non disattiva le protezioni né introduce esclusioni antivirus.
 Il referente del collaudo deve verificare l'errore sul componente indicato
 prima di considerare utilizzabile il pacchetto su quel dispositivo.
 
-La 0.8.20 elimina la compilazione di una DLL temporanea durante la
-preparazione. Questo migliora l'identificazione dei componenti, ma non
-sostituisce la firma del distributore. Il cambio di numero di versione non
-garantisce l'accettazione da parte di Smart App Control; la firma e la
-reputazione riguardano i file effettivi. Il rapporto `windows-trust-check.json`
-della release elenca hash e stato delle firme senza dichiarare un collaudo
-Smart App Control.
+Un controllo delle applicazioni può bloccare anche il file temporaneo di
+Inno Setup, per esempio `NIPAT-Setup.tmp`. Per la diagnosi, annotare il file
+indicato da Windows e come è stato avviato il setup. Il rapporto
+`windows-trust-check.json` elenca gli hash e lo stato delle firme dei
+componenti della build.
 
 Per identificare un blocco aprire **Visualizzatore eventi → Registri
 applicazioni e servizi → Microsoft → Windows → CodeIntegrity → Operational**
@@ -277,32 +271,16 @@ preparazione del runtime:
 un errore lascia l'applicazione bloccata fino al completamento del setup,
 anche se la distribuzione precedente è ancora presente.
 
-### Riparazione dell'autotest CPIN della 0.8.50
+<a id="riparazione-dellautotest-cpin-della-0850"></a>
 
-Il setup ufficiale 0.8.50 contiene un difetto nell'avvio di
-`scripts/verify_cpin_update.py`: il Python incorporato non aggiunge automaticamente
-la cartella dello script ai percorsi di importazione. Il controllo può quindi
-terminare con `ModuleNotFoundError: No module named 'verify_contamination_update'`.
-Il transcript delle versioni precedenti può omettere questo dettaglio.
+### Autotest e collaudo
 
-Lo script [repair-0850-self-test.ps1](../scripts/windows/repair-0850-self-test.ps1)
-applica una correzione locale soltanto al verificatore conosciuto della release
-ufficiale. Verifica versione e hash, conserva backup e ricevuta separata e ripete
-la preparazione completa con i controlli originali. Usarlo da PowerShell normale,
-senza elevazione, indicando il commit immutabile da cui è stato scaricato tramite
-`-HotfixSourceCommit`. Dati, risultati e manifest della release restano intatti.
-Lo stato `ready` viene scritto esclusivamente dal bootstrap dopo il successo.
+La preparazione verifica i cinque moduli con il Python incorporato. Se il setup
+resta incompleto, consultare `.runtime/installer/setup.log` nella cartella
+dell'applicazione. Per verificare tutti i moduli e i workflow dopo il completamento,
+eseguire il [collaudo automatico](COLLAUDO_INSTALLAZIONE.md).
 
-L'installazione risultante è **0.8.50 con correzione locale**. La ricevuta distingue
-il pacchetto originario dalla correzione; non riscrive l'inventario per dichiarare
-che il file modificato appartenga al setup originale. La funzione di manutenzione
-«recupera» rileva questa differenza. Rieseguire l'EXE 0.8.50 originale ripristina
-il verificatore difettoso; un successivo installer ufficiale corretto sostituisce
-la riparazione locale.
-
-La verifica del payload ora avvia tutti e cinque i verificatori con `--help`
-usando il Python incorporato. Questo controllo rapido intercetta import mancanti
-prima della distribuzione, senza ripetere i calcoli scientifici.
+Per riparare una 0.8.50, seguire le [istruzioni specifiche](https://github.com/GregorioDalia/nipat-desktop/blob/main/docs/COLLAUDO_INSTALLAZIONE_0850.md#correzione-locale-dellautotest-cpin).
 
 ## Manutenzione dei componenti installati
 

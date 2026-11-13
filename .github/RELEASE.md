@@ -2,8 +2,8 @@
 
 NIPAT distribuisce installatori costruiti e verificati da GitHub Actions.
 La pubblicazione riutilizza gli stessi file, senza ricompilare applicazione
-o runtime. Le versioni Desktop 0.8.2 e successive comprendono Windows 10/11 x64, Ubuntu 24.04 x86_64
-e macOS Intel/Apple Silicon, con un archivio scientifico comune.
+o runtime. La build produce i pacchetti Windows 10/11 x64, Ubuntu 24.04 x86_64
+e macOS Intel e Apple Silicon, con un archivio scientifico comune.
 
 La distribuzione per ricerca pre-1.0 distingue controlli automatici, prove
 osservate sui dispositivi e valutazione di dominio. Le prove desktop estese
@@ -25,9 +25,12 @@ ambito ed esiti originali; non attestano prove su versioni successive.
 Avviare manualmente **Installers (review build)** su un commit revisionato
 di `main` oppure del branch `release/VERSIONE` o `release/VERSIONE-...`
 corrispondente alla versione del pacchetto.
-Il branch di sviluppo permette di costruire e verificare la candidata prima
-dell'integrazione in `main`. Conservare il commit completo, non soltanto il
-nome del branch o il numero di versione.
+Per una release, costruire preferibilmente dal commit già integrato in
+`main`. Se si costruisce dal branch di release, integrare il sorgente con un
+merge commit che conservi il commit costruito come antenato di `main`.
+Squash e rebase possono cambiare il commit anche quando il contenuto finale
+è identico. In quel caso serve una build qualificata del commit integrato.
+Registrare il commit completo, l'ID della build e i checksum.
 
 La build verifica il client, costruisce l'immagine scientifica, acquisisce le
 regressioni verificate, esporta l'archivio comune e confeziona i quattro installatori.
@@ -109,9 +112,9 @@ non sostituiscono una firma del distributore o la notarizzazione Apple.
 ## Accettazione dei pacchetti
 
 Il record della candidata è `.github/release-acceptance/vVERSIONE.json`.
-Viene revisionato dopo la build e integrato in `main` insieme ai sorgenti,
-conservando il commit compilato nella storia. Non fa parte del pacchetto.
-La generazione del modello non equivale ad accettazione:
+Revisionarlo dopo la build e integrarlo in `main` dopo il sorgente.
+Il record resta nel repository. Il comando seguente genera un modello
+`pending` da compilare con le evidenze della candidata:
 
 ```bash
 python .github/scripts/release_acceptance.py \
@@ -129,11 +132,8 @@ build indicata: `stable`/`Latest` per versioni senza suffisso, `testing` per
 versioni `a`, `b` o `rc`. Il workflow procede autonomamente su GitHub.
 Modifiche miste e pubblicazioni in due fasi mantengono l'avvio manuale.
 
-Per Desktop 0.8.2–0.8.8 il modello usa lo **schema 5**; da 0.8.9 a 0.8.49
-usa lo **schema 6**. Dalla **0.8.50 richiede lo schema 7**, che qualifica
-separatamente i due caller e i tre modelli aggiornati. La decisione iniziale
-è `pending`.
-Una distribuzione per ricerca richiede:
+Il record corrente usa lo **schema 7**, con rapporti separati per i due
+caller e per Contamination, CPI e CPIN. Una distribuzione per ricerca richiede:
 
 - versione, commit, build e checksum dei quattro installatori, del manifest
   e dell'archivio scientifico;
@@ -177,7 +177,9 @@ precedenti rimangono utilizzati per le rispettive release storiche. Il
 [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) descrive
 prove e registrazione senza trasformare i casi non svolti in esiti positivi.
 
-## Contratto scientifico della 0.8.50
+<a id="contratto-scientifico-della-0850"></a>
+
+## Contratto scientifico del record
 
 Lo schema 7 aggiunge `scientific_analysis_qualification`, con gli stessi quattro
 campi di `scientific_equivalence`. Il commit di riferimento è

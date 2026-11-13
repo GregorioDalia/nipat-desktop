@@ -1,8 +1,8 @@
 # Integrazione continua e distribuzione
 
 NIPAT verifica separatamente il client, il motore scientifico, gli installatori
-e il funzionamento sui dispositivi reali. La versione 0.8.50 distribuisce
-Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
+e il funzionamento sui dispositivi reali. I pacchetti sono per Windows 10/11
+x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo su Intel e Apple Silicon.
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
 ## Workflow GitHub Actions
@@ -23,8 +23,10 @@ I branch di sviluppo ricevono la CI tramite la pull request, evitando la seconda
 esecuzione sul push dello stesso commit. Su un branch senza PR si può avviare
 la CI manualmente.
 Gli installatori completi vengono costruiti su richiesta, non a ogni push.
-Una modifica al solo workflow di pubblicazione richiede i controlli di packaging
-e i controlli rapidi obbligatori; non riesegue il runtime scientifico. Le modifiche
+Una modifica al solo workflow di pubblicazione manuale richiede i controlli
+di packaging e i controlli rapidi obbligatori. Il workflow di pubblicazione
+automatica seleziona la matrice di integrazione completa quando viene
+modificato. Le modifiche
 al selettore, alla CI, alla build o a workflow non riconosciuti conservano tutti
 i livelli. Una modifica scientifica concomitante riattiva sempre quel livello.
 
@@ -57,11 +59,10 @@ prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
 
 ## Regressioni scientifiche
 
-La 0.8.50 verifica i due caller con `scripts/verify_r_equivalence.py`:
-17 casi contro NIPAT 0.8.5 per DNP e SNPcall 2.0 per SNP, con rapporto
-`r-equivalence.json`. I riferimenti rimangono congelati. CPI e Contamination
-adottano il modello NEWPAT aggiornato; CPIN usa il nuovo modello postnatale.
-Non si richiede a questi tre moduli l'equivalenza con le formule precedenti.
+`scripts/verify_r_equivalence.py` confronta 17 casi con i riferimenti
+congelati: NIPAT 0.8.5 per DNP e SNPcall 2.0 per SNP. Il rapporto è
+`r-equivalence.json`. Contamination, CPI e CPIN hanno un rapporto distinto,
+con i riferimenti NEWPAT indicati di seguito.
 
 `scripts/verify_five_modules.py --image IMMAGINE --full` confronta i tre moduli
 con NEWPAT al commit `9c2a8be60afcb944153710da6a61cd0559e2b4cf` e oracoli
@@ -83,10 +84,9 @@ di copertura e sui parametri vengono eseguite anche nell'immagine finale:
 una dipendenza R mancante o un test saltato impedisce il completamento.
 
 Per DNP/SNP le tabelle esportate e i valori R non arrotondati devono
-coincidere con il rispettivo riferimento scientifico. Dalla 0.8.30, i grafici aggiornati sono
-verificati per contenuto, dimensioni e classi degli istogrammi; i rendering
+coincidere con il rispettivo riferimento scientifico. La verifica dei
+grafici copre contenuto, dimensioni e classi degli istogrammi. I rendering
 devono essere identici tra le modalità seriale e parallele della candidata.
-Le versioni precedenti conservano il confronto esatto con i PDF della baseline.
 
 Il container contiene R, samtools, gli script scientifici, gli adattatori e
 l'orchestrazione. Il client verifica i contratti e non monta gli script R
@@ -110,16 +110,16 @@ trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 Avviare **Installers (review build)** sul commit da distribuire, su `main`,
 `release/VERSIONE` o `release/VERSIONE-...`, con la stessa versione dichiarata
-dai sorgenti, ad esempio `release/0.8.50`. Il controllo
+dai sorgenti, ad esempio `release/VERSIONE`. Il controllo
 `installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
 comune ai quattro pacchetti. La build produce:
 
 | Artefatto Actions | Pacchetto |
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`. |
-| `nipat-linux-setup` | `nipat-desktop_0.8.50_amd64.deb`. |
-| `nipat-macos-setup-arm64` | `NIPAT-0.8.50-macos-arm64.pkg`. |
-| `nipat-macos-setup-x86_64` | `NIPAT-0.8.50-macos-x86_64.pkg`. |
+| `nipat-linux-setup` | `nipat-desktop_VERSIONE_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-VERSIONE-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-VERSIONE-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
 Ogni job conserva il proprio pacchetto nell'artefatto originale. Il job finale
@@ -130,10 +130,8 @@ EXE/DEB/PKG da installare direttamente.
 
 I controlli Windows e il runtime Linux partono in parallelo dopo la verifica
 della sorgente. Il compilatore Windows attende entrambi; il controllo finale
-richiede il successo di tutti e quattro gli installer. Sul profilo temporale
-riportato sotto, la sovrapposizione eliminerebbe circa 3 min 34 s dal percorso
-critico, da confermare con una build completa. Se Windows fallisce, il ramo
-Linux può consumare ulteriore tempo di esecuzione, ma la pubblicazione resta bloccata.
+richiede il successo di tutti e quattro gli installer. Un fallimento Windows
+blocca la pubblicazione anche se il ramo Linux continua a lavorare.
 
 La release espone direttamente il file da installare per ciascuna piattaforma.
 I pacchetti **Source code** non contengono l'ambiente pronto all'uso. Gli archivi
@@ -187,11 +185,12 @@ I controlli del client, il preflight delle evidenze, il runtime WSL, il caricame
 dell'archivio esportato nel motore distribuito e le verifiche dei quattro pacchetti
 restano obbligatori nella nuova build.
 
-Il beneficio dipende dal numero di corrispondenze effettive. Il profilo precedente
-attribuiva circa 14 minuti ai sette controlli: il risparmio netto sottrae ricerca,
-download e verifica delle evidenze, e va misurato sulla build reale.
+Misurare il beneficio sulla build reale, includendo ricerca, download
+e verifica delle evidenze.
 
-## Audit Windows e concorrenza dalla 0.8.20
+<a id="audit-windows-e-concorrenza-dalla-0820"></a>
+
+## Controlli Windows e concorrenza
 
 La build Windows compila preventivamente il componente di coordinamento e
 verifica la ripetibilità dei binari C# interessati. Una fixture derivata dalla
@@ -235,8 +234,10 @@ e i digest remoti. I rilanci riconoscono una release già pubblicata e possono
 riprendere una bozza coerente. Il workflow manuale e quello automatico condividono
 lo stesso limite di concorrenza.
 
-Sorgenti e record di accettazione vengono integrati in `main` conservando il
-commit compilato. Il publisher crea una bozza con gli stessi byte verificati;
+Il commit costruito deve essere un antenato del commit di pubblicazione su
+`main`. Costruire da `main` dopo l'integrazione oppure conservare il commit
+sorgente con un merge commit quando la build parte da un branch. Il publisher
+crea una bozza con gli stessi byte verificati;
 `prepare-and-publish` prepara e pubblica in un'unica esecuzione esplicita,
 ricontrollando la bozza prima della pubblicazione. In alternativa, `prepare`
 e `publish` mantengono le due fasi separate per esaminare la bozza.
@@ -253,41 +254,18 @@ le osservazioni dei ricercatori.
 
 ## Tempi e gestione dei rilanci
 
-La [build 43430275209](https://github.com/GregorioDalia/nipat-desktop/actions/runs/43430275209)
-del 13 novembre 2026 permette di distinguere il costo di un ciclo dai tentativi
-ripetuti. Queste sono misure di quella esecuzione, non soglie garantite:
+Prima di avviare la build, congelare la candidata e completare i controlli
+locali pertinenti. Per una build già eseguita, consultare il percorso critico
+dei job, separando attesa in coda ed esecuzione. Le durate dei job paralleli
+non si sommano al tempo trascorso.
 
-| Fase sul percorso critico | Durata |
-| --- | --- |
-| Identificazione sorgente | 21 s |
-| Controlli Windows | 3 min 34 s |
-| Runtime Linux, regressioni ed esportazione | 19 min 54 s |
-| Quattro installer in parallelo | 5 min 48 s |
-| Raccolta e controllo finale | 2 min 32 s |
-| Avvio dei job e intervalli | 16 s |
-| **Totale** | **32 min 25 s** |
+Per un guasto transitorio sullo stesso commit, rilanciare i soli job falliti.
+Una modifica sorgente richiede evidenze della nuova candidata. La modalità
+di pubblicazione combinata evita di scaricare e qualificare due volte gli
+stessi pacchetti. Mantiene la verifica dei contenuti della bozza.
 
-Nel job Linux, i controlli scientifici richiedevano 13 min 55 s, i test Python
-53 s e le guardie della release 3 s. Il fallimento finale riguardava il limite
-dei file delle evidenze, dopo il completamento dei quattro installer. I sette
-tentativi di build della candidata precedenti alla correzione finale totalizzavano
-75 min 45 s di esecuzione; le CI parallele non vanno sommate a questo valore
-come attesa dell'operatore.
-
-Il preflight delle evidenze scientifiche usa lo stesso lettore e gli stessi
-limiti dell'archivio finale, prima dell'esportazione e del packaging. Non attesta
-gli installer ancora da costruire: il controllo completo finale resta richiesto.
-Sulle evidenze reali del tentativo fallito ha letto 3.602 file in 1,34 s e avrebbe
-intercettato il precedente limite circa 12 minuti prima. Non riduce in modo
-significativo la durata di una build già corretta.
-
-Congelare la candidata prima della build e completare i controlli locali pertinenti.
-Creare il ramo di accettazione quando il record è disponibile, evitando una nuova
-CI completa su un ramo provvisorio senza modifiche. Per un guasto transitorio su
-uno stesso commit usare il rilancio dei soli job falliti; una correzione dei sorgenti
-richiede evidenze corrispondenti alla nuova candidata. La modalità combinata di
-pubblicazione evita il secondo download e la seconda qualificazione locale degli
-stessi pacchetti, mantenendo la verifica dei contenuti della bozza.
+Per confrontare le durate con un caso documentato, consultare il
+[profilo storico della build degli installatori](https://github.com/GregorioDalia/nipat-desktop/blob/main/docs/archive/README.md#profilo-storico-della-build-degli-installatori).
 
 Il riuso della qualificazione tra CI e build segue il contratto descritto sopra.
 La CI produce sempre evidenze nuove quando esegue il livello scientifico; la build

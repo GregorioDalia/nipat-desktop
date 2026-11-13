@@ -1,6 +1,6 @@
 # Accettazione degli installatori
 
-NIPAT Desktop 0.8.50 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+NIPAT Desktop distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
 macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
 identifica commit, build e checksum; distingue prove automatiche,
 osservazioni sui dispositivi e validazione scientifica di dominio.
@@ -15,8 +15,8 @@ prova dell'installatore candidato; un test simulato non diventa una prova
 sul computer del ricercatore. Il canale `stable` indica la versione ufficiale,
 non una validazione scientifica generale.
 
-Il record schema 7 della 0.8.50 conserva le evidenze delle quattro piattaforme
-e distingue il confronto dei caller dalla qualificazione dei tre modelli aggiornati:
+Il record con schema 7 conserva le evidenze delle quattro piattaforme
+e distingue il confronto dei caller dalla qualificazione di Contamination, CPI e CPIN:
 
 | Campo | Contenuto |
 | --- | --- |
@@ -33,25 +33,24 @@ e distingue il confronto dei caller dalla qualificazione dei tre modelli aggiorn
 | `macos_validation` | Stato separato `arm64`/`x86_64`: `passed` con evidenze HTTPS oppure `not-performed` con elenco vuoto. |
 | `deferred_desktop_scenarios` | Scenari desktop estesi ancora da svolgere. |
 | `scientific_equivalence` | Commit della baseline 0.8.5, percorso e SHA-256 del rapporto nel bundle di qualificazione e ID immutabile dell’immagine scientifica. |
-| `scientific_analysis_qualification` | Commit NEWPAT aggiornato, percorso e SHA-256 di `five-module-qualification.json` nel bundle, stesso ID immutabile dell’immagine dei caller. |
+| `scientific_analysis_qualification` | Commit NEWPAT di riferimento, percorso e SHA-256 di `five-module-qualification.json` nel bundle, stesso ID immutabile dell’immagine dei caller. |
 | `domain_validation` | `pending-domain-researchers`. |
 
-Per DNP rimane il riferimento NIPAT 0.8.5; per SNP, SNPcall 2.0. CPI,
+DNP usa il riferimento NIPAT 0.8.5 e SNP il riferimento SNPcall 2.0. CPI,
 Contamination e CPIN usano i sorgenti NEWPAT congelati al commit
-`9c2a8be60afcb944153710da6a61cd0559e2b4cf`. Gli schemi precedenti rimangono
-validi soltanto per le rispettive release storiche; lo schema 6 non può
-qualificare una build 0.8.50.
+`9c2a8be60afcb944153710da6a61cd0559e2b4cf`. La [procedura di pubblicazione](../.github/RELEASE.md)
+descrive il contratto e i rapporti richiesti.
 
-Il publisher richiede 17 casi caller e il rapporto completo dei tre modelli
-aggiornati: 86 esecuzioni, 16 confronti upstream e 54 prove batch su 2/3/5
-famiglie o campioni, in seriale/automatico/limite 2, per marcatori SNP e DNP.
+Il publisher richiede 17 casi caller e il rapporto di Contamination, CPI e
+CPIN. Il secondo rapporto raccoglie 86 esecuzioni, 16 confronti upstream e
+54 prove batch su 2/3/5 famiglie o campioni, in seriale, automatico e con
+limite di due processi, per marcatori SNP e DNP.
 Controlla sorgenti e helper installati, fixture, verificatore, input invariati,
 parametri e costanti effettivi, identità dei worker e budget rispettati.
-Per i caller mantiene i confronti esatti delle tabelle e dei valori R; per i
-modelli aggiornati applica oracoli analitici e confronti numerici con tolleranza
-esplicita. Una modifica di modello non viene dichiarata equivalente alle
-vecchie formule. I controlli di istogrammi e rendering seriale/parallelo
-rimangono obbligatori nei caller.
+Per i caller usa confronti esatti delle tabelle e dei valori R. Per
+Contamination, CPI e CPIN usa oracoli analitici e confronti numerici con
+tolleranza esplicita. I rapporti dei caller includono anche i controlli
+di istogrammi e rendering fra seriale e parallelo.
 
 Il risultato aggregato è conservato in `scientific-equivalence-check.json`;
 `release-provenance.json` identifica entrambi i rapporti. Il publisher
@@ -65,16 +64,17 @@ rimanere dichiarate come tali.
 
 Usare una build manuale **Installers (review build)** completata sul commit
 revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
-i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
-di build diverse. Consultare le [note della 0.8.50](RELEASE_0.8.50.md);
-i risultati di qualificazione devono riferirsi ai pacchetti esatti. Le
-[note della 0.8.20](RELEASE_0.8.20.md) conservano il contesto della
-precedente versione e delle sue verifiche.
+i PKG, manifest, checksum, rapporti e ID della build. Usare soltanto
+file ed evidenze della stessa build.
 
-La sequenza è: costruire, raccogliere evidenze, revisionare il record,
-integrare sorgenti e record in `main` conservando il commit compilato,
-preparare la bozza, quindi pubblicarla con un secondo avvio esplicito.
-La [procedura di pubblicazione](../.github/RELEASE.md) specifica i parametri.
+1. Costruire dal commit sorgente già integrato in `main`, oppure conservarne
+   l'identità con un merge commit dopo la build dal branch di release.
+2. Raccogliere e revisionare le evidenze e il record della candidata.
+3. Integrare il solo record revisionato per avviare CI e pubblicazione
+   automatica, oppure seguire la procedura manuale prevista.
+
+La [procedura di pubblicazione](../.github/RELEASE.md) specifica i parametri
+e le modalità di verifica della bozza.
 
 ## Registrazione di ciascuna prova
 
@@ -245,10 +245,12 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Per la 0.8.5 il comando genera lo schema 5 in stato `pending`; non esegue
-prove né autorizza pubblicazioni. Compilare soltanto con evidenze disponibili
-e revisionare `.github/release-acceptance/v0.8.5.json`. Il record è separato
-dal commit e dai byte dell'installatore, e viene letto da `main` dal publisher.
+Il modello identifica lo schema applicabile alla build e parte da
+`pending`. Compilarlo con le evidenze della build qualificata e sottoporre
+`.github/release-acceptance/vVERSIONE.json` a revisione. Dedicare al record una
+PR separata dopo avere integrato il commit sorgente. Sul merge di questa PR,
+la CI verifica le evidenze e il workflow di pubblicazione può pubblicare la
+build indicata. Tenere distinti generazione del modello, accettazione e merge.
 
 Gli schemi precedenti rimangono disponibili per le relative release storiche.
 La [scheda di validazione](VALIDAZIONE.md) raccoglie i casi di dominio;
