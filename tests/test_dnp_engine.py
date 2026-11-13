@@ -96,6 +96,21 @@ class DnpEngineTests(unittest.TestCase):
         self.assertEqual(self.snapshot(), before)
         self.assertFalse(self.run.exists())
 
+    def test_ambiguous_chromosomes_or_identical_alleles_fail_before_staging(self):
+        for row in ("chr1:alt\t100\t101\tAC\tGT\n", "chr1|alt\t100\t101\tAC\tGT\n",
+                    "chr1\t100\t101\tAC\tac\n"):
+            with self.subTest(row=row):
+                self.panel.write_text(row)
+                self.assert_rejected_without_writes(self.request)
+                self.assertFalse(self.run.exists())
+
+    def test_hardlink_cannot_count_the_same_bam_twice(self):
+        alias = self.inputs / "sample_0002.bam"
+        alias.hardlink_to(self.bam)
+        request = deepcopy(self.request)
+        request["samples"].append({"path": str(alias), "sample_id": "sample_0002"})
+        self.assert_rejected_without_writes(request)
+
     def test_safe_reference_alias_cannot_change_native_option_selection(self):
         # These are the actual unanchored regular expressions in upstream R.
         # Its parser takes the first matching argument, even for a partial flag.

@@ -98,6 +98,16 @@ def test_same_source_must_not_be_aliased_to_multiple_roles(tmp_path):
     assert not (tmp_path / "run").exists()
 
 
+def test_hardlinked_source_must_not_impersonate_another_role(tmp_path):
+    request = make_request(tmp_path)
+    alias = tmp_path / "mother-hardlink.txt"
+    alias.hardlink_to(request["samples"][0]["path"])
+    request["samples"][1]["path"] = str(alias)
+    with pytest.raises(ValidationError):
+        prepare_cpin(request)
+    assert not (tmp_path / "run").exists()
+
+
 def test_inconsistent_totals_and_duplicate_coordinates_reject_without_writes(tmp_path):
     request = make_request(tmp_path)
     sample = Path(request["samples"][0]["path"])

@@ -76,6 +76,9 @@ class WorkflowExecutionTests(unittest.TestCase):
     def fake_r(self, command, cwd, log_path):
         self.calls.append(command)
         log_path.write_text("scientific output\n", encoding="utf-8")
+        settings_path = Path(os.environ["NIPAT_SCIENTIFIC_SETTINGS"])
+        settings = json.loads(settings_path.read_text())["parameters"]
+        (settings_path.parent.parent / "output/scientific-settings.json").write_bytes(settings_path.read_bytes())
         if Path(command[1]).name == "dnp-call.R":
             directory = cwd / "output" / "individual_outputs"
             directory.mkdir()
@@ -123,7 +126,9 @@ class WorkflowExecutionTests(unittest.TestCase):
                     native_pair = f"Mother{mother}-Father{father}_DNPs"
                     for cutoff in cutoffs:
                         row = {name: "NA" for name in columns}
-                        row.update(Pair=native_pair, N_sites_mother="0", N_sites_father="0", Error_constant="0.0001", Min_fetal_reads="3", Marker_type="DNP")
+                        row.update(Pair=native_pair, N_sites_mother="0", N_sites_father="0",
+                                   Error_constant=str(settings["err_const_dnp"]),
+                                   Min_fetal_reads=str(settings["min_fetal_reads"]), Marker_type="DNP")
                         if cutoff is not None:
                             row["Cutoff"] = cutoff
                         writer.writerow(row)
@@ -480,7 +485,8 @@ class WorkflowExecutionTests(unittest.TestCase):
         self.assertFalse(self.run.exists())
 
     def test_cpi_missing_outputs_or_wrong_pair_cutoff_are_not_success(self):
-        for mutation in ("summary_missing", "pair_missing", "combined_missing", "wrong_pair", "wrong_cutoff",
+        for mutation in ("summary_missing", "settings_missing", "pair_missing", "combined_missing", "wrong_pair", "wrong_cutoff",
+                         "wrong_marker", "wrong_read_threshold", "wrong_error_constant",
                          "duplicate_row", "missing_column", "invalid_pdf", "unexpected_pdf", "outside_pdf"):
             with self.subTest(mutation=mutation):
                 self.run = self.root / f"cpi_{mutation}"
@@ -493,6 +499,20 @@ class WorkflowExecutionTests(unittest.TestCase):
                     plot = plots / "Mothers0001-Fathers0002_DNPs_CPIplot.pdf"
                     if mutation == "summary_missing":
                         summary.unlink()
+                    elif mutation == "settings_missing":
+                        (output / "scientific-settings.json").unlink()
+                    elif mutation in {"wrong_marker", "wrong_read_threshold", "wrong_error_constant"}:
+                        column, replacement = {"wrong_marker": ("Marker_type", "SNP"),
+                            "wrong_read_threshold": ("Min_fetal_reads", "999"),
+                            "wrong_error_constant": ("Error_constant", "0.5")}[mutation]
+                        with summary.open(newline="") as stream:
+                            reader = csv.DictReader(stream)
+                            fieldnames, rows = reader.fieldnames, list(reader)
+                        rows[0][column] = replacement
+                        with summary.open("w", newline="") as stream:
+                            writer = csv.DictWriter(stream, fieldnames=fieldnames)
+                            writer.writeheader()
+                            writer.writerows(rows)
                     elif mutation == "pair_missing":
                         plot.unlink()
                     elif mutation == "combined_missing":

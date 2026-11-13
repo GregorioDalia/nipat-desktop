@@ -1,9 +1,8 @@
-# NIPAT 0.8.50 — sviluppo, senza pubblicazione
+# NIPAT 0.8.50 — guida ai cinque moduli
 
 La revisione integra cinque moduli: DNPcall, SNPcall 2.0, Contamination,
 CPI prenatale e CPIN (CPI postnatale). Non include fetal sex.
-Non sono stati creati tag, release o nuovi installer. Il codice richiede il
-motore scientifico di questa revisione: il client verifica esplicitamente
+Il codice richiede il motore scientifico di questa revisione: il client verifica esplicitamente
 contratti, moduli e registro dei parametri del runtime.
 
 ## Analisi e associazioni
@@ -123,15 +122,16 @@ nell'immagine costruita, compresi batch da 2, 3 e 5 elementi in modalità
 seriale, automatica e con limite di due processi.
 
 ```bash
-python -m unittest discover -s tests
+python -m pytest tests
 python -m unittest discover -s .github/scripts
 python scripts/verify_five_modules.py --output build/qualification-0850 --full
 python scripts/verify_five_modules.py --image IMAGE_ID --output build/qualification-image-0850 --full
 ```
 
 Le prove locali con R e quelle del client non attestano l'installazione su
-Windows/WSL o sugli altri sistemi finali. La costruzione e il collaudo dei
-nuovi installer precederanno un'eventuale pubblicazione successiva.
+Windows/WSL o sugli altri sistemi finali. La build verifica il runtime
+distribuito e i pacchetti; il record di accettazione distingue queste
+evidenze dalle prove desktop e di dominio.
 
 ## Esempio: analisi diverse sui due rami
 
@@ -158,8 +158,12 @@ ripetibili `--dnp-table ID PATH` / `--snp-table ID PATH`. Per SNPcall da pileup
 usare `--caller snp --pileup ID PATH --snp-panel PATH`, senza FASTA. Gli ID
 indicati da `--pair` e `--trio` si riferiscono esplicitamente a questi campioni.
 
-Esito locale: 1.182 test Python (4 saltati), 253 test dei contratti CI,
+La qualificazione iniziale dello sviluppo comprendeva 1.182 test Python
+(4 saltati), 253 test dei contratti CI,
 86 esecuzioni R e due workflow completi da tre BAM superati. Le 30 tabelle
 scientifiche dei workflow seriale e con limite 2 sono identiche.
-Il [resoconto verificabile](validation/0.8.50-development.json) riporta hash,
+Il [resoconto iniziale](validation/0.8.50-development.json) conserva hash,
 runtime, copertura e verifiche non eseguite nell’ambiente finale.
+La [revisione successiva](AUDIT_0.8.50.md) e le
+[note di versione](RELEASE_0.8.50.md) descrivono le ulteriori correzioni e
+la qualificazione per la distribuzione.

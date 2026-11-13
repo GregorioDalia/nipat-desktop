@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import importlib.util
 import io
@@ -15,6 +16,21 @@ SPEC.loader.exec_module(distribution)
 
 
 class DistributionTests(unittest.TestCase):
+    def test_distributed_python_scripts_include_their_local_helper_imports(self):
+        project = SCRIPT.parents[1]
+        selected = set(distribution.source_files(project))
+        for source in selected:
+            if source.suffix != ".py" or source.parent != project / "scripts":
+                continue
+            for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+                modules = ([node.module] if isinstance(node, ast.ImportFrom) and node.module
+                           else [name.name for name in node.names] if isinstance(node, ast.Import) else [])
+                for module in modules:
+                    helper = source.parent / (module.split(".")[0] + ".py")
+                    if helper.is_file():
+                        with self.subTest(script=source.name, helper=helper.name):
+                            self.assertIn(helper, selected)
+
     def make_project(self, root):
         project = root / "project"
         project.mkdir()

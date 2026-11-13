@@ -19,6 +19,22 @@ from nipat_scientific.settings import (
 from nipat_scientific.snp import prepare_snp
 
 
+def r_jsonlite_available():
+    executable = shutil.which("Rscript")
+    if executable is None:
+        return False
+    try:
+        result = subprocess.run([executable, "-e",
+            'quit(status=if (requireNamespace("jsonlite", quietly=TRUE)) 0L else 1L)'],
+            capture_output=True, timeout=20)
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+R_JSONLITE_AVAILABLE = r_jsonlite_available()
+
+
 class ScientificSettingsTests(unittest.TestCase):
     def test_registry_has_all_modules_and_readable_definitions(self):
         modules = describe_settings()
@@ -103,6 +119,26 @@ class ScientificSettingsTests(unittest.TestCase):
             with self.assertRaises(ValidationError), settings_context("cpin", {}, linked):
                 pass
 
+    def test_saved_settings_do_not_accept_boolean_numeric_aliases_or_partial_documents(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {}, clear=True):
+            work = Path(directory) / "work"
+            with settings_context("cpi", {"min_fetal_reads": 1}, work):
+                target = work / "effective-scientific-settings.json"
+                original = target.read_text()
+            for mutation in (lambda doc: doc.update(schema_version=True),
+                             lambda doc: doc["parameters"].update(min_fetal_reads=True),
+                             lambda doc: doc["parameters"].pop("min_fetal_reads"),
+                             lambda doc: doc["constants"]["homozygous_transmission"].update(value=True)):
+                document = json.loads(original)
+                mutation(document)
+                target.write_text(json.dumps(document))
+                with self.assertRaises(ValidationError), settings_context("cpi", {"min_fetal_reads": 1}, work):
+                    pass
+                with patch.dict(os.environ, {"NIPAT_SCIENTIFIC_SETTINGS": str(target)}):
+                    with self.assertRaises(ValidationError):
+                        settings_from_environment("cpi")
+                self.assertEqual(json.loads(target.read_text()), document)
+
     def test_existing_pileup_warns_about_unapplied_acquisition_overrides(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -121,7 +157,7 @@ class ScientificSettingsTests(unittest.TestCase):
             self.assertIn("min_base_quality", warning["message"])
             self.assertNotIn("other_fraction_max", warning["message"])
 
-    @unittest.skipUnless(shutil.which("Rscript"), "R runtime not available")
+    @unittest.skipUnless(R_JSONLITE_AVAILABLE, "R runtime with jsonlite not available on this host")
     def test_r_and_python_share_defaults_and_custom_settings(self):
         helper = REGISTRY.with_name("settings.R")
         expression = ('args <- commandArgs(TRUE); source(args[[1]]); '
@@ -136,7 +172,7 @@ class ScientificSettingsTests(unittest.TestCase):
                                             capture_output=True, text=True, check=True)
                     self.assertEqual(json.loads(result.stdout), normalize_settings(workflow, override))
 
-    @unittest.skipUnless(shutil.which("Rscript"), "R runtime not available")
+    @unittest.skipUnless(R_JSONLITE_AVAILABLE, "R runtime with jsonlite not available on this host")
     def test_r_native_sidecar_records_final_overrides_without_replacing_prior_values(self):
         helper = REGISTRY.with_name("settings.R")
         expression = ('args <- commandArgs(TRUE); source(args[[1]]); cfg <- nipat_settings("cpi"); '
@@ -154,7 +190,7 @@ class ScientificSettingsTests(unittest.TestCase):
             self.assertEqual(native["parameters"]["min_fetal_reads"], 7)
             self.assertEqual(native["constants"], original["constants"])
 
-    @unittest.skipUnless(shutil.which("Rscript"), "R runtime not available")
+    @unittest.skipUnless(R_JSONLITE_AVAILABLE, "R runtime with jsonlite not available on this host")
     def test_r_native_sidecar_does_not_ignore_changed_parameter_names(self):
         helper = REGISTRY.with_name("settings.R")
         expression = ('args <- commandArgs(TRUE); source(args[[1]]); cfg <- nipat_settings("cpi"); '

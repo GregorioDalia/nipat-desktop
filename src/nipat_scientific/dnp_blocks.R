@@ -106,7 +106,15 @@ nipat_dnp_plan <- function(index, labels, ref_alt,
   # Different original chromosome lexemes may collapse under read.table's
   # inference. Equal effective POS must stay together to preserve all merges.
   effective <- unique(ref_alt$POS)
-  groups <- lapply(effective, function(key) which(ref_alt$POS == key))
+  group_ids <- match(ref_alt$POS, effective)
+  groups <- split(seq_len(nrow(ref_alt)), factor(group_ids, levels = seq_along(effective)))
+  # Index panel membership and raw coordinates once. Repeated which()/%in%
+  # scans and named-list lookups otherwise make planning quadratic in the
+  # number of panel loci, before any scientific computation begins.
+  label_groups <- group_ids[match(labels$uniq, seq_len(nrow(ref_alt)))]
+  coordinate_indices <- match(labels$df.chr, names(by_coordinate))
+  group_coordinates <- split(coordinate_indices,
+    factor(label_groups, levels = seq_along(effective)))
   blocks <- list()
   active_ids <- active_rows <- integer()
   append_block <- function() {
@@ -117,8 +125,9 @@ nipat_dnp_plan <- function(index, labels, ref_alt,
       )
     }
   }
-  for (ids in groups) {
-    coordinates <- unique(labels$df.chr[labels$uniq %in% ids])
+  for (group_number in seq_along(groups)) {
+    ids <- groups[[group_number]]
+    coordinates <- unique(group_coordinates[[group_number]])
     rows <- unique(unlist(by_coordinate[coordinates], use.names = FALSE))
     if (is.null(rows)) rows <- integer()
     combined <- union(active_rows, rows)

@@ -3,6 +3,7 @@ from contextlib import nullcontext, redirect_stdout
 from itertools import combinations
 import io
 import json
+import os
 import shutil
 from pathlib import Path
 import tempfile
@@ -135,6 +136,41 @@ class FiveModuleClientTests(unittest.TestCase):
             refs = steps[marker + "_contamination"]["inputs"]["samples"]
             self.assertEqual({ref["output"] for ref in refs}, {marker + "-tables"})
 
+    def test_html_report_preserves_explicit_families_for_asymmetric_branches(self):
+        from nipat.run_report import write_run_report
+        arguments = self.arguments()
+        arguments.update(dnp_analyses=["cpin"], snp_analyses=["cpi"])
+        run = self.workflows.analyze(**arguments)
+        metadata = {"schema_version": 1, "workflow": "analysis", "status": "planned",
+                    "parameters": self.runner.records[-1][1]["parameters"]}
+        (run / "run.json").write_text(json.dumps(metadata), encoding="utf-8")
+        write_run_report(run)
+        page = (run / "run-report.html").read_text(encoding="utf-8")
+        self.assertIn("Famiglie e ruoli dichiarati", page)
+        for step, marker, family, role, sample in (
+            ("dnp_cpin", "DNP", "Postnatal", "Madre", "Mother"),
+            ("dnp_cpin", "DNP", "Postnatal", "Figlio", "Child"),
+            ("snp_cpi", "SNP", "Prenatal", "cfDNA materno", "Plasma"),
+            ("snp_cpi", "SNP", "Prenatal", "Padre", "Father"),
+        ):
+            expected = "</pre></td><td><pre>".join((step, marker, family, role, sample, sample + " $ space.bam"))
+            self.assertIn(expected, page)
+        self.assertNotIn("dnp_cpi</pre>", page)
+        self.assertNotIn("snp_cpin</pre>", page)
+
+    def test_html_report_does_not_infer_families_from_inconsistent_plan_metadata(self):
+        from nipat.run_report import write_run_report
+        run = self.workflows.analyze(**self.arguments())
+        metadata = {"schema_version": 1, "workflow": "analysis", "status": "planned",
+                    "parameters": self.runner.records[-1][1]["parameters"]}
+        metadata["parameters"]["sample_mapping"][0]["container_path"] = "/unrelated/input.bam"
+        (run / "run.json").write_text(json.dumps(metadata), encoding="utf-8")
+        write_run_report(run)
+        page = (run / "run-report.html").read_text(encoding="utf-8")
+        self.assertIn("Associazioni familiari non consultabili", page)
+        self.assertNotIn("<th>Famiglia</th>", page)
+
+    @unittest.skipIf(os.name == "nt", "Engine preflight uses Linux container paths; exercised on Linux")
     def test_generated_plan_passes_engine_file_preflight_with_arbitrary_biological_ids(self):
         from nipat_scientific.executor import _preflight
         run = self.workflows.analyze(**self.arguments())
@@ -219,6 +255,16 @@ class FiveModuleClientTests(unittest.TestCase):
         config = load_scientific_config(export)
         self.assertEqual(set(config), {"dnp-call", "snp-call", "contamination", "cpi", "cpin"})
         self.assertEqual(config["snp-call"]["min_base_quality"], 23)
+
+    def test_scientific_config_rejects_silently_overwritten_modules_and_parameters(self):
+        for number, document in enumerate((
+            '{"cpin":{"min_child_reads":9},"cpin":{"min_parent_reads":7}}',
+            '{"snp-call":{"min_base_quality":23,"min_base_quality":0}}',
+        )):
+            with self.subTest(document=document):
+                path = self.file(f"duplicate-settings-{number}.json", document)
+                with self.assertRaisesRegex(ValidationError, "Chiave duplicata"):
+                    load_scientific_config(path)
 
     def test_cli_scientific_config_and_generic_roles_dispatch(self):
         config = self.file("config.json", '{"cpin":{"min_child_reads":9}}')

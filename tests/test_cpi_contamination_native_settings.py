@@ -4,16 +4,16 @@ import csv
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 
 import pytest
 
 from nipat_scientific.settings import settings_context
+from native_r_helpers import NATIVE_R_AVAILABLE, NATIVE_R_REASON
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/five_modules/SNP"
-pytestmark = pytest.mark.skipif(shutil.which("Rscript") is None, reason="R runtime is unavailable")
+pytestmark = pytest.mark.skipif(not NATIVE_R_AVAILABLE, reason=NATIVE_R_REASON)
 
 
 def execute(tmp_path, workflow, settings, flags, inputs=None):

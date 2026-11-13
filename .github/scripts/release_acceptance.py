@@ -1,6 +1,9 @@
 """Bind an explicit desktop or research acceptance policy to one verified build."""
 
 import argparse
+import csv
+import io
+import math
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -28,6 +31,21 @@ RELIABILITY_RESEARCH_FIELDS = REVIEWED_RESEARCH_FIELDS | RELIABILITY_DIGESTS
 MACOS_DIGESTS = {"macos_arm64_installer_sha256", "macos_x86_64_installer_sha256"}
 MULTIPLATFORM_RESEARCH_FIELDS = RELIABILITY_RESEARCH_FIELDS | MACOS_DIGESTS | {"macos_validation"}
 SCIENTIFIC_RESEARCH_FIELDS = MULTIPLATFORM_RESEARCH_FIELDS | {"scientific_equivalence"}
+FIVE_MODULE_RESEARCH_FIELDS = SCIENTIFIC_RESEARCH_FIELDS | {"scientific_analysis_qualification"}
+FIVE_MODULE_SOURCE_SCOPE = "reviewed-operative-changes-with-versioned-scientific-models-v1"
+ANALYSIS_REFERENCE_COMMIT = "9c2a8be60afcb944153710da6a61cd0559e2b4cf"
+ANALYSIS_REFERENCE_ROOT = "tests/reference_r/NEWPAT_20261113"
+ANALYSIS_REFERENCE_SHA256 = {
+    "CPI_postnatal/Postnatal_CPI.R": "66f260ef0d66b923b763d1115b36e797c6784b37b0b4793964fa53f55dfa658e",
+    "CPI_from_cffDNA/cfDNA_CPI_estimator.R": "8c8062b6110af7d957f152bb26539d72b22d7d90a26ebe251b27679c573d14f6",
+    "contamination/detect_contamination.R": "e82a71b90dfc73982b350b719bcbeedbb20502b353a9d735c590dc14635d6d1d",
+}
+CPIN_SOURCE = "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R"
+ANALYSIS_HELPERS = ("__init__.py", "errors.py", "settings.py", "settings.R", "settings_data.json", "parallel.R", "plots.R")
+CALLER_SUPPORTING_SOURCES = tuple("src/nipat_scientific/" + name for name in (
+    "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R", "parallel.R", "parallel.py",
+    "plots.R", "settings.py", "settings.R", "settings_data.json",
+))
 REVISED_R_SOURCE_SCOPE = "reviewed-operative-changes-with-tested-r-equivalence-v1"
 R_REFERENCE_COMMIT = "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5"
 R_REFERENCE_ROOT = "tests/reference_r/0.8.5"
@@ -134,6 +152,11 @@ def snp2_contract(version):
     return bool(match and tuple(map(int, match.groups())) >= (0, 8, 30))
 
 
+def five_module_contract(version):
+    match = re.fullmatch(r"0\.8\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
+    return bool(match and int(match[1]) >= 50)
+
+
 def verify_presentation_variants(case):
     """Bind corrected plots to serial results and retained parallel renderings."""
     variants = case.get("execution_variants")
@@ -200,6 +223,8 @@ def verify_multibam_variants(case):
 
 
 def reviewable_path(path, *, reliability=False, multiplatform=False, revised_r=False, version=None):
+    if revised_r and five_module_contract(version) and path == CPIN_SOURCE:
+        return True
     if revised_r and path in set(R_WORKFLOWS) | {"scientific/SHA256SUMS"}:
         return True
     if revised_r and snp2_contract(version) and path == SNP2_EXAMPLE_OUTPUT:
@@ -273,6 +298,13 @@ def template(installer_set, run_id):
                 "reference_source_commit": R_REFERENCE_COMMIT,
                 "report_path": "", "report_sha256": "", "runtime_image": "",
             }
+        if five_module_contract(fields["version"]):
+            record["schema_version"] = 7
+            record["observed_baseline"]["source_comparison_scope"] = FIVE_MODULE_SOURCE_SCOPE
+            record["scientific_analysis_qualification"] = {
+                "reference_source_commit": ANALYSIS_REFERENCE_COMMIT,
+                "report_path": "", "report_sha256": "", "runtime_image": "",
+            }
         return record
     return {
         "schema_version": 1, **fields, "build_run_id": run_id, "decision": "pending",
@@ -285,9 +317,10 @@ def validate(record, version, commit, run_id, installer_set=None):
     """Require a committed review under the record's explicit acceptance policy."""
     acceptance_path(version)
     require(not revised_r_contract(version) or isinstance(record, dict)
-            and type(record.get("schema_version")) is int and record["schema_version"] == 6,
-            "Releases from 0.8.9 require scientific equivalence acceptance schema 6")
-    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4, 5, 6):
+            and type(record.get("schema_version")) is int
+            and record["schema_version"] == (7 if five_module_contract(version) else 6),
+            "Releases from 0.8.9 require scientific equivalence acceptance schema 6; from 0.8.50 require five-module schema 7")
+    if isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (2, 3, 4, 5, 6, 7):
         validate_research(record, version, commit, run_id, installer_set)
         return
     require(not multiplatform_contract(version), "Official 0.8.2+ releases require four-platform acceptance schema 5")
@@ -355,11 +388,13 @@ def review_evidence(value, label):
 
 def validate_research(record, version, commit, run_id, installer_set=None):
     """A limited research decision records deferred qualification, never fictitious passes."""
-    revised_r = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 6
-    multiplatform = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (5, 6)
-    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (4, 5, 6)
-    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4, 5, 6)
-    schema = 6 if revised_r else 5 if multiplatform else (4 if reliability else (3 if reviewed_delta else 2))
+    five_modules = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] == 7
+    revised_r = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (6, 7)
+    multiplatform = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (5, 6, 7)
+    reliability = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (4, 5, 6, 7)
+    reviewed_delta = isinstance(record, dict) and type(record.get("schema_version")) is int and record["schema_version"] in (3, 4, 5, 6, 7)
+    schema = 7 if five_modules else 6 if revised_r else 5 if multiplatform else (4 if reliability else (3 if reviewed_delta else 2))
+    require(not five_modules or five_module_contract(version), "Five-module acceptance is available from 0.8.50 only")
     require(not revised_r or revised_r_contract(version), "Revised R acceptance is available from 0.8.9 only")
     minor = "7" if reviewed_delta else "6"
     require(multiplatform_contract(version) if multiplatform else
@@ -370,7 +405,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
     elif reviewed_delta:
         require(not reliability_contract(version),
                 "Research releases from 0.7.2 require reliability acceptance schema 4")
-    expected_fields = (SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
+    expected_fields = (FIVE_MODULE_RESEARCH_FIELDS if five_modules else SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
     require(isinstance(record, dict) and set(record) == expected_fields
             and type(record["schema_version"]) is int and record["schema_version"] == schema,
@@ -411,7 +446,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
             and bool(set(observations) & ({"scientific_self_tests", "dnp_sample_analysis"}
                                          | ({"automatic_workflow_sample_analysis"} if reviewed_delta else set()))),
             "Baseline must identify observed installation and scientific execution")
-    expected_scope = (REVISED_R_SOURCE_SCOPE if revised_r else MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else
+    expected_scope = (FIVE_MODULE_SOURCE_SCOPE if five_modules else REVISED_R_SOURCE_SCOPE if revised_r else MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else
                       REVIEWED_SOURCE_SCOPE if reviewed_delta else SOURCE_EQUIVALENCE_SCOPE)
     require(baseline[scope_field] == expected_scope,
             "Unsupported baseline source equivalence scope")
@@ -436,6 +471,11 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                         "Unperformed macOS validation cannot imply a successful runtime test")
     if revised_r:
         validate_scientific_record(record["scientific_equivalence"])
+    if five_modules:
+        validate_analysis_record(record["scientific_analysis_qualification"])
+        require(record["scientific_equivalence"]["runtime_image"] ==
+                record["scientific_analysis_qualification"]["runtime_image"],
+                "All five modules must be qualified in the same packaged image")
     if reviewed_delta:
         changes = record["reviewed_source_changes"]
         require(isinstance(changes, list), "Reviewed source changes must be an explicit list")
@@ -497,6 +537,272 @@ def validate_scientific_record(evidence):
             "Scientific equivalence requires an immutable runtime image ID")
 
 
+def validate_analysis_record(evidence):
+    require(isinstance(evidence, dict) and set(evidence) == {
+        "reference_source_commit", "report_path", "report_sha256", "runtime_image",
+    }, "Invalid downstream scientific qualification record fields")
+    require(evidence["reference_source_commit"] == ANALYSIS_REFERENCE_COMMIT,
+            "Updated analyses require the frozen NEWPAT 20261113 reference")
+    require(safe_evidence_path(evidence["report_path"])
+            and evidence["report_path"].startswith("scientific/")
+            and PurePosixPath(evidence["report_path"]).name == "five-module-qualification.json",
+            "Updated analyses must identify their retained qualification report")
+    require(valid_digest(evidence["report_sha256"]), "Invalid downstream qualification report digest")
+    require(isinstance(evidence["runtime_image"], str)
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", evidence["runtime_image"]),
+            "Updated analyses require an immutable runtime image ID")
+
+
+def analysis_expected_cases():
+    expected = {}
+    for marker in ("SNP", "DNP"):
+        for workflow, variants in (("cpin", ({},)),
+                ("cpi", ({}, {"minimum": 1}, {"minimum": 5}, {"metadata": True}, {"mismatch": True})),
+                ("contamination", ({}, {"include_zero": False}))):
+            for index, values in enumerate(variants):
+                variant = {"minimum": 2, "include_zero": True, "metadata": False, "mismatch": False, **values}
+                for candidate in (False, True):
+                    name = f"{marker}-{workflow}-{index}-{'candidate' if candidate else 'reference'}"
+                    expected[name] = (workflow, marker, candidate, 1, "serial", None, variant)
+        for workflow in ("cpin", "cpi", "contamination"):
+            for count in (2, 3, 5):
+                for mode, cap in (("serial", None), ("auto", None), ("auto", 2)):
+                    name = f"{marker}-{workflow}-batch{count}-{mode}-cap{cap}"
+                    expected[name] = (workflow, marker, True, count, mode, cap,
+                                     {"minimum": 2, "include_zero": True, "metadata": False, "mismatch": False})
+    return expected
+
+
+def same_scientific_values(actual, expected):
+    """JSON numbers can differ in representation, but true is never the number 1."""
+    if isinstance(actual, bool) or isinstance(expected, bool):
+        return type(actual) is type(expected) and actual == expected
+    if isinstance(expected, dict):
+        return (isinstance(actual, dict) and set(actual) == set(expected)
+                and all(same_scientific_values(actual[key], value) for key, value in expected.items()))
+    if isinstance(expected, list):
+        return (isinstance(actual, list) and len(actual) == len(expected)
+                and all(same_scientific_values(a, b) for a, b in zip(actual, expected)))
+    return actual == expected
+
+
+def compare_analysis_rows(actual, expected):
+    require(isinstance(actual, list) and isinstance(expected, list) and len(actual) == len(expected),
+            "Downstream scientific summary row counts differ")
+    for row, reference in zip(actual, expected):
+        require(isinstance(row, dict) and isinstance(reference, dict) and set(reference) <= set(row),
+                "Downstream scientific summary fields are incomplete")
+        for key, wanted in reference.items():
+            value = row[key]
+            require(isinstance(value, str) and isinstance(wanted, str), "Scientific table values must be strings")
+            if wanted in {"NA", "NaN"}:
+                require(value in {"NA", "NaN", "nan"}, "Downstream missing scientific value differs")
+                continue
+            try:
+                numeric = float(wanted)
+            except ValueError:
+                require(value == wanted, "Downstream scientific sample/selection identity differs")
+            else:
+                try:
+                    observed = float(value)
+                except ValueError as error:
+                    raise ValueError("Downstream scientific numeric value is missing") from error
+                require(math.isfinite(observed) and math.isfinite(numeric)
+                        and math.isclose(observed, numeric, rel_tol=1e-11, abs_tol=1e-11),
+                        "Downstream scientific numerical results differ")
+
+
+def verify_analysis_summary(archive, report_path, case):
+    workflow, marker, size = case["workflow"], case["marker"], case["batch_size"]
+    filename = {"cpin": "Summary_Postnatal_CPI.txt", "cpi": "Summary_FetalFraction_CPI.csv",
+                "contamination": "contamination_summary.txt"}[workflow]
+    require(case["output_sha256"].get(filename) == case["summary_sha256"],
+            "Downstream summary digest does not identify the scientific output")
+    member = (PurePosixPath(report_path).parent / case["name"] / "output" / filename).as_posix()
+    try:
+        with zipfile.ZipFile(archive) as handle:
+            entries = [entry for entry in handle.infolist() if entry.filename == member]
+            require(len(entries) == 1 and 0 < entries[0].file_size <= 8 * 1024 * 1024,
+                    "Missing, duplicate or oversized retained downstream summary")
+            raw = handle.read(entries[0])
+        require(hashlib.sha256(raw).hexdigest() == case["summary_sha256"],
+                "Retained downstream summary bytes differ from the qualified result")
+        rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8-sig")), delimiter="," if workflow == "cpi" else "\t"))
+    except (OSError, zipfile.BadZipFile, KeyError, UnicodeError, csv.Error) as error:
+        raise ValueError("Cannot read retained downstream scientific summary") from error
+    require(rows == case["rows"], "Reported downstream rows differ from retained summary bytes")
+    required_columns = {
+        "cpin": {"Trio", "Marker_type", "Analysis", "N_sites", "N_heterozygous_child_sites",
+                 "N_homozygous_child", "Matching_sites", "Mismatching_sites", "Log10_CPI", "CPI",
+                 "Error_constant", "Min_child_reads"},
+        "cpi": {"Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
+                "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI", "Median_logCPI",
+                "Mean_logCPI", "CPI_medianFF", "Error_constant"},
+        "contamination": {"individuo", "informative_sites", "mean_contamination", "sd_contamination"},
+    }[workflow]
+    require(all(required_columns <= set(row) for row in rows), "Downstream scientific summary columns are incomplete")
+    if workflow == "cpin":
+        selections = {"heterozygous_child_sites", "all_compatible_sites"}
+        trios = ([f"MotherM-FatherF-ChildC_{marker}s"] if size == 1 else
+                 [f"MotherM{i}-FatherF{i}-ChildC{i}_{marker}s" for i in range(1, size + 1)])
+        identities = {(row.get("Trio"), row.get("Analysis")) for row in rows}
+        require(len(rows) == 2 * size and identities == {(trio, selection) for trio in trios for selection in selections}
+                and all(row.get("Marker_type") == marker for row in rows),
+                "CPIN summary must contain each expected trio and selection exactly once")
+    elif workflow == "cpi":
+        pairs = ([f"MotherM-FatherF_{marker}s", f"MotherN-FatherN_{marker}s"] if size == 1 else
+                 [f"MotherM{i}-FatherF{i}_{marker}s" for i in range(1, size + 1)])
+        require(len(rows) == len(pairs) and {row.get("Pair") for row in rows} == set(pairs),
+                "CPI summary must contain every expected pair exactly once")
+    else:
+        require(len(rows) == size and {row.get("individuo") for row in rows} == {f"Sample{i}" for i in range(1, size + 1)},
+                "Contamination summary must contain every expected sample exactly once")
+
+
+def verify_analysis_qualification(record, evidence_directory, read_source):
+    """Validate updated models separately; never relabel changed science as old equivalence."""
+    evidence = record["scientific_analysis_qualification"]
+    validate_analysis_record(evidence)
+    archive = Path(evidence_directory) / "qualification-evidence.zip"
+    require(archive.is_file() and not archive.is_symlink()
+            and hashlib.sha256(archive.read_bytes()).hexdigest() == record["qualification_evidence_sha256"],
+            "Downstream qualification archive differs from the accepted build")
+    try:
+        with zipfile.ZipFile(archive) as handle:
+            entries = [entry for entry in handle.infolist() if entry.filename == evidence["report_path"]]
+            require(len(entries) == 1 and 0 < entries[0].file_size <= 8 * 1024 * 1024,
+                    "Missing, duplicate or oversized downstream qualification report")
+            raw = handle.read(entries[0])
+        require(hashlib.sha256(raw).hexdigest() == evidence["report_sha256"],
+                "Downstream qualification report differs from the accepted bytes")
+        report = json.loads(raw)
+    except (OSError, zipfile.BadZipFile, KeyError, UnicodeError) as error:
+        raise ValueError("Cannot read retained downstream qualification report") from error
+    require(isinstance(report, dict) and type(report.get("schema_version")) is int
+            and report["schema_version"] == 2 and report.get("status") == "passed"
+            and report.get("full_batch_matrix") is True and report.get("inputs_unchanged") is True
+            and report.get("source_unchanged") is True,
+            "Updated analyses require the complete unchanged-input/source qualification matrix")
+
+    def source(path):
+        require(safe_evidence_path(path), "Invalid downstream source path")
+        try:
+            data = read_source(record["source_commit"], path)
+        except (OSError, KeyError, RuntimeError, subprocess.CalledProcessError) as error:
+            raise ValueError(f"Cannot read downstream qualification source: {path}") from error
+        require(isinstance(data, bytes), "Downstream qualification requires exact source bytes")
+        return data
+
+    def hashes(value, label):
+        require(isinstance(value, dict) and bool(value)
+                and all(safe_evidence_path(path) and valid_digest(digest) for path, digest in value.items()),
+                f"Missing or invalid downstream {label} hashes")
+
+    runtime = report.get("runtime")
+    require(isinstance(runtime, dict) and runtime.get("kind") == "installed-image"
+            and runtime.get("image_id") == evidence["runtime_image"],
+            "Local R evidence cannot qualify the packaged scientific image")
+    installed = {"scientific/vendor/NEWPAT/" + name: "scientific/vendor/NEWPAT/" + name
+                 for name in ANALYSIS_REFERENCE_SHA256}
+    installed.update({"lib/nipat_scientific/" + name: "src/nipat_scientific/" + name
+                      for name in ANALYSIS_HELPERS})
+    require(runtime.get("candidate_and_helper_sha256") == {
+        installed_path: hashlib.sha256(source(git_path)).hexdigest()
+        for installed_path, git_path in installed.items()},
+        "Downstream qualification used different installed R or helper sources")
+    require(report.get("verification_script_sha256") ==
+            hashlib.sha256(source("scripts/verify_five_modules.py")).hexdigest(),
+            "Downstream qualification used a different verifier")
+    reference = {"repository": "https://github.com/lpistacchia/NEWPAT",
+                 "upstream_commit": ANALYSIS_REFERENCE_COMMIT, "sha256": ANALYSIS_REFERENCE_SHA256}
+    require(report.get("upstream_reference") == reference
+            and json.loads(source(ANALYSIS_REFERENCE_ROOT + "/manifest.json")) == reference,
+            "Downstream qualification uses a different immutable upstream reference")
+    for path, digest in ANALYSIS_REFERENCE_SHA256.items():
+        require(hashlib.sha256(source(ANALYSIS_REFERENCE_ROOT + "/" + path)).hexdigest() == digest,
+                "Frozen downstream reference bytes were modified")
+    fixtures = report.get("fixture_sha256")
+    hashes(fixtures, "fixture")
+    required_fixtures = {f"{marker}/{workflow}/{filename}"
+        for marker in ("SNP", "DNP") for workflow, filenames in {
+            "cpin": ("MotherM.txt", "FatherF.txt", "ChildC.txt", "population.tsv"),
+            "cpi": ("MotherM.txt", "FatherF.txt", "MotherN.txt", "FatherN.txt", "population.tsv"),
+            "contamination": ("Calls.txt", "panel.tsv"),
+        }.items() for filename in filenames}
+    require(required_fixtures <= set(fixtures), "Downstream qualification fixture coverage is incomplete")
+    for path, digest in fixtures.items():
+        require(hashlib.sha256(source("tests/fixtures/five_modules/" + path)).hexdigest() == digest,
+                "Downstream fixture differs from the reviewed source")
+    registry = json.loads(source("src/nipat_scientific/settings_data.json"))["workflows"]
+    expected = analysis_expected_cases()
+    results = report.get("results")
+    require(isinstance(results, list) and all(isinstance(row, dict) for row in results)
+            and len(results) == len(expected)
+            and {row.get("name") for row in results} == set(expected),
+            "Updated analyses require all 86 unique reference and batch executions")
+    by_name = {row["name"]: row for row in results}
+    for name, (workflow, marker, candidate, size, mode, cap, variant) in expected.items():
+        case = by_name[name]
+        require(case.get("status") == "passed" and case.get("inputs_unchanged") is True
+                and case.get("workflow") == workflow and case.get("marker") == marker
+                and case.get("candidate") is candidate and type(case.get("batch_size")) is int and case["batch_size"] == size
+                and case.get("mode") == mode and same_scientific_values(case.get("max_workers"), cap)
+                and same_scientific_values(case.get("variant"), variant) and isinstance(case.get("rows"), list) and case["rows"],
+                "A downstream execution failed or used different scientific settings")
+        for field in ("input_sha256", "output_sha256", "log_sha256"):
+            hashes(case.get(field), field)
+        require(valid_digest(case.get("summary_sha256")), "Missing downstream summary digest")
+        verify_analysis_summary(archive, evidence["report_path"], case)
+        if not candidate:
+            require(case.get("worker_evidence") is None and case.get("scientific_settings") is None,
+                    "The independent reference cannot use candidate settings or worker helpers")
+            continue
+        parameters = {key: value["default"] for key, value in registry[workflow]["parameters"].items()}
+        parameters[{"cpin": "min_child_reads", "cpi": "min_fetal_reads", "contamination": "include_zero"}[workflow]] = (
+            variant["include_zero"] if workflow == "contamination" else variant["minimum"])
+        settings = {"schema_version": 1, "workflow": workflow, "parameters": parameters,
+                    "constants": registry[workflow]["constants"]}
+        require(case.get("settings_match") is True and same_scientific_values(case.get("scientific_settings"), settings),
+                "Downstream native effective parameters/constants differ from the reviewed model")
+        worker = case.get("worker_evidence")
+        require(isinstance(worker, dict), "Downstream execution lacks worker evidence")
+        planned, observed = worker.get("max_planned_workers"), worker.get("observed_peak_workers")
+        require(type(planned) is int and type(observed) is int and 1 <= observed <= planned
+                and (cap is None or planned <= cap) and (mode != "serial" or planned == observed == 1)
+                and type(worker.get("completed_worker_tasks")) is int and worker["completed_worker_tasks"] > 0,
+                "Downstream workers exceed their execution budget or did not finish")
+        if size > 1 and mode == "auto":
+            children = worker.get("observed_child_pids")
+            require(planned > 1 and isinstance(children, list)
+                    and all(type(pid) is int and pid > 0 for pid in children) and len(set(children)) > 1,
+                    "Parallel downstream batches did not execute in distinct child workers")
+    comparisons = {name.removesuffix("-candidate") for name in expected
+                   if name.endswith("-candidate")}
+    names = report.get("reference_comparisons")
+    pairs = report.get("reference_comparison_evidence")
+    require(isinstance(names, list) and len(names) == len(comparisons) and set(names) == comparisons
+            and isinstance(pairs, dict) and set(pairs) == comparisons,
+            "Updated analyses require all 16 independent reference comparisons")
+    for name, pair in pairs.items():
+        require(isinstance(pair, dict) and pair.get("equal") is True
+                and pair.get("candidate_sha256") == by_name[name + "-candidate"]["summary_sha256"]
+                and pair.get("reference_sha256") == by_name[name + "-reference"]["summary_sha256"],
+                "Downstream reference comparison failed or refers to different scientific outputs")
+        compare_analysis_rows(by_name[name + "-candidate"]["rows"], by_name[name + "-reference"]["rows"])
+    for marker in ("SNP", "DNP"):
+        for workflow in ("cpin", "cpi", "contamination"):
+            for count in (2, 3, 5):
+                prefix = f"{marker}-{workflow}-batch{count}"
+                for cap in (None, 2):
+                    compare_analysis_rows(by_name[f"{prefix}-auto-cap{cap}"]["rows"],
+                                          by_name[f"{prefix}-serial-capNone"]["rows"])
+    return {"report_sha256": evidence["report_sha256"], "runtime_image": evidence["runtime_image"],
+            "reference_source_commit": ANALYSIS_REFERENCE_COMMIT,
+            "executions_verified": len(results), "reference_comparisons_verified": len(comparisons),
+            "batch_executions_verified": sum("-batch" in name for name in expected),
+            "scope": "synthetic-independent-oracles-and-upstream-models", "domain_validation_claimed": False}
+
+
 def verify_scientific_equivalence(record, evidence_directory, manifest, read_source):
     """Bind reviewed R results to Git, the retained build evidence and packaged image.
 
@@ -504,7 +810,7 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
     This check adds scientific content validation; it does not turn synthetic
     equivalence into domain validation or claim execution on users' desktops.
     """
-    require(record.get("schema_version") == 6, "Scientific evidence requires acceptance schema 6")
+    require(record.get("schema_version") in (6, 7), "Scientific evidence requires acceptance schema 6 or 7")
     validate(record, record["version"], record["source_commit"], record["build_run_id"])
     evidence = record["scientific_equivalence"]
     require(manifest.get("source_commit") == record["source_commit"]
@@ -534,6 +840,7 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
             and report.get("inputs_unchanged") is True
             and report.get("runtime_image") == evidence["runtime_image"],
             "Scientific equivalence did not pass in the packaged image with unchanged inputs")
+    five_modules = five_module_contract(record["version"])
     snp2 = snp2_contract(record["version"])
     audited = audited_r_contract(record["version"]) or snp2
     comparison_policy = {"table_bytes": "exact", "unrounded_r": "identical",
@@ -589,7 +896,15 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
         require(isinstance(supporting, dict) and supporting.get(PRESENTATION_SOURCE)
                 == hashlib.sha256(source(commit, PRESENTATION_SOURCE)).hexdigest(),
                 "Scientific presentation evidence used different plotting sources")
-    candidate_hashes = {path: hashlib.sha256(source(commit, path)).hexdigest() for path in R_WORKFLOWS}
+    if five_modules:
+        require(report.get("supporting_source_sha256") == {
+            path: hashlib.sha256(source(commit, path)).hexdigest() for path in CALLER_SUPPORTING_SOURCES},
+            "Caller qualification used different installed scientific helpers")
+    workflows = {path: workflow for path, workflow in R_WORKFLOWS.items()
+                 if not five_modules or workflow in {"dnp-call", "snp-call"}}
+    candidate_hashes = {path: hashlib.sha256(source(commit, path)).hexdigest() for path in workflows}
+    all_hashes = {path: hashlib.sha256(source(commit, path)).hexdigest()
+                  for path in set(R_WORKFLOWS) | ({CPIN_SOURCE} if five_modules else set())}
     require(report.get("candidate_r_sha256") == candidate_hashes,
             "Scientific equivalence was performed on different candidate R sources")
     try:
@@ -597,9 +912,9 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
                          if line.strip()]
     except UnicodeError as error:
         raise ValueError("Invalid scientific source hash manifest") from error
-    require(len(manifest_rows) == len(candidate_hashes)
+    require(len(manifest_rows) == len(all_hashes)
             and all(len(row) == 2 for row in manifest_rows)
-            and {"scientific/" + row[1]: row[0] for row in manifest_rows} == candidate_hashes,
+            and {"scientific/" + row[1]: row[0] for row in manifest_rows} == all_hashes,
             "Scientific source hash manifest differs from the tested candidate R sources")
 
     cases = report.get("cases")
@@ -607,12 +922,15 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
             "Scientific differential cases are missing")
     names = [case.get("case") for case in cases]
     required_cases = {**R_CASES, **(R_AUDIT_CASES if audited else {}), **(SNP2_CASES if snp2 else {})}
+    if five_modules:
+        required_cases = {name: workflow for name, workflow in required_cases.items()
+                          if workflow in {"dnp-call", "snp-call"}}
     require(all(isinstance(name, str) and name for name in names) and len(set(names)) == len(names)
             and set(required_cases) <= set(names), "Required scientific differential cases are missing or duplicated")
     plots_verified = 0
     for case in cases:
         require(case.get("status") == "passed" and case.get("unrounded_r_values") == "identical"
-                and case.get("workflow") in set(R_WORKFLOWS.values())
+                and case.get("workflow") in set(workflows.values())
                 and (case["case"] not in required_cases or case["workflow"] == required_cases[case["case"]]),
                 "A scientific differential case failed or has a different workflow")
         if snp2:
@@ -655,6 +973,9 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
     paths = [item.get("path") for item in helpers]
     required_helpers = (R_HELPERS | (R_AUDIT_HELPERS if audited else set())
                         | ({PRESENTATION_HELPER} if snp2 else set()))
+    if five_modules:
+        required_helpers = {path for path in required_helpers
+                            if not path.startswith(("tests/r_optimization/cpi/", "tests/r_optimization/contamination/"))}
     require(all(safe_evidence_path(path) and path.startswith("tests/r_optimization/") for path in paths)
             and len(set(paths)) == len(paths) and required_helpers <= set(paths),
             "Required scientific focused comparisons are missing or duplicated")
@@ -662,7 +983,9 @@ def verify_scientific_equivalence(record, evidence_directory, manifest, read_sou
         require(helper.get("status") == "passed" and helper.get("sha256") ==
                 hashlib.sha256(source(commit, helper["path"])).hexdigest(),
                 "Scientific focused comparison failed or used different test sources")
+    analysis = verify_analysis_qualification(record, evidence_directory, read_source) if five_modules else None
     return {"source_commit": commit, "reference_source_commit": R_REFERENCE_COMMIT,
+            **({"scientific_analysis_qualification": analysis} if analysis else {}),
             **({"snp_reference": SNP2_REFERENCE} if snp2 else {}),
             "runtime_image": evidence["runtime_image"], "report_sha256": evidence["report_sha256"],
             "candidate_r_sha256": candidate_hashes, "cases_verified": len(cases),
@@ -685,14 +1008,15 @@ def verify_baseline(record, read_source):
     evidence verification is mandatory before publication.
     """
     require(isinstance(record, dict) and type(record.get("schema_version")) is int
-            and record["schema_version"] in (1, 2, 3, 4, 5, 6), "Unsupported acceptance schema")
+            and record["schema_version"] in (1, 2, 3, 4, 5, 6, 7), "Unsupported acceptance schema")
     if record["schema_version"] == 1:
         return None
-    revised_r = record["schema_version"] == 6
-    multiplatform = record["schema_version"] in (5, 6)
-    reliability = record["schema_version"] in (4, 5, 6)
-    reviewed_delta = record["schema_version"] in (3, 4, 5, 6)
-    expected_fields = (SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
+    five_modules = record["schema_version"] == 7
+    revised_r = record["schema_version"] in (6, 7)
+    multiplatform = record["schema_version"] in (5, 6, 7)
+    reliability = record["schema_version"] in (4, 5, 6, 7)
+    reviewed_delta = record["schema_version"] in (3, 4, 5, 6, 7)
+    expected_fields = (FIVE_MODULE_RESEARCH_FIELDS if five_modules else SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
     require(set(record) == expected_fields,
             "Research acceptance record fields are invalid")
@@ -746,7 +1070,7 @@ def verify_baseline(record, read_source):
         require(record["reviewed_source_changes"] == changes,
                 "Reviewed source changes do not match the exact baseline-to-candidate delta")
         return {"baseline_source_commit": baseline, "source_commit": candidate,
-                "scope": REVISED_R_SOURCE_SCOPE if revised_r else MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
+                "scope": FIVE_MODULE_SOURCE_SCOPE if five_modules else REVISED_R_SOURCE_SCOPE if revised_r else MULTIPLATFORM_SOURCE_SCOPE if multiplatform else RELIABILITY_SOURCE_SCOPE if reliability else REVIEWED_SOURCE_SCOPE,
                 "unchanged_files_verified": unchanged,
                 "reviewed_source_changes": changes, "candidate_windows_installation_claimed": False,
                 **({"operational_equivalence_claimed": False,

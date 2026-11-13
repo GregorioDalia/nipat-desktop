@@ -120,6 +120,8 @@ def prepare_cpi(request: object) -> list[str]:
         if name not in required_names or name in samples:
             raise ValidationError(f"Campione CPI inatteso o duplicato: {name}")
         source = require_file(_absolute_path(item["path"], "Output del caller"), "Output del caller")
+        if any(source.samefile(previous) for previous in samples.values()):
+            raise ValidationError("Uno stesso file non può rappresentare campioni CPI distinti.")
         warnings.extend(require_count_input(source, marker_type=marker, cpi=True))
         samples[name] = source
     if set(samples) != set(required_names):

@@ -1,11 +1,16 @@
 # Sviluppo e validazione
 
-La versione stabile di NIPAT Desktop è la **0.8.30**, con integrazione
-di SNPcall 2.0 e revisione della presentazione dei risultati. Le
-[note 0.8.30](RELEASE_0.8.30.md) distinguono modifiche e verifiche. Il prodotto mantiene una CLI guidata e
-workflow automatici su Windows, macOS e Ubuntu. SNP usa il sorgente upstream
-2.0 congelato come riferimento; DNP, CPI e Contamination conservano la
-baseline numerica 0.8.5.
+La versione stabile di NIPAT Desktop è la **0.8.50**, con DNPcall, SNPcall 2.0,
+Contamination, CPI prenatale e CPIN postnatale. Le [note 0.8.50](RELEASE_0.8.50.md)
+distinguono modifiche e verifiche. Il prodotto mantiene una CLI guidata e
+workflow automatici su Windows, macOS e Ubuntu. DNP e SNP conservano i
+rispettivi riferimenti 0.8.5 e upstream 2.0; CPI, Contamination e CPIN usano
+il riferimento NEWPAT congelato il 13 novembre 2026.
+
+La 0.8.50 collega i conteggi di entrambi i caller a tutte le combinazioni dei
+tre moduli successivi, con rami indipendenti, ruoli espliciti e parametri
+configurabili. Le costanti del modello sono consultabili e i valori effettivi
+sono registrati in ogni run. Il modulo fetal sex resta fuori da questa versione.
 
 ## Priorità
 
@@ -14,7 +19,7 @@ baseline numerica 0.8.5.
 | Validazione di dominio | Confrontare risultati e parametri su casi rappresentativi degli utilizzi scientifici previsti. |
 | Tracciabilità | Collegare senza ambiguità nomi originali, identità interne, fasi e risultati. |
 | Uso delle risorse | Conservare la distinzione fra configurazione salvata, risorse effettive, suggerimenti e modifiche; Invio mantiene i valori correnti. |
-| Prestazioni | Misurare la 0.8.30 su BAM reali con risorse fisse e un unico budget di calcolo, anche nei batch SNP 2.0; conservare i blocchi DNP iniziali da 32 MiB / 64 loci e confrontare tempi e RAM con il riferimento scientifico di ciascun modulo. |
+| Prestazioni | Misurare la 0.8.50 su BAM reali con risorse e alimentazione del computer comparabili, includendo più di due BAM e tutti i moduli; mantenere un unico budget di calcolo e confrontare tempi e RAM a parità di parametri. I blocchi DNP iniziali da 32 MiB / 64 loci restano configurabili. |
 | Portabilità | Raccogliere prove reali Windows 10/11, Ubuntu e Mac Intel/Apple Silicon oltre ai controlli automatici. |
 | Interfaccia | Esporre fase, campione, tempo trascorso e attività anche senza diagnostica; usare avanzamento e tempo residuo solo quando misurabili o stimabili con dati sufficienti. |
 | GUI | Riutilizzare i contratti della CLI e gli eventi di avanzamento in una futura interfaccia grafica. |
@@ -33,13 +38,15 @@ per gli avvii guidati successivi; il riepilogo permette un override per la
 singola analisi. I MiB del blocco misurano input grezzo, non RAM residente:
 dimensioni e stime di memoria devono essere verificate con il parallelismo.
 
-I requisiti di qualificazione sono equivalenza con la 0.8.5 in seriale,
-automatico, massimo 2 e massimo 4, determinismo delle ripetizioni e prova
-di processi realmente contemporanei entro il budget. Il
+Per ciascun modulo la qualificazione confronta seriale e parallelo con il
+rispettivo riferimento scientifico e gli stessi parametri, distinguendo i
+cambiamenti intenzionali di modello dalle ottimizzazioni. Include determinismo
+delle ripetizioni e prova di processi realmente contemporanei entro il budget. Il
 [protocollo prestazioni](PERFORMANCE.md#collaudo-del-parallelismo-0812) richiede
 poi gli stessi input reali e risorse fisse per confrontare tempi e RAM.
 I test di sviluppo non sostituiscono questo collaudo o le prove dei pacchetti
-sulle piattaforme finali; non costituiscono autorizzazione alla pubblicazione.
+sulle piattaforme finali. La pubblicazione richiede inoltre i gate della release
+descritti in [CI/CD](CI_CD.md).
 
 ## Prototipo 0.8.10 — contesto precedente
 
@@ -61,13 +68,16 @@ Engine.
 
 La 0.8.30 integra SNPcall 2.0 dopo l'esame del nuovo sorgente e del suo
 contratto: qualità, likelihood, genotipi, raggruppamento per SNP e QNAME,
-statistiche degli indel e riepiloghi. L'ulteriore modulo scientifico resta
-separato, in attesa di un sorgente e di requisiti sufficienti per integrarlo.
+statistiche degli indel e riepiloghi. La successiva 0.8.50 integra CPIN e i
+nuovi modelli CPI e Contamination; i riferimenti storici restano congelati.
 
 ## Metodo di verifica
 
-La [revisione 0.8.9](OPTIMIZATION_0.8.9.md) usa i sorgenti congelati della 0.8.5
-come riferimento. I controlli distinguono equivalenza dei risultati,
+La [revisione 0.8.9](OPTIMIZATION_0.8.9.md) documenta i confronti storici con
+la 0.8.5. Per la versione corrente, i sorgenti indipendenti sotto
+`tests/reference_r/` identificano il riferimento appropriato a ogni modulo;
+le differenze intenzionali, come la nuova quota Contamination, non vengono
+forzate a riprodurre il modello precedente. I controlli distinguono equivalenza dei risultati,
 misure delle prestazioni e funzionamento sulle piattaforme finali.
 Le build di sviluppo sono identificate da commit e build; il completamento
 dei test non pubblica automaticamente un aggiornamento.

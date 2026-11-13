@@ -29,6 +29,27 @@ class REquivalenceCI(unittest.TestCase):
             self.assertIn('${{ runner.temp }}/nipat-five-modules-check/', job)
             self.assertNotIn("continue-on-error:", job)
 
+    def test_native_edge_and_settings_regressions_cannot_skip_in_image(self):
+        for name, identifier in (("ci.yml", "scientific"), ("windows-installer.yml", "linux-runtime")):
+            job = job_text((ROOT / ".github/workflows" / name).read_text(), identifier)
+            self.assertIn("/qualification/.github/scripts/check_native_r.py", job)
+            self.assertIn("--env PYTHONPATH=/opt/nipat/lib:/qualification/src", job)
+            self.assertIn("--network=none", job)
+            self.assertIn("${{ runner.temp }}/nipat-native-r-check/", job)
+        gate = (ROOT / ".github/scripts/check_native_r.py").read_text()
+        self.assertIn("result.skipped", gate)
+        self.assertIn("test_native_r_*.py", gate)
+        self.assertIn("test_scientific_settings.py", gate)
+
+    def test_python_collection_includes_pytest_functions_and_unittest_classes(self):
+        for name in ("ci.yml", "windows-installer.yml"):
+            workflow = (ROOT / ".github/workflows" / name).read_text()
+            self.assertIn("python -m coverage run -m pytest tests", workflow)
+        self.assertIn("'pytest', 'tests'", (ROOT / ".github/scripts/check_windows.ps1").read_text())
+        self.assertIn('"-m", "pytest", "tests"', (ROOT / ".github/scripts/check_macos.py").read_text())
+        self.assertIn('"-r", ".github/quality-requirements.txt"', (ROOT / ".github/scripts/check_macos.py").read_text())
+        self.assertIn("pytest==", (ROOT / ".github/quality-requirements.txt").read_text())
+
     def test_ci_and_installer_build_require_equivalence_in_the_tested_image(self):
         for name, identifier in (("ci.yml", "scientific"),
                                  ("windows-installer.yml", "linux-runtime")):

@@ -82,9 +82,15 @@ The full matrix also checks 2/3/5 prenatal pairs, postnatal trios and
 contamination samples under serial, auto and maximum-two-process execution.
 Reference scientific fields and deterministic row order must match; added
 candidate diagnostics and PDF metadata are not scientific differences.
-`qualification.json` records numerical assertions, reference comparisons,
+`five-module-qualification.json` records numerical assertions, reference comparisons,
 installed candidate/helper hashes, immutable image identity and actual worker
-budgets/completion/concurrency. Details and derivations are in
+budgets/completion/concurrency. Every execution binds input, output and log
+hashes, checks that inputs remain unchanged and checks native R effective
+settings against the requested configuration, including readable constants.
+Hashes describe raw execution bytes before archive path redaction. Tiny batch
+cases require distinct real child processes without a scheduling-dependent
+overlap assertion; the controlled parallel scheduler barrier separately proves
+simultaneous execution. Details and derivations are in
 `tests/fixtures/five_modules/README.md`.
 
 Engine workflow/BAM integration, presentation contracts and native Windows

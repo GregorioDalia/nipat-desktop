@@ -73,6 +73,45 @@ def sample_rows(metadata: dict) -> list[dict[str, str]]:
     return result
 
 
+def _family_section(metadata: dict, samples: list[dict[str, str]]) -> str:
+    """Keep explicit family assignments visible when the full plan is omitted.
+
+    Roles come from the recorded plan, never from a sample's filename. Validate
+    the complete plan and its sample mapping before displaying any assignment.
+    """
+    if metadata.get("workflow") != "analysis":
+        return ""
+    from nipat.results import _workflow_steps
+
+    try:
+        _workflow_steps(metadata)
+    except (ValueError, KeyError, TypeError):
+        return "<h2>Famiglie e ruoli dichiarati</h2><p>Associazioni familiari non consultabili: il piano o la corrispondenza dei campioni non sono validi.</p>"
+    sources = {sample["sample_id"]: sample for sample in samples}
+    rows = []
+    for step in metadata["parameters"]["plan"]["steps"]:
+        workflow = step["workflow"]
+        if workflow not in {"cpi", "cpin"}:
+            continue
+        roles = (("mother", "cfDNA materno" if workflow == "cpi" else "Madre"),
+                 ("father", "Padre"), ("child", "Figlio"))
+        families = step["inputs"].get("pairs", step["inputs"].get("trios", []))
+        for family in families:
+            for role, label in roles:
+                if role not in family:
+                    continue
+                identifier = family[role]["sample"]
+                source = sources[identifier]
+                rows.append([step["id"], step["parameters"]["marker_type"], family["id"],
+                             label, identifier, source["original_name"]])
+    if not rows:
+        return ""
+    return ("<h2>Famiglie e ruoli dichiarati</h2>"
+            "<p>Le associazioni sono quelle richieste nel piano. Il cfDNA materno del CPI prenatale "
+            "e il campione madre del CPIN postnatale sono riportati separatamente.</p>" +
+            _table(["Fase", "Marcatori", "Famiglia", "Ruolo", "Identificativo", "Nome originale"], rows))
+
+
 def _text(value: object) -> str:
     if value is None:
         return "Non registrato"
@@ -429,6 +468,7 @@ def write_run_report(run_dir: Path) -> dict:
                     "i nomi esatti sono riportati qui e in run.json.</p>")
     else:
         body.append("<p>Questa esecuzione non registra una corrispondenza dei campioni. Consultare gli input in run.json.</p>")
+    body.append(_family_section(metadata, rows))
 
     parameters = metadata.get("parameters")
     options = metadata.get("execution_options")

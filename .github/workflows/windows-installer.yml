@@ -106,7 +106,7 @@ jobs:
       - name: Python unit tests with branch coverage
         run: |
           mkdir -p build/quality
-          python -m coverage run -m unittest discover -s tests -v
+          python -m coverage run -m pytest tests
           python -m coverage json
           python -m coverage report > build/quality/coverage.txt
       - name: CI selection, release and installer-set guard tests
@@ -160,6 +160,17 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Verify native scientific edge cases and settings in the installed image
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-native-r-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          docker run --rm --network=none --cpus=4 --memory=8g \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/qualification,readonly" \
+            --workdir /qualification --env PYTHONPATH=/opt/nipat/lib:/qualification/src \
+            --entrypoint python3 "$NIPAT_RUNTIME_IMAGE" /qualification/.github/scripts/check_native_r.py \
+            2>&1 | tee "$TMPDIR/verification.log"
       - name: Verify updated CPI Contamination and CPIN models
         env:
           TMPDIR: ${{ runner.temp }}/nipat-five-modules-check
@@ -263,6 +274,7 @@ jobs:
             ${{ runner.temp }}/nipat-performance-check/
             ${{ runner.temp }}/nipat-r-equivalence-check/
             ${{ runner.temp }}/nipat-five-modules-check/
+            ${{ runner.temp }}/nipat-native-r-check/
             build/quality/
           retention-days: 14
           if-no-files-found: ignore

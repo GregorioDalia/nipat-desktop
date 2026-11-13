@@ -4,7 +4,7 @@ NIPAT Desktop è un'applicazione locale con interfaccia a riga di comando e menu
 guidato. Il client Python gestisce l'interazione, i percorsi, la configurazione
 e i registri delle esecuzioni. Un'immagine Linux autosufficiente contiene R,
 samtools, le dipendenze, gli script scientifici e il codice necessario alla
-preparazione delle quattro analisi e all'esecuzione dei piani composti.
+preparazione delle cinque analisi e all'esecuzione dei piani composti.
 Non sono presenti un server web o un servizio
 di analisi remoto.
 
@@ -14,6 +14,7 @@ di analisi remoto.
 | --- | --- |
 | `src/nipat/cli.py` e `wizard.py` | Comandi, menu, raccolta degli input e conferma dell'analisi. |
 | `src/nipat/execution/workflows.py` | Selezione e convalida preliminare degli input, richiesta del workflow e creazione del run. |
+| `src/nipat/execution/analysis_plan.py` e `analysis_forms.py` | Costruzione e raccolta guidata del piano SNP/DNP con analisi e ruoli familiari espliciti. |
 | `src/nipat/execution/runner.py` | Identificazione del motore, isolamento del container, esecuzione, interruzione e diagnostica. |
 | `src/nipat/execution/transport.py` | Accesso al Docker Engine locale su Linux, al motore WSL2 su Windows o alla VM Lima su macOS. |
 | `src/nipat/execution/performance.py` | Osservazione facoltativa delle statistiche del container dal client. |
@@ -21,6 +22,8 @@ di analisi remoto.
 | `engine/main.py` | Contratto del motore, verifica dei sorgenti scientifici e avvio dei workflow nell'immagine. |
 | `src/nipat_scientific/` | Validatori, catalogo e preparazione dei file, condivisi dal client e dal motore. |
 | `src/nipat_scientific/plan.py` ed `executor.py` | Contratto dei piani e orchestrazione scientifica eseguita nell'immagine. |
+| `src/nipat_scientific/settings_data.json`, `settings.py` e `settings.R` | Registro comune dei parametri, convalida Python/R, costanti leggibili e valori effettivi registrati. |
+| `src/nipat_scientific/dnp_pileup.py` e `dnp_blocks.R` | Acquisizione controllata del pileup e distribuzione dei blocchi DNP di più campioni entro un budget comune. |
 | `src/nipat_scientific/performance.py` | Campionamento facoltativo di cgroup e processi e registrazione delle fasi nel motore. |
 | `scientific/vendor/` | Sorgenti R e risorse dei progetti scientifici integrati. |
 
@@ -33,10 +36,11 @@ di lavoro e i casi che richiedono interpretazione scientifica generano avvisi
 tracciabili. Analisi singole e piani riutilizzano anche i controlli degli output.
 Il comando `execute` avvia una singola analisi; `execute-plan` riceve un piano
 con riferimenti espliciti fra campioni, passaggi e risultati. Il client offre
-DNPcall → Contamination, DNPcall → CPI e DNPcall → Contamination e CPI
-come workflow automatici, con SNPcall facoltativo sugli stessi BAM, e un
-workflow SNPcall su più BAM o pileup. Restano disponibili i quattro comandi
-singoli. Questo documento descrive la versione 0.8.9.
+`workflow analyze`: DNPcall e/o SNPcall alimentano qualsiasi sottoinsieme di
+Contamination, CPI e CPIN, con selezioni indipendenti per SNP e DNP. Il piano
+può partire anche da pileup SNP o tabelle importate. Restano disponibili i
+cinque comandi singoli, i preset DNP e il batch SNP. Questo documento descrive
+la versione 0.8.50.
 
 ### Confini dei workflow automatici
 
@@ -47,12 +51,15 @@ Non dipende dalla presenza della CLI o di una GUI dentro il container.
 Il contratto usa percorsi Linux assegnati dai mount e può essere utilizzato
 su Windows tramite WSL2, su macOS tramite Lima, su Linux nativo e da un futuro servizio.
 
-Il validatore e l'esecutore supportano le quattro analisi e controllano i
-collegamenti tipizzati. SNPcall può condividere un BAM con DNPcall, ma non
-produce output utilizzabili da Contamination o CPI. Ogni campione SNPcall
-ha un passaggio distinto; da BAM, samtools prepara il pileup prima di R.
-I passaggi sono sequenziali; il parallelismo interno DNPcall rimane
-un'opzione distinta. Un errore interrompe
+Il validatore e l'esecutore supportano le cinque analisi e controllano i
+collegamenti tipizzati. SNPcall e DNPcall possono condividere BAM; i loro
+conteggi alimentano Contamination, CPI e CPIN in rami distinti, con pannelli e
+frequenze coerenti con il tipo di marcatore. Ogni campione SNPcall ha un
+passaggio distinto; da BAM, samtools prepara il pileup prima di R.
+L'esecutore rispetta le dipendenze e può distribuire i caller SNP indipendenti
+anche nei piani misti. Un unico budget limita il calcolo concorrente;
+`serial` disattiva tale distribuzione e i pool annidati sono evitati.
+Gli altri passaggi mantengono l'ordine del piano. Un errore interrompe
 il piano e blocca tutti i passaggi non ancora avviati. Non è prevista la ripresa.
 
 Interazione, preferenze locali, traduzione dei testi, avvio del runtime,
@@ -91,13 +98,13 @@ permessi dell'account che ha avviato WSL.
 ## Contratto tra client e motore
 
 Ogni analisi produce una richiesta JSON con versione di schema 1 e una delle
-interfacce `dnp-call-v1`, `snp-call-v2`, `contamination-v1` o `cpi-v1`.
+interfacce `dnp-call-v1`, `snp-call-v2`, `contamination-v2`, `cpi-v2` o `cpin-v1`.
 La seconda versione dell'interfaccia SNP identifica il modello SNPcall 2.0
 e il relativo output a 17 colonne; il piano mantiene lo schema versione 1.
 La richiesta contiene percorsi interni al container, parametri e destinazioni.
 Il motore valida nuovamente i file e prepara gli input prima di avviare R.
 I piani usano uno schema distinto, identificato da `schema_version: 1`,
-e l'interfaccia di esecuzione `workflow-plan-execution-v1`. Il runner ne
+e l'interfaccia di esecuzione `workflow-plan-execution-v2`. Il runner ne
 verifica la presenza e il sottoinsieme di analisi supportato prima dell'avvio.
 Il contratto completo è descritto nel [riferimento del motore](../engine/README.md).
 
@@ -105,7 +112,8 @@ Prima dell'analisi, il runner risolve l'immagine in un ID immutabile e verifica
 la descrizione fornita dall'immagine. Un'interfaccia mancante o incompatibile
 interrompe l'esecuzione: non è previsto un ripiego sugli script R presenti
 nel filesystem del client. `doctor --runtime` verifica il motore e i contratti
-dei quattro workflow senza richiedere una copia locale dei sorgenti R.
+dei cinque workflow e dei parametri `scientific-settings-v1` senza richiedere
+una copia locale dei sorgenti R.
 
 Le sonde diagnostiche e le analisi non scaricano dipendenze. Le sonde non
 montano dati o cartelle applicative. Ogni analisi usa esclusivamente il proprio
@@ -117,7 +125,10 @@ montano dati o cartelle applicative. Ogni analisi usa esclusivamente il proprio
 - rete disabilitata.
 
 Le quote CPU, memoria e processi sono facoltative e registrate con l'esecuzione.
-Non modificano i parametri scientifici o il numero di worker deciso da R.
+Non modificano i parametri scientifici. CPU e memoria effettive concorrono
+invece al budget dei worker, insieme a `--execution-mode` e `--max-workers`;
+il limite PID riguarda tutti i processi/thread del container e non coincide
+con il massimo di processi di calcolo.
 
 Le altre analisi, la cartella dei dati predefiniti e il progetto non vengono
 montati. I bind mount dei singoli file evitano di copiare BAM e FASTA di grandi
@@ -143,16 +154,19 @@ una cartella risultati non può occupare runtime o cache gestiti dall'installato
 
 DNPcall riceve alias numerati come `sample_0001.bam`, compatibili con le chiamate
 interne dello script. `run.json` conserva l'associazione con i BAM originali.
-Nelle analisi singole, Contamination e CPI mantengono i nomi dei campioni
+Nelle analisi singole, Contamination, CPI e CPIN mantengono i nomi dei campioni
 nelle copie preparate; collisioni di nome, incluse quelle che differiscono
 soltanto per maiuscole, vengono rifiutate prima della scrittura.
 Nel piano automatico, Contamination usa alias `table_0001`, ecc.; lo stato
 del motore conserva l'associazione con il campione e il passaggio produttore,
 indipendentemente dall'ordine dei file o dai loro nomi originali.
-CPI assegna alias stabili alle tabelle selezionate e riutilizza i genitori
-condivisi senza duplicarne l'elaborazione. L'identificatore di ogni coppia,
-i riferimenti materno/paterno e il nome nativo prodotto da R rimangono
-associati nello stato del piano; i CSV scientifici non vengono riscritti.
+CPI e CPIN assegnano alias stabili alle tabelle selezionate. Il calling degli
+stessi BAM viene riutilizzato fra le famiglie e le analisi successive.
+L'identificatore di ogni coppia o trio, i riferimenti ai ruoli e il nome nativo
+prodotto da R rimangono associati nello stato del piano; i CSV scientifici non
+vengono riscritti. CPI distingue cfDNA materno e padre; CPIN distingue madre,
+padre e figlio. Il cfDNA e il campione materno postnatale possono essere
+campioni diversi; le relazioni sono dichiarate e non dedotte dai nomi.
 
 ## Preferenze del menu guidato
 
@@ -161,8 +175,9 @@ delle analisi. Su Windows risiedono in
 `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json`; su macOS in
 `~/Library/Application Support/NIPAT-Desktop/preferences.json`. Comprendono
 cartelle dati e risultati, modalità, riferimenti e parametri proposti per i
-workflow. Non comprendono campioni, coppie CPI o nomi dei run.
-Comprendono anche modalità dei checksum e limiti facoltativi del container.
+workflow. Non comprendono campioni, coppie CPI, trii CPIN o nomi dei run.
+Comprendono anche modalità dei checksum, parallelismo, blocchi DNP, limiti
+facoltativi del container e parametri scientifici personalizzati.
 
 Il menu carica questi valori e li sottopone alla convalida degli input prima
 dell'esecuzione. Le modifiche effettuate per una singola analisi non aggiornano
@@ -170,6 +185,14 @@ le preferenze; **Configura** richiede un salvataggio esplicito. I comandi dirett
 non leggono questi valori e mantengono il proprio contratto di argomenti,
 ambiente e valori iniziali. La configurazione di installazione resta responsabile
 della posizione dell'applicazione, della cache e dell'ambiente WSL.
+
+`nipat settings` espone valori predefiniti, intervalli ammessi e costanti;
+`--scientific-config PATH` e `--set modulo.parametro=valore` applicano override
+espliciti ai comandi diretti. Il registro comune controlla anche i vincoli fra
+parametri. Le chiavi duplicate nei file di configurazione sono rifiutate.
+La modifica guidata opera su una copia validata; non modifica le costanti
+invarianti del modello. Ogni modulo registra `work/effective-scientific-settings.json`
+e il resoconto del run ne rende leggibili parametri e costanti.
 
 ## Esecuzioni, risultati e tracciabilità
 
@@ -186,9 +209,11 @@ agli output di ogni passaggio; i messaggi scientifici sono nei rispettivi
 Il motore conserva le richieste e i file preparati nel run; ogni passaggio
 di un piano ha una propria sottocartella `work`. SNPcall da BAM conserva
 BED e pileup, e ogni modalità SNP conserva il pannello normalizzato;
-DNPcall conserva pannello e lista BAM, mentre lo script R elimina
-i propri file temporanei BED e pileup al termine. CPI e Contamination conservano
-le tabelle preparate e i pannelli normalizzati. Gli originali non vengono modificati.
+DNPcall conserva pannello, lista BAM e metadati di acquisizione/lettura,
+mentre BED e pileup temporanei vengono eliminati al termine. Il pileup DNP
+risiede su disco scratch Linux e non è conservato come risultato ordinario.
+CPI, CPIN e Contamination conservano tabelle preparate, frequenze quando
+richieste e pannelli normalizzati. Gli originali non vengono modificati.
 
 L'interruzione termina il processo attivo e richiede la rimozione del container
 del run. I risultati parziali rimangono disponibili per la diagnosi. Una prova
@@ -209,6 +234,9 @@ checksum. Windows e Ubuntu mantengono il manifest compatibile con i client
 precedenti; macOS usa un feed dedicato alle due architetture. Il download
 viene verificato prima del passaggio all'installatore. Le installazioni
 sperimentali conservano identità distinta.
+Le preferenze nuove o prive del campo canale usano `stable`; una scelta
+`testing` esplicita resta invariata. Entrambi i canali sono selezionabili dal
+menu; il controllo all'avvio è facoltativo e inizialmente disattivato.
 
 ## Installazione Windows
 
@@ -284,11 +312,15 @@ al daemon resta una scelta amministrativa. Non è presente una VM NIPAT.
 
 ## Limiti tecnici
 
-DNPcall invoca samtools internamente, ne sopprime lo stderr e non controlla
-esplicitamente il codice di uscita. Il runner conserva lo stato restituito da R,
-ma non può attribuirgli una verifica completa di ogni sottoprocesso interno.
-Il completamento di un processo deve quindi essere distinto dalla verifica
-della completezza e correttezza scientifica dei risultati.
+DNPcall delega l'acquisizione a `dnp_pileup.py`: l'helper controlla i codici di
+uscita dei processi samtools, conserva lo stderr nel log e scrive
+`work/dnp-pileup.json`. Un'acquisizione fallita arresta R. La strategia
+indicizzata per cromosoma e il ripiego seriale sono registrati, insieme al
+budget e al numero massimo di processi samtools osservati.
+Il budget di memoria usa stime conservative e non garantisce l'assenza di
+esaurimenti della memoria; i limiti del container sono distinti. Il
+completamento tecnico e i controlli strutturali degli output non sostituiscono
+la valutazione della correttezza scientifica su dati rappresentativi.
 
 Gli hash identificano i file e rilevano alterazioni rispetto al manifest;
 non costituiscono una validazione scientifica. Le prove del motore, le prove

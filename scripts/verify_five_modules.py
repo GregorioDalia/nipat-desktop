@@ -17,6 +17,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -42,6 +43,29 @@ HELPERS = ("__init__.py", "errors.py", "settings.py", "settings.R", "settings_da
            "parallel.R", "plots.R")
 CANDIDATE_ROOT = PROJECT / "scientific/vendor/NEWPAT"
 HELPER_ROOT = PROJECT / "src/nipat_scientific"
+REPORT_NAME = "five-module-qualification.json"
+SUMMARIES = {"cpin": "Summary_Postnatal_CPI.txt", "cpi": "Summary_FetalFraction_CPI.csv",
+             "contamination": "contamination_summary.txt"}
+
+
+def file_hash(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def tree_hashes(root):
+    return {path.relative_to(root).as_posix(): file_hash(path)
+            for path in sorted(root.rglob("*")) if path.is_file()}
+
+
+def same_settings(actual, expected):
+    """Compare native R provenance independently, including JSON value types."""
+    if isinstance(expected, dict):
+        return (isinstance(actual, dict) and actual.keys() == expected.keys()
+                and all(same_settings(actual[key], value) for key, value in expected.items()))
+    if type(expected) in (int, float):
+        return (type(actual) in (int, float) and math.isfinite(actual)
+                and math.isclose(actual, expected, rel_tol=1e-14, abs_tol=0))
+    return type(actual) is type(expected) and actual == expected
 
 
 def verify_installed_payload(bundle):
@@ -91,7 +115,7 @@ def qualify_image(image, destination, full):
     inspected = subprocess.run(["docker", "image", "inspect", "--format", "{{.Id}}", image],
                                capture_output=True, text=True, check=True)
     image_id = inspected.stdout.strip()
-    require(image_id.startswith("sha256:") and len(image_id) == 71, "Invalid immutable Docker image ID")
+    require(re.fullmatch(r"sha256:[0-9a-f]{64}", image_id), "Invalid immutable Docker image ID")
     command = ["docker", "run", "--rm", "--network=none", "--cpus=4", "--memory=8g",
                "--mount", mount(PROJECT, "/qualification", readonly=True),
                "--mount", mount(destination, "/evidence"), "--workdir", "/evidence",
@@ -106,7 +130,7 @@ def qualify_image(image, destination, full):
     (destination / "container-stderr.log").write_text(process.stderr)
     require(process.returncode == 0,
             f"Scientific image qualification failed ({process.returncode}): {process.stderr[-1500:]}")
-    report = json.loads((destination / "qualification.json").read_text())
+    report = json.loads((destination / REPORT_NAME).read_text())
     require(report["status"] == "passed" and report["runtime"]["image_id"] == image_id,
             "Image qualification evidence is incomplete")
     return report
@@ -165,6 +189,11 @@ def check_cpin(output, marker, families=1, minimum=2):
     epsilon = .001 if marker == "SNP" else .0000892303778101497
     expected_pi = {"heterozygous_child_sites": 3.125 * epsilon,
                    "all_compatible_sites": (3.125 / .6) * epsilon}
+    trios = ([f"MotherM-FatherF-ChildC_{marker}s"] if families == 1 else
+             [f"MotherM{i}-FatherF{i}-ChildC{i}_{marker}s" for i in range(1, families + 1)])
+    require({(row["Trio"], row["Analysis"]) for row in rows}
+            == {(trio, selection) for trio in trios for selection in expected_pi},
+            "CPIN must retain each distinct trio and selection exactly once")
     for row in rows:
         selection = row["Analysis"]
         require(selection in expected_pi and row["Marker_type"] == marker, "Wrong CPIN selection/type")
@@ -213,11 +242,17 @@ def check_cpin_curves(output, marker, families):
             number(row["Mismatching_sites"], sum(item[2] for item in retained))
 
 
-def check_cpi(output, marker, minimum=2, families=1, mismatch=False):
+def check_cpi(output, marker, minimum=2, families=1, mismatch=False, *, candidate=True):
     rows = table(output / "Summary_FetalFraction_CPI.csv")
     require(len(rows) == (2 if families == 1 else families), "CPI lost an informative/no-sites pair")
     epsilon = .001 if marker == "SNP" else .0000892303778101497
+    pairs = ([f"MotherM-FatherF_{marker}s", f"MotherN-FatherN_{marker}s"] if families == 1 else
+             [f"MotherM{i}-FatherF{i}_{marker}s" for i in range(1, families + 1)])
+    require({row["Pair"] for row in rows} == set(pairs), "CPI must retain each distinct pair exactly once")
     for row in rows:
+        if candidate:
+            require(row["Marker_type"] == marker, "Wrong CPI marker type")
+            number(row["Min_fetal_reads"], minimum)
         empty = "MotherN-FatherN" in row["Pair"] or minimum > 4
         expected = {
             "N_sites_mother": 0 if empty else (4 if minimum == 1 else 3),
@@ -269,6 +304,8 @@ def check_cpi_curves(output, minimum, marker, families=1, mismatch=False):
 def check_contamination(output, include_zero, samples=1):
     rows = table(output / "contamination_summary.txt")
     require(len(rows) == samples, "Contamination lost or duplicated samples")
+    require({row["individuo"] for row in rows} == {f"Sample{i}" for i in range(1, samples + 1)},
+            "Contamination must retain each distinct sample exactly once")
     for row in rows:
         number(row["informative_sites"], 2 if include_zero else 1)
         number(row["mean_contamination"], .025 if include_zero else .05)
@@ -278,37 +315,67 @@ def check_contamination(output, include_zero, samples=1):
 
 def check_worker_limits(path, cap):
     events = []
-    for item in path.glob("*.jsonl"):
+    for item in sorted(path.glob("*.jsonl")):
         events.extend(json.loads(line) for line in item.read_text().splitlines() if line.strip())
     plans = [event for event in events if event["event"] == "plan"]
     require(plans, "Candidate did not record its parallel budget")
+    budget_fields = ("coordinator_pid", "label", "workers", "tasks", "mode", "cpu_limit", "memory_worker_limit")
+    declared = {tuple(plan[key] for key in budget_fields) for plan in plans}
     for plan in plans:
-        require(plan["workers"] >= 1 and (cap is None or plan["workers"] <= cap),
+        require(type(plan["workers"]) is int and type(plan["tasks"]) is int
+                and plan["tasks"] >= 0 and plan["workers"] >= 1
+                and (cap is None or plan["workers"] <= cap),
                 "Worker budget exceeded the requested limit")
         require(plan["workers"] <= min(math.ceil(plan["cpu_limit"]), plan["memory_worker_limit"], max(1, plan["tasks"])),
                 "Worker budget exceeded available CPU/memory/tasks")
-    pending = {}
-    peak = completed = 0
+    pending, completed, children = {}, set(), set()
+    generations, expected = {}, set()
+    peak = 0
     for event in sorted(events, key=lambda item: item["observed_at_unix"]):
+        plan_key = (event["coordinator_pid"], event["label"])
+        if event["event"] == "plan":
+            # CPI reuses a cutoff label sequentially for each prenatal pair.
+            # Task indices are unique within that invocation, not process-wide.
+            generation = generations.get(plan_key, 0) + 1
+            generations[plan_key] = generation
+            expected.update((generation, *plan_key, index)
+                            for index in range(1, event["tasks"] + 1))
+            continue
         if event["event"] not in {"task-start", "task-end"}:
             continue
-        key = (event["pid"], event["coordinator_pid"], event["label"], event["task_index"])
+        require(tuple(event[key] for key in budget_fields) in declared,
+                "Scientific task has no matching resource plan")
+        require(type(event["task_index"]) is int and 1 <= event["task_index"] <= event["tasks"],
+                "Scientific task index is outside its resource plan")
+        require(plan_key in generations, "Scientific task occurred before its resource plan")
+        key = (generations[plan_key], *plan_key, event["task_index"])
         if event["event"] == "task-start":
-            require(key not in pending, "Duplicated scientific task start")
+            require(key not in pending and key not in completed, "Duplicated scientific task start")
             pending[key] = event
+            if event["pid"] != event["coordinator_pid"]:
+                children.add(event["pid"])
         else:
-            require(key in pending and event["outcome"] == "succeeded", "Unmatched or failed worker end")
+            require(key in pending and event["outcome"] == "succeeded"
+                    and pending[key]["pid"] == event["pid"], "Unmatched or failed worker end")
             pending.pop(key)
-            completed += 1
+            completed.add(key)
         # Nested serial work in the same process still consumes one worker.
-        active = len({key[0] for key in pending})
+        live_pids = {item["pid"] for item in pending.values()}
+        active = len(live_pids)
         peak = max(peak, active)
         require(cap is None or active <= cap, "Observed worker concurrency exceeded requested cap")
-    require(not pending and completed > 0, "Scientific workers did not complete")
-    require(completed == sum(plan["tasks"] for plan in plans),
-            "Scientific workers did not complete every planned task")
+        if active:
+            outer = [item["workers"] for item in pending.values()
+                     if item["coordinator_pid"] not in live_pids]
+            if not outer:
+                outer = [item["workers"] for item in pending.values()
+                         if item["pid"] == item["coordinator_pid"]]
+            require(outer and active <= min(outer), "Observed worker concurrency exceeded shared budget")
+    require(not pending and completed, "Scientific workers did not complete")
+    require(completed == expected, "Scientific workers did not complete every planned task")
     return {"plans": len(plans), "max_planned_workers": max(event["workers"] for event in plans),
-            "observed_peak_workers": peak, "completed_worker_tasks": completed}
+            "observed_peak_workers": peak, "completed_worker_tasks": len(completed),
+            "observed_child_pids": sorted(children), "event_sha256": tree_hashes(path)}
 
 
 def prepare_inputs(root, marker, workflow, families=1, metadata=False, mismatch=False):
@@ -349,6 +416,7 @@ def run_case(root, name, workflow, marker, *, candidate=True, minimum=2,
     destination = root / name
     destination.mkdir()
     inputs = prepare_inputs(destination, marker, workflow, families, metadata, mismatch)
+    input_hashes = tree_hashes(inputs)
     output = destination / "output"
     work = destination / "work"
     work.mkdir()
@@ -400,26 +468,47 @@ def run_case(root, name, workflow, marker, *, candidate=True, minimum=2,
         if candidate:
             check_cpin_curves(output, marker, families)
     elif workflow == "cpi":
-        rows = check_cpi(output, marker, minimum, families, mismatch)
+        rows = check_cpi(output, marker, minimum, families, mismatch, candidate=candidate)
         if candidate:
             check_cpi_curves(output, minimum, marker, families, mismatch)
     else:
         rows = check_contamination(output, include_zero, families)
+    require(tree_hashes(inputs) == input_hashes, f"{name}: scientific execution changed its inputs")
+    effective_settings = None
+    if candidate:
+        effective_settings = json.loads((work / "effective-scientific-settings.json").read_text())
+        actual_settings = json.loads((output / "scientific-settings.json").read_text())
+        require(same_settings(actual_settings, effective_settings),
+                f"{name}: native R effective settings differ from the requested settings")
     worker = check_worker_limits(destination / "parallel", 1 if mode == "serial" else cap) if candidate else None
     if candidate and families > 1 and mode == "auto":
-        require(worker["max_planned_workers"] > 1 and worker["observed_peak_workers"] > 1,
-                "Parallel qualification requires enough CPU/RAM and actual overlapping batch work")
+        # Millisecond workloads need not overlap on a loaded host. Require real
+        # child execution here; the controlled scheduler barrier test proves overlap.
+        require(worker["max_planned_workers"] > 1 and len(worker["observed_child_pids"]) > 1,
+                "Parallel qualification requires enough CPU/RAM and actual distinct child workers")
     return {"name": name, "workflow": workflow, "marker": marker, "candidate": candidate,
             "elapsed_seconds": round(time.monotonic() - start, 3), "status": "passed",
             "mode": mode, "max_workers": cap, "batch_size": families,
-            "worker_evidence": worker, "rows": rows}
+            "worker_evidence": worker, "rows": rows,
+            "variant": {"minimum": minimum, "include_zero": include_zero,
+                        "metadata": metadata, "mismatch": mismatch},
+            "inputs_unchanged": True, "input_sha256": input_hashes,
+            "output_sha256": tree_hashes(output),
+            "summary_sha256": file_hash(output / SUMMARIES[workflow]),
+            "log_sha256": {item.name: file_hash(item) for item in (destination / "stdout.log", destination / "stderr.log")},
+            "scientific_settings": effective_settings, "settings_match": True if candidate else None}
 
 
 def qualify(destination, full=False, runtime=None):
     reference = verify_frozen_sources()
     verifier_hash = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    fixture_hashes = tree_hashes(FIXTURE)
+    source_hashes = {str(path): file_hash(path) for path in
+                     [*(CANDIDATE_ROOT / name for name in SOURCES.values()),
+                      *(HELPER_ROOT / name for name in HELPERS), Path(__file__)]}
     results = []
     pairs = []
+    comparison_evidence = {}
     try:
         for marker in ("SNP", "DNP"):
             for workflow, variants in (("cpin", [{}]),
@@ -433,6 +522,9 @@ def qualify(destination, full=False, runtime=None):
                     results.append(actual)
                     compare_tables(actual["rows"], wanted["rows"])
                     pairs.append(case)
+                    comparison_evidence[case] = {"equal": True,
+                        "candidate_sha256": actual["summary_sha256"],
+                        "reference_sha256": wanted["summary_sha256"]}
             if full:
                 for workflow in ("cpin", "cpi", "contamination"):
                     for count in (2, 3, 5):
@@ -445,18 +537,24 @@ def qualify(destination, full=False, runtime=None):
                                 baseline = result["rows"]
                             else:
                                 compare_tables(result["rows"], baseline)
-        report = {"schema_version": 1, "status": "passed", "verification_script_sha256": verifier_hash,
+        require(tree_hashes(FIXTURE) == fixture_hashes, "Qualification fixtures changed during execution")
+        require(all(file_hash(path) == sha for path, sha in source_hashes.items()),
+                "Qualification source changed during execution")
+        report = {"schema_version": 2, "status": "passed", "verification_script_sha256": verifier_hash,
                   "runtime": runtime or {"kind": "local-R"},
                   "upstream_reference": reference, "full_batch_matrix": full,
                   "scope": "CPI/CPIN/Contamination science from SNP and DNP count tables; caller BAM qualification is separate",
-                  "reference_comparisons": pairs, "results": results}
+                  "reference_comparisons": pairs, "reference_comparison_evidence": comparison_evidence,
+                  "inputs_unchanged": True, "source_unchanged": True, "fixture_sha256": fixture_hashes,
+                  "hash_scope": "Raw execution bytes before archive path redaction; reference equality compares numerical fields, not PDF bytes",
+                  "results": results}
     except Exception as error:
-        report = {"schema_version": 1, "status": "failed", "verification_script_sha256": verifier_hash,
+        report = {"schema_version": 2, "status": "failed", "verification_script_sha256": verifier_hash,
                   "runtime": runtime or {"kind": "local-R"},
                   "error": f"{type(error).__name__}: {error}", "results": results}
-        (destination / "qualification.json").write_text(json.dumps(report, indent=2) + "\n")
+        (destination / REPORT_NAME).write_text(json.dumps(report, indent=2) + "\n")
         raise
-    (destination / "qualification.json").write_text(json.dumps(report, indent=2) + "\n")
+    (destination / REPORT_NAME).write_text(json.dumps(report, indent=2) + "\n")
     return report
 
 
@@ -499,7 +597,7 @@ def main():
         version = subprocess.run(["Rscript", "--version"], capture_output=True, text=True, check=True)
         runtime["r_version"] = (version.stdout + version.stderr).strip()
         report = qualify(destination, args.full, runtime)
-    print(f"{len(report['results'])} R executions passed; evidence: {destination / 'qualification.json'}")
+    print(f"{len(report['results'])} R executions passed; evidence: {destination / REPORT_NAME}")
 
 
 if __name__ == "__main__":

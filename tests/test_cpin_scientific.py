@@ -11,13 +11,14 @@ import sys
 import pytest
 
 from nipat_scientific.settings import settings_context
+from native_r_helpers import NATIVE_R_AVAILABLE, NATIVE_R_REASON
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/cpin"
 sys.path.insert(0, str(ROOT / "scripts"))
 from verify_cpin_update import check_outputs
 
-pytestmark = pytest.mark.skipif(shutil.which("Rscript") is None, reason="R runtime is unavailable")
+pytestmark = pytest.mark.skipif(not NATIVE_R_AVAILABLE, reason=NATIVE_R_REASON)
 
 
 def table(path):

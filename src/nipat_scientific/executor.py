@@ -119,6 +119,17 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
             raise PlanExecutionError("execution.script", f"Missing bundled script for {workflow}.")
         scripts[workflow] = require_file(Path(script_paths[workflow]), "Bundled R script")
 
+    validated_counts = set()
+
+    def validate_imported_counts(reference, marker, *, cpi):
+        if "step" in reference:
+            return
+        source = samples[reference["sample"]]
+        key = (source, marker, cpi)
+        if key not in validated_counts:
+            require_count_input(source, marker_type=marker, cpi=cpi)
+            validated_counts.add(key)
+
     for step in plan["steps"]:
         inputs = step["inputs"]
         if step["workflow"] in {"cpi", "cpin"}:
@@ -138,9 +149,7 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
                                  else ("trios", ("mother", "father", "child")))
             for family in inputs[family_key]:
                 for role in roles:
-                    reference = family[role]
-                    if "step" not in reference:
-                        require_count_input(samples[reference["sample"]], marker_type=marker, cpi=True)
+                    validate_imported_counts(family[role], marker, cpi=True)
             continue
         panel = require_file(Path(inputs["panel"]), "Plan panel")
         sources.append(panel)
@@ -181,8 +190,7 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
         else:
             read_position_panel(panel, marker_type=step["parameters"]["marker_type"])
             for reference in inputs["samples"]:
-                if "step" not in reference:
-                    require_count_input(samples[reference["sample"]], marker_type=step["parameters"]["marker_type"], cpi=False)
+                validate_imported_counts(reference, step["parameters"]["marker_type"], cpi=False)
     if any(path.is_relative_to(root) for path in [*sources, *scripts.values()]):
         raise PlanExecutionError("execution.overlap", "Inputs and bundled scripts must be outside the new run directory.")
     return report, root, scripts

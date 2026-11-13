@@ -90,7 +90,7 @@ def prepare_dnp(request: object) -> DnpPreparation:
         native_bam = _native_path(bam, "BAM")
         if bam.name != f"{expected_id}.bam":
             raise ValidationError(f"Il BAM deve usare il nome alias {expected_id}.bam.")
-        if bam in seen:
+        if any(bam.samefile(previous) for previous in seen):
             raise ValidationError("Lo stesso BAM compare più volte nella richiesta DNPcall.")
         seen.add(bam)
         bams.append(native_bam)

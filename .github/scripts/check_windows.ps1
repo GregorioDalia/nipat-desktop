@@ -13,7 +13,8 @@ function Invoke-CheckedProcess {
 }
 
 Write-Host '::group::Python unit and CI policy tests'
-Invoke-CheckedProcess 'python' @('-m', 'unittest', 'discover', '-s', 'tests', '-v')
+Invoke-CheckedProcess 'python' @('-m', 'pip', 'install', '-r', '.github/quality-requirements.txt')
+Invoke-CheckedProcess 'python' @('-m', 'pytest', 'tests')
 Invoke-CheckedProcess 'python' @('-m', 'unittest', 'discover', '-s', '.github/scripts', '-p', 'test_*.py', '-v')
 Write-Host '::endgroup::'
 

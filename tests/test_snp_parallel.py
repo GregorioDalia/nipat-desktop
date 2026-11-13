@@ -29,6 +29,7 @@ if args[0] == "-e":
     raise SystemExit(0)
 if pathlib.Path(args[0]).name == "contamination.R":
     selected, output = pathlib.Path(args[2]), pathlib.Path(args[3])
+    (output / "scientific-settings.json").write_bytes(pathlib.Path(os.environ["NIPAT_SCIENTIFIC_SETTINGS"]).read_bytes())
     names = [source.stem for source in sorted(selected.iterdir())]
     for name in names:
         (output / ("contamination_" + name + ".txt")).write_text("chr\tpos\tcontamination\nchr1\t10\t0.01\n")
@@ -48,6 +49,7 @@ if mode != "normal":
     time.sleep(120)
 time.sleep(.25)
 out = pathlib.Path(args[args.index("--out")+1])
+(out.parent / "scientific-settings.json").write_bytes(pathlib.Path(os.environ["NIPAT_SCIENTIFIC_SETTINGS"]).read_bytes())
 out.write_text("chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tratio\tGL0\tGL1\tGL2\tGT\treads_discarded_for_indels\tratio_reads_discarded_for_indels\tcombined_bases\tcombined_counts\n"
                "chr1\t10\tA\tG\t1\t1\t0\t2\t0.5\t-9.21\t-1.386\t-9.21\t0/1\t0\t0\tA-G\t1-1\n")
 summary = out.parent / "summary"

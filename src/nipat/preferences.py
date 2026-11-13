@@ -157,7 +157,7 @@ class Preferences:
     data_dir: Path | None = None
     runs_dir: Path | None = None
     workflows: dict[str, dict[str, Any]] = field(default_factory=dict)
-    update_channel: str = "testing"
+    update_channel: str = "stable"
     check_updates_on_startup: bool = False
     execution: dict[str, Any] = field(default_factory=dict)
     scientific_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -263,7 +263,7 @@ class Preferences:
         directories = {key: _path(value, key, stored=True) if value is not None else None
                        for key in ("data_dir", "runs_dir") if (value := document.get(key)) is not None}
         return cls(**directories, workflows=normalized,
-                   update_channel=document.get("update_channel", "testing"),
+                   update_channel=document.get("update_channel", "stable"),
                    check_updates_on_startup=document.get("check_updates_on_startup", False),
                    execution=document.get("execution", {}),
                    scientific_settings=document.get("scientific_settings", {}))

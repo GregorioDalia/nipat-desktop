@@ -11,6 +11,15 @@ from nipat_scientific.settings import defaults, describe_settings, normalize_set
 WORKFLOWS = ("dnp-call", "snp-call", "contamination", "cpi", "cpin")
 
 
+def _unique_settings(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"Chiave duplicata nella configurazione scientifica: {key}")
+        result[key] = value
+    return result
+
+
 def normalize_config(value: object) -> dict:
     if not isinstance(value, dict) or any(not isinstance(key, str) for key in value):
         raise ValidationError("La configurazione scientifica deve essere un oggetto JSON per modulo.")
@@ -28,8 +37,8 @@ def load_scientific_config(path: Path | None = None, overrides: list[str] | None
     config = {}
     if path is not None:
         try:
-            config = json.loads(path.read_text(encoding="utf-8-sig"))
-        except (UnicodeError, json.JSONDecodeError) as exc:
+            config = json.loads(path.read_text(encoding="utf-8-sig"), object_pairs_hook=_unique_settings)
+        except (UnicodeError, ValueError) as exc:
             raise ValidationError(f"Configurazione scientifica JSON non valida: {path}: {exc}") from exc
         config = normalize_config(config)
     for override in overrides or []:

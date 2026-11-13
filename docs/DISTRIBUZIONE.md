@@ -6,12 +6,14 @@ non occorre scaricarla separatamente o importarla manualmente.
 
 I [download per piattaforma](../README.md#download) sono disponibili nel README.
 La pagina [Releases](https://github.com/GregorioDalia/nipat-desktop/releases)
-conserva tutte le versioni. La versione stabile 0.8.35 include SNPcall 2.0,
-corregge la lettura dello stato dei processi SNP paralleli e amplia le
-verifiche dei batch. Mantiene la baseline 0.8.5 per DNP, Contamination e CPI,
-la presentazione corretta nella 0.8.30 e il budget comune di parallelismo. Funzionalità,
+conserva tutte le versioni. La versione stabile 0.8.50 comprende DNPcall,
+SNPcall 2.0, Contamination, CPI prenatale e CPIN postnatale. I conteggi SNP e
+DNP possono alimentare separatamente tutte le combinazioni dei tre moduli
+successivi, con ruoli familiari espliciti e parametri scientifici configurabili.
+CPI, Contamination e CPIN usano il riferimento NEWPAT congelato il 13 novembre
+2026; DNP e SNP mantengono i rispettivi riferimenti precedenti. Funzionalità,
 aggiornamento e limiti delle verifiche sono descritti nelle
-[note di rilascio](RELEASE_0.8.35.md). La
+[note di rilascio](RELEASE_0.8.50.md). La
 [diagnostica delle prestazioni](PERFORMANCE.md) resta facoltativa e disattivata
 per impostazione predefinita.
 Scegliere l'installatore nella sezione Assets. Gli archivi **Source code**
@@ -70,7 +72,7 @@ Le installazioni sperimentali hanno identità separata e non vengono rimosse.
 Installare il `.deb` con il gestore pacchetti oppure, nella cartella del download:
 
 ```bash
-sudo apt install ./nipat-desktop_0.8.35_amd64.deb
+sudo apt install ./nipat-desktop_0.8.50_amd64.deb
 ```
 
 APT installa le dipendenze mancanti dai repository configurati, inclusi Python,
@@ -111,13 +113,18 @@ le fasi. Consultare [Risultati e registrazione](ESECUZIONI.md).
 ## Aggiornamenti dall'applicazione
 
 **Verifica aggiornamenti** consulta le release compatibili con il sistema.
+Le nuove preferenze usano il canale **Stabile**. Il menu **Configura →
+Aggiornamenti** permette di selezionare **Testing**; una selezione già salvata
+rimane invariata. Il controllo automatico all'avvio è facoltativo e disattivato
+per impostazione predefinita.
 Il download viene verificato prima dell'installazione. L'aggiornamento dell'app
 è distinto dall'aggiornamento dei componenti del sistema, come WSL.
 Chiudere le analisi prima di aggiornare; dati e risultati restano nelle loro
 cartelle. La guida del proprio sistema descrive il passaggio all'installatore.
 
-Chi usa la 0.8.5 o la 0.8.20 può selezionare **Verifica aggiornamenti** per
-scaricare il pacchetto ufficiale 0.8.35 compatibile e seguire la procedura del proprio sistema.
+Chi usa una versione precedente con aggiornamento integrato può selezionare
+**Verifica aggiornamenti** per scaricare il pacchetto ufficiale 0.8.50
+compatibile e seguire la procedura del proprio sistema.
 Il download manuale dalla release resta disponibile. La verifica usa il numero
 di versione, non il commit: una build diversa con lo stesso numero non è un
 aggiornamento. Prima della pubblicazione i candidati sono distinti da commit,

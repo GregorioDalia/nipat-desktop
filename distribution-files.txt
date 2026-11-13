@@ -414,6 +414,8 @@ docs/RELEASE_0.8.35.md
 
 # Five scientific modules and configurable scientific settings (0.8.50 development).
 docs/DEVELOPMENT_0.8.50.md
+docs/RELEASE_0.8.50.md
+docs/AUDIT_0.8.50.md
 src/nipat/scientific_options.py
 src/nipat/execution/analysis_plan.py
 src/nipat_scientific/cpin.py
@@ -424,6 +426,7 @@ src/nipat_scientific/catalog_data/cpin.json
 scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R
 scientific/vendor/NEWPAT/CPI_postnatal/README.md
 scripts/verify_cpin_update.py
+scripts/verify_five_module_workflow.py
 tests/fixtures/cpin/DNP/ChildC1.txt
 tests/fixtures/cpin/DNP/FatherF1.txt
 tests/fixtures/cpin/DNP/MotherM1.txt

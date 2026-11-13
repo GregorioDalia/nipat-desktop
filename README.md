@@ -5,17 +5,17 @@
 
 # NIPAT Desktop
 
-NIPAT esegue analisi locali DNPcall, SNPcall, Contamination e CPI attraverso
+NIPAT esegue analisi locali DNPcall, SNPcall, Contamination, CPI prenatale e
+CPIN postnatale attraverso
 un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.35.** Include SNPcall 2.0 di NEWPAT e corregge
-la lettura dello stato dei processi nei batch SNP paralleli. La qualificazione
-verifica batch con 2, 3 e 5 BAM, risultati identici tra esecuzione seriale
-e parallela e diagnostica degli errori senza perdere la causa originale.
-Restano disponibili conteggi, likelihood basate sulle qualità, genotipi,
-statistiche degli indel e riepiloghi di più campioni.
+**Versione stabile: 0.8.50.** Integra cinque moduli: aggiunge CPIN, aggiorna
+CPI e Contamination da NEWPAT e mantiene SNPcall 2.0. I conteggi SNP e DNP
+alimentano separatamente qualsiasi combinazione di Contamination, CPI e CPIN,
+anche con analisi diverse nei due rami. I ruoli familiari sono espliciti;
+parametri scientifici e costanti del modello sono consultabili nell'applicazione.
 
 Sono disponibili esecuzione seriale, scelta automatica del parallelismo e
 un massimo configurabile di processi. I batch SNP e i blocchi DNP di più
@@ -23,17 +23,13 @@ campioni condividono un budget CPU/memoria senza moltiplicare i pool interni;
 il pileup DNP può essere prodotto in parallelo per cromosoma. La diagnostica
 resta facoltativa.
 
-Per SNP il riferimento scientifico è ora la versione upstream 2.0 congelata;
-DNP, Contamination e CPI mantengono la
-[baseline numerica 0.8.5](docs/OPTIMIZATION_0.8.9.md). I risultati SNP possono
-quindi differire da quelli delle versioni di NIPAT precedenti alla 0.8.30.
-Le [note della 0.8.35](docs/RELEASE_0.8.35.md) descrivono funzionalità,
-aggiornamento e limiti delle verifiche.
-
-**In sviluppo: 0.8.50, non pubblicata.** Aggiunge CPIN, aggiorna CPI e
-Contamination per SNP/DNP e rende configurabili i parametri scientifici.
-La [guida di sviluppo](docs/DEVELOPMENT_0.8.50.md) descrive tutti i workflow,
-le associazioni familiari e la consultazione di parametri e costanti.
+DNP mantiene il riferimento numerico 0.8.5 e SNP quello upstream 2.0;
+CPI, Contamination e CPIN usano i sorgenti NEWPAT congelati il 13 novembre 2026
+come riferimento indipendente. Contamination usa ora
+`N_Other / (N_REF + N_ALT + N_Other)`: i suoi risultati non sono forzati a
+coincidere con le versioni precedenti. Le [note della 0.8.50](docs/RELEASE_0.8.50.md)
+distinguono cambiamenti e verifiche. La [guida ai cinque moduli](docs/DEVELOPMENT_0.8.50.md)
+descrive workflow, associazioni familiari e configurazione scientifica.
 
 ## Download
 
@@ -41,14 +37,14 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.35 |
+| Sistema | Versione stabile 0.8.50 |
 | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/NIPAT-0.8.35-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/NIPAT-0.8.35-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.35/nipat-desktop_0.8.35_amd64.deb) |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/NIPAT-0.8.50-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/NIPAT-0.8.50-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/nipat-desktop_0.8.50_amd64.deb) |
 
-La pagina della [release 0.8.35](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.35)
+La pagina della [release 0.8.50](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.50)
 riporta note, checksum e verifiche dei pacchetti. Le
 [release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
 restano disponibili. La
@@ -68,18 +64,20 @@ separati; **Invio mantiene la configurazione corrente**.
 | --- | --- | --- |
 | DNPcall | Uno o più BAM, FASTA indicizzato e pannello DNP | Conteggi, genotipi, riepiloghi e grafici. |
 | SNPcall 2.0 | BAM e FASTA indicizzato, oppure pileup con qualità e QNAME; pannello SNP | Conteggi, likelihood e genotipi SNP, statistiche degli indel e grafici; riepiloghi nei run con più campioni. |
-| Contamination | Tabelle individuali compatibili con DNPcall e pannello di coordinate | Stime per sito e riepilogo per campione. |
-| CPI | Tabelle cfDNA materne e paterne, coppie, frequenze di popolazione ed eventuali pannelli | Frazione fetale, CPI e grafici. |
+| Contamination | Tabelle di conteggi SNP oppure DNP e pannello di coordinate coerente | Stime per sito e riepilogo per campione. |
+| CPI prenatale | Tabelle SNP oppure DNP di cfDNA materno e padre, coppie, frequenze di popolazione ed eventuali pannelli | Frazione fetale, CPI e grafici. |
+| CPIN postnatale | Tabelle SNP oppure DNP di madre, padre e figlio, trii, frequenze di popolazione ed eventuale pannello REF/ALT | Indici di paternità per sito, CPI e grafici. |
 
 Gli input selezionati sono montati in sola lettura. Ogni analisi crea una
 cartella distinta con risultati, intermedi conservati, metadati e log.
-I run esistenti non vengono sovrascritti. Le quattro analisi sono disponibili
-sia nel menu sia nella CLI diretta. I workflow automatici collegano
-**DNPcall → Contamination**, **DNPcall → CPI** oppure **DNPcall → Contamination
-e CPI**. DNPcall produce una sola volta le tabelle individuali per le analisi
-selezionate. CPI richiede l'assegnazione esplicita delle coppie cfDNA materne/paterne.
-Si può aggiungere SNPcall sugli stessi BAM, con un pannello SNP scelto
-esplicitamente, oppure eseguire SNPcall su più BAM o pileup in un unico run.
+I run esistenti non vengono sovrascritti. Le cinque analisi sono disponibili
+sia nel menu sia nella CLI diretta. **W → Workflow completo: tutti i cinque moduli**
+collega DNPcall e/o SNPcall a qualsiasi sottoinsieme di Contamination, CPI e
+CPIN; può anche partire da pileup SNP o tabelle già prodotte. I rami SNP e DNP
+mantengono pannelli, frequenze e risultati separati. CPI richiede coppie
+cfDNA materno/padre; CPIN richiede trii madre/padre/figlio. Il campione materno
+postnatale può essere diverso dal cfDNA prenatale e i ruoli non sono dedotti
+dai nomi dei file. Contamination non filtra le tabelle destinate a CPI o CPIN.
 Ogni passaggio conserva risultati e stato distinti.
 Il livello Python condiviso controlla gli input prima di avviare R e gli
 output prima di registrare il completamento. I pannelli SNP e DNP vengono
@@ -89,14 +87,17 @@ tecnici, segnalazioni di qualità e valutazione scientifica.
 L'interfaccia è testuale. Il catalogo scientifico è consultabile in italiano
 e inglese con `nipat parameters` o da **Guida e informazioni → Catalogo
 scientifico**. Descrive parametri pubblici, regole fisse e preparazione degli
-input senza modificare gli algoritmi o avviare analisi.
+input senza avviare analisi. `nipat settings` e **Configura → Parametri
+scientifici e costanti** mostrano valori predefiniti, limiti e costanti del modello.
+I parametri configurabili possono essere salvati o modificati per un singolo run;
+le regole invarianti del modello rimangono leggibili. Ogni esecuzione conserva i
+valori effettivi in `effective-scientific-settings.json`.
 
 Il [contratto dei piani](docs/WORKFLOW_CONTRACT.md) identifica campioni,
-dipendenze e risultati. I piani misti rispettano l'ordine dei passaggi;
-un batch composto soltanto da SNPcall può distribuire i campioni indipendenti
-entro il budget comune, mantenendo l'esecuzione seriale selezionabile.
-SNPcall è un'attività indipendente: legge il BAM o il
-pileup selezionato e non fornisce tabelle compatibili con Contamination o CPI.
+dipendenze e risultati. I piani rispettano le dipendenze; SNPcall può distribuire
+i campioni indipendenti entro il budget comune anche nei piani misti,
+mantenendo l'esecuzione seriale selezionabile. I conteggi dei caller sono
+validati prima di alimentare le analisi successive.
 Il [catalogo scientifico](docs/CATALOGO_SCIENTIFICO.md) descrive
 modalità di consultazione e significato delle informazioni esposte.
 
@@ -149,8 +150,8 @@ di configurazione non ancora salvate vengono scartate.
 Per chiudere il programma scegliere **0 — Esci** nel menu principale.
 **5 — Configura** salva cartelle dati e risultati, riferimenti, modalità e
 parametri predefiniti dei workflow per gli avvii successivi del menu.
-Ogni analisi permette di modificarli prima della conferma; campioni, coppie
-e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
+Ogni analisi permette di modificarli prima della conferma; campioni, coppie,
+trii e nome del run vengono scelti ogni volta. Le preferenze non alterano i comandi
 CLI diretti. **6 — Ultima esecuzione** riapre il run più recente della sessione;
 **7 — Guida e informazioni** e **8 — Verifica ambiente** separano consultazione
 e diagnostica. **9 — Verifica aggiornamenti** consulta le release compatibili
@@ -159,9 +160,13 @@ identità e dati separati e non vengono adottate automaticamente.
 L'aggiornatore confronta il numero di versione: una nuova build con lo stesso
 numero non viene proposta come aggiornamento. Le release pubblicate rimangono
 immutabili; ogni successivo pacchetto ufficiale ha una versione superiore.
+Il canale predefinito è **Stabile**; **Configura → Aggiornamenti** permette
+di scegliere **Testing**. Una scelta Testing già salvata viene conservata.
 Dopo la preparazione l'applicazione esegue le analisi offline.
-**W — Workflow automatici** offre le tre composizioni DNPcall e SNPcall su più
-campioni, con un unico riepilogo e una sola conferma. Per spostare applicazione, ambiente WSL o cache
+**N — CPIN / CPI postnatale** avvia l'analisi singola.
+**W — Workflow automatici → 5** offre il piano dei cinque moduli, oltre ai
+preset DNP e ai batch SNP. La scelta **8 — Analisi diverse per SNP e DNP**
+permette combinazioni differenti nei due rami. Per spostare applicazione, ambiente WSL o cache
 usare il setup.
 
 Su Windows sono supportati input su dischi locali fissi, anche fuori dalla
@@ -171,8 +176,8 @@ corrente indicata nel campo: la cartella configurata come **Dati** non è una
 base di ricerca automatica. Per il riferimento scegliere il file FASTA delle
 sequenze, ad esempio `genome.fa`; `.fai` e `.gzi` sono indici associati e non
 vanno selezionati al suo posto. Nel workflow automatico non occorre copiare
-o riselezionare le tabelle fra i passaggi. Le altre sequenze si
-compongono selezionando gli output compatibili di un run come input del successivo.
+o riselezionare le tabelle fra i passaggi. Gli output compatibili di run
+precedenti possono essere usati come input di nuove analisi.
 
 ### CLI diretta
 
@@ -193,7 +198,38 @@ workflow del menu. Sostituire i percorsi relativi di esempio con i propri:
 
 .\nipat.cmd cpi --input-dir "..\campioni\cpi" --pairs "A1:A1" `
   --popfreq "..\pannelli\pop_allFreq.txt" --panel "..\pannelli\DNP_list.txt"
+
+.\nipat.cmd cpin --input-dir "..\campioni\cpin" --trios "M1:F1:C1" `
+  --popfreq "..\pannelli\pop_allFreq.txt"
 ```
+
+Il comando CPIN usa per impostazione predefinita `MotherM1.txt`,
+`FatherF1.txt` e `ChildC1.txt`; i tre prefissi sono configurabili. Per collegare
+tutti e cinque i moduli con ruoli espliciti:
+
+```powershell
+.\nipat.cmd --max-workers 2 workflow analyze --caller both `
+  --analyses contamination,cpi,cpin `
+  --sample Plasma "..\campioni\cfdna.bam" `
+  --sample Mother "..\campioni\madre.bam" `
+  --sample Father "..\campioni\padre.bam" `
+  --sample Child "..\campioni\figlio.bam" `
+  --pair Prenatal Plasma Father --trio Postnatal Mother Father Child `
+  --reference "..\riferimenti\genome.fa" `
+  --dnp-panel "..\pannelli\DNP_list.txt" --snp-panel "..\pannelli\SNPlist.txt" `
+  --dnp-popfreq "..\pannelli\DNP_frequencies.tsv" `
+  --snp-popfreq "..\pannelli\SNP_frequencies.tsv"
+
+.\nipat.cmd settings cpin
+.\nipat.cmd settings --export "..\parametri-scientifici.json"
+```
+
+`--dnp-analyses` e `--snp-analyses` selezionano analisi differenti per ramo;
+`--caller tables` usa tabelle importate con `--dnp-table ID PATH` e
+`--snp-table ID PATH`. `--scientific-config PATH` legge parametri esportati;
+`--set cpin.min_child_reads=8` sovrascrive un parametro. Queste due opzioni
+globali precedono il sottocomando. La [guida ai cinque moduli](docs/DEVELOPMENT_0.8.50.md)
+descrive i formati e gli altri esempi.
 
 Per eseguire DNPcall e poi Contamination nella stessa esecuzione:
 
@@ -284,9 +320,9 @@ conservare il checkout completo e seguire i requisiti della
 
 Ogni run contiene `output`, `work`, `run.json` ed `execution.log`.
 Nel workflow automatico, `output/workflow` conserva il piano, lo stato
-complessivo e le sottocartelle dei passaggi selezionati: `steps/dnp`,
-`steps/contamination`, `steps/cpi` e, quando richiesti, `steps/snp_0001` e
-successivi. Ogni passaggio conserva risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
+complessivo e le sottocartelle `steps/<id>` dei passaggi selezionati. Nel piano
+a cinque moduli gli ID distinguono anche il ramo, per esempio `dnp_cpi` e
+`snp_cpin`. Ogni passaggio conserva risultati, preparazione e log. Un errore impedisce l'avvio dei passaggi
 successivi; le evidenze già prodotte restano disponibili. Non è prevista
 la ripresa del run: una nuova prova usa una nuova cartella.
 Il record identifica input, parametri e immagine effettivamente usata;
@@ -301,11 +337,11 @@ incomplete e, su Windows, l'inventario dell'installazione con manutenzione
 selettiva confermata dall'utente.
 
 `doctor --runtime` verifica l'ambiente e il motore scientifico incorporato.
-`self-test` confronta i casi distribuiti di SNPcall, CPI e Contamination e le
+`self-test` confronta i casi distribuiti di SNPcall, CPI, Contamination e CPIN e le
 modalità di input esterno. Il collaudo DNPcall da BAM richiede un caso distinto.
 La CI esegue inoltre regressioni DNPcall sintetiche e confronti fra workflow
-automatici e analisi separate, compresi CPI e le sue modalità di selezione dei siti,
-SNPcall da BAM o pileup e l'uso dello stesso BAM per DNPcall e SNPcall;
+automatici e analisi separate per tutti i moduli, comprese le analisi SNP/DNP
+successive al calling, i ruoli familiari e le impostazioni scientifiche;
 la [documentazione CI/CD](docs/CI_CD.md) distingue copertura automatica,
 verifica degli installatori e pubblicazione. La
 [scheda di validazione](docs/VALIDAZIONE.md) permette di registrare prove
@@ -317,7 +353,9 @@ indipendenti e problemi riproducibili.
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
 - [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
-- [Note della versione stabile 0.8.35](docs/RELEASE_0.8.35.md)
+- [Note della versione stabile 0.8.50](docs/RELEASE_0.8.50.md)
+- [Guida ai cinque moduli](docs/DEVELOPMENT_0.8.50.md)
+- [Note della versione 0.8.35](docs/RELEASE_0.8.35.md)
 - [Integrazione SNPcall 2.0 nella versione 0.8.30](docs/RELEASE_0.8.30.md)
 - [Note della versione 0.8.2](docs/RELEASE_0.8.2.md)
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)

@@ -1,6 +1,6 @@
 # Accettazione degli installatori
 
-NIPAT Desktop 0.8.35 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
+NIPAT Desktop 0.8.50 distribuisce Windows 10/11 x64, Ubuntu 24.04 x86_64 e
 macOS 14 o successivo Intel/Apple Silicon. La decisione di distribuzione
 identifica commit, build e checksum; distingue prove automatiche,
 osservazioni sui dispositivi e validazione scientifica di dominio.
@@ -15,8 +15,8 @@ prova dell'installatore candidato; un test simulato non diventa una prova
 sul computer del ricercatore. Il canale `stable` indica la versione ufficiale,
 non una validazione scientifica generale.
 
-Il record schema 6 per gli script R revisionati comprende tutti i campi
-dello schema 5 e un riferimento aggiuntivo alle evidenze scientifiche:
+Il record schema 7 della 0.8.50 conserva le evidenze delle quattro piattaforme
+e distingue il confronto dei caller dalla qualificazione dei tre modelli aggiornati:
 
 | Campo | Contenuto |
 | --- | --- |
@@ -27,40 +27,46 @@ dello schema 5 e un riferimento aggiuntivo alle evidenze scientifiche:
 | `decision`, `scope` | `accepted-for-research`, `pre-1.0-research`, dopo revisione. |
 | `review` | Responsabile, data UTC e riferimenti HTTPS della decisione. |
 | `observed_baseline` | Commit effettivamente osservato, prove ricevute, ruolo `historical-platform-evidence`. |
-| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-tested-r-equivalence-v1` nello schema 6. |
+| `observed_baseline.source_comparison_scope` | `reviewed-operative-changes-with-versioned-scientific-models-v1` nello schema 7. |
 | `reviewed_source_changes` | Elenco ordinato di percorso e hash prima/dopo; `null` per aggiunte o rimozioni. |
 | `qualification_evidence_sha256`, `linux_upgrade_check_sha256` | Rapporti permanenti della candidata e aggiornamento reale Ubuntu dalla 0.7.2. |
 | `macos_validation` | Stato separato `arm64`/`x86_64`: `passed` con evidenze HTTPS oppure `not-performed` con elenco vuoto. |
 | `deferred_desktop_scenarios` | Scenari desktop estesi ancora da svolgere. |
 | `scientific_equivalence` | Commit della baseline 0.8.5, percorso e SHA-256 del rapporto nel bundle di qualificazione e ID immutabile dell’immagine scientifica. |
+| `scientific_analysis_qualification` | Commit NEWPAT aggiornato, percorso e SHA-256 di `five-module-qualification.json` nel bundle, stesso ID immutabile dell’immagine dei caller. |
 | `domain_validation` | `pending-domain-researchers`. |
 
-Lo schema 5 continua a richiedere script R vendorizzati invariati. Dalla
-0.8.9 lo schema 6 permette la revisione dei quattro script R identificati e
-del relativo manifest, mantenendo immutabile il riferimento 0.8.5. Dalla
-0.8.30, SNP usa il sorgente originale congelato di SNPcall 2.0; DNP,
-Contamination e CPI mantengono il riferimento NIPAT 0.8.5. Il rapporto
-scientifico identifica separatamente il riferimento SNP. Il publisher
-verifica i byte Git prima/dopo, il rapporto conservato nel bundle della build,
-l’identità dell’immagine distribuita e gli hash dei sorgenti sottoposti ai test.
-Richiede i confronti completi per tutti i quattro moduli: tabelle esatte e
-valori R non arrotondati identici al riferimento pertinente. Dalla 0.8.30,
-la presentazione aggiornata è verificata per contenuto e dimensioni dei PDF,
-classi degli istogrammi e rendering identico tra esecuzione seriale e
-parallela della candidata. Per le versioni precedenti resta richiesto il
-rendering esatto rispetto alla baseline, oltre ai controlli mirati.
-Il risultato è conservato in `scientific-equivalence-check.json`.
-Il publisher confronta file e hash effettivi dei commit;
-una differenza non dichiarata o un rapporto riferito ad altri pacchetti
-interrompe la procedura. Le prove Mac non eseguite non impediscono di per sé
-una distribuzione pre-1.0, ma devono rimanere dichiarate come tali.
+Per DNP rimane il riferimento NIPAT 0.8.5; per SNP, SNPcall 2.0. CPI,
+Contamination e CPIN usano i sorgenti NEWPAT congelati al commit
+`9c2a8be60afcb944153710da6a61cd0559e2b4cf`. Gli schemi precedenti rimangono
+validi soltanto per le rispettive release storiche; lo schema 6 non può
+qualificare una build 0.8.50.
+
+Il publisher richiede 17 casi caller e il rapporto completo dei tre modelli
+aggiornati: 86 esecuzioni, 16 confronti upstream e 54 prove batch su 2/3/5
+famiglie o campioni, in seriale/automatico/limite 2, per marcatori SNP e DNP.
+Controlla sorgenti e helper installati, fixture, verificatore, input invariati,
+parametri e costanti effettivi, identità dei worker e budget rispettati.
+Per i caller mantiene i confronti esatti delle tabelle e dei valori R; per i
+modelli aggiornati applica oracoli analitici e confronti numerici con tolleranza
+esplicita. Una modifica di modello non viene dichiarata equivalente alle
+vecchie formule. I controlli di istogrammi e rendering seriale/parallelo
+rimangono obbligatori nei caller.
+
+Il risultato aggregato è conservato in `scientific-equivalence-check.json`;
+`release-provenance.json` identifica entrambi i rapporti. Il publisher
+confronta i byte Git e i digest del bundle accettato, senza sostituire i test
+dell’immagine distribuita con esecuzioni R locali. Una differenza non dichiarata
+o un rapporto riferito ad altri pacchetti interrompe la procedura. Le prove Mac
+non eseguite non impediscono di per sé una distribuzione pre-1.0, ma devono
+rimanere dichiarate come tali.
 
 ## Pacchetti da provare
 
 Usare una build manuale **Installers (review build)** completata sul commit
 revisionato, con `installer-required` riuscito. Conservare EXE, DEB, entrambi
 i PKG, manifest, checksum, rapporti e ID della build. Non combinare file
-di build diverse. Consultare le [note della 0.8.35](RELEASE_0.8.35.md);
+di build diverse. Consultare le [note della 0.8.50](RELEASE_0.8.50.md);
 i risultati di qualificazione devono riferirsi ai pacchetti esatti. Le
 [note della 0.8.20](RELEASE_0.8.20.md) conservano il contesto della
 precedente versione e delle sue verifiche.
@@ -74,7 +80,7 @@ La [procedura di pubblicazione](../.github/RELEASE.md) specifica i parametri.
 
 La tabella seguente costituisce il catalogo della qualificazione desktop
 completa. Nello schema 1 tutti i sei scenari devono essere superati;
-negli schemi 5 e 6 per ricerca sono dichiarati esplicitamente come rinviati.
+negli schemi 5, 6 e 7 per ricerca sono dichiarati esplicitamente come rinviati.
 Le singole evidenze automatiche o manuali restano utilizzabili con il loro
 ambito effettivo, senza attribuire loro la copertura dell’intero scenario.
 
@@ -91,10 +97,10 @@ restano da verificare; non vanno registrati come `passed`.
 
 | Chiave della prova | Ambiente e operazioni | Criteri di accettazione |
 | --- | --- | --- |
-| `windows_clean_wsl` | Windows 11 x64 senza NIPAT, Docker Desktop, Python o strumenti scientifici; WSL inizialmente non configurato. Eseguire l’EXE con doppio clic, autorizzare i componenti richiesti, completare l’eventuale riavvio e riaprire NIPAT dall’icona. Eseguire diagnostica, autotest e i quattro workflow con casi noti. Riavviare Windows e ripetere l’avvio. | La preparazione arriva a `ready` senza spostare file; il menu e i calcoli funzionano dal normale account; risultati e log sono accessibili; dopo il riavvio non servono comandi manuali per avviare il runtime. |
+| `windows_clean_wsl` | Windows 11 x64 senza NIPAT, Docker Desktop, Python o strumenti scientifici; WSL inizialmente non configurato. Eseguire l’EXE con doppio clic, autorizzare i componenti richiesti, completare l’eventuale riavvio e riaprire NIPAT dall’icona. Eseguire diagnostica, autotest e i cinque moduli e i workflow composti con casi noti. Riavviare Windows e ripetere l’avvio. | La preparazione arriva a `ready` senza spostare file; il menu e i calcoli funzionano dal normale account; risultati e log sono accessibili; dopo il riavvio non servono comandi manuali per avviare il runtime. |
 | `windows_stable_coexistence` | Windows 11 x64 con installazioni NIPAT 0.4 e 0.5 e dati di controllo, affiancate a NIPAT Desktop. Registrare prima e dopo percorsi, versioni, stato e inventario delle distribuzioni WSL. Avviare tutte le applicazioni. | NIPAT Desktop usa nome, cartelle, collegamenti e distribuzione propri. Applicazione, configurazione, dati e runtime delle altre installazioni NIPAT restano utilizzabili e non vengono adottati o sostituiti da NIPAT Desktop. |
 | `windows_reinstall_removal` | Sull’installazione NIPAT Desktop preparata, eseguire i casi sotto riportati per percorsi personalizzati, reinstallazione, cambio di destinazione e rimozione. Provare entrambe le scelte di conservazione dell'ambiente, l'annullamento e un errore parziale. | Le preferenze vengono riproposte, i file esistenti restano nelle loro destinazioni e le analisi funzionano. La rimozione elimina applicazione e collegamenti; l'opzione aggiuntiva riguarda soltanto risorse verificate di NIPAT Desktop. Dati, risultati e risorse estranee rimangono invariati. |
-| `ubuntu_clean_dependencies` | Ubuntu Desktop 24.04 x86_64 senza Docker Engine o Compose. Installare il `.deb` con APT, registrare le dipendenze installate e configurare l’accesso Docker tramite l’amministratore. Accedere nuovamente all’account se richiesto. Avviare dal menu applicazioni, eseguire preparazione, diagnostica, autotest e i quattro workflow; riavviare il sistema e ripetere l’avvio. | APT installa le dipendenze; l’account non riceve accesso Docker senza autorizzazione; il servizio e l’accesso funzionano dopo la configurazione e il riavvio. Menu e analisi sono eseguiti senza `sudo`; risultati e log appartengono all’utente. |
+| `ubuntu_clean_dependencies` | Ubuntu Desktop 24.04 x86_64 senza Docker Engine o Compose. Installare il `.deb` con APT, registrare le dipendenze installate e configurare l’accesso Docker tramite l’amministratore. Accedere nuovamente all’account se richiesto. Avviare dal menu applicazioni, eseguire preparazione, diagnostica, autotest e i cinque moduli e i workflow composti; riavviare il sistema e ripetere l’avvio. | APT installa le dipendenze; l’account non riceve accesso Docker senza autorizzazione; il servizio e l’accesso funzionano dopo la configurazione e il riavvio. Menu e analisi sono eseguiti senza `sudo`; risultati e log appartengono all’utente. |
 | `ubuntu_existing_docker` | Ubuntu Desktop 24.04 con Docker di sistema già configurato e risorse Docker estranee a NIPAT. Registrare versioni, endpoint e configurazione prima e dopo installazione, preparazione e analisi. | Il Docker compatibile viene riutilizzato; non vengono sostituiti repository, contesto globale, configurazione del daemon, immagini o container estranei. NIPAT usa il socket locale dichiarato. |
 | `ubuntu_reinstall_removal` | Sull’installazione NIPAT Desktop preparata, conservare un run e un file di controllo; reinstallare lo stesso `.deb`, ripetere avvio e diagnostica, poi rimuovere `nipat-desktop` con APT. | Reinstallazione e avvio riescono; la rimozione elimina applicazione e collegamento, conservando dati, risultati, stato e immagini Docker. Le risorse Docker estranee non cambiano. |
 

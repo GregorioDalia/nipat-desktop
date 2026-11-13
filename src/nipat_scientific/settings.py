@@ -93,6 +93,27 @@ def normalize_settings(workflow: str, overrides: dict | None = None) -> dict:
     return values
 
 
+def validate_settings_document(document: object, workflow: str) -> dict:
+    """Validate complete persisted provenance, not an optional override map."""
+    if (not isinstance(document, dict)
+            or set(document) != {"schema_version", "workflow", "parameters", "constants"}
+            or type(document.get("schema_version")) is not int or document["schema_version"] != 1
+            or document.get("workflow") != workflow or not isinstance(document.get("parameters"), dict)):
+        raise ValidationError("Schema o modulo dei parametri scientifici non valido.")
+    effective = normalize_settings(workflow, document["parameters"])
+    if set(document["parameters"]) != set(effective):
+        raise ValidationError("Il documento dei parametri scientifici non contiene tutti i valori effettivi.")
+    # JSON boolean equality must not let true impersonate a numeric constant
+    # such as the homozygous transmission probability (Python True == 1).
+    constants = describe_settings(workflow)["constants"]
+    actual = document["constants"]
+    if (actual != constants or any(
+            type(actual[name]["value"]) is bool and type(entry["value"]) is not bool
+            for name, entry in constants.items())):
+        raise ValidationError("Le costanti scientifiche non corrispondono al modello installato.")
+    return effective
+
+
 def settings_from_environment(workflow: str) -> dict:
     """Read a verified run's effective settings (also used by the pileup helper)."""
     path = os.environ.get("NIPAT_SCIENTIFIC_SETTINGS")
@@ -103,10 +124,7 @@ def settings_from_environment(workflow: str) -> dict:
             document = json.load(stream)
     except (OSError, ValueError) as exc:
         raise ValidationError("Impossibile leggere i parametri scientifici del run.") from exc
-    if (not isinstance(document, dict) or document.get("schema_version") != 1
-            or document.get("workflow") != workflow or not isinstance(document.get("parameters"), dict)):
-        raise ValidationError("I parametri scientifici non appartengono al modulo in esecuzione.")
-    return normalize_settings(workflow, document["parameters"])
+    return validate_settings_document(document, workflow)
 
 
 @contextmanager
@@ -137,6 +155,7 @@ def settings_context(workflow: str, overrides: dict | None, workdir: Path):
                 existing = json.loads(target.read_text(encoding="utf-8"))
             except (OSError, ValueError) as exc:
                 raise ValidationError("Impossibile verificare i parametri scientifici già presenti.") from exc
+            validate_settings_document(existing, workflow)
             if existing != document:
                 raise ValidationError("Parametri scientifici diversi già presenti nella cartella di lavoro.")
     finally:

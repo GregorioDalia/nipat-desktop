@@ -3,8 +3,8 @@
   "workflow": "cpin",
   "source": {
     "path": "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R",
-    "sha256": "cac401d40ed7b137d49d22e0ef99ef891a0bce5661e3df6ccc8a8c8b1cf9ae49",
-    "line_count": 549
+    "sha256": "947723633cbd9563fee34d638522fe0edb37498ca0e3eb00aef1b21900f4d10c",
+    "line_count": 565
   },
   "public_parameters": [
     {
@@ -366,7 +366,7 @@
       },
       "source_lines": [
         100,
-        324
+        331
       ]
     },
     {
@@ -391,12 +391,12 @@
       "kind": "format",
       "value": "total_count=NA with all three counts zero -> zero in memory",
       "description": {
-        "it": "Lo zero con totale mancante viene normalizzato soltanto in memoria; gli input non sono riscritti. Tutti gli altri conteggi mancanti sono errori.",
-        "en": "Zero coverage with missing total is normalized in memory only; original inputs are not rewritten. All other missing counts are errors."
+        "it": "Lo zero con totale mancante viene normalizzato soltanto in memoria; gli input non sono riscritti. Tutti gli altri conteggi mancanti sono errori. Tabelle con sola intestazione e colonne total_count interamente NA sono gestite esplicitamente; nessun locus eleggibile produce stime NA e curve vuote.",
+        "en": "Zero coverage with missing total is normalized in memory only; original inputs are not rewritten. All other missing counts are errors. Header-only tables and entirely NA total_count columns are handled explicitly; no eligible loci produce NA estimates and empty curves."
       },
       "source_lines": [
         280,
-        324
+        331
       ]
     },
     {
@@ -413,8 +413,8 @@
         "en": "The diploid model requires a homozygous mother; the compatible child determines the obligatory paternal allele. Paternal mismatch uses epsilon and remains included. Transmission probabilities are model invariants."
       },
       "source_lines": [
-        326,
-        337
+        333,
+        350
       ]
     },
     {
@@ -433,8 +433,8 @@
         "en": "Curves retain sites eligible at the initial per-called-allele minimum and increase obligatory paternal allele support. Exact constant intervals and cumulative sums use memory proportional to loci rather than read depth."
       },
       "source_lines": [
-        339,
-        355
+        352,
+        368
       ]
     },
     {
@@ -456,8 +456,8 @@
         "en": "Ordered mutually exclusive exclusion reasons are exported for every locus in the union. Opposite homozygous mother and child are excluded. The analyses differ only in including compatible homozygous children."
       },
       "source_lines": [
-        402,
-        431
+        415,
+        444
       ]
     },
     {
@@ -466,15 +466,16 @@
       "value": {
         "log10_CPI": "sum(log10(Paternity_Index))",
         "CPI": "10^log10_CPI",
-        "zero_sites": "NA"
+        "zero_sites": "NA",
+        "overflow_log_fallback": "log10(weight)-log10(frequency) only for positive finite frequency with overflowed PI"
       },
       "description": {
-        "it": "Il logCPI evita l’underflow del prodotto; CPI può essere 0 o Inf quando l’esponenziazione supera l’intervallo floating point. Nessun sito produce NA.",
-        "en": "LogCPI avoids product underflow; CPI can be 0 or Inf when exponentiation exceeds floating-point range. No eligible sites gives NA."
+        "it": "Il logCPI evita l’underflow del prodotto; CPI può essere 0 o Inf quando l’esponenziazione supera l’intervallo floating point. Nessun sito produce NA. Se la divisione per una frequenza positiva finita va in overflow, conserva il logaritmo finito tramite differenza dei logaritmi; i valori ordinari mantengono lo stesso arrotondamento.",
+        "en": "LogCPI avoids product underflow; CPI can be 0 or Inf when exponentiation exceeds floating-point range. No eligible sites gives NA. If division by a positive finite frequency overflows, retain the finite logarithm using a difference of logs; ordinary values preserve their rounding."
       },
       "source_lines": [
-        448,
-        461
+        463,
+        477
       ]
     },
     {
@@ -493,8 +494,8 @@
         "en": "Individual plots and a paginated aggregate. The configured minimum is highlighted and matching/mismatching counts have a separate axis. Shaded display guides do not change calculations."
       },
       "source_lines": [
-        487,
-        540
+        503,
+        556
       ]
     }
   ],
@@ -514,7 +515,7 @@
       },
       "evidence": {
         "path": "src/nipat_scientific/cpin.py",
-        "sha256": "65f46c57f25c4158059ac73833089b9e191905ee3666ea04ea26ac139a065291",
+        "sha256": "a0a53975759336d9fa46e72a936624906fbb56f19ae2fc73f0a9d522313fc775",
         "source_lines": [
           1,
           155
@@ -530,10 +531,10 @@
           },
           {
             "path": "src/nipat_scientific/panels.py",
-            "sha256": "fdb28f0935587088cfe3921171e37c5c075e9d30ffc2888edd162d9de64236c4",
+            "sha256": "c05735970f78fa4527a195f599dc58d198872b557a64105f191e939e26699c65",
             "source_lines": [
               1,
-              220
+              226
             ]
           }
         ]
@@ -697,10 +698,10 @@
         "dependencies": [
           {
             "path": "src/nipat_scientific/settings.py",
-            "sha256": "6690241ce2ee41393433381dcb07a87fea60c7b664b9ad58a4ced8a27def7fc4",
+            "sha256": "21fd42ad2c04e8f7bf7bf3f08e01aa88df27416f7fbd104aeae6439ba7cd8f88",
             "source_lines": [
               1,
-              178
+              197
             ]
           },
           {
@@ -768,39 +769,39 @@
     },
     {
       "start": 220,
-      "end": 323,
+      "end": 330,
       "summary": {
         "it": "Cache dei campioni, classi genotipiche e qualità.",
         "en": "Sample caches, genotype classes and quality."
       }
     },
     {
-      "start": 324,
-      "end": 354,
+      "start": 331,
+      "end": 367,
       "summary": {
         "it": "Modello PI e curve a intervalli cumulativi.",
         "en": "PI model and cumulative interval curves."
       }
     },
     {
-      "start": 355,
-      "end": 430,
+      "start": 368,
+      "end": 443,
       "summary": {
         "it": "Preparazione condivisa, join dei tre ruoli ed eleggibilità.",
         "en": "Shared preparation, three-role joins and eligibility."
       }
     },
     {
-      "start": 431,
-      "end": 539,
+      "start": 444,
+      "end": 555,
       "summary": {
         "it": "PI per sito, tabelle, riepiloghi e grafici.",
         "en": "Per-site PI, tables, summaries and plots."
       }
     },
     {
-      "start": 540,
-      "end": 549,
+      "start": 556,
+      "end": 565,
       "summary": {
         "it": "Parallelismo delle terne e aggregazione ordinata.",
         "en": "Trio parallelism and ordered aggregation."

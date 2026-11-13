@@ -107,6 +107,15 @@ class CpiEngineTests(unittest.TestCase):
         request["samples"] = [{**request["samples"][0], "name": "A.txt"}]
         self.reject(request)
 
+    def test_same_file_cannot_impersonate_distinct_samples_through_paths_or_hardlinks(self):
+        source = Path(self.request["samples"][0]["path"])
+        linked = self.inputs / "same-sample-hardlink.txt"
+        linked.hardlink_to(source)
+        for path in (source, linked):
+            request = deepcopy(self.request)
+            request["samples"][1]["path"] = str(path)
+            self.reject(request)
+
     def test_schema_types_and_error_constant_reject_before_writes(self):
         cases = [None, [], "request", {}, {**self.request, "extra": 1}]
         for field in self.request:

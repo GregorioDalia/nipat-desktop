@@ -42,6 +42,10 @@ def read_dnp_list(path: Path) -> list[DnpRecord]:
             chromosome, pos1_text, pos2_text, reference, alternative = (
                 value.strip() for value in row
             )
+            # The caller builds locus keys as chr:pos1|chr:pos2 and splits
+            # them using these delimiters. Reject ambiguous names up front.
+            if any(char in chromosome for char in (":", "|", "\0")):
+                raise ValidationError(f"DNP_list: cromosoma non rappresentabile alla riga {line_number}.")
             try:
                 pos1 = int(pos1_text)
                 pos2 = int(pos2_text)
@@ -70,6 +74,8 @@ def read_dnp_list(path: Path) -> list[DnpRecord]:
                 raise ValidationError(
                     f"DNP_list: allele non valido alla riga {line_number}."
                 )
+            if reference == alternative:
+                raise ValidationError(f"DNP_list: REF e ALT devono essere distinti alla riga {line_number}.")
             key = (chromosome, pos1, pos2)
             if key in seen:
                 raise ValidationError(f"DNP_list: posizione duplicata alla riga {line_number}.")

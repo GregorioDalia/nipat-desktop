@@ -14,6 +14,7 @@ from nipat_scientific.files import (
     require_dnp_input, table_rows,
 )
 from nipat_scientific.panels import read_dnp_list, read_snp_list
+from nipat_scientific.settings import normalize_settings, validate_settings_document
 
 
 def _sha256(path: Path) -> str:
@@ -90,6 +91,27 @@ def _cpin_bindings(step: dict) -> tuple[list[dict], list[dict]]:
     return inputs, trios
 
 
+def _expected_settings(request: dict) -> dict:
+    values = normalize_settings(request["workflow"], request.get("scientific_settings"))
+    if request["workflow"] == "cpi" and request.get("err_const") is not None:
+        values[f"err_const_{request.get('marker_type', 'DNP').lower()}"] = request["err_const"]
+    return values
+
+
+def _check_cpi_summary_settings(row: dict, request: dict, settings: dict, path: Path, number: int):
+    marker = request.get("marker_type", "DNP")
+    threshold = "Min_child_reads" if request["workflow"] == "cpin" else "Min_fetal_reads"
+    if row["Marker_type"] != marker or nonnegative_integer(
+            row[threshold], path, number, threshold, positive=True) != settings[threshold.lower()]:
+        raise PlanExecutionError("execution.output", "CPI summary marker or read threshold differs from the request.")
+    try:
+        error = float(row["Error_constant"])
+    except ValueError as exc:
+        raise PlanExecutionError("execution.output", "Invalid CPI summary error constant.") from exc
+    if not math.isclose(error, settings[f"err_const_{marker.lower()}"], rel_tol=1e-12, abs_tol=0):
+        raise PlanExecutionError("execution.output", "CPI summary error constant differs from the request.")
+
+
 def _collect_cpin_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
     summary = output_dir / "Summary_Postnatal_CPI.txt"
     summary_artifact = _artifact(summary, root, output_dir)
@@ -105,8 +127,10 @@ def _collect_cpin_outputs(step: dict, request: dict, root: Path, output_dir: Pat
                 "both": ["heterozygous_child_sites", "all_compatible_sites"]}[selection]
     expected = {(item["native_trio"], analysis) for item in bindings for analysis in analyses}
     seen, warnings = set(), []
+    settings = _expected_settings(request)
     counts = {"N_sites", "N_heterozygous_child_sites", "N_homozygous_child", "Matching_sites", "Mismatching_sites", "Min_child_reads"}
     for number, row in enumerate(rows, 2):
+        _check_cpi_summary_settings(row, request, settings, summary, number)
         key = row["Trio"], row["Analysis"]
         if key in seen:
             raise PlanExecutionError("execution.output", "Duplicate CPIN trio/analysis row.")
@@ -198,9 +222,11 @@ def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path
     expected = {(pair["native_pair"], cutoff) for pair in bindings for cutoff in cutoffs}
     found = {}
     warnings = []
+    settings = _expected_settings(request)
     for number, row in enumerate(rows, 1):
         if None in row or any(value is None for value in row.values()):
             raise PlanExecutionError("execution.output", "Malformed CPI summary row.")
+        _check_cpi_summary_settings(row, request, settings, summary, number + 1)
         key = (row["Pair"], row.get("Cutoff"))
         if key in found:
             raise PlanExecutionError("execution.output", "CPI summary contains duplicate pair/cutoff rows.")
@@ -388,22 +414,12 @@ def _collect_outputs(step: dict, request: dict, root: Path, output_dir: Path) ->
     try:
         result = _collect_outputs_unchecked(step, request, root, output_dir)
         settings = output_dir / "scientific-settings.json"
-        if settings.exists():
-            artifact = _artifact(settings, root, output_dir)
-            document = json.loads(settings.read_text(encoding="utf-8"))
-            from nipat_scientific.settings import normalize_settings, describe_settings
-            if (not isinstance(document, dict) or type(document.get("schema_version")) is not int
-                    or document["schema_version"] != 1 or document.get("workflow") != step["workflow"]
-                    or set(document) != {"schema_version", "workflow", "parameters", "constants"}):
-                raise PlanExecutionError("execution.output", "Scientific settings sidecar has an invalid schema or workflow.")
-            expected = normalize_settings(step["workflow"], request.get("scientific_settings"))
-            if step["workflow"] == "cpi" and request.get("err_const") is not None:
-                expected[f"err_const_{request.get('marker_type', 'DNP').lower()}"] = request["err_const"]
-            actual = normalize_settings(step["workflow"], document["parameters"])
-            if (not isinstance(document["parameters"], dict) or set(document["parameters"]) != set(expected)
-                    or actual != expected or document["constants"] != describe_settings(step["workflow"])["constants"]):
-                raise PlanExecutionError("execution.output", "Scientific settings sidecar differs from the requested parameters or model constants.")
-            result["scientific-settings"] = artifact
+        artifact = _artifact(settings, root, output_dir)
+        document = json.loads(settings.read_text(encoding="utf-8"))
+        actual = validate_settings_document(document, step["workflow"])
+        if actual != _expected_settings(request):
+            raise PlanExecutionError("execution.output", "Scientific settings sidecar differs from the requested parameters.")
+        result["scientific-settings"] = artifact
         return result
     except PlanExecutionError:
         raise

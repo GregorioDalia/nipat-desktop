@@ -288,8 +288,15 @@ prepare_sample <- function(id, prefix, role) {
     stop(path, ": alleles must contain only A, C, G and T")
   }
   count_columns <- c("N_REF", "N_ALT", "N_Other", "total_count")
-  if (any(!vapply(x[count_columns], is.numeric, logical(1)))) {
-    stop(path, ": read counts must be numeric")
+  for (column in count_columns) {
+    # read.table infers logical storage for header-only or entirely NA columns.
+    # Preserve missing values for the validation below, including the supported
+    # all-zero DNP sample with total_count=NA at every locus. Boolean counts
+    # remain invalid rather than silently becoming zero or one.
+    if (is.logical(x[[column]]) && all(is.na(x[[column]]))) {
+      x[[column]] <- as.numeric(x[[column]])
+    }
+    if (!is.numeric(x[[column]])) stop(path, ": read counts must be numeric")
   }
   # DNPcall can report NA total_count at sites with no reads.
   # Correct this representation in memory and retain an internal flag.
@@ -312,7 +319,7 @@ prepare_sample <- function(id, prefix, role) {
   x$GT <- classify_genotype(x$ratio)
   x$Other_ratio <- x$N_Other / x$total_count
   x$Quality_pass <- passes_quality(x$N_REF, x$N_ALT, x$N_Other, x$total_count)
-  x$Present <- TRUE
+  x$Present <- rep(TRUE, nrow(x))
   x <- x[c(site_columns, "REF", "ALT", count_columns, "ratio", "GT",
            "Other_ratio", "Quality_pass", "Present", "Missing_total_at_zero_coverage")]
   names(x)[!names(x) %in% site_columns] <- paste0(
@@ -330,18 +337,24 @@ site_pi <- function(required, father_gt, ref_frequency, alt_frequency, epsilon) 
            (required == "ALT" & father_gt == "1/1"), 1, 0))
   mismatch <- transmission == 0
   weight <- ifelse(mismatch, epsilon, transmission)
-  list(PI=weight / frequency, Mismatch=mismatch,
+  pi <- weight / frequency
+  log_pi <- log10(pi)
+  # Preserve ordinary division/log rounding. A positive representable frequency
+  # can make PI overflow even though its logarithm is finite and usable.
+  overflow <- is.infinite(pi) & is.finite(frequency) & frequency > 0
+  log_pi[overflow] <- log10(weight[overflow]) - log10(frequency[overflow])
+  list(PI=pi, Log10_PI=log_pi, Mismatch=mismatch,
        Frequency=frequency, Transmission=transmission)
 }
 
 # Exact plateaus over integer thresholds. Avoid scanning all loci for each read depth.
 # Each row covers [Min_child_reads, Through_min_child_reads], inclusive.
-support_curve <- function(sites, minimum) {
+support_curve <- function(sites, minimum, log_pi=log10(sites$Paternity_Index)) {
   if (!nrow(sites)) return(data.frame(Min_child_reads=numeric(), Through_min_child_reads=numeric(),
     N_sites=integer(), Log10_CPI=numeric(), Matching_sites=integer(), Mismatching_sites=integer()))
   order_index <- order(sites$Child_support, seq_len(nrow(sites)), method="radix")
   support <- sites$Child_support[order_index]
-  suffix_log <- rev(cumsum(rev(log10(sites$Paternity_Index[order_index]))))
+  suffix_log <- rev(cumsum(rev(log_pi[order_index])))
   suffix_match <- rev(cumsum(rev(as.integer(!sites$Mismatch[order_index]))))
   suffix_mismatch <- rev(cumsum(rev(as.integer(sites$Mismatch[order_index]))))
   boundaries <- sort(unique(c(minimum, support[support < max(support)] + 1)))
@@ -429,13 +442,15 @@ process_trio <- function(ids) {
     TRUE ~ "eligible")
 
   eligible <- x$Status == "eligible"
-  x$Paternity_Index <- NA_real_
-  x$Mismatch <- NA
-  x$Paternal_transmission <- NA_real_
+  x$Paternity_Index <- rep(NA_real_, nrow(x))
+  site_log_pi <- rep(NA_real_, nrow(x))
+  x$Mismatch <- rep(NA, nrow(x))
+  x$Paternal_transmission <- rep(NA_real_, nrow(x))
   if (any(eligible)) {
     pi <- site_pi(x$Required_paternal_allele[eligible], x$GT_father[eligible],
                   x$Ref_f.pop[eligible], x$Alt_f.pop[eligible], err_const)
     x$Paternity_Index[eligible] <- pi$PI
+    site_log_pi[eligible] <- pi$Log10_PI
     x$Mismatch[eligible] <- pi$Mismatch
     x$Paternal_transmission[eligible] <- pi$Transmission
   }
@@ -446,7 +461,8 @@ process_trio <- function(ids) {
     sites <- x[retained, , drop=FALSE]
 
     # Sum logs directly to avoid numerical underflow of the product.
-    log_cpi <- if (nrow(sites)) sum(log10(sites$Paternity_Index)) else NA_real_
+    log_pi <- site_log_pi[retained]
+    log_cpi <- if (nrow(sites)) sum(log_pi) else NA_real_
     cpi <- if (is.na(log_cpi)) NA_real_ else 10^log_cpi
     summary_rows[[length(summary_rows) + 1L]] <- data.frame(
       Trio=trio_name, Marker_type=marker, Analysis=analysis,
@@ -459,7 +475,7 @@ process_trio <- function(ids) {
       Min_child_reads=min_child_reads)
 
     if (nrow(sites)) {
-      curve <- support_curve(sites, min_child_reads)
+      curve <- support_curve(sites, min_child_reads, log_pi)
       # Preserve the original result at the configured minimum without changing
       # its summation order; interval accumulation can differ by rounding only.
       curve$Log10_CPI[1L] <- log_cpi

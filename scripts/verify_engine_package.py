@@ -34,6 +34,7 @@ from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_w
 from verify_cpi_engine import check_cpi_client_without_host_scripts, check_cpi_workflow
 from verify_workflow_execution import check_workflow_execution, check_cpi_chains, check_imported_cpi_plans
 from verify_snp_workflow import check_snp_plans
+from verify_five_module_workflow import qualify_image
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -668,6 +669,9 @@ def main() -> int:
         check_cpi_client_without_host_scripts(identifier, root, cpi_inputs)
         check_contamination_client_without_host_scripts(identifier, root)
         check_cpin_workflow(identifier, root)
+        composed = qualify_image(identifier, root / "five-module BAM workflow", run_container=run_container)
+        print(f"PASS: source-free five-module client, three BAMs, ten steps per run, "
+              f"serial/cap2 and {composed['identical_scientific_tables']} identical scientific tables.", flush=True)
     except (NipatError, OSError, RuntimeError, ValueError, KeyError) as exc:
         print(f"Engine package verification failed: {exc}", file=sys.stderr)
         if root is not None:
@@ -675,7 +679,8 @@ def main() -> int:
         return 1
     shutil.rmtree(root)
     print("PASS: numeric regressions and validation failures without application/source mounts or network.")
-    print("Complete DNPcall, SNPcall, Contamination, CPI and CPIN, plus automatic DNPcall -> Contamination/CPI plans and independent SNP batches/tasks, verified inside the bundled engine.")
+    print("Complete DNPcall, SNPcall, Contamination, CPI and CPIN, including both caller branches "
+          "feeding all three consumers in a three-BAM serial/cap2 workflow, verified inside the bundled engine.")
     return 0
 
 

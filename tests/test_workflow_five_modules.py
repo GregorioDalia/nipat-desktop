@@ -1,10 +1,13 @@
 """Typed five-module plans preserve biological roles and caller identities."""
 import copy
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from nipat_scientific.errors import ValidationError
+from nipat_scientific.executor import _preflight
 from nipat_scientific.files import require_count_input
 from nipat_scientific.panels import read_position_panel, write_position_panel
 from nipat_scientific.plan import PlanValidationError, validate_plan
@@ -43,6 +46,38 @@ def plan_for(marker="SNP", *, called=True):
 
 
 class FiveModulePlans(unittest.TestCase):
+    def test_imported_shared_parents_are_scanned_once_per_validation_contract(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inputs = root / "inputs"
+            shutil.copytree(Path(__file__).parent / "fixtures/cpin/SNP", inputs)
+            source = plan_for(called=False)
+            for sample, name in zip(source["samples"], ("MotherM1.txt", "FatherF1.txt", "ChildC1.txt")):
+                sample["path"] = str(inputs / name)
+            extra = inputs / "ChildC2.txt"
+            shutil.copyfile(inputs / "ChildC1.txt", extra)
+            source["samples"].append({"id": "child_two", "kind": "snp-table", "path": str(extra)})
+            source["presentation"]["samples"]["child_two"] = "ChildC2.txt"
+            source["steps"][-1]["inputs"]["trios"].append({"id": "trio_two", "mother": {"sample": "mother"},
+                "father": {"sample": "father"}, "child": {"sample": "child_two"}})
+            for step in source["steps"]:
+                for field, name in (("panel", "markers.tsv"), ("popfreq", "population.txt")):
+                    if field in step["inputs"]:
+                        step["inputs"][field] = str(inputs / name)
+            scripts = {workflow: Path(__file__) for workflow in ("cpi", "cpin", "contamination")}
+            with patch("nipat_scientific.executor.require_count_input", wraps=require_count_input) as scan:
+                _preflight(source, root / "run", scripts)
+            keys = [(call.args[0], call.kwargs["marker_type"], call.kwargs["cpi"]) for call in scan.call_args_list]
+            self.assertEqual(len(keys), 7)  # 3 contamination contracts + 4 CPI/CPIN contracts.
+            self.assertEqual(len(set(keys)), len(keys))
+            self.assertFalse((root / "run").exists())
+            # Cache lifetime is only this preflight: edited input must be read
+            # and rejected on the next request, before creating any run.
+            extra.write_text("invalid\n")
+            with self.assertRaises(ValidationError):
+                _preflight(source, root / "run", scripts)
+            self.assertFalse((root / "run").exists())
+
     def test_all_caller_and_imported_table_branches_are_typed_and_idempotent(self):
         for marker in ("SNP", "DNP"):
             for called in (False, True):

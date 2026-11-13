@@ -100,7 +100,7 @@ def prepare_cpin(request: object) -> list[str]:
         if not isinstance(name, str) or name not in required_names or name in samples:
             raise ValidationError("Nome di campione CPIN inatteso o duplicato.")
         source = require_file(_absolute_path(item["path"], "Tabella di conteggi"), "Tabella di conteggi")
-        if source in source_names:
+        if any(source.samefile(previous) for previous in source_names):
             raise ValidationError("La stessa tabella non può identificare due campioni CPIN distinti.")
         source_names[source] = name
         warnings.extend(require_count_input(source, marker_type, cpi=True))

@@ -22,7 +22,8 @@ def main():
     if major < 14:
         raise SystemExit("macOS 14 or later is required")
     for command in (
-        [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v"],
+        [sys.executable, "-m", "pip", "install", "-r", ".github/quality-requirements.txt"],
+        [sys.executable, "-m", "pytest", "tests"],
         [sys.executable, "-m", "unittest", "discover", "-s", ".github/scripts", "-p", "test_*.py", "-v"],
         [sys.executable, "-m", "nipat", "--help"],
     ):
