@@ -1,4 +1,4 @@
-"""Compare scientific R with immutable NIPAT 0.8.5 and SNPcall 2.0 references.
+"""Compare DNP/SNP R defaults with immutable NIPAT 0.8.5 and SNPcall 2.0 references.
 
 Both implementations run in the same immutable, locally built image. Complete
 table bytes and unrounded R objects are compared strictly. Revised plots are
@@ -6,6 +6,8 @@ rendered and bounded; candidate serial/parallel pixels must match exactly.
 Timings are descriptive observations, not a noisy CI performance threshold.
 Only generated or public synthetic inputs are used. No network is available to
 the execution containers, and source/input mounts are read-only.
+Updated CPI/CPIN/Contamination models are qualified by verify_five_modules.py
+against their separate immutable NEWPAT reference and independent oracles.
 """
 
 from __future__ import annotations
@@ -44,20 +46,18 @@ EXPECTED_REFERENCE = {
     "scientific/vendor/NEWPAT/contamination/detect_contamination.R": "28f0d0298cdce06c6d9f33ec5d7a224a8c9fa7dfb6fde87b930ee938e703cc08",
     "src/nipat_scientific/presentation.R": "f368a60172d0bc9c632c09c49a1ea5924b835fb7a1db91413dffc8817ab1f193",
 }
-SCRIPTS = dict(zip(("dnp-call", "cpi", "snp-call", "contamination"), (
+SCRIPTS = dict(zip(("dnp-call", "snp-call"), (
     "scientific/vendor/DNPcall/DNPcall.R",
-    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
     "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
-    "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
 )))
 SUPPORTING_SOURCES = tuple(f"src/nipat_scientific/{name}" for name in (
     "dnp_blocks.R", "dnp_pileup.py", "scratch.py", "progress.py", "progress.R", "parallel.R", "parallel.py", "plots.R",
+    "settings.py", "settings.R", "settings_data.json",
 ))
 PARALLEL_CASES = {"dnp-blocks-1", "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6",
-                  "snp-edge", "cpi-shared-parents",
-                  "cpi-single-intervals", "cpi-single-cutoffs", "contamination-batch"}
+                  "snp-edge"}
 CONCURRENT_CASES = {"dnp-blocks-1", "dnp-multi-blocks-2", "dnp-multi-blocks-3", "dnp-multi-blocks-6",
-                    "snp-edge", "cpi-shared-parents", "contamination-batch"}
+                    "snp-edge"}
 PARALLEL_VARIANTS = {
     "auto": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": ""},
     "manual-2": {"NIPAT_EXECUTION_MODE": "auto", "NIPAT_MAX_WORKERS": "2"},
@@ -649,17 +649,6 @@ def make_inputs(root: Path, image: str) -> Path:
 def cases() -> list[Case]:
     dnp = ("--bamlist=bamlist.txt", "--DNPs=/inputs/dnp/panel.txt",
            "--reference=/inputs/dnp/reference.fa", "--out=output")
-    cpi = ("--pileup_dir", "/inputs/cpi/samples", "--out_dir", "output",
-           "--pairs", "Informative:Informative,NoSites:NoSites,Deep:Deep",
-           "--mother_prefix", "Mother", "--father_prefix", "Father",
-           "--popfreq", "/inputs/cpi/population.tsv")
-    shared_parents = list(cpi)
-    shared_parents[shared_parents.index("--pairs") + 1] = (
-        "Deep:Deep,Deep:Informative,Informative:Informative,"
-        "NoSites:Informative,Informative:Deep"
-    )
-    single_pair = list(cpi)
-    single_pair[single_pair.index("--pairs") + 1] = "Informative:Informative"
     original = [
         Case("dnp-single", "dnp-call", dnp, ("/inputs/dnp/A.bam",)),
         Case("dnp-multi", "dnp-call", dnp, ("/inputs/dnp/A.bam", "/inputs/dnp/B.bam")),
@@ -670,16 +659,6 @@ def cases() -> list[Case]:
         Case("snp-varied-qualities", "snp-call", ("--pileup", "/inputs/snp/pileup-qualities.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
         Case("snp-overlapping-windows", "snp-call", ("--pileup", "/inputs/snp/pileup-overlap.txt", "--snplist", "/inputs/snp/overlap-panel.tsv", "--out", "output/SNPcall_output.txt")),
         Case("snp-zero-coverage", "snp-call", ("--pileup", "/inputs/snp/pileup-empty.txt", "--snplist", "/inputs/snp/panel.tsv", "--out", "output/SNPcall_output.txt")),
-        Case("cpi-all", "cpi", cpi),
-        Case("cpi-panels", "cpi", (*cpi, "--cutoff_map", "Full=/inputs/cpi/full.tsv,Subset=/inputs/cpi/subset.tsv")),
-        Case("cpi-zero-error", "cpi", (*cpi, "--err_const", "0")),
-        Case("cpi-shared-parents", "cpi", tuple(shared_parents)),
-        Case("cpi-single-intervals", "cpi", tuple(single_pair)),
-        Case("cpi-single-cutoffs", "cpi", (*single_pair, "--cutoff_map",
-                                           "Full=/inputs/cpi/full.tsv,Subset=/inputs/cpi/subset.tsv")),
-        Case("contamination-batch", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples", "output")),
-        Case("contamination-single", "contamination", ("/inputs/contamination/panel.txt", "/inputs/contamination/samples/single.txt", "output")),
-        Case("contamination-panel-only", "contamination", ("/inputs/panel-only/panel.txt", "/inputs/panel-only", "output")),
     ]
     blocks = []
     for count in (1, 2, 3):
@@ -783,9 +762,13 @@ def verify(root: Path, image: str) -> dict:
     results = [verify_case(root, image, inputs, case) for case in cases()]
     qualified = {result["workflow"] for result in results if result["case"] in PARALLEL_CASES}
     if qualified != set(SCRIPTS):
-        raise ValueError("All four scientific workflows must pass real parallel qualification")
+        raise ValueError("Both invariant caller models must pass real parallel qualification")
     helpers = []
     for helper in sorted((PROJECT / "tests/r_optimization").glob("*/check_*.R")):
+        if helper.parent.name in {"cpi", "contamination"}:
+            # These old-model equality checks cannot qualify updated science.
+            # The new model gate is mandatory alongside this caller gate.
+            continue
         relative = helper.relative_to(PROJECT)
         log = root / f"{helper.parent.name}-{helper.stem}.log"
         run(image, ["Rscript", f"/repo/{relative.as_posix()}", "/repo"],
@@ -835,7 +818,7 @@ def verify(root: Path, image: str) -> dict:
                                  "status": "passed", "observed_r_progress": cancellation_evidence["observed_r_progress"]},
             "synthetic_performance": {
                 "file": performance.name, "sha256": digest(performance),
-                "scope": "source transformations and CPI core; three timing observations per variant",
+                "scope": "DNP source transformations; three timing observations per variant",
                 "memory": "Rprofmem allocation totals from a separate pass; not peak RAM",
                 "speed_threshold": "none",
             }}

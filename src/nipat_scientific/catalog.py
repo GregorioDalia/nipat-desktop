@@ -18,13 +18,14 @@ import re
 from nipat_scientific.errors import ValidationError
 
 
-WORKFLOWS = ("dnp-call", "snp-call", "contamination", "cpi")
+WORKFLOWS = ("dnp-call", "snp-call", "contamination", "cpi", "cpin")
 CATALOG_DIRECTORY = Path(__file__).with_name("catalog_data")
 SOURCE_PATHS = {
     "dnp-call": "scientific/vendor/DNPcall/DNPcall.R",
     "snp-call": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
     "contamination": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
     "cpi": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+    "cpin": "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R",
 }
 
 

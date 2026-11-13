@@ -1,24 +1,13 @@
-# Reference values only: this file is not read as user configuration.
-# Guided CLI preferences are saved through Configura in preferences.json.
-# Direct CLI commands use their explicit flags and documented built-in defaults.
+# Runtime reference only; guided preferences are stored by Configura.
+# The authoritative scientific defaults, ranges and readable model constants are
+# in src/nipat_scientific/settings_data.json, shared by Python and R.
+# Inspect with: nipat settings
+# Export editable scientific configuration with: nipat settings --export PATH
+# Apply with: nipat --scientific-config PATH --set cpin.min_child_reads=3 ...
 
 [runtime]
 compose_service = "scientific"
 
-[dnp_call]
-parallel = false
-
-[cpi]
-err_const = 0.0000892303778101497
-
-# These values document the current scientific defaults. The present upstream
-# R scripts hard-code them, so the Python layer does not override them yet.
-[scientific_defaults]
-homozygous_lower_ratio = 0.1
-homozygous_upper_ratio = 0.9
-paternal_heterozygous_lower_ratio = 0.4
-paternal_heterozygous_upper_ratio = 0.6
-max_other_reads_ratio = 0.1
-minimum_fetal_reads = 2
-cpi_plot_lower_threshold = -4.0
-cpi_plot_upper_threshold = 4.0
+[scientific_registry]
+path = "src/nipat_scientific/settings_data.json"
+interface = "scientific-settings-v1"

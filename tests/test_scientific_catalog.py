@@ -80,7 +80,7 @@ class ScientificCatalogTests(unittest.TestCase):
         for workflow, document in catalog.items():
             source = (ROOT / document["source"]["path"]).read_text(encoding="utf-8")
             names = {name for item in document["public_parameters"] for name in item["r_names"]}
-            if workflow == "cpi":
+            if workflow in {"cpi", "cpin"}:
                 declared = set(re.findall(r'parser\$add_argument\("(--[a-z_]+)"', source))
                 self.assertEqual(names, declared)
             elif workflow == "dnp-call":
@@ -104,7 +104,7 @@ class ScientificCatalogTests(unittest.TestCase):
                     self.assertIn(f'"{name}"', source)
             else:
                 positional = {item["position"]: item["r_names"][0]
-                              for item in document["public_parameters"]}
+                              for item in document["public_parameters"] if item["position"] is not None}
                 for number, name in positional.items():
                     self.assertRegex(source, rf'{re.escape(name)}\s*<-\s*args\[{number}\]')
                 self.assertEqual(set(positional), {1, 2, 3})

@@ -38,6 +38,17 @@ class InstallationEvidenceTests(unittest.TestCase):
     def test_accepts_bound_nonroot_checks(self):
         self.verify(self.evidence)
 
+    def test_0850_requires_five_scientific_workflows(self):
+        self.manifest["version"] = "0.8.50"
+        old = copy.deepcopy(self.evidence)
+        old["checks"].update(dict.fromkeys(VERIFY.WORKFLOW_INSTALLATION_CHECKS, True))
+        with self.assertRaises(ValueError):
+            self.verify(old)
+        updated = copy.deepcopy(old)
+        updated["checks"].pop("all_four_workflows")
+        updated["checks"]["all_five_workflows"] = True
+        self.verify(updated)
+
     def test_07_requires_workflow_and_preference_evidence(self):
         for version in ("0.7.0a1", "0.7.0b1", "0.7.0rc1", "0.7.0", "0.7.5"):
             self.manifest["version"] = version
@@ -190,6 +201,22 @@ class WindowsClientEvidenceTests(unittest.TestCase):
             installer_sha256=self.installer_sha256, launcher_sha256=self.launcher_sha256,
             inventory_bytes=self.inventory_bytes if inventory_bytes is None else inventory_bytes,
         )
+
+    def test_0850_requires_settings_and_five_module_client_evidence(self):
+        self.manifest["version"] = "0.8.50"
+        self.evidence["version"] = "0.8.50"
+        self.inventory["files"].append({"path": "installer/windows/NipatActivityNative.dll", "sha256": "2" * 64})
+        self.inventory_bytes = json.dumps(self.inventory).encode("utf-8")
+        self.evidence["application_inventory_sha256"] = hashlib.sha256(self.inventory_bytes).hexdigest()
+        with self.assertRaises(ValueError):
+            self.verify(self.evidence)
+        self.evidence["checks"].update(dict.fromkeys(VERIFY.FIVE_MODULE_CLIENT_CHECKS, True))
+        self.verify(self.evidence)
+        for name in VERIFY.FIVE_MODULE_CLIENT_CHECKS:
+            changed = copy.deepcopy(self.evidence)
+            changed["checks"][name] = False
+            with self.subTest(check=name), self.assertRaises(ValueError):
+                self.verify(changed)
 
     def test_accepts_exact_client_checks_bound_to_compiled_installer_and_sources(self):
         self.verify(self.evidence)

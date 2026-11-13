@@ -16,6 +16,7 @@ import tempfile
 from typing import Any, Mapping
 
 from nipat.errors import ValidationError
+from nipat.scientific_options import normalize_config
 from nipat.distribution import WINDOWS_DIRECTORY, UNIX_DIRECTORY
 from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout
@@ -28,6 +29,7 @@ WORKFLOW_KEYS = {
     "1": frozenset({"mode", "reference", "panel", "parallel"}),
     "2": frozenset({"mode", "reference", "panel"}),
     "3": frozenset({"mode", "panel"}),
+    "n": frozenset({"mother_prefix", "father_prefix", "child_prefix", "popfreq", "panel"}),
     "4": frozenset({"mother_prefix", "father_prefix", "popfreq", "cutoff_mode",
                     "panel", "cutoffs", "cutoff_map", "err_const"}),
 }
@@ -128,18 +130,18 @@ def _workflow_values(choice: str, values: Any, *, stored: bool = False) -> dict[
             if not isinstance(value, str) or value not in allowed:
                 raise ValidationError(f"Selezione {key} non valida.")
             normalized[key] = value
-        elif key in {"mother_prefix", "father_prefix"}:
+        elif key in {"mother_prefix", "father_prefix", "child_prefix"}:
             prefix = _text(value, key, empty=True)
             if any(char in prefix for char in "/\\"):
                 raise ValidationError("I prefissi non possono contenere separatori di cartella.")
             normalized[key] = prefix
         elif key == "err_const":
             try:
-                valid_number = type(value) in {int, float} and math.isfinite(value) and value >= 0
+                valid_number = type(value) in {int, float} and math.isfinite(value) and 0 < value <= 1
             except OverflowError:
                 valid_number = False
             if not valid_number:
-                raise ValidationError("La costante di errore deve essere finita e maggiore o uguale a zero.")
+                raise ValidationError("La costante di errore deve essere finita, maggiore di zero e non superiore a uno.")
             normalized[key] = float(value)
         elif key == "cutoffs":
             normalized[key] = _cutoffs(value, stored=stored)
@@ -158,8 +160,10 @@ class Preferences:
     update_channel: str = "testing"
     check_updates_on_startup: bool = False
     execution: dict[str, Any] = field(default_factory=dict)
+    scientific_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "scientific_settings", normalize_config(self.scientific_settings))
         if not isinstance(self.update_channel, str) or self.update_channel not in {"stable", "testing"}:
             raise ValidationError("Canale aggiornamenti non valido: scegliere stable o testing.")
         if type(self.check_updates_on_startup) is not bool:
@@ -240,12 +244,13 @@ class Preferences:
                 "runs_dir": str(self.runs_dir) if self.runs_dir is not None else None,
                 "workflows": workflows, "update_channel": self.update_channel,
                 "check_updates_on_startup": self.check_updates_on_startup,
-                "execution": deepcopy(self.execution)}
+                "execution": deepcopy(self.execution),
+                "scientific_settings": deepcopy(self.scientific_settings)}
 
     @classmethod
     def from_dict(cls, document: Any) -> "Preferences":
         allowed = {"schema_version", "data_dir", "runs_dir", "workflows",
-                   "update_channel", "check_updates_on_startup", "execution"}
+                   "update_channel", "check_updates_on_startup", "execution", "scientific_settings"}
         if (not isinstance(document, dict) or document.keys() - allowed
                 or type(document.get("schema_version")) is not int
                 or document["schema_version"] != SCHEMA_VERSION):
@@ -260,7 +265,8 @@ class Preferences:
         return cls(**directories, workflows=normalized,
                    update_channel=document.get("update_channel", "testing"),
                    check_updates_on_startup=document.get("check_updates_on_startup", False),
-                   execution=document.get("execution", {}))
+                   execution=document.get("execution", {}),
+                   scientific_settings=document.get("scientific_settings", {}))
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

@@ -4,12 +4,16 @@
 # pileup adapter; bound parsing and parallel read aggregation; preserve the
 # upstream counts, natural-log likelihood model, genotype and indel semantics.
 # The byte-identical upstream source is frozen in tests/reference_r/2.0.
+# NIPAT 0.8.50: configured Other threshold and effective-settings sidecar.
 suppressPackageStartupMessages({
   library(optparse)
   library(tidyverse)
 })
 
 source(Sys.getenv("NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
+source(Sys.getenv("NIPAT_SETTINGS_HELPER", unset = file.path(dirname(Sys.getenv(
+  "NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R")), "settings.R")))
+nipat_cfg <- nipat_settings("snp-call")
 
 nipat_snp_empty <- function(panel) {
   data.frame(chr = panel$chr, pos = as.integer(panel$pos),
@@ -444,7 +448,7 @@ other_fraction <- with(
   N_Altro / (N_Reference + N_Alternative + N_Altro)
 )
 dataframe_final$GT[
-  which(!is.na(other_fraction) & other_fraction >= 0.1)
+  which(!is.na(other_fraction) & other_fraction >= nipat_cfg$other_fraction_max)
 ] <- NA_character_
 # Attach indel statistics without changing previous columns.
 indel_idx <- match(
@@ -499,6 +503,7 @@ nipat_snp_main <- function() {
   arguments <- parse_args(OptionParser(option_list = options))
   if (is.null(arguments$pileup) || is.null(arguments$snplist))
     stop("Required: --pileup --snplist --out")
+  nipat_write_settings("snp-call", nipat_cfg, dirname(arguments$out))
   cat(">> SNPcall 2.0 started\n")
   started <- unname(proc.time()[["elapsed"]])
   resident_start <- nipat_snp_memory_mb()

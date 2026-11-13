@@ -62,7 +62,7 @@ def check_readable(run: Path, *, artifact_root: Path | None = None) -> dict:
                        for value in headers]
         for row in expected[1:]:
             for number, header in enumerate(headers):
-                if header in {"Pair", "individuo", "sample"}:
+                if header in {"Pair", "Trio", "individuo", "sample"}:
                     row[number] = config["replacements"].get(row[number], row[number])
         if export["sample"]:
             expected[0].insert(0, "Sample")
@@ -85,9 +85,16 @@ def check_readable(run: Path, *, artifact_root: Path | None = None) -> dict:
             labels = [config["samples"][export["sample"]]]
         elif source.endswith(("DNPs_covered_UpSet_plot.pdf", "SNPs_covered_UpSet_plot.pdf")):
             labels = list(config["samples"].values())
-        elif config["workflow"] == "cpi":
-            labels = (list(config["pairs"].values()) if source.endswith("All_CPIplots.pdf") else
-                      [config["pairs"][Path(source).name.removesuffix("_CPIplot.pdf")]])
+        elif config["workflow"] in {"cpi", "cpin"}:
+            if source.endswith("All_CPIplots.pdf"):
+                labels = list(config["pairs"].values())
+            else:
+                stem = Path(source).name.removesuffix("_CPIplot.pdf")
+                matches = [label for identity, label in config["pairs"].items()
+                           if stem == identity or stem.startswith(identity + "_")]
+                if len(matches) != 1:
+                    raise ValueError(f"Ambiguous family identity in plot: {source}")
+                labels = matches
         for label in labels:
             if "".join(unicodedata.normalize("NFC", label).split()) not in "".join(text.split()):
                 raise ValueError(f"Original sample label missing inside PDF {source}: {label!r}\n{text}")
@@ -234,6 +241,16 @@ def main() -> int:
             "popfreq": "/inputs/pop_allFreq.txt", "err_const": ERR, "cutoff_mode": "all", "cutoffs": []},
             {name: f'{"Madre" if name.startswith("Mother") else "Padre"} à {index}_' + "IonXpress_008_" * 13 + ".txt"
              for index, name in enumerate(names)}, "cpi")
+    for marker in ("SNP", "DNP"):
+        cpin = PROJECT / "tests/fixtures/cpin" / marker
+        names = ("MotherM1", "FatherF1", "ChildC1")
+        execute(identifier, root, cpin, {
+            "workflow": "cpin", "marker_type": marker,
+            "samples": [{"path": f"/inputs/{name}.txt", "name": name + ".txt"} for name in names],
+            "trios": "M1:F1:C1", "mother_prefix": "Mother", "father_prefix": "Father",
+            "child_prefix": "Child", "popfreq": "/inputs/population.txt",
+        }, {"MotherM1": 'Madre à "M".txt', "FatherF1": "Padre β.txt", "ChildC1": "Figlio è.txt"},
+           "cpin-" + marker.lower())
     check_plan(identifier, root, inputs)
     if any(digest(path) != expected for path, expected in original.items()):
         raise ValueError("Presentation regression modified an original input")

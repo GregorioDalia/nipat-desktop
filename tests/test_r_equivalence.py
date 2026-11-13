@@ -162,24 +162,16 @@ class REquivalenceTests(unittest.TestCase):
         arguments = next(csv.reader([verification.mount(path, "/inputs", readonly=True)]))
         self.assertEqual(arguments, ["type=bind", f"source={path}", "target=/inputs", "readonly"])
 
-    def test_cases_cover_all_workflows_without_private_bam(self):
+    def test_cases_cover_invariant_callers_without_private_bam(self):
         cases = verification.cases()
         self.assertEqual({case.workflow for case in cases}, set(verification.SCRIPTS))
         self.assertEqual(len({case.name for case in cases}), len(cases))
         self.assertTrue(any("--parallel" in case.arguments for case in cases))
-        self.assertTrue(any(case.name == "contamination-panel-only" for case in cases))
-        self.assertTrue(any(case.name == "cpi-zero-error" for case in cases))
+        self.assertEqual(set(verification.SCRIPTS), {"dnp-call", "snp-call"})
         self.assertTrue(any(case.name == "dnp-varied-qualities" for case in cases))
         self.assertTrue(any(case.name == "snp-extra-columns" for case in cases))
         self.assertTrue({"snp-varied-qualities", "snp-overlapping-windows", "snp-zero-coverage"}
                         <= {case.name for case in cases})
-        shared = next(case for case in cases if case.name == "cpi-shared-parents")
-        pairs = shared.arguments[shared.arguments.index("--pairs") + 1].split(",")
-        self.assertEqual(len(pairs), len(set(pairs)))
-        self.assertTrue(any(left.split(":")[0] == right.split(":")[0]
-                            for left, right in zip(pairs, pairs[1:])))
-        self.assertTrue(any(left.split(":")[1] == right.split(":")[1]
-                            for left, right in zip(pairs, pairs[1:])))
         selected = [case for case in cases if case.name in verification.PARALLEL_CASES]
         self.assertEqual({case.workflow for case in selected}, set(verification.SCRIPTS))
         concurrent = [case for case in cases if case.name in verification.CONCURRENT_CASES]

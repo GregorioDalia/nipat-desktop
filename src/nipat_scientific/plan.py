@@ -1,7 +1,7 @@
 """Validate a scientific workflow plan without reading files or executing tools.
 
-Version 1 is a deliberately small contract for the four bundled workflows.
-Dependencies arise only from typed DNP output references. It is not a shell,
+Version 1 is a deliberately small contract for the five bundled workflows.
+Dependencies arise only from typed SNP/DNP output references. It is not a shell,
 template language, or generic task scheduler. The executor consumes this contract
 separately; validation itself never runs an analysis.
 """
@@ -19,8 +19,8 @@ from nipat_scientific.presentation import normalize_presentation
 
 
 SCHEMA_VERSION = 1
-WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi"})
-SAMPLE_KINDS = frozenset({"bam", "dnp-table", "snp-pileup"})
+WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi", "cpin"})
+SAMPLE_KINDS = frozenset({"bam", "dnp-table", "snp-table", "snp-pileup"})
 _IDENTIFIER = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,63}\Z")
 
 
@@ -88,18 +88,20 @@ def _table_reference(value: object, samples: dict, step_ids: set[str],
     if not isinstance(value, dict):
         _fail("plan.fields", f"{consumer}: expected a table reference object.")
     if set(value) == {"sample"}:
-        sample = _sample(value["sample"], samples, "dnp-table", consumer)
+        sample = _identifier(value["sample"], consumer)
+        if sample not in samples or samples[sample]["kind"] not in {"dnp-table", "snp-table"}:
+            _fail("plan.sample_kind", f"{consumer}: expected a SNP or DNP count table.")
         return {"sample": sample}
     _object(value, {"step", "output", "sample"}, f"{consumer} table reference")
     producer = _identifier(value["step"], f"{consumer} producer")
     if producer not in step_ids:
         _fail("plan.step_missing", f"{consumer}: unknown producer {producer}.")
-    if value["output"] != "dnp-tables":
-        _fail("plan.output_kind", f"{consumer}: only dnp-tables are compatible with this input.")
+    if value["output"] not in {"dnp-tables", "snp-tables"}:
+        _fail("plan.output_kind", f"{consumer}: only dnp-tables and snp-tables are compatible with this input.")
     sample = _identifier(value["sample"], f"{consumer} output sample")
     dependencies[consumer].add(producer)
-    references.append((consumer, producer, sample))
-    return {"step": producer, "output": "dnp-tables", "sample": sample}
+    references.append((consumer, producer, sample, value["output"]))
+    return {"step": producer, "output": value["output"], "sample": sample}
 
 
 def _reference_key(reference: dict) -> tuple:
@@ -156,7 +158,7 @@ def validate_plan(document: object) -> dict:
     Input fields are schema_version, samples and steps, with optional presentation. The return value
     is a validation report: {schema_version, plan, execution_order}. Its ``plan``
     can be validated again unchanged; the report itself is not a request.
-    Every scientific parameter supported by this contract must be explicit.
+    Scientific overrides are validated against the shared readable registry.
     """
     fields = {"schema_version", "samples", "steps"}
     _object(document, fields | ({"presentation"} if isinstance(document, dict) and "presentation" in document else set()), "Plan")
@@ -191,7 +193,20 @@ def validate_plan(document: object) -> dict:
         identifier, workflow = step["id"], step["workflow"]
         if not isinstance(workflow, str) or workflow not in WORKFLOWS:
             _fail("plan.workflow", f"{identifier}: unknown workflow.")
-        inputs, parameters = step["inputs"], step["parameters"]
+        inputs = step["inputs"]
+        if not isinstance(step["parameters"], dict):
+            _fail("plan.fields", f"{identifier}: parameters must be an object.")
+        parameters = dict(step["parameters"])
+        scientific_settings = parameters.pop("scientific_settings", None)
+        marker_type = parameters.pop("marker_type", None)
+        if marker_type is not None and (not isinstance(marker_type, str) or marker_type not in {"SNP", "DNP"}):
+            _fail("plan.marker_type", f"{identifier}: marker_type must be SNP or DNP.")
+        if scientific_settings is not None:
+            from nipat_scientific.settings import normalize_settings
+            try:
+                scientific_settings = normalize_settings(workflow, scientific_settings)
+            except ValidationError as exc:
+                _fail("plan.parameter", str(exc))
         selected = {}
         values = {}
         if workflow == "dnp-call":
@@ -231,15 +246,15 @@ def validate_plan(document: object) -> dict:
             if len(tables) != len({_reference_key(table) for table in tables}):
                 _fail("plan.duplicate", f"{identifier}: duplicate input table.")
             selected = {"samples": tables, "panel": _path(inputs["panel"], f"{identifier} panel")}
-        else:
+        elif workflow == "cpi":
             _object(inputs, {"pairs", "popfreq", "cutoffs"}, identifier)
-            _object(parameters, {"err_const", "cutoff_mode"}, f"{identifier} parameters")
-            error = parameters["err_const"]
+            _object(parameters, {"cutoff_mode"} | ({"err_const"} if "err_const" in parameters else set()), f"{identifier} parameters")
+            error = parameters.get("err_const")
             try:
                 valid_error = type(error) in {int, float} and math.isfinite(error) and error >= 0
             except OverflowError:
                 valid_error = False
-            if not valid_error:
+            if error is not None and not valid_error:
                 _fail("plan.parameter", f"{identifier}: err_const must be finite and nonnegative.")
             pairs, pair_ids, pair_keys, mothers, fathers = [], [], set(), set(), set()
             for pair in _list(inputs["pairs"], f"{identifier} pairs"):
@@ -266,21 +281,79 @@ def validate_plan(document: object) -> dict:
                 _fail("plan.roles", f"{identifier}: inconsistent mother cfDNA/father roles across pairs.")
             selected = {"pairs": pairs, "popfreq": _path(inputs["popfreq"], f"{identifier} popfreq"),
                         "cutoffs": _cutoffs(inputs["cutoffs"], parameters["cutoff_mode"], identifier)}
-            values = {"err_const": error, "cutoff_mode": parameters["cutoff_mode"]}
+            values = {"cutoff_mode": parameters["cutoff_mode"]}
+            if error is not None:
+                values["err_const"] = error
+        else:
+            _object(inputs, {"trios", "popfreq", "markers"}, identifier)
+            _object(parameters, set(), f"{identifier} parameters")
+            trios, ids, combinations = [], [], set()
+            role_samples = {role: set() for role in ("mother", "father", "child")}
+            for trio in _list(inputs["trios"], f"{identifier} trios"):
+                _object(trio, {"id", "mother", "father", "child"}, f"{identifier} trio")
+                trio_id = _identifier(trio["id"], f"{identifier} trio id")
+                ids.append(trio_id)
+                row = {"id": trio_id}
+                for role in role_samples:
+                    row[role] = _table_reference(trio[role], samples, set(step_ids), identifier, dependencies, references)
+                    role_samples[role].add(row[role]["sample"])
+                identity = tuple(row[role]["sample"] for role in role_samples)
+                if len(set(identity)) != 3:
+                    _fail("plan.roles", f"{identifier}: mother, father and child must be distinct samples.")
+                if identity in combinations:
+                    _fail("plan.duplicate", f"{identifier}: duplicate trio.")
+                combinations.add(identity)
+                trios.append(row)
+            _unique(ids, f"{identifier} trios")
+            roles = list(role_samples.values())
+            if any(roles[a] & roles[b] for a in range(3) for b in range(a + 1, 3)):
+                _fail("plan.roles", f"{identifier}: inconsistent roles across trios.")
+            selected = {"trios": trios, "popfreq": _path(inputs["popfreq"], f"{identifier} popfreq"),
+                        "markers": _path(inputs["markers"], f"{identifier} markers") if inputs["markers"] is not None else None}
+        if scientific_settings is not None:
+            values["scientific_settings"] = scientific_settings
+        if marker_type is not None:
+            values["marker_type"] = marker_type
         normalized[identifier] = {"id": identifier, "workflow": workflow,
                                   "inputs": selected, "parameters": values}
 
     order = _order(dependencies)
-    for consumer, producer, sample in references:
+    for consumer, producer, sample, kind in references:
         source = normalized[producer]
-        if source["workflow"] != "dnp-call":
-            _fail("plan.output_kind", f"{consumer}: {producer} does not produce dnp-tables.")
-        if sample not in source["inputs"]["samples"]:
+        expected_workflow = "snp-call" if kind == "snp-tables" else "dnp-call"
+        if source["workflow"] != expected_workflow:
+            _fail("plan.output_kind", f"{consumer}: {producer} does not produce {kind}.")
+        produced_samples = ([source["inputs"]["sample"]] if expected_workflow == "snp-call" else source["inputs"]["samples"])
+        if sample not in produced_samples:
             _fail("plan.output_sample", f"{consumer}: {producer} does not produce sample {sample}.")
+    for step in normalized.values():
+        if step["workflow"] in {"dnp-call", "snp-call"}:
+            continue
+        inp = step["inputs"]
+        refs = (inp["samples"] if step["workflow"] == "contamination" else
+                [family[role] for family in inp.get("pairs", inp.get("trios", []))
+                 for role in (("mother", "father", "child") if step["workflow"] == "cpin" else ("mother", "father"))])
+        kinds = {("SNP" if ref["output"] == "snp-tables" else "DNP") if "step" in ref else
+                 ("SNP" if samples[ref["sample"]]["kind"] == "snp-table" else "DNP") for ref in refs}
+        if len(kinds) != 1:
+            _fail("plan.marker_type", f"{step['id']}: SNP and DNP tables must be analyzed separately.")
+        inferred = kinds.pop()
+        declared = step["parameters"].get("marker_type", inferred)
+        if declared != inferred:
+            _fail("plan.marker_type", f"{step['id']}: declared marker type differs from its inputs.")
+        step["parameters"]["marker_type"] = inferred
+        if step["workflow"] == "cpi" and "err_const" in step["parameters"]:
+            from nipat_scientific.settings import normalize_settings
+            overrides = dict(step["parameters"].get("scientific_settings", {}))
+            overrides[f"err_const_{inferred.lower()}"] = step["parameters"]["err_const"]
+            try:
+                step["parameters"]["scientific_settings"] = normalize_settings("cpi", overrides)
+            except ValidationError as exc:
+                _fail("plan.parameter", str(exc))
     presentation = None
     if "presentation" in document:
-        pair_ids = {pair["id"] for step in normalized.values() if step["workflow"] == "cpi"
-                    for pair in step["inputs"]["pairs"]}
+        pair_ids = {family["id"] for step in normalized.values() if step["workflow"] in {"cpi", "cpin"}
+                    for family in step["inputs"].get("pairs", step["inputs"].get("trios", []))}
         try:
             presentation = normalize_presentation(document["presentation"], set(samples), pair_ids)
         except ValidationError as exc:

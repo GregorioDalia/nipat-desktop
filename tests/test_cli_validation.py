@@ -141,16 +141,16 @@ class WizardTests(unittest.TestCase):
         self.workflows.cpi.assert_called_once_with(
             input_dir=self.samples, pairs='M1:F1', mother_prefix='Plasma_', father_prefix='',
             popfreq=self.popfreq, panel=None, cutoffs=None, cutoff_map=None,
-            err_const=DEFAULT_ERR_CONST, run_name=None)
+            err_const=None, run_name=None)
 
     def test_cpi_repeated_cutoffs_and_numeric_validation(self):
         result, messages = self.invoke(self.cpi_answers() + [
             '2', '0.3', self.panel, '0.5', self.panel, '',
-            'bad', 'nan', 'inf', '-1', '0', '', '1', '0', '0'])
+            'bad', 'nan', 'inf', '-1', '0', '0.001', '', '1', '0', '0'])
         self.assertEqual(result, 0)
         args = self.workflows.cpi.call_args.kwargs
         self.assertEqual(args['cutoffs'], [('0.3', self.panel), ('0.5', self.panel)])
-        self.assertEqual(args['err_const'], 0.0)
+        self.assertEqual(args['err_const'], 0.001)
         self.assertIsNone(args['panel'])
         self.assertEqual(messages.count('numero finito maggiore o uguale a zero'), 4)
 

@@ -78,6 +78,16 @@ class DnpEngineTests(unittest.TestCase):
         self.assertEqual((self.run / "work/bamlist.txt").read_text().splitlines(),
                          [Path(sample["path"]).as_posix() for sample in samples])
 
+    def test_scientific_settings_are_validated_before_staging(self):
+        for settings in ({"other_fraction_max": -0.1}, {"max_depth": -1},
+                         {"unsupported": 1}, {"min_base_quality": True}):
+            with self.subTest(settings=settings):
+                self.assert_rejected_without_writes({**self.request, "scientific_settings": settings})
+        prepared = prepare_dnp({**self.request, "scientific_settings": {
+            "other_fraction_max": 0.05, "min_base_quality": 20,
+        }})
+        self.assertEqual(prepared.working_dir, self.run)
+
     def test_panel_at_first_base_fails_before_staging_or_output_creation(self):
         self.panel.write_text("chr1\t1\t2\tAC\tGT\n", encoding="utf-8")
         before = self.snapshot()

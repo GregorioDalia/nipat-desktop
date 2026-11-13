@@ -77,7 +77,7 @@ class PreferencesTests(unittest.TestCase):
                                           "panel": panel, "parallel": "2"})
                      .with_workflow("4", {"mother_prefix": "", "father_prefix": "Father_",
                                           "popfreq": "popfreq.txt", "cutoff_mode": "2",
-                                          "cutoffs": [("A", panel)], "err_const": 0.0}))
+                                          "cutoffs": [("A", panel)], "err_const": 0.001}))
             self.store.save(prefs)
         with chdir(self.project):
             loaded = PreferencesStore(self.store.path).load()
@@ -323,7 +323,7 @@ class PreferencesTests(unittest.TestCase):
             result = main(["cpi", "--input-dir", "samples", "--pairs", "A:A", "--popfreq", "pop.txt"])
         self.assertEqual(result, 0)
         store.assert_not_called()
-        self.assertEqual(workflows.cpi.call_args.kwargs["err_const"], DEFAULT_ERR_CONST)
+        self.assertIsNone(workflows.cpi.call_args.kwargs["err_const"])
         self.assertEqual(workflows.cpi.call_args.kwargs["mother_prefix"], "Mother")
 
 

@@ -84,13 +84,13 @@ def nonnegative_integer(value: str, path: Path, number: int, column: str, *, pos
         raise ValidationError(f"{path.name}: riga {number}, {column} deve essere un intero {condition}.") from exc
 
 
-def locus_key(row: dict, path: Path, number: int) -> tuple[str, int, int]:
+def locus_key(row: dict, path: Path, number: int, marker_type: str | None = None) -> tuple:
     chromosome = row["chr"].strip()
     if not chromosome or any(char.isspace() for char in chromosome):
         raise ValidationError(f"{path.name}: riga {number}, cromosoma non valido.")
     positions = tuple(nonnegative_integer(row[name], path, number, name, positive=True)
-                      for name in ("pos1", "pos2"))
-    if positions[1] <= positions[0]:
+                      for name in (("pos",) if marker_type == "SNP" or (marker_type is None and "pos" in row) else ("pos1", "pos2")))
+    if len(positions) == 2 and positions[1] <= positions[0]:
         raise ValidationError(f"{path.name}: riga {number}, pos2 deve essere maggiore di pos1.")
     return chromosome, *positions
 
@@ -99,10 +99,27 @@ def _warning(path: Path, number: int, code: str, message: str) -> dict:
     return {"code": code, "path": str(path), "row": number, "message": message}
 
 
-def _counts(path: Path, *, cpi: bool) -> list[dict]:
+def detect_marker_type(path: Path) -> str:
+    columns = set(tabular_header(path, whitespace=True))
+    snp, dnp = "pos" in columns, {"pos1", "pos2"}.issubset(columns)
+    if snp == dnp or "chr" not in columns:
+        raise ValidationError(f"{path.name}: attese coordinate SNP chr/pos oppure DNP chr/pos1/pos2.")
+    return "SNP" if snp else "DNP"
+
+
+def require_count_input(path: Path, marker_type: str | None = None, *, cpi: bool = True) -> list[dict]:
+    return _counts(path, cpi=cpi, marker_type=marker_type)
+
+
+def _counts(path: Path, *, cpi: bool, marker_type: str | None = None) -> list[dict]:
     seen = set()
     warnings = []
-    required = DNP_OUTPUT_COLUMNS if cpi else CONTAMINATION_COLUMNS
+    detected = detect_marker_type(path)
+    if marker_type is not None and marker_type != detected:
+        raise ValidationError(f"{path.name}: atteso {marker_type}, trovato {detected}.")
+    marker_type = detected
+    coordinates = {"chr", "pos"} if marker_type == "SNP" else {"chr", "pos1", "pos2"}
+    required = coordinates | {"N_REF", "N_ALT", "N_Other"} | ({"REF", "ALT", "total_count"} if cpi else set())
     for number, row in table_rows(path, required, "Input CPI non compatibile" if cpi else
                                   "Input contamination non compatibile", whitespace=cpi):
         key = locus_key(row, path, number)
@@ -125,8 +142,10 @@ def _counts(path: Path, *, cpi: bool) -> list[dict]:
         if cpi:
             for name in ("REF", "ALT"):
                 allele = row[name]
-                if len(allele) != 2 or set(allele.upper()) - set("ACGT"):
-                    raise ValidationError(f"{path.name}: riga {number}, {name} deve essere un dinucleotide A/C/G/T.")
+                if len(allele) != (1 if marker_type == "SNP" else 2) or set(allele.upper()) - set("ACGT"):
+                    raise ValidationError(f"{path.name}: riga {number}, {name} non valido per marcatori {marker_type} (A/C/G/T).")
+        if cpi and row["REF"].upper() == row["ALT"].upper():
+            raise ValidationError(f"{path.name}: riga {number}, REF e ALT devono essere distinti.")
         if "ratio_REF_ALT" in row:
             raw = row["ratio_REF_ALT"].strip()
             if raw in {"NA", "NaN", ""}:
@@ -149,13 +168,17 @@ def _counts(path: Path, *, cpi: bool) -> list[dict]:
 
 def require_dnp_input(path: Path) -> list[dict]:
     """Check imported CPI/DNP count tables; never repair or deduplicate data."""
-    return _counts(path, cpi=True)
+    return _counts(path, cpi=True, marker_type="DNP")
 
 
-def require_population_frequencies(path: Path) -> list[dict]:
+def require_population_frequencies(path: Path, marker_type: str | None = None) -> list[dict]:
     seen = set()
     warnings = []
-    for number, row in table_rows(path, POPFREQ_COLUMNS, "Frequenze di popolazione non compatibili"):
+    detected = detect_marker_type(path)
+    if marker_type is not None and detected != marker_type:
+        raise ValidationError(f"{path.name}: frequenze {detected} incompatibili con {marker_type}.")
+    coordinates = {"chr", "pos"} if detected == "SNP" else {"chr", "pos1", "pos2"}
+    for number, row in table_rows(path, coordinates | {"Ref_f.pop", "Alt_f.pop"}, "Frequenze di popolazione non compatibili"):
         key = locus_key(row, path, number)
         if key in seen:
             raise ValidationError(f"{path.name}: riga {number}, coordinate duplicate nelle frequenze: {key}.")
@@ -165,14 +188,11 @@ def require_population_frequencies(path: Path) -> list[dict]:
             try:
                 # This decimal-comma mode is part of the native CPI interface.
                 value = float(row[column].replace(",", "."))
-                if not math.isfinite(value) or not 0 <= value <= 1:
+                if not math.isfinite(value) or not 0 < value <= 1:
                     raise ValueError
             except ValueError as exc:
                 raise ValidationError(f"{path.name}: riga {number}, {column} deve essere finita tra 0 e 1.") from exc
             values.append(value)
-        if 0 in values:
-            warnings.append(_warning(path, number, "input.zero_population_frequency",
-                "A population frequency is zero; CPI may divide by zero for an informative locus."))
         if not math.isclose(sum(values), 1.0, rel_tol=0, abs_tol=1e-6):
             warnings.append(_warning(path, number, "input.frequency_sum",
                 "REF and ALT frequencies do not sum to one; their interpretation requires domain review."))

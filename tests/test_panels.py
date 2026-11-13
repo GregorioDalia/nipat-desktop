@@ -25,9 +25,9 @@ class PanelTests(unittest.TestCase):
             self.assertEqual(
                 destination.read_text(encoding="utf-8").splitlines(),
                 [
-                    "n°DNP\tchr\tpos1\tpos2",
-                    "DNP001\tchr1\t10\t11",
-                    "DNP002\tchr2\t20\t21",
+                    "chr\tpos1\tpos2\tREF\tALT",
+                    "chr1\t10\t11\tAC\tGT",
+                    "chr2\t20\t21\tAA\tCC",
                 ],
             )
 

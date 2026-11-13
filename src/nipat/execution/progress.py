@@ -164,7 +164,7 @@ class ProgressObserver:
 
 
 _WORKFLOW_LABELS = {"dnp-call": "DNPcall", "snp-call": "SNPcall",
-                    "contamination": "Contamination", "cpi": "CPI"}
+                    "contamination": "Contamination", "cpi": "CPI", "cpin": "CPIN"}
 
 
 _PHASE_LABELS = {

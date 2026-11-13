@@ -160,6 +160,13 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Verify updated CPI Contamination and CPIN models
+        env:
+          TMPDIR: ${{ runner.temp }}/nipat-five-modules-check
+        run: |
+          mkdir -p "$TMPDIR"
+          set -o pipefail
+          python scripts/verify_five_modules.py --image "$NIPAT_RUNTIME_IMAGE" --output "$TMPDIR/artifacts" --full 2>&1 | tee "$TMPDIR/verification.log"
       - name: Compare scientific cores with immutable versioned references
         env:
           TMPDIR: ${{ runner.temp }}/nipat-r-equivalence-check
@@ -255,6 +262,7 @@ jobs:
             ${{ runner.temp }}/nipat-presentation-check/
             ${{ runner.temp }}/nipat-performance-check/
             ${{ runner.temp }}/nipat-r-equivalence-check/
+            ${{ runner.temp }}/nipat-five-modules-check/
             build/quality/
           retention-days: 14
           if-no-files-found: ignore

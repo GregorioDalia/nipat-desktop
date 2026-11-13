@@ -25,7 +25,10 @@ _PARAMETERS = {"reference": "Genoma di riferimento", "panel": "Pannello", "snp_p
                "contamination_panel": "Pannello Contamination", "parallel": "Opzione parallela del codice storico",
                "popfreq": "Frequenze di popolazione", "err_const": "Costante di errore",
                "cutoff_mode": "Selezione dei siti CPI", "cutoffs": "Pannelli CPI",
-               "mother_prefix": "Prefisso materno", "father_prefix": "Prefisso paterno",
+               "mother_prefix": "Prefisso materno", "father_prefix": "Prefisso paterno", "child_prefix": "Prefisso del figlio",
+               "trios": "Trii CPIN", "caller": "Caller selezionato", "analyses": "Analisi successive",
+               "scientific_settings_requested": "Parametri scientifici richiesti",
+               "scientific_settings_effective": "Parametri scientifici del piano",
                "pairs": "Coppie CPI", "mode": "Modalità di input", "preset": "Workflow automatico",
                "input_dir": "Cartella degli input", "bamlist": "Lista BAM"}
 
@@ -352,6 +355,37 @@ def _performance_section(run_dir: Path, metadata: dict) -> str:
     return "\n".join(body)
 
 
+def _scientific_settings_section(run_dir: Path) -> str:
+    """Expose actual run parameters and readable constants from fixed owned files."""
+    paths = [("Analisi", "work/effective-scientific-settings.json")]
+    try:
+        steps = _performance_file(run_dir, "output/workflow/steps")
+        if steps.is_dir():
+            for entry in sorted(islice(steps.iterdir(), _MAX_PARALLEL_STEPS), key=lambda item: item.name):
+                if entry.is_dir():
+                    paths.append((entry.name, f"output/workflow/steps/{entry.name}/work/effective-scientific-settings.json"))
+    except (OSError, ValueError):
+        pass
+    sections = []
+    for label, relative in paths:
+        try:
+            path = _performance_file(run_dir, relative)
+            if not path.is_file():
+                continue
+            document = _read_json(path)
+            if document.get("schema_version") != 1 or not isinstance(document.get("parameters"), dict) or not isinstance(document.get("constants"), dict):
+                continue
+            rows = [[key, value] for key, value in document["parameters"].items()]
+            constants = [[key, value] for key, value in document["constants"].items()]
+            sections.append(f"<h3>{html.escape(label)} — {html.escape(str(document.get('workflow', '')))}</h3>" +
+                            _table(["Parametro effettivo", "Valore"], rows) +
+                            (_table(["Costante del modello", "Definizione"], constants) if constants else "") +
+                            f"<p><a href='{quote(relative)}'>Parametri e costanti registrati (JSON)</a></p>")
+        except (OSError, ValueError, RecursionError):
+            continue
+    return "<h2>Parametri scientifici e costanti</h2>" + "".join(sections) if sections else ""
+
+
 def write_run_report(run_dir: Path) -> dict:
     """Write a local HTML report and TSV map after final run metadata is saved.
 
@@ -401,7 +435,7 @@ def write_run_report(run_dir: Path) -> dict:
     modern_parallel = isinstance(options, dict) and "execution_mode" in options
     if isinstance(parameters, dict):
         values = [[_PARAMETERS.get(key, key), value] for key, value in parameters.items()
-                  if key not in {"sample_mapping", "bams", "inputs", "expected_steps"}
+                  if key not in {"sample_mapping", "bams", "inputs", "expected_steps", "plan"}
                   and not (key == "parallel" and modern_parallel)]
         if values:
             body.extend(["<h2>Impostazioni registrate</h2>", _table(["Impostazione", "Valore"], values)])
@@ -437,6 +471,7 @@ def write_run_report(run_dir: Path) -> dict:
                 ["Massimo di loci per blocco DNP", options.get("dnp_block_loci")],
             ]), "<p>I MiB del blocco descrivono l'input grezzo, non la RAM occupata dal processo. "
                 "La modalità seriale usa un processo di calcolo alla volta, anche se il massimo richiesto è maggiore.</p>"])
+    body.append(_scientific_settings_section(run_dir))
     body.append(_parallel_section(run_dir, metadata))
     commands = metadata.get("commands")
     if isinstance(commands, list):

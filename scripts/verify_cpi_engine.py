@@ -43,13 +43,17 @@ def summary_rows(run: Path) -> tuple[list[str], list[dict[str, str]]]:
 def check_summary(run: Path, expected: dict[tuple[str, str | None], dict]) -> None:
     fields, rows = summary_rows(run)
     with_cutoff = any(label is not None for _, label in expected)
-    expected_fields = {"Pair", *EXPECTED_INFORMATIVE}
+    expected_fields = {"Pair", *EXPECTED_INFORMATIVE, "Error_constant", "Min_fetal_reads", "Marker_type"}
     if with_cutoff:
         expected_fields.add("Cutoff")
     keys = [(row.get("Pair"), row.get("Cutoff")) for row in rows]
     if set(fields) != expected_fields or len(rows) != len(expected) or set(keys) != set(expected):
         raise ValueError(f"Unexpected CPI summary columns, pairs or cutoffs in {run}: {rows}.")
     for row, key in zip(rows, keys):
+        if row["Marker_type"] != "DNP":
+            raise ValueError(f"Unexpected marker metadata in {run}: {row}.")
+        check_number(row, "Min_fetal_reads", 2)
+        check_number(row, "Error_constant", float(expected[key].get("Error_constant", DEFAULT_ERR_CONST)))
         for field, wanted in expected[key].items():
             if wanted == "NA":
                 if row[field] != "NA":
@@ -88,9 +92,18 @@ def check_staging(run: Path, samples: dict[str, Path], panels: dict[str, tuple[i
                      if path.name == "DNPpanel.txt" or path.name.startswith("cutoff_")}
     if actual_panels != set(panels):
         raise ValueError(f"Unexpected CPI prepared panels in {run}: {actual_panels}.")
+    alleles = {100: ("AA", "CC"), 200: ("GG", "TT"), 300: ("AC", "GT"), 400: ("CC", "AA")}
     for name, positions in panels.items():
-        if (run / "work" / name).read_text(encoding="utf-8") != normalized_panel(positions):
+        with (run / "work" / name).open(encoding="utf-8") as handle:
+            rows = list(csv.DictReader(handle, delimiter="\t"))
+        if (len(rows) != len(positions) or any(
+                row["chr"] != "chr1" or row["pos1"] != str(position) or row["pos2"] != str(position + 1)
+                or row["n°DNP"] != f"DNP{number:03d}"
+                for number, (row, position) in enumerate(zip(rows, positions), 1))):
             raise ValueError(f"CPI panel preparation differs from expected coordinates: {name}.")
+        for row, position in zip(rows, positions):
+            if ("REF" in row or "ALT" in row) and (row.get("REF"), row.get("ALT")) != alleles[position]:
+                raise ValueError(f"CPI panel preparation changed alleles: {name}.")
 
 
 def assert_originals(originals: dict[Path, bytes]) -> None:
@@ -238,6 +251,7 @@ def mismatch_expected(error: str, pairs: tuple[str, ...]) -> dict:
     if len(matching) != 1:
         raise ValueError(f"Missing unique mismatch oracle for err_const={error}.")
     values = {key: value for key, value in matching[0].items() if key != "err_const"}
+    values["Error_constant"] = error
     return {(pair, None): values for pair in pairs}
 
 
@@ -250,7 +264,7 @@ def check_cpi_error_constant(identifier: str, root: Path, workflow: Workflows, l
     originals = {path: path.read_bytes() for path in inputs.iterdir()}
     expected_pairs = ("MotherM-FatherP_DNPs", "MotherM-FatherQ_DNPs")
     with patch.dict(os.environ, {"NIPAT_RUNTIME_IMAGE": identifier, "NIPAT_BACKEND": "native"}):
-        for error in ("0.01", "0.1", "0"):
+        for error in ("0.01", "0.1"):
             run = workflow.cpi(
                 input_dir=inputs, pairs="M:P,M:Q", mother_prefix="", father_prefix="",
                 popfreq=inputs / "population.tsv", err_const=float(error),
@@ -268,6 +282,15 @@ def check_cpi_error_constant(identifier: str, root: Path, workflow: Workflows, l
                         if Path(entry["host_path"]).name in ("M.txt", "P.txt", "Q.txt")]
             if len(selected) != 3:
                 raise ValueError("CPI must mount each selected sample once despite reused maternal input.")
+        from nipat.errors import ValidationError
+        try:
+            workflow.cpi(input_dir=inputs, pairs="M:P", mother_prefix="", father_prefix="",
+                         popfreq=inputs / "population.tsv", err_const=0,
+                         run_name="complete-cpi-error-zero-rejected")
+        except ValidationError:
+            pass
+        else:
+            raise ValueError("Updated CPI must reject a zero mismatch constant.")
     assert_originals(originals)
-    print("PASS: CPI err_const 0.01/0.1/0 gives independently predicted log10 summaries and NA handling; "
+    print("PASS: CPI err_const 0.01/0.1 gives independently predicted log10 summaries; zero is rejected; "
           "empty prefixes and shared mother preserve both pairs.", flush=True)

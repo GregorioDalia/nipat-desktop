@@ -25,10 +25,10 @@ so `CPI_medianFF` is the log10 CPI at threshold 2.
   median round to −2.048, and `CPI_medianFF` rounds to −2.699.
 - At `e = 0.1`, they are −0.698970 and −0.397940; their mean and median round to
   −0.548, and `CPI_medianFF` rounds to −0.699.
-- At `e = 0`, CPI is zero and native R represents log10 CPI and its summaries
-  as `NA`. Site counts and fetal fraction remain 2 and 5%, respectively.
+- The mathematical boundary `e = 0` would give CPI zero. The updated model
+  requires `0 < e <= 1`, so the packaged check rejects zero before execution.
 
-The image check runs all three settings through the public client workflow and
+The image check runs both valid settings through the public client workflow and
 its `execute cpi` request, with empty prefixes. Reusing the
 same maternal input across `M:P` and `M:Q` must stage that input only once while
 retaining both pair outputs. The expected rows are a mathematical oracle, not

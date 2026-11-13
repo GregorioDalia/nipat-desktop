@@ -22,6 +22,7 @@ WINDOWS_CLIENT_CHECKS = {
     "wizard_navigation", "composed_workflow_plans", "snp_batch_plans",
     "read_only_input_mounts", "original_inputs_unchanged",
 }
+FIVE_MODULE_CLIENT_CHECKS = {"scientific_settings", "cpin_dry_run", "five_module_plan"}
 DEPENDENCY_CHECKS = {
     "dependencies_initially_absent", "apt_installs_required_packages",
     "installed_cli_help_and_version", "no_automatic_docker_access",
@@ -47,7 +48,10 @@ def installation_checks(version):
         "This review contract supports NIPAT 0.6, 0.7 and 0.8")
     require(not version.startswith("0.8.") or (re.fullmatch(r"0\.8\.[0-9]+", version) and int(version.split(".")[2]) >= 2),
             "The official 0.8 review contract starts at 0.8.2")
-    return INSTALLATION_CHECKS | (WORKFLOW_INSTALLATION_CHECKS if not version.startswith("0.6.") else set())
+    checks = INSTALLATION_CHECKS | (WORKFLOW_INSTALLATION_CHECKS if not version.startswith("0.6.") else set())
+    if tuple(map(int, version.split(".")[:2])) == (0, 8) and int(version.split(".")[2]) >= 50:
+        checks = (checks - {"all_four_workflows"}) | {"all_five_workflows"}
+    return checks
 
 
 def requires_reliability_evidence(version):
@@ -181,7 +185,10 @@ def verify_windows_client_check(evidence, manifest, manifest_bytes, *, installer
             and all(type(evidence.get(key)) is type(value) and evidence.get(key) == value
                     for key, value in expected.items()), "Windows client evidence mismatch")
     checks = evidence["checks"]
-    require(isinstance(checks, dict) and set(checks) == WINDOWS_CLIENT_CHECKS
+    current = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", manifest["version"])
+    required_checks = WINDOWS_CLIENT_CHECKS | (FIVE_MODULE_CLIENT_CHECKS
+        if current and tuple(map(int, current.groups())) >= (0, 8, 50) else set())
+    require(isinstance(checks, dict) and set(checks) == required_checks
             and all(value is True for value in checks.values()),
             "A required Windows client check is missing or failed")
     inventory = json.loads(inventory_bytes.decode("utf-8-sig"))

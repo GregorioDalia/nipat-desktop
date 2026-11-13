@@ -216,7 +216,7 @@ class WorkflowPlanTests(unittest.TestCase):
         self.assert_invalid(plan, "plan.roles")
 
     def test_cpi_parameter_and_cutoff_modes_preserve_native_contract(self):
-        for value in (-1, float("nan"), float("inf"), True, "0.01", 10 ** 1000):
+        for value in (0, -1, float("nan"), float("inf"), True, "0.01", 10 ** 1000):
             with self.subTest(error=str(value)[:20]):
                 plan = example_plan()
                 plan["steps"][0]["parameters"]["err_const"] = value
@@ -228,11 +228,11 @@ class WorkflowPlanTests(unittest.TestCase):
         ):
             with self.subTest(mode=mode):
                 plan = example_plan()
-                plan["steps"][0]["parameters"].update(err_const=0, cutoff_mode=mode)
+                plan["steps"][0]["parameters"].update(err_const=0.0001, cutoff_mode=mode)
                 plan["steps"][0]["inputs"]["cutoffs"] = cutoffs
                 result = validate_plan(plan)["plan"]["steps"][2]
                 self.assertEqual(result["inputs"]["cutoffs"], cutoffs)
-                self.assertEqual(result["parameters"]["err_const"], 0)
+                self.assertEqual(result["parameters"]["err_const"], 0.0001)
         for mode, cutoffs, code in (
             ("unknown", [], "plan.cutoff_mode"), ("panel", [], "plan.cutoff_mode"),
             ("named", [], "plan.cutoff_mode"),

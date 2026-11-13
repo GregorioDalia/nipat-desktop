@@ -86,7 +86,7 @@ class WorkflowExecutionTests(unittest.TestCase):
                     encoding="utf-8",
                 )
         elif Path(command[1]).name == "contamination.R":
-            selected, output = Path(command[-2]), Path(command[-1])
+            selected, output = Path(command[3]), Path(command[4])
             rows = []
             for source in sorted(selected.iterdir()):
                 with source.open(encoding="utf-8") as handle:
@@ -97,7 +97,7 @@ class WorkflowExecutionTests(unittest.TestCase):
                 )
                 rows.append(f"{source.stem}\t1\t0\tNA\n")
             (output / "contamination_summary.txt").write_text(
-                "individuo\tinformative_DNPs\tmean_contamination\tsd_contamination\n" + "".join(rows),
+                "individuo\tinformative_sites\tmean_contamination\tsd_contamination\n" + "".join(rows),
                 encoding="utf-8",
             )
         else:
@@ -110,7 +110,7 @@ class WorkflowExecutionTests(unittest.TestCase):
             ]
             columns = ["Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
                        "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI",
-                       "Median_logCPI", "Mean_logCPI", "CPI_medianFF"]
+                       "Median_logCPI", "Mean_logCPI", "CPI_medianFF", "Error_constant", "Min_fetal_reads", "Marker_type"]
             if cutoff_argument is not None:
                 columns.insert(1, "Cutoff")
             plots = output / "plots"
@@ -123,7 +123,7 @@ class WorkflowExecutionTests(unittest.TestCase):
                     native_pair = f"Mother{mother}-Father{father}_DNPs"
                     for cutoff in cutoffs:
                         row = {name: "NA" for name in columns}
-                        row.update(Pair=native_pair, N_sites_mother="0", N_sites_father="0")
+                        row.update(Pair=native_pair, N_sites_mother="0", N_sites_father="0", Error_constant="0.0001", Min_fetal_reads="3", Marker_type="DNP")
                         if cutoff is not None:
                             row["Cutoff"] = cutoff
                         writer.writerow(row)
@@ -272,7 +272,7 @@ class WorkflowExecutionTests(unittest.TestCase):
         def malformed(command, cwd, log_path):
             self.fake_r(command, cwd, log_path)
             if Path(command[1]).name == "contamination.R":
-                path = Path(command[-1]) / "contamination_summary.txt"
+                path = Path(command[4]) / "contamination_summary.txt"
                 path.write_text(path.read_text(encoding="utf-8").replace("table_0001", "unregistered"), encoding="utf-8")
             return 0
         result = self.execute(malformed)

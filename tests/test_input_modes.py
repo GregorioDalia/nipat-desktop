@@ -69,6 +69,7 @@ class InputModeTests(unittest.TestCase):
         request = json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
         self.assertEqual(request, {
             "schema_version": 1, "workflow": "snp-call", "mode": "pileup",
+            "scientific_settings": {},
             "presentation": {"samples": {"sample_0001": pileup.name}, "pairs": {}},
             "panel": "/workspace/inputs/snp-list.tsv",
             "pileup": "/workspace/inputs/snp-pileup.txt", "bam": None, "reference": None,
@@ -175,9 +176,9 @@ class InputModeTests(unittest.TestCase):
     def cpi_request(self, run):
         return json.loads((run / "work/engine-request.json").read_text(encoding="utf-8"))
 
-    def test_cpi_all_delegates_to_engine_with_zero_error_and_no_host_staging(self):
+    def test_cpi_all_delegates_to_engine_with_explicit_error_and_no_host_staging(self):
         args = self.cpi_args()
-        run = self.workflows.cpi(**args, err_const=0)
+        run = self.workflows.cpi(**args, err_const=0.01)
         command = self.runner.calls[0]
         self.assertEqual(command, [
             "python3", "/opt/nipat/engine/main.py", "execute", "cpi", "--request",
@@ -192,7 +193,7 @@ class InputModeTests(unittest.TestCase):
             ],
             "pairs": args["pairs"], "mother_prefix": "Mother", "father_prefix": "Father",
             "popfreq": "/workspace/inputs/population.tsv", "cutoff_mode": "all",
-            "cutoffs": [], "err_const": 0,
+            "cutoffs": [], "err_const": 0.01, "marker_type": "DNP", "scientific_settings": {},
             "work_dir": str(self.layout.container_path(run / "work")),
             "out_dir": str(self.layout.container_path(run / "output")),
         })
@@ -289,13 +290,12 @@ class InputModeTests(unittest.TestCase):
                          ["Informative.txt", "--Padre è $= Informative.txt"])
         self.assertEqual({path: path.read_bytes() for path in original_dir.iterdir()}, before)
 
-    def test_cpi_identical_sample_for_both_roles_has_one_selected_file(self):
+    def test_cpi_identical_sample_for_both_roles_is_rejected(self):
         args = self.cpi_args()
         args.update(pairs="Informative:Informative", father_prefix="Mother")
-        run = self.workflows.cpi(**args)
-        self.assertEqual([sample["name"] for sample in self.cpi_request(run)["samples"]],
-                         ["MotherInformative.txt"])
-        self.assertEqual(len(self.runner.records[0]["mounts"].mappings), 2)
+        with self.assertRaisesRegex(ValidationError, "campioni distinti"):
+            self.workflows.cpi(**args)
+        self.assertEqual(self.runner.calls, [])
 
     def test_cpi_rejects_duplicate_pairs_and_cutoff_labels_before_run(self):
         args = self.cpi_args()
@@ -317,7 +317,7 @@ class InputModeTests(unittest.TestCase):
 
     def test_cpi_rejects_nonfinite_negative_or_boolean_error_before_run(self):
         args = self.cpi_args()
-        for value in (-1, float("inf"), float("nan"), 10 ** 1000, True, False, "0.2", None):
+        for value in (-1, 0, float("inf"), float("nan"), 10 ** 1000, True, False, "0.2"):
             with self.subTest(value=value), self.assertRaisesRegex(ValidationError, "costante di errore"):
                 self.workflows.cpi(**args, err_const=value)
         self.assertEqual(self.runner.calls, [])

@@ -124,10 +124,10 @@ class StandaloneProgressTests(unittest.TestCase):
     def test_all_standalone_workflows_enter_request_sample_context(self):
         from types import SimpleNamespace
         for workflow, function in (("dnp-call", "dnp.prepare_dnp"), ("snp-call", "snp.prepare_snp"),
-                                   ("contamination", "contamination.prepare_contamination"), ("cpi", "cpi.prepare_cpi")):
+                                   ("contamination", "contamination.prepare_contamination"), ("cpi", "cpi.prepare_cpi"), ("cpin", "cpin.prepare_cpin")):
             with self.subTest(workflow=workflow):
                 request = self.root / (workflow + ".json")
-                request.write_text(json.dumps({"workflow": workflow, "presentation": {
+                request.write_text(json.dumps({"workflow": workflow, "marker_type": "DNP", "work_dir": str(self.root / workflow / "work"), "presentation": {
                     "samples": {"sample_0001": "original.bam"}}}))
                 prepared = (SimpleNamespace(native_arguments=[], working_dir=Path.cwd(), preparation_command=None)
                             if workflow in {"snp-call", "dnp-call"} else [])
@@ -141,7 +141,7 @@ class StandaloneProgressTests(unittest.TestCase):
         events = self.events()
         self.assertEqual({row["workflow"] for row in events}, set(self.engine.SCRIPT_PATHS))
         self.assertTrue(all(row["sample_ids"] == ["sample_0001"] for row in events))
-        self.assertEqual(len(events), 8)
+        self.assertEqual(len(events), 10)
 
     def test_invalid_json_still_returns_engine_error_without_traceback(self):
         request = self.root / "invalid.json"

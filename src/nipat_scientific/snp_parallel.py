@@ -115,13 +115,14 @@ def _merge_record(record, path, *, attempts=_STATE_READ_ATTEMPTS):
 
 
 def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, atomic_json):
-    """Return False for serial/mixed/single-task plans, otherwise finish the batch.
+    """Run all ready SNP callers in a mixed plan within the global budget.
 
     Only the coordinator writes the global state. Fresh worker interpreters
     import the production step runner instead of serializing Python state.
     """
-    steps = plan["steps"]
-    if (os.name != "posix" or len(steps) < 2 or any(step["workflow"] != "snp-call" for step in steps)
+    records = {record["id"]: record for record in state["steps"]}
+    steps = [step for step in plan["steps"] if step["workflow"] == "snp-call" and records[step["id"]]["status"] == "pending"]
+    if (os.name != "posix" or len(steps) < 2
             or os.environ.get("NIPAT_EXECUTION_MODE", "auto") == "serial"
             or os.environ.get("NIPAT_MAX_WORKERS") == "1"
             or os.environ.get("NIPAT_PARALLEL_CHILD") == "1"):
@@ -173,7 +174,8 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
             while next_index < len(steps) and len(active) < budget["workers"]:
                 if cancellation.signum is not None:
                     raise KeyboardInterrupt
-                step, record = steps[next_index], state["steps"][next_index]
+                step = steps[next_index]
+                record = records[step["id"]]
                 identifier = step["id"]
                 job = directory / f"job-{identifier}.json"
                 record_path = directory / f"state-{identifier}.json"

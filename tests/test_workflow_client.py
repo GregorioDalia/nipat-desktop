@@ -249,7 +249,7 @@ class WorkflowClientTests(unittest.TestCase):
         return arguments
 
     def test_cpi_pairs_define_roles_and_only_one_container_with_all_default(self):
-        arguments = self.cpi_arguments(err_const=0)
+        arguments = self.cpi_arguments(err_const=0.001)
         originals = {path: path.read_bytes() for path in self.external.iterdir()}
         run = self.workflows.dnp_cpi(**arguments)
         plan = self.plan(run)
@@ -263,7 +263,10 @@ class WorkflowClientTests(unittest.TestCase):
             "mother": {"step": "dnp", "output": "dnp-tables", "sample": "sample_0001"},
             "father": {"step": "dnp", "output": "dnp-tables", "sample": "sample_0002"},
         }])
-        self.assertEqual(cpi["parameters"], {"err_const": 0, "cutoff_mode": "all"})
+        self.assertEqual(cpi["parameters"]["err_const"], 0.001)
+        self.assertEqual(cpi["parameters"]["cutoff_mode"], "all")
+        self.assertEqual(cpi["parameters"]["scientific_settings"]["err_const_dnp"], 0.001)
+        self.assertEqual(cpi["parameters"]["marker_type"], "DNP")
         self.assertEqual(cpi["inputs"]["cutoffs"], [])
         self.assertEqual(len(self.runner.calls), 1)
         self.assertEqual(self.runner.calls[0][0][2], "execute-plan")
@@ -441,7 +444,8 @@ class WorkflowClientTests(unittest.TestCase):
                                    "inputs": {"sample": f"sample_{number:04d}",
                                               "reference": "/workspace/inputs/reference/genome.fa",
                                               "panel": "/workspace/inputs/snp-list.tsv"},
-                                   "parameters": {"mode": "bam"}})
+                                   "parameters": {"mode": "bam", "scientific_settings":
+                                                      step["parameters"]["scientific_settings"]}})
         self.assertEqual(plan["steps"][1]["inputs"]["samples"][0]["step"], "dnp")
         record = self.runner.records[0][1]
         self.assertEqual(record["bundled_workflow"], "workflow-plan-with-snp")
@@ -500,7 +504,7 @@ class WorkflowClientTests(unittest.TestCase):
         plan = self.plan(run)
         self.assertEqual([sample["kind"] for sample in plan["samples"]], ["snp-pileup", "snp-pileup"])
         self.assertTrue(all(step["inputs"]["reference"] is None for step in plan["steps"]))
-        self.assertTrue(all(step["parameters"] == {"mode": "pileup"} for step in plan["steps"]))
+        self.assertTrue(all(step["parameters"]["mode"] == "pileup" for step in plan["steps"]))
         record = self.runner.records[0][1]
         self.assertEqual(record["parameters"]["reference"], None)
         self.assertEqual(record["parameters"]["pileups"], [str(first), str(second)])

@@ -44,6 +44,32 @@ class ResultsTests(unittest.TestCase):
     def save_metadata(self):
         (self.run / "run.json").write_text(json.dumps(self.metadata), encoding="utf-8")
 
+    def test_five_module_analysis_uses_validated_plan_and_shows_cpin_roles(self):
+        from test_workflow_five_modules import plan_for
+        from nipat_scientific.plan import validate_plan
+        from nipat.results import _workflow_steps
+        plan = validate_plan(plan_for("SNP", called=False))["plan"]
+        expected = [{"id": step["id"], "workflow": step["workflow"]} for step in plan["steps"]]
+        self.metadata.update(workflow="analysis", parameters={"plan": plan, "expected_steps": expected,
+            "sample_mapping": [{"sample_id": item["id"], "original_path": item["path"], "container_path": item["path"]}
+                               for item in plan["samples"]]})
+        self.save_metadata()
+        self.assertEqual(_workflow_steps(self.metadata), expected)
+        root = self.run / "output/workflow"
+        root.mkdir()
+        (root / "workflow-state.json").write_text(json.dumps({"schema_version": 1,
+            "interface": "workflow-plan-execution-v2", "status": "succeeded",
+            "steps": [{**step, "status": "succeeded"} for step in expected]}))
+        ui = FakeTerminal(["2", "0"])
+        show_results(ui, self.run)
+        text = "\n".join(ui.lines)
+        self.assertIn("CPIN: Completata", text)
+        self.assertIn("CPIN trio_family (SNP)", text)
+        self.assertIn("Figlio (child): child.tsv", text)
+        self.metadata["parameters"]["expected_steps"][0]["id"] = "../../outside"
+        with self.assertRaises(ValueError):
+            _workflow_steps(self.metadata)
+
     def test_success_opens_only_the_explicitly_selected_locations(self):
         ui, opener = FakeTerminal(["1", "3", "4", "0"]), Mock()
         show_results(ui, self.run, open_path=opener)
@@ -183,7 +209,7 @@ class ResultsTests(unittest.TestCase):
         root = self.run / "output" / "workflow"
         root.mkdir(exist_ok=True)
         state = {
-            "schema_version": 1, "interface": "workflow-plan-execution-v1",
+            "schema_version": 1, "interface": "workflow-plan-execution-v2",
             "status": "cancelled" if status == "interrupted" else status,
             "steps": [
                 {"id": "dnp", "workflow": "dnp-call", "status": dnp},

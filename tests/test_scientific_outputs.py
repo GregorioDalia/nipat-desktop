@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -29,6 +31,27 @@ class ScientificOutputTests(unittest.TestCase):
                         + "\t0\t0\tNA\tNA\n", encoding="utf-8")
         write_snp_auxiliary(self.output)
         return path
+
+    def test_scientific_settings_sidecar_must_match_schema_parameters_and_constants(self):
+        from nipat_scientific.settings import normalize_settings, describe_settings
+        self.snp("1")
+        self.request["scientific_settings"] = {"other_fraction_max": 0.25}
+        document = {"schema_version": 1, "workflow": "snp-call",
+            "parameters": normalize_settings("snp-call", self.request["scientific_settings"]),
+            "constants": describe_settings("snp-call")["constants"]}
+        path = self.output / "scientific-settings.json"
+        path.write_text(json.dumps(document))
+        self.assertIn("scientific-settings", validate_standalone_outputs(self.request))
+        for mutation in (lambda value: value.update(schema_version=999),
+                         lambda value: value["parameters"].update(other_fraction_max=0.9),
+                         lambda value: value["parameters"].update(max_depth=False),
+                         lambda value: value.update(constants={}),
+                         lambda value: value.update(workflow="dnp-call")):
+            invalid = copy.deepcopy(document)
+            mutation(invalid)
+            path.write_text(json.dumps(invalid))
+            with self.assertRaises(PlanExecutionError):
+                validate_standalone_outputs(self.request)
 
     def test_expected_na_and_anomalous_estimates_have_distinct_outcomes(self):
         for value, count, expected in (("NA", 0, None), ("NA", 1, "output.missing_estimate"),
@@ -97,7 +120,7 @@ class ScientificOutputTests(unittest.TestCase):
         request = {"workflow": "contamination", "samples": [{"name": "sample.txt"}],
                    "work_dir": str(self.root / "work"), "out_dir": str(self.output)}
         summary = self.output / "contamination_summary.txt"
-        summary.write_text("individuo\tinformative_DNPs\tmean_contamination\tsd_contamination\n"
+        summary.write_text("individuo\tinformative_sites\tmean_contamination\tsd_contamination\n"
                            "sample\t1\t0.01\tNA\n", encoding="utf-8")
         table = self.output / "contamination_sample.txt"
         table.write_text("chr\tpos1\tpos2\tcontamination\nchr1\t10\t11\t0.01\n", encoding="utf-8")
@@ -105,7 +128,7 @@ class ScientificOutputTests(unittest.TestCase):
         table.write_text("chr\tpos1\tpos2\tcontamination\n", encoding="utf-8")
         with self.assertRaisesRegex(PlanExecutionError, "site count"):
             validate_standalone_outputs(request)
-        summary.write_text("individuo\tinformative_DNPs\tmean_contamination\tsd_contamination\n"
+        summary.write_text("individuo\tinformative_sites\tmean_contamination\tsd_contamination\n"
                            "sample\t1\t0.01\n", encoding="utf-8")
         with self.assertRaises(PlanExecutionError):
             validate_standalone_outputs(request)

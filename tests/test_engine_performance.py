@@ -225,7 +225,7 @@ class EnginePerformanceTests(unittest.TestCase):
 
     def test_engine_execute_keeps_native_command_and_return_code_with_diagnostics(self):
         request = self.root / "request.json"
-        request.write_text(json.dumps({"workflow": "contamination", "work_dir": str(self.root / "work"),
+        request.write_text(json.dumps({"workflow": "contamination", "marker_type": "DNP", "work_dir": str(self.root / "work"),
                                        "out_dir": str(self.root / "output")}))
         recorded = []
         for enabled in (False, True):

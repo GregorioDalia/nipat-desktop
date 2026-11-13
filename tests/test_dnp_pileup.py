@@ -11,6 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from nipat_scientific import dnp_pileup
+from nipat_scientific.settings import settings_context
 
 
 FAKE_SAMTOOLS = r'''
@@ -119,6 +120,24 @@ class DnpPileupTests(unittest.TestCase):
         self.assertEqual(result['staged_bytes'], 0)
         self.assertEqual(list(self.scratch.iterdir()), [self.output])
         self.assertEqual(json.loads(self.metadata.read_text()), result)
+
+    def test_custom_acquisition_settings_apply_with_and_without_budget(self):
+        self.samples([True, True])
+        settings = {"min_base_quality": 21, "min_mapping_quality": 17, "max_depth": 500,
+                    "baq": False, "count_overlaps": True, "include_orphans": True}
+        for budget in (None, {"schema_version": 1, "interface": "nipat-parallel-v1",
+                             "mode": "serial", "workers": 1}):
+            with self.subTest(budget=budget), settings_context("dnp-call", settings, self.root / "settings"):
+                result = self.generate(budget)
+                command = [entry["args"] for entry in self.commands() if entry["stage"] == "mpileup"][-1]
+                for flag, expected in (("-Q", "21"), ("-q", "17"), ("-d", "500")):
+                    self.assertEqual(command[command.index(flag) + 1], expected)
+                for flag in ("-B", "-x", "-A"):
+                    self.assertIn(flag, command)
+                    self.assertIn(flag, result["mpileup_options"])
+                self.assertEqual(result["scientific_settings"]["min_base_quality"], 21)
+            self.output.unlink()
+            self.metadata.unlink()
 
     def test_multiple_inputs_keep_order_duplicate_names_and_staging_cost(self):
         self.samples([True, False, True])

@@ -30,6 +30,11 @@ quindi differire da quelli delle versioni di NIPAT precedenti alla 0.8.30.
 Le [note della 0.8.35](docs/RELEASE_0.8.35.md) descrivono funzionalità,
 aggiornamento e limiti delle verifiche.
 
+**In sviluppo: 0.8.50, non pubblicata.** Aggiunge CPIN, aggiorna CPI e
+Contamination per SNP/DNP e rende configurabili i parametri scientifici.
+La [guida di sviluppo](docs/DEVELOPMENT_0.8.50.md) descrive tutti i workflow,
+le associazioni familiari e la consultazione di parametri e costanti.
+
 ## Download
 
 Scaricare **un solo pacchetto**, scegliendo sistema e architettura.

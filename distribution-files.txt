@@ -411,3 +411,29 @@ tests/test_snp_parallel.py
 
 # SNP batch state recovery and expanded package qualification (0.8.35).
 docs/RELEASE_0.8.35.md
+
+# Five scientific modules and configurable scientific settings (0.8.50 development).
+docs/DEVELOPMENT_0.8.50.md
+src/nipat/scientific_options.py
+src/nipat/execution/analysis_plan.py
+src/nipat_scientific/cpin.py
+src/nipat_scientific/settings.py
+src/nipat_scientific/settings.R
+src/nipat_scientific/settings_data.json
+src/nipat_scientific/catalog_data/cpin.json
+scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R
+scientific/vendor/NEWPAT/CPI_postnatal/README.md
+scripts/verify_cpin_update.py
+tests/fixtures/cpin/DNP/ChildC1.txt
+tests/fixtures/cpin/DNP/FatherF1.txt
+tests/fixtures/cpin/DNP/MotherM1.txt
+tests/fixtures/cpin/DNP/markers.tsv
+tests/fixtures/cpin/DNP/population.txt
+tests/fixtures/cpin/README.md
+tests/fixtures/cpin/SNP/ChildC1.txt
+tests/fixtures/cpin/SNP/FatherF1.txt
+tests/fixtures/cpin/SNP/MotherM1.txt
+tests/fixtures/cpin/SNP/markers.tsv
+tests/fixtures/cpin/SNP/population.txt
+src/nipat/analysis_forms.py
+docs/validation/0.8.50-development.json

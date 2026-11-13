@@ -98,9 +98,9 @@ class WizardGuidanceTests(unittest.TestCase):
 
     def test_empty_cutoff_label_and_file_wait_without_losing_entries(self):
         form, ui = self.collect("4", [self.root, "A1:A1", "", "", self.popfreq,
-                                       "2", "", "0", "", self.panel, "", "0", ""])
+                                       "2", "", "0", "", self.panel, "", "0.001", ""])
         self.assertEqual(form.arguments()["cutoffs"], [("0", self.panel)])
-        self.assertEqual(form.arguments()["err_const"], 0)
+        self.assertEqual(form.arguments()["err_const"], 0.001)
         self.assert_no_errors(ui)
 
     def test_invalid_files_still_fail_validation_and_keep_previous_items(self):

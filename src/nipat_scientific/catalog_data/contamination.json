@@ -3,8 +3,8 @@
   "workflow": "contamination",
   "source": {
     "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
-    "sha256": "d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26",
-    "line_count": 328
+    "sha256": "3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0",
+    "line_count": 300
   },
   "public_parameters": [
     {
@@ -26,14 +26,14 @@
         ],
         "mapping": "adapted"
       },
-      "description": {
-        "it": "Pannello delle coordinate DNP. Selezionabile da CLI e menu; NIPAT ne prepara una copia normalizzata senza modificare l'originale.",
-        "en": "DNP coordinate panel. Selectable in the CLI and menu; NIPAT prepares a normalized copy without changing the original."
-      },
       "source_lines": [
-        16,
-        22
-      ]
+        18,
+        20
+      ],
+      "description": {
+        "it": "Pannello SNP o DNP; coordinate e alleli sono preservati nella copia normalizzata.",
+        "en": "SNP or DNP panel; coordinates and alleles are retained in the normalized copy."
+      }
     },
     {
       "id": "input_path",
@@ -55,14 +55,14 @@
         ],
         "mapping": "adapted"
       },
-      "description": {
-        "it": "R accetta un file o una cartella. NIPAT accetta file ripetuti oppure una cartella ricorsiva e passa a R una cartella di copie con estensione .txt.",
-        "en": "R accepts a file or directory. NIPAT accepts repeated files or a recursive directory and passes a directory of .txt copies to R."
-      },
       "source_lines": [
-        16,
-        22
-      ]
+        18,
+        20
+      ],
+      "description": {
+        "it": "File o cartella di tabelle dei conteggi, con selezione ricorsiva .txt.",
+        "en": "File or count-table directory, with recursive .txt selection."
+      }
     },
     {
       "id": "output_dir",
@@ -82,61 +82,81 @@
         "request_fields": [
           "out_dir"
         ],
-        "mapping": "managed"
-      },
-      "description": {
-        "it": "NIPAT crea una nuova cartella di run e usa la sottocartella output come destinazione R; i nomi delle tabelle scientifiche restano definiti dallo script.",
-        "en": "NIPAT creates a new run directory and uses its output subdirectory as the R destination; scientific table names remain defined by the script."
+        "mapping": "adapted"
       },
       "source_lines": [
-        16,
-        24
-      ]
+        18,
+        20
+      ],
+      "description": {
+        "it": "Cartella nuova dei risultati.",
+        "en": "New results directory."
+      }
+    },
+    {
+      "id": "include_zero",
+      "r_names": [
+        "--include_zero",
+        "--exclude_zero"
+      ],
+      "position": null,
+      "type": "boolean",
+      "default": true,
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--set",
+          "--scientific-config"
+        ],
+        "request_fields": [
+          "scientific_settings.include_zero"
+        ],
+        "mapping": "adapted"
+      },
+      "source_lines": [
+        22,
+        37
+      ],
+      "description": {
+        "it": "Include per impostazione predefinita i loci con zero letture inattese; l’esclusione modifica siti, media e deviazione standard.",
+        "en": "Includes sites with zero unexpected reads by default; exclusion changes site count, mean and standard deviation."
+      }
     }
   ],
   "fixed_settings": [
     {
-      "id": "panel_header_detection",
+      "id": "marker_detection",
       "kind": "format",
       "value": {
-        "normalized_required_names": [
+        "SNP": [
+          "chr",
+          "pos"
+        ],
+        "DNP": [
           "chr",
           "pos1",
           "pos2"
         ],
-        "normalization": "lowercase; remove non-alphanumeric characters"
-      },
-      "description": {
-        "it": "L'intestazione del pannello viene riconosciuta normalizzando i nomi delle colonne; chr, pos1 e pos2 devono essere identificabili.",
-        "en": "The panel header is recognized by normalizing column names; chr, pos1 and pos2 must be identifiable."
-      },
-      "source_lines": [
-        26,
-        62
-      ]
-    },
-    {
-      "id": "headerless_panel_layout",
-      "kind": "format",
-      "value": {
-        "required_first_columns": [
-          "chr",
-          "pos1",
-          "pos2"
+        "headerless_columns": [
+          2,
+          3,
+          4,
+          5
         ],
-        "optional_columns": {
-          "4": "REF",
-          "5": "ALT"
-        }
-      },
-      "description": {
-        "it": "Senza intestazione, le prime tre colonne contengono le coordinate; la quarta e la quinta, se presenti, sono denominate REF e ALT.",
-        "en": "Without a header, the first three columns contain coordinates; the fourth and fifth, if present, are named REF and ALT."
+        "optional": [
+          "REF",
+          "ALT"
+        ]
       },
       "source_lines": [
-        64,
-        102
-      ]
+        39,
+        83
+      ],
+      "description": {
+        "it": "Rilevamento del formato del pannello e coordinate dinamiche.",
+        "en": "Panel format detection and dynamic coordinate keys."
+      }
     },
     {
       "id": "native_directory_selection",
@@ -144,621 +164,312 @@
       "value": {
         "pattern": "\\.txt$",
         "recursive": true,
-        "exclude_panel": true
-      },
-      "description": {
-        "it": "R cerca ricorsivamente i nomi terminanti in .txt, con corrispondenza sensibile alle maiuscole, ed esclude il percorso del pannello. Un file indicato direttamente non è selezionato tramite tale pattern.",
-        "en": "R recursively selects names ending in .txt, with case-sensitive matching, and excludes the panel path. A directly supplied file is not selected through this pattern."
+        "exclude_panel": true,
+        "duplicate_basenames": "rejected ignoring case"
       },
       "source_lines": [
-        104,
-        131
-      ]
+        85,
+        112
+      ],
+      "description": {
+        "it": "Selezione ricorsiva dei campioni con esclusione del pannello e nomi univoci.",
+        "en": "Recursive sample selection excluding the panel and requiring unique names."
+      }
     },
     {
       "id": "input_table_schema",
       "kind": "format",
       "value": {
-        "delimiter": "\\t",
-        "header": true,
-        "required_columns": [
-          "chr",
-          "pos1",
-          "pos2",
+        "coordinates": "SNP or DNP",
+        "counts": [
           "N_REF",
           "N_ALT",
           "N_Other"
         ],
-        "fill": true
-      },
-      "description": {
-        "it": "Le tabelle richiedono coordinate e tre conteggi con questi nomi esatti. REF, ALT, GT e ratio_REF_ALT non sono colonne obbligatorie.",
-        "en": "Tables require coordinates and three counts under these exact names. REF, ALT, GT and ratio_REF_ALT are not required columns."
+        "count_values": "finite nonnegative integers",
+        "ratio": "optional"
       },
       "source_lines": [
-        142,
-        174
-      ]
-    },
-    {
-      "id": "numeric_conversion",
-      "kind": "format",
-      "value": [
-        "pos1",
-        "pos2",
-        "N_REF",
-        "N_ALT",
-        "N_Other"
+        124,
+        184
       ],
       "description": {
-        "it": "Coordinate e conteggi vengono convertiti in numeri; le righe con valori mancanti dopo la conversione vengono successivamente filtrate.",
-        "en": "Coordinates and counts are converted to numbers; rows with missing values after conversion are subsequently filtered."
-      },
-      "source_lines": [
-        176,
-        185
-      ]
+        "it": "I conteggi sono validati prima dei filtri.",
+        "en": "Counts are validated before filtering."
+      }
     },
     {
-      "id": "supplied_ratio_precedence",
-      "kind": "assumption",
-      "value": {
-        "column": "ratio_REF_ALT",
-        "recompute_when_present": false
-      },
-      "description": {
-        "it": "Se ratio_REF_ALT è presente, R usa quel valore convertito in numero e non ne verifica la concordanza con i conteggi. La tabella deve mantenerli coerenti.",
-        "en": "If ratio_REF_ALT is present, R uses that value after numeric conversion and does not check agreement with the counts. The table must keep them consistent."
-      },
-      "source_lines": [
-        187,
-        202
-      ]
-    },
-    {
-      "id": "computed_reference_ratio",
+      "id": "reference_ratio",
       "kind": "formula",
       "value": {
-        "expression": "N_REF / (N_REF + N_ALT)",
-        "condition": "N_REF + N_ALT > 0",
-        "otherwise": "NA"
-      },
-      "description": {
-        "it": "Quando la colonna manca, il rapporto REF viene calcolato sui soli conteggi REF e ALT; con somma non positiva viene impostato a NA.",
-        "en": "When the column is absent, the REF ratio is calculated from REF and ALT counts alone; a nonpositive sum produces NA."
+        "supplied_ratio_REF_ALT": "preserved",
+        "otherwise": "N_REF/(N_REF+N_ALT)",
+        "zero_depth": "excluded"
       },
       "source_lines": [
-        192,
-        202
-      ]
-    },
-    {
-      "id": "complete_positive_depth_rows",
-      "kind": "filter",
-      "value": {
-        "not_na": [
-          "chr",
-          "pos1",
-          "pos2",
-          "N_REF",
-          "N_ALT",
-          "N_Other",
-          "ratio_REF_ALT"
-        ],
-        "required": "N_REF + N_ALT > 0"
-      },
+        173,
+        205
+      ],
       "description": {
-        "it": "Si escludono valori mancanti nei campi elencati e siti senza somma REF+ALT positiva. Questo filtro non aggiunge controlli di interezza o non negatività per ogni singolo conteggio.",
-        "en": "Missing values in the listed fields and sites without a positive REF+ALT sum are excluded. This filter does not add integer or nonnegativity checks for each individual count."
-      },
-      "source_lines": [
-        207,
-        218
-      ]
-    },
-    {
-      "id": "panel_match",
-      "kind": "filter",
-      "value": {
-        "join": "semi_join",
-        "keys": [
-          "chr",
-          "pos1",
-          "pos2"
-        ]
-      },
-      "description": {
-        "it": "Si mantengono solo le righe con coordinate presenti nel pannello. Il confronto non usa REF e ALT e non elimina eventuali righe ripetute del campione.",
-        "en": "Only rows whose coordinates occur in the panel are retained. Matching does not use REF or ALT and does not remove repeated sample rows."
-      },
-      "source_lines": [
-        220,
-        225
-      ]
+        "it": "Il rapporto fornito prevale; se assente è calcolato dai conteggi.",
+        "en": "A supplied ratio takes precedence; otherwise it is computed from counts."
+      }
     },
     {
       "id": "other_ratio",
       "kind": "formula",
-      "value": "N_Other / (N_REF + N_ALT)",
-      "description": {
-        "it": "Il rapporto delle altre letture usa REF+ALT come denominatore, non la profondità totale.",
-        "en": "The other-read ratio uses REF+ALT as its denominator, not total depth."
-      },
+      "value": "N_Other/(N_REF+N_ALT+N_Other)",
       "source_lines": [
-        227,
-        231
-      ]
-    },
-    {
-      "id": "other_ratio_maximum",
-      "kind": "filter",
-      "value": {
-        "maximum": 0.1,
-        "inclusive": true,
-        "exclude_na": true
-      },
+        212,
+        221
+      ],
       "description": {
-        "it": "Sono ammessi rapporti delle altre letture minori o uguali a 0,1, pari al 10% di REF+ALT.",
-        "en": "Other-read ratios at or below 0.1, equal to 10% of REF+ALT, are retained."
-      },
-      "source_lines": [
-        232,
-        235
-      ]
+        "it": "Il denominatore aggiornato include anche le letture Other; la soglia other_fraction_max è configurabile.",
+        "en": "The updated denominator includes Other reads; other_fraction_max is configurable."
+      }
     },
     {
       "id": "informative_reference_ratio",
       "kind": "filter",
-      "value": {
-        "lower_tail_maximum": 0.1,
-        "upper_tail_minimum": 0.9,
-        "inclusive": true
-      },
-      "description": {
-        "it": "Un sito è informativo se ratio_REF_ALT è almeno 0,9 oppure al massimo 0,1; entrambi i limiti sono inclusi.",
-        "en": "A site is informative when ratio_REF_ALT is at least 0.9 or at most 0.1; both limits are inclusive."
-      },
+      "value": "ratio>=homozygous_ref_min or ratio<=homozygous_alt_max",
       "source_lines": [
-        237,
-        242
-      ]
-    },
-    {
-      "id": "unexpected_read_selection",
-      "kind": "formula",
-      "value": {
-        "condition": "ratio_REF_ALT >= 0.9",
-        "when_true": "N_ALT",
-        "otherwise": "N_REF"
-      },
+        223,
+        229
+      ],
       "description": {
-        "it": "Nei siti a prevalenza REF, le letture inattese sono ALT; negli altri siti informativi sono REF.",
-        "en": "At REF-dominated sites, unexpected reads are ALT; at the other informative sites they are REF."
-      },
-      "source_lines": [
-        243,
-        248
-      ]
+        "it": "Classificazione omozigote con soglie inclusive configurabili.",
+        "en": "Homozygous classification with configurable inclusive thresholds."
+      }
     },
     {
       "id": "site_contamination",
       "kind": "formula",
-      "value": "N_unexpected / (N_REF + N_ALT)",
-      "description": {
-        "it": "La contaminazione per sito è una frazione, non una percentuale, e non include N_Other nel denominatore.",
-        "en": "Per-site contamination is a fraction, not a percentage, and excludes N_Other from the denominator."
+      "value": {
+        "unexpected": "ALT reads for REF homozygote, REF reads otherwise",
+        "proportion": "N_unexpected/(N_REF+N_ALT)"
       },
       "source_lines": [
-        249,
-        250
-      ]
+        230,
+        239
+      ],
+      "description": {
+        "it": "Stima per sito in proporzione, non percentuale.",
+        "en": "Per-site estimate as a proportion, not a percentage."
+      }
     },
     {
-      "id": "mean_contamination",
+      "id": "zero_support_policy",
+      "kind": "filter",
+      "value": "include_zero controls per-site rows, site count, mean and SD",
+      "source_lines": [
+        238,
+        245
+      ],
+      "description": {
+        "it": "Gli zeri inclusi contribuiscono alle statistiche; NA rimane distinto da zero.",
+        "en": "Included zeros contribute to statistics; NA remains distinct from zero."
+      }
+    },
+    {
+      "id": "sample_statistics",
       "kind": "formula",
       "value": {
-        "aggregation": "unweighted arithmetic mean",
-        "na_rm": true,
-        "minimum_sites": 1,
-        "otherwise": "NA"
-      },
-      "description": {
-        "it": "La media attribuisce lo stesso peso a ciascuna riga informativa, indipendentemente dalla profondità; senza siti è NA.",
-        "en": "The mean gives each informative row equal weight regardless of depth; with no sites it is NA."
+        "mean": "unweighted arithmetic mean",
+        "SD": "sample standard deviation with denominator n-1",
+        "no_sites": "mean and SD NA",
+        "one_site": "SD NA"
       },
       "source_lines": [
-        268,
-        273
-      ]
-    },
-    {
-      "id": "sd_contamination",
-      "kind": "formula",
-      "value": {
-        "aggregation": "R sample standard deviation",
-        "denominator": "n - 1",
-        "na_rm": true,
-        "minimum_sites": 2,
-        "otherwise": "NA"
-      },
+        258,
+        274
+      ],
       "description": {
-        "it": "La deviazione standard campionaria viene calcolata soltanto con almeno due righe informative; altrimenti è NA.",
-        "en": "The sample standard deviation is calculated only with at least two informative rows; otherwise it is NA."
-      },
-      "source_lines": [
-        275,
-        280
-      ]
+        "it": "Riduzioni sulla sequenza originale dei siti selezionati.",
+        "en": "Reductions over retained sites in their original order."
+      }
     },
     {
-      "id": "sample_name",
-      "kind": "format",
-      "value": "basename without extension",
-      "description": {
-        "it": "Il nome del campione nel riepilogo e nei file deriva dal nome del file di input senza estensione.",
-        "en": "The sample name in summaries and filenames comes from the input basename without its extension."
-      },
-      "source_lines": [
-        282,
-        282
-      ]
-    },
-    {
-      "id": "informative_count",
-      "kind": "formula",
-      "value": "nrow(filtered_df)",
-      "description": {
-        "it": "informative_DNPs conta le righe mantenute, non effettua un conteggio distinto delle coordinate.",
-        "en": "informative_DNPs counts retained rows; it does not count distinct coordinates."
-      },
-      "source_lines": [
-        284,
-        291
-      ]
-    },
-    {
-      "id": "per_sample_output",
+      "id": "outputs",
       "kind": "format",
       "value": {
-        "filename": "contamination_{sample_name}.txt",
-        "delimiter": "\\t",
-        "quote": false,
-        "row_names": false,
-        "rows": "informative only"
-      },
-      "description": {
-        "it": "Ogni tabella contiene le sole righe mantenute, le colonne dell'input e i campi derivati dal calcolo.",
-        "en": "Each table contains only retained rows, input columns and fields derived by the calculation."
-      },
-      "source_lines": [
-        293,
-        303
-      ]
-    },
-    {
-      "id": "sample_execution",
-      "kind": "execution",
-      "value": {
-        "sample_pool": "shared resource budget",
-        "duplicate_output_basenames": "case-insensitive comparison; serial sample processing in original order",
-        "row_tasks": "ceil(sample_rows / 50000)",
-        "row_partition": "contiguous and ordered",
-        "nested_worker_pools": false
-      },
-      "description": {
-        "it": "I campioni usano il pool comune. Basename di output ripetuti, anche con sole differenze di maiuscole/minuscole, forzano l’ordine seriale dei campioni, preservando le sovrascritture storiche. Se il budget consente più worker, un campione grande può ripartire le trasformazioni indipendenti in intervalli contigui di righe; dentro un worker campione questo pool resta seriale. Media e deviazione standard sono calcolate sul vettore completo nell’ordine originale, senza combinare statistiche parziali.",
-        "en": "Samples use the shared pool. Repeated output basenames, including names differing only in case, force serial sample order, preserving historical overwrites. When the budget allows multiple workers, a large sample can partition independent transformations into contiguous row ranges; inside a sample worker this pool remains serial. Mean and standard deviation use the complete vector in original order, without combining partial statistics."
-      },
-      "source_lines": [
-        308,
-        316
-      ]
-    },
-    {
-      "id": "summary_output",
-      "kind": "format",
-      "value": {
-        "filename": "contamination_summary.txt",
-        "columns": [
+        "per_sample": "contamination_<sample>.txt",
+        "summary": "contamination_summary.txt",
+        "summary_columns": [
           "individuo",
-          "informative_DNPs",
+          "informative_sites",
           "mean_contamination",
           "sd_contamination"
-        ],
-        "delimiter": "\\t",
-        "quote": false,
-        "row_names": false
-      },
-      "description": {
-        "it": "Il riepilogo contiene identificativo, numero di righe informative, media e deviazione standard per campione.",
-        "en": "The summary contains the identifier, informative-row count, mean and standard deviation for each sample."
+        ]
       },
       "source_lines": [
-        321,
-        328
-      ]
+        270,
+        300
+      ],
+      "description": {
+        "it": "Tabelle per sito e riepilogo con conteggio indipendente dal tipo di marcatore.",
+        "en": "Per-site tables and summary with marker-neutral site count."
+      }
     },
     {
-      "id": "row_execution",
+      "id": "calculation_execution",
       "kind": "execution",
       "value": {
         "row_task_target": 50000,
         "partition": "contiguous",
-        "reductions": "mean and sd on original-order combined rows"
-      },
-      "description": {
-        "it": "La partizione avviene dopo le conversioni numeriche; i filtri e la contaminazione per sito restano invariati. Le righe dei task sono riunite in ordine prima delle statistiche e della scrittura.",
-        "en": "Partitioning follows numeric conversion; filters and per-site contamination are unchanged. Task rows are combined in order before statistics and output."
+        "sample_pool": "bounded",
+        "nested_pools": false,
+        "reduction": "ordered"
       },
       "source_lines": [
-        204,
-        268
-      ]
+        245,
+        259
+      ],
+      "description": {
+        "it": "Blocchi di righe e campioni usano un budget comune e risultati ordinati.",
+        "en": "Row blocks and samples use one shared budget and ordered results."
+      }
     }
   ],
   "preparation_settings": [
     {
-      "id": "input_selection",
+      "id": "scientific_settings",
       "value": {
-        "modes": [
-          "explicit files",
-          "recursive directory"
+        "workflow": "contamination",
+        "parameters": {
+          "other_fraction_max": {
+            "default": 0.1,
+            "type": "number",
+            "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "homozygous_ref_min": {
+            "default": 0.9,
+            "type": "number",
+            "description": "Frazione REF minima per classificare il sito come omozigote REF.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "homozygous_alt_max": {
+            "default": 0.1,
+            "type": "number",
+            "description": "Frazione REF massima per classificare il sito come omozigote ALT.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "include_zero": {
+            "default": true,
+            "type": "boolean",
+            "description": "Include i siti informativi con zero letture inattese nel conteggio, media e deviazione standard.",
+            "unit": null
+          }
+        },
+        "constants": {
+          "other_fraction_denominator": {
+            "value": "N_REF+N_ALT+N_Other",
+            "description": "Denominatore del filtro Other, modello NEWPAT 2026-11-13."
+          },
+          "site_contamination": {
+            "value": "N_unexpected/(N_REF+N_ALT)",
+            "description": "Stima di contaminazione per sito."
+          },
+          "sample_contamination": {
+            "value": "arithmetic mean of retained sites",
+            "description": "Media non pesata fra i siti trattenuti."
+          },
+          "one_site_sd": {
+            "value": "NA",
+            "description": "La deviazione standard non e definita con un solo sito."
+          },
+          "missing_result": {
+            "value": "NA",
+            "description": "Assenza di stima o genotipo; non equivale a zero."
+          }
+        },
+        "source_files": [
+          "scientific/vendor/NEWPAT/contamination/detect_contamination.R"
         ],
-        "directory_extensions": [
-          ".txt",
-          ".tsv"
-        ],
-        "extension_case_sensitive": false,
-        "exclude_panel": true
-      },
-      "applies_to": "all",
-      "origin": "nipat_client",
-      "description": {
-        "it": "NIPAT accetta file selezionati oppure tutte le tabelle TXT/TSV di una cartella e delle sottocartelle, escludendo il pannello.",
-        "en": "NIPAT accepts selected files or all TXT/TSV tables in a directory and its subdirectories, excluding the panel."
-      },
-      "evidence": {
-        "path": "src/nipat/execution/workflows.py",
-        "source_lines": [
-          603,
-          669
-        ],
-        "sha256": "1557b32c42f8c3c8fd4b4b35a4a1634f263ac709044509131d068acc2baca37c"
-      }
-    },
-    {
-      "id": "sample_name_collisions",
-      "value": {
-        "staging_extension": ".txt",
-        "case_insensitive_uniqueness": true
-      },
-      "applies_to": "all",
-      "origin": "nipat_client",
-      "description": {
-        "it": "I nomi vengono normalizzati all'estensione .txt e devono restare univoci anche ignorando le maiuscole; le collisioni interrompono la preparazione.",
-        "en": "Names are normalized to the .txt extension and must remain unique ignoring case; collisions stop preparation."
-      },
-      "evidence": {
-        "path": "src/nipat/execution/workflows.py",
-        "source_lines": [
-          603,
-          669
-        ],
-        "sha256": "1557b32c42f8c3c8fd4b4b35a4a1634f263ac709044509131d068acc2baca37c"
-      }
-    },
-    {
-      "id": "panel_coordinate_validation",
-      "value": {
-        "required": [
-          "chr",
-          "pos1",
-          "pos2"
-        ],
-        "coordinate_type": "positive ordered integer",
-        "supports_headerless": true,
-        "requires_adjacent_positions": false,
-        "unique_coordinates": true
-      },
-      "applies_to": "all",
-      "origin": "nipat_engine",
-      "description": {
-        "it": "Accetta pannelli con o senza intestazione: cromosoma e coordinate intere positive, pos2 maggiore di pos1, siti unici. Non richiede alleli ne posizioni adiacenti.",
-        "en": "Accepts headered or headerless panels: chromosome and positive integer coordinates, pos2 greater than pos1, unique sites. Alleles and adjacency are not required."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/panels.py",
-        "source_lines": [
-          156,
-          201
-        ],
-        "sha256": "0794988796809bf15aebf20c8f732632523978fbbaafa5a92eaece059b4007d6"
-      }
-    },
-    {
-      "id": "normalized_panel",
-      "value": {
-        "filename": "work/DNPpanel.txt",
-        "columns": [
-          "n°DNP",
-          "chr",
-          "pos1",
-          "pos2"
+        "constraints": [
+          "homozygous_alt_max < homozygous_ref_min"
         ]
       },
       "applies_to": "all",
-      "origin": "nipat_engine",
+      "origin": "NIPAT scientific runtime",
       "description": {
-        "it": "Il motore prepara una copia del pannello con intestazione standard e identificativi DNP generati; le coordinate originali vengono preservate.",
-        "en": "The engine prepares a panel copy with a standard header and generated DNP identifiers; original coordinates are preserved."
+        "it": "Tutti i parametri scientifici sono configurabili da menu, --set e --scientific-config. Il file di lavoro registra i parametri gestiti; output/scientific-settings.json registra i valori finali R dopo le opzioni native esplicite. R legge lo stesso registro validato.",
+        "en": "Every scientific parameter is configurable through the menu, --set and --scientific-config. The work settings record managed parameters; output/scientific-settings.json records final R values after explicit native overrides. R uses the same validated registry."
       },
       "evidence": {
-        "path": "src/nipat_scientific/panels.py",
-        "source_lines": [
-          92,
-          100
-        ],
-        "sha256": "0794988796809bf15aebf20c8f732632523978fbbaafa5a92eaece059b4007d6"
-      }
-    },
-    {
-      "id": "table_staging",
-      "value": {
-        "directory": "work/inputs",
-        "copy_contents": true,
-        "modify_originals": false
-      },
-      "applies_to": "all",
-      "origin": "nipat_engine",
-      "description": {
-        "it": "Le tabelle vengono copiate nella cartella del run e quella cartella viene passata a R. I dati originali non vengono riscritti.",
-        "en": "Tables are copied into the run directory and that directory is passed to R. Original data are not rewritten."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/contamination.py",
-        "source_lines": [
-          42,
-          102
-        ],
-        "sha256": "d1e4f3b685d17b5dcb35d57ac48379c041b088b5a8ec245c6c223c87eef22585"
-      }
-    },
-    {
-      "id": "empty_output_guard",
-      "value": {
-        "output_must_be_empty": true,
-        "staging_must_not_exist": true
-      },
-      "applies_to": "all",
-      "origin": "nipat_engine",
-      "description": {
-        "it": "La preparazione richiede risultati vuoti e file di staging nuovi per evitare la sovrascrittura di un'analisi.",
-        "en": "Preparation requires an empty output directory and new staging files to avoid overwriting an analysis."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/contamination.py",
-        "source_lines": [
-          42,
-          102
-        ],
-        "sha256": "d1e4f3b685d17b5dcb35d57ac48379c041b088b5a8ec245c6c223c87eef22585"
-      }
-    },
-    {
-      "id": "saved_preferences",
-      "value": [
-        "mode",
-        "panel"
-      ],
-      "applies_to": "wizard",
-      "origin": "nipat_preferences",
-      "description": {
-        "it": "Le preferenze del menu conservano modalità di selezione e pannello; le tabelle dei campioni vengono scelte per ciascuna analisi.",
-        "en": "Menu preferences retain selection mode and panel; sample tables are selected for each analysis."
-      },
-      "evidence": {
-        "path": "src/nipat/preferences.py",
-        "source_lines": [
-          27,
-          33
-        ],
-        "sha256": "5e7b445bda7aa326770a805caa025ab5a6f47a10af7dd49d3e9acbbe72895f7a"
-      }
-    },
-    {
-      "id": "count_table_preflight",
-      "value": {
-        "counts": "finite nonnegative integers",
-        "unique_loci": true,
-        "header_only": "allowed",
-        "ratio_optional": true,
-        "mismatch_policy": "warn without rewriting"
-      },
-      "applies_to": "contamination",
-      "origin": "NIPAT Python scientific engine",
-      "description": {
-        "it": "Preflight verifica colonne, larghezza delle righe, coordinate uniche e ordinate e conteggi interi finiti non negativi. Se fornito, ratio_REF_ALT deve essere finito tra 0 e 1 oppure mancante. Rapporto/totale incoerente e rapporto mancante con conteggi positivi producono avvisi; R conserva la propria politica di calcolo. Il valore total_count=NA e ammesso solo se N_REF, N_ALT e N_Other sono tutti zero, come nei loci senza copertura prodotti da DNPcall; resta invariato.",
-        "en": "Preflight checks columns, row width, unique ordered coordinates and finite nonnegative integer counts. When supplied, ratio_REF_ALT must be finite from 0 to 1 or missing. Ratio/total mismatches and missing ratios with positive counts produce warnings; R retains its calculation policy. total_count=NA is allowed only when N_REF, N_ALT and N_Other are all zero, as in uncovered DNPcall loci; it remains unchanged."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/files.py",
-        "source_lines": [
-          101,
-          142
-        ],
-        "sha256": "1b2859b76c3eea91be66813b13464687464d34605457e81f24243d36f61f8b0f"
-      }
-    },
-    {
-      "id": "input_validation_provenance",
-      "value": "work/input-validation.json",
-      "applies_to": "contamination",
-      "origin": "NIPAT Python scientific engine",
-      "description": {
-        "it": "Il motore registra gli avvisi e le copie normalizzate con percorsi e SHA256 di origine e copia. Gli originali restano invariati. Errori UTF-8 e di formato delle tabelle diventano diagnostica di validazione.",
-        "en": "The engine records warnings and normalized copies with source/prepared paths and SHA256. Originals remain unchanged. UTF-8 and table-format errors become validation diagnostics."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/files.py",
-        "source_lines": [
-          179,
-          195
-        ],
-        "sha256": "1b2859b76c3eea91be66813b13464687464d34605457e81f24243d36f61f8b0f"
-      }
-    },
-    {
-      "id": "scientific_output_contract",
-      "value": {
-        "standalone_report": "work/scientific-validation.json",
-        "plan_report": "workflow-state.json step artifacts",
-        "nonfinite_estimate": "structured warning",
-        "missing_or_malformed_output": "execution failure"
-      },
-      "applies_to": "contamination",
-      "origin": "NIPAT Python scientific engine",
-      "description": {
-        "it": "Analisi singole e workflow applicano gli stessi contratti di output: identita dei campioni e dei siti, colonne, conteggi e file attesi. NA previsto in assenza di informazione resta valido; stime non finite o NA inattesi sono segnalati e non riscritti. Output mancanti o malformati impediscono lo stato di successo.",
-        "en": "Individual analyses and plans share output contracts for sample/site identity, columns, counts and expected files. Expected NA with no information remains valid; nonfinite estimates or unexpected NA are reported and never rewritten. Missing or malformed output prevents success."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/outputs.py",
-        "source_lines": [
-          189,
-          311
-        ],
-        "sha256": "6dbe8028da0d68767a76d61fcaa7118207bac24edfa328ce446abd1ec2826edb"
-      }
-    },
-    {
-      "id": "readable_presentation",
-      "value": {
-        "optional_request_field": "presentation",
-        "exports": "output/presentation",
-        "canonical_outputs": "unchanged",
-        "sample_column": "added to per-sample readable tables only"
-      },
-      "applies_to": "contamination",
-      "origin": "NIPAT presentation adapter",
-      "description": {
-        "it": "Gli export leggibili conservano valori numerici e nomi originali di campioni e coppie, con associazioni esplicite agli output canonici. Lo zero resta distinto da NA; i rapporti, le likelihood, le unità delle risorse e la copertura per genotipo sono descritti nell'indice HTML. I duplicati sono disambiguati, i nomi adattati al filesystem e le etichette protette come testo per i fogli di calcolo. I grafici aggiuntivi richiedono tempo.",
-        "en": "Readable exports preserve numeric values and original sample/pair names, explicitly mapped to canonical outputs. Zero remains distinct from NA; ratios, likelihoods, resource units and genotype coverage are described in the HTML index. Duplicates are disambiguated, filenames adapted to the filesystem and spreadsheet labels protected as text. Additional plot rendering takes time."
-      },
-      "evidence": {
-        "path": "src/nipat_scientific/presentation.py",
+        "path": "src/nipat_scientific/settings.py",
+        "sha256": "6690241ce2ee41393433381dcb07a87fea60c7b664b9ad58a4ced8a27def7fc4",
         "source_lines": [
           1,
-          362
+          178
         ],
-        "sha256": "6feddc305562645ce79fb197aed39e9ecb4a054ff80507f7a8e0b3f67e59b471",
         "dependencies": [
           {
-            "path": "src/nipat_scientific/presentation.R",
+            "path": "src/nipat_scientific/settings.R",
+            "sha256": "d4e0db860501861132aa3fde280d371ab84a5fe7944d94482b7499f29687c392",
             "source_lines": [
               1,
-              163
-            ],
-            "sha256": "145baac97be8cf37835ff87e8557599cc762f73c921573d6747e92a503b57ad6"
+              96
+            ]
+          },
+          {
+            "path": "src/nipat_scientific/settings_data.json",
+            "sha256": "e1284fe3489dc55b19c13a806ca461cbfc712c6047fb2499d8c3ac2c86692123",
+            "source_lines": [
+              1,
+              631
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "input_preparation",
+      "value": {
+        "marker_types": [
+          "SNP",
+          "DNP"
+        ],
+        "originals": "unchanged",
+        "staging": "byte-preserving copies",
+        "output": "new empty directory",
+        "validation": "before copying"
+      },
+      "applies_to": "all",
+      "origin": "NIPAT scientific runtime",
+      "description": {
+        "it": "Gli input sono validati prima delle copie. I tipi SNP/DNP non si mescolano; gli originali restano invariati. Cartelle sovrapposte, collisioni e risultati preesistenti sono rifiutati.",
+        "en": "Inputs are validated before staging. SNP/DNP types cannot be mixed; originals remain unchanged. Overlapping directories, collisions and existing outputs are rejected."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/contamination.py",
+        "sha256": "9a003fed6043cbbf0cd68ffe7b708dbbe4aeaa45552b07a3e8e89d78cea6b307",
+        "source_lines": [
+          1,
+          116
+        ],
+        "dependencies": [
+          {
+            "path": "src/nipat_scientific/files.py",
+            "sha256": "cb6d5e52658233b8f20f8f86739710a3a7af84d7901d02821f33e1fd182447d0",
+            "source_lines": [
+              1,
+              300
+            ]
+          },
+          {
+            "path": "src/nipat_scientific/panels.py",
+            "sha256": "fdb28f0935587088cfe3921171e37c5c075e9d30ffc2888edd162d9de64236c4",
+            "source_lines": [
+              1,
+              220
+            ]
           }
         ]
       }
@@ -766,83 +477,89 @@
     {
       "id": "parallel_execution_policy",
       "value": {
-        "default_mode": "auto",
         "modes": [
           "auto",
           "serial"
         ],
-        "environment": [
-          "NIPAT_EXECUTION_MODE",
-          "NIPAT_MAX_WORKERS",
-          "NIPAT_CPU_LIMIT",
-          "NIPAT_MEMORY_LIMIT_MIB"
-        ],
-        "cli": [
-          "--execution-mode",
-          "--max-workers"
-        ],
-        "serial_workers": 1,
-        "nested_worker_pools": false,
-        "result_order": "input task order",
-        "memory_estimate_minimum_mib": 2048,
-        "available_memory_fraction": 0.8,
-        "memory_estimate": "conservative scheduling estimate, not a hard allocation limit",
-        "internal_library_threads": 1,
-        "thread_limit_scope": "managed requests, workflow steps and native engine run"
+        "nested_pools": false,
+        "ordered_reduction": true,
+        "max_workers": "user ceiling bounded by resources"
       },
-      "applies_to": "contamination",
-      "origin": "NIPAT scientific engine and client",
+      "applies_to": "all",
+      "origin": "NIPAT scientific runtime",
       "description": {
-        "it": "La modalità auto è predefinita; serial impone un solo processo di calcolo. Il massimo scelto dall’utente è un tetto, limitato ulteriormente da attività disponibili, affinità e quota CPU, memoria disponibile e limiti dei processi. La stima conservativa di RAM riserva il 20% della memoria disponibile e almeno 2 GiB per worker; non garantisce il consumo effettivo. Dentro un worker i pool interni restano seriali. Il coordinatore ricompone i risultati nell’ordine delle attività e propaga gli errori; i limiti del container restano distinti dalla stima di scheduling. I thread interni delle librerie numeriche e di vroom sono limitati a uno nei percorsi gestiti e nell’avvio nativo del motore; client e coordinatori restano distinti dai processi di calcolo.",
-        "en": "Automatic mode is the default; serial mode uses one calculation process. The user-selected maximum is a ceiling, further bounded by available tasks, CPU affinity and quota, available memory and process limits. Conservative RAM scheduling reserves 20% of available memory and at least 2 GiB per worker; this does not guarantee actual consumption. Pools inside a worker remain serial. The coordinator restores input task order and propagates errors; container limits remain separate from the scheduling estimate. Numeric-library and vroom internal threads are limited to one in managed execution paths and native engine runs; clients and coordinators remain separate from calculation workers."
+        "it": "Esecuzione seriale o automatica con limite configurabile ai processi, budget di CPU/RAM e riunione ordinata; i pool interni di un worker sono seriali.",
+        "en": "Serial or automatic execution with configurable process ceiling, CPU/RAM budget and ordered collection; nested worker pools remain serial."
       },
       "evidence": {
         "path": "src/nipat_scientific/parallel.R",
+        "sha256": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
         "source_lines": [
           1,
           205
         ],
-        "sha256": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
         "dependencies": [
           {
-            "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
-            "source_lines": [
-              10,
-              10
-            ],
-            "sha256": "d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26"
-          },
-          {
-            "path": "src/nipat/execution/options.py",
-            "source_lines": [
-              12,
-              34
-            ],
-            "sha256": "0a53d636dc26461b15807f5f8ec54f1719367ddc4d76412eaa137428ff4ae972"
-          },
-          {
-            "path": "src/nipat/execution/runner.py",
-            "source_lines": [
-              190,
-              198
-            ],
-            "sha256": "2039bed62df37f5f437c2510373214a9a054b2234195928e8b86cd131ecf4c07"
-          },
-          {
             "path": "src/nipat_scientific/parallel.py",
+            "sha256": "bcdf3866e76419ac0b2879bf292be2a45eeb69ec6a590332652423f1aade87f7",
             "source_lines": [
-              8,
+              1,
               44
-            ],
-            "sha256": "bcdf3866e76419ac0b2879bf292be2a45eeb69ec6a590332652423f1aade87f7"
-          },
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "scientific_output_contract",
+      "value": {
+        "missing_output": "failure",
+        "invalid_output": "failure",
+        "nonfinite_estimates": "warnings",
+        "zero": "distinct from NA"
+      },
+      "applies_to": "all",
+      "origin": "NIPAT scientific runtime",
+      "description": {
+        "it": "Il contratto verifica file, campioni, colonne e conteggi; gli output mancanti o malformati bloccano il successo. NA previsto rimane distinto da zero.",
+        "en": "The contract verifies files, samples, columns and counts; missing or malformed outputs prevent success. Expected NA remains distinct from zero."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/outputs.py",
+        "sha256": "47970f4fe68ff0d92082926fe5a13ddeaf67b82c4d180a520f0fa69e4a40eb9c",
+        "source_lines": [
+          1,
+          445
+        ]
+      }
+    },
+    {
+      "id": "readable_presentation",
+      "value": {
+        "canonical_values": "preserved",
+        "exports": "output/presentation"
+      },
+      "applies_to": "all",
+      "origin": "NIPAT scientific runtime",
+      "description": {
+        "it": "Gli export leggibili mantengono i valori scientifici e collegano esplicitamente i nomi dei campioni agli output canonici.",
+        "en": "Readable exports preserve scientific values and explicitly map sample names to canonical outputs."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/presentation.py",
+        "sha256": "fb01b23f6183c3478ab97d869dfafcb11692428be63453e378f9a7742bb78c0a",
+        "source_lines": [
+          1,
+          386
+        ],
+        "dependencies": [
           {
-            "path": "engine/main.py",
+            "path": "src/nipat_scientific/presentation.R",
+            "sha256": "eb56110e3f793666cd9550e9112488ee662f8fecac0995ce06ab402ba46bb08b",
             "source_lines": [
-              410,
-              417
-            ],
-            "sha256": "c48d540f537e1aa181e76fab8d6399034ffd06d39e96b43f9911c3ec8de6cf54"
+              1,
+              163
+            ]
           }
         ]
       }
@@ -851,146 +568,58 @@
   "audit_sections": [
     {
       "start": 1,
-      "end": 25,
+      "end": 38,
       "summary": {
-        "it": "Librerie, tre argomenti posizionali e cartella di output.",
-        "en": "Libraries, three positional arguments and output directory."
+        "it": "Librerie, configurazione, input e politica degli zeri.",
+        "en": "Libraries, configuration, inputs and zero policy."
       }
     },
     {
-      "start": 26,
-      "end": 39,
+      "start": 39,
+      "end": 84,
       "summary": {
-        "it": "Lettura della prima riga e riconoscimento dell'intestazione del pannello.",
-        "en": "First-row reading and panel-header detection."
+        "it": "Formato del pannello SNP/DNP.",
+        "en": "SNP/DNP panel format."
       }
     },
     {
-      "start": 40,
-      "end": 63,
+      "start": 85,
+      "end": 123,
       "summary": {
-        "it": "Lettura del pannello con intestazione e normalizzazione dei nomi.",
-        "en": "Reading a headered panel and normalizing names."
+        "it": "Selezione dei file e schema del riepilogo.",
+        "en": "File selection and summary schema."
       }
     },
     {
-      "start": 64,
-      "end": 90,
+      "start": 124,
+      "end": 172,
       "summary": {
-        "it": "Lettura del pannello senza intestazione e assegnazione delle colonne.",
-        "en": "Reading a headerless panel and assigning columns."
+        "it": "Lettura e validazione dei conteggi.",
+        "en": "Count reading and validation."
       }
     },
     {
-      "start": 91,
-      "end": 103,
+      "start": 173,
+      "end": 244,
       "summary": {
-        "it": "Controllo e conversione delle coordinate del pannello.",
-        "en": "Panel-coordinate checks and conversion."
+        "it": "Rapporto REF, filtri e contaminazione per sito.",
+        "en": "REF ratio, filters and per-site contamination."
       }
     },
     {
-      "start": 104,
-      "end": 132,
+      "start": 245,
+      "end": 269,
       "summary": {
-        "it": "Selezione dei file, ricerca ricorsiva ed esclusione del pannello.",
-        "en": "File selection, recursive discovery and panel exclusion."
+        "it": "Blocchi paralleli ordinati e statistiche.",
+        "en": "Ordered parallel blocks and statistics."
       }
     },
     {
-      "start": 133,
-      "end": 141,
+      "start": 270,
+      "end": 300,
       "summary": {
-        "it": "Inizializzazione dello schema del riepilogo.",
-        "en": "Summary-schema initialization."
-      }
-    },
-    {
-      "start": 142,
-      "end": 185,
-      "summary": {
-        "it": "Lettura del campione, colonne obbligatorie e conversioni numeriche.",
-        "en": "Sample reading, required columns and numeric conversions."
-      }
-    },
-    {
-      "start": 186,
-      "end": 202,
-      "summary": {
-        "it": "Uso del rapporto fornito o calcolo dai conteggi.",
-        "en": "Use of the supplied ratio or calculation from counts."
-      }
-    },
-    {
-      "start": 203,
-      "end": 218,
-      "summary": {
-        "it": "Funzione dei filtri indipendenti per riga: valori mancanti e profondità positiva.",
-        "en": "Independent per-row filter function: missing values and positive depth."
-      }
-    },
-    {
-      "start": 219,
-      "end": 226,
-      "summary": {
-        "it": "Restrizione ai siti del pannello per coordinate.",
-        "en": "Restriction to panel sites by coordinates."
-      }
-    },
-    {
-      "start": 227,
-      "end": 236,
-      "summary": {
-        "it": "Calcolo e filtro del rapporto delle altre letture.",
-        "en": "Calculation and filtering of the other-read ratio."
-      }
-    },
-    {
-      "start": 237,
-      "end": 252,
-      "summary": {
-        "it": "Selezione dei siti informativi e contaminazione per sito.",
-        "en": "Informative-site selection and per-site contamination."
-      }
-    },
-    {
-      "start": 253,
-      "end": 267,
-      "summary": {
-        "it": "Partizione in righe contigue secondo il budget e riunione ordinata dei risultati.",
-        "en": "Resource-bounded contiguous-row partitioning and ordered result assembly."
-      }
-    },
-    {
-      "start": 268,
-      "end": 281,
-      "summary": {
-        "it": "Media e deviazione standard sul vettore ricomposto nell’ordine originale.",
-        "en": "Mean and standard deviation over the recombined vector in original order."
-      }
-    },
-    {
-      "start": 282,
-      "end": 292,
-      "summary": {
-        "it": "Identificativo del campione e costruzione della riga del riepilogo.",
-        "en": "Sample identifier and construction of its summary row."
-      }
-    },
-    {
-      "start": 293,
-      "end": 306,
-      "summary": {
-        "it": "Scrittura della tabella per campione e restituzione della riga del riepilogo.",
-        "en": "Per-sample table writing and return of its summary row."
-      }
-    },
-    {
-      "start": 307,
-      "end": 328,
-      "summary": {
-        "it": "Pool campioni senza collisioni di output, raccolta ordinata e scrittura del riepilogo.",
-        "en": "Sample pool without output collisions, ordered collection and summary writing."
+        "it": "Output per campione, pool dei campioni e riepilogo.",
+        "en": "Per-sample output, sample pool and summary."
       }
     }
   ]

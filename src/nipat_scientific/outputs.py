@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 import math
 from pathlib import Path
 
@@ -23,7 +24,7 @@ def _sha256(path: Path) -> str:
 _CPI_COLUMNS = {
     "Pair", "N_sites_mother", "N_sites_father", "Median_fetal_fraction_raw",
     "Median_fetal_fraction_percent", "Max_logCPI", "Min_logCPI",
-    "Median_logCPI", "Mean_logCPI", "CPI_medianFF",
+    "Median_logCPI", "Mean_logCPI", "CPI_medianFF", "Error_constant", "Min_fetal_reads", "Marker_type",
 }
 _SNP_COLUMNS = {
     "chr", "pos", "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count", "ratio",
@@ -63,11 +64,74 @@ def _cpi_bindings(step: dict) -> tuple[list[dict], list[dict]]:
             names[role] = aliases[key]
         pairs.append({
             "pair": pair["id"], "mother": pair["mother"].copy(), "father": pair["father"].copy(),
-            "native_pair": f"Mother{names['mother']}-Father{names['father']}_DNPs",
+            "native_pair": f"Mother{names['mother']}-Father{names['father']}_{step.get('parameters', {}).get('marker_type', 'DNP')}s",
             "native_selection": f"{names['mother']}:{names['father']}",
         })
     return inputs, pairs
 
+
+
+def _cpin_bindings(step: dict) -> tuple[list[dict], list[dict]]:
+    aliases, inputs, trios = {}, [], []
+    marker = step.get("parameters", {}).get("marker_type", "DNP")
+    for trio in step["inputs"]["trios"]:
+        names = {}
+        for role in ("mother", "father", "child"):
+            ref = trio[role]
+            key = (ref.get("step"), ref["sample"])
+            if key not in aliases:
+                native = f"s{len(aliases) + 1:04d}"
+                aliases[key] = native
+                inputs.append({"source": ref.copy(), "name": f"{role.title()}{native}.txt"})
+            names[role] = aliases[key]
+        trios.append({"trio": trio["id"], **{role: trio[role].copy() for role in names},
+                      "native_trio": f"Mother{names['mother']}-Father{names['father']}-Child{names['child']}_{marker}s",
+                      "native_selection": ":".join(names.values())})
+    return inputs, trios
+
+
+def _collect_cpin_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
+    summary = output_dir / "Summary_Postnatal_CPI.txt"
+    summary_artifact = _artifact(summary, root, output_dir)
+    columns = {"Trio", "Marker_type", "Analysis", "N_sites", "N_heterozygous_child_sites",
+               "N_homozygous_child", "Matching_sites", "Mismatching_sites", "Log10_CPI", "CPI",
+               "Error_constant", "Min_child_reads"}
+    rows = [row for _, row in table_rows(summary, columns, "CPIN summary")]
+    bindings = step.get("native_bindings")
+    if bindings is None:
+        _, bindings = _cpin_bindings(step)
+    selection = request.get("scientific_settings", {}).get("site_selection", "both")
+    analyses = {"other_allele": ["heterozygous_child_sites"], "all": ["all_compatible_sites"],
+                "both": ["heterozygous_child_sites", "all_compatible_sites"]}[selection]
+    expected = {(item["native_trio"], analysis) for item in bindings for analysis in analyses}
+    seen, warnings = set(), []
+    counts = {"N_sites", "N_heterozygous_child_sites", "N_homozygous_child", "Matching_sites", "Mismatching_sites", "Min_child_reads"}
+    for number, row in enumerate(rows, 2):
+        key = row["Trio"], row["Analysis"]
+        if key in seen:
+            raise PlanExecutionError("execution.output", "Duplicate CPIN trio/analysis row.")
+        seen.add(key)
+        values = {column: nonnegative_integer(row[column], summary, number, column) for column in counts}
+        if values["Matching_sites"] + values["Mismatching_sites"] != values["N_sites"] or values["N_heterozygous_child_sites"] + values["N_homozygous_child"] != values["N_sites"]:
+            raise PlanExecutionError("execution.output", "CPIN site counts disagree.")
+        warnings.extend(_numeric_warnings(row, {"Log10_CPI", "CPI", "Error_constant"}, summary, number,
+                                         allow_missing=values["N_sites"] == 0))
+    if seen != expected:
+        raise PlanExecutionError("execution.output", "CPIN results do not match requested trios and analyses.")
+    trios = []
+    for binding in bindings:
+        name = binding["native_trio"]
+        sites = output_dir / "sites" / f"{name}_sites.tsv"
+        _output_columns(sites, {"Status", "Paternity_Index", "Mismatch"})
+        analyses_artifacts = []
+        for analysis in analyses:
+            curve = output_dir / "curves" / f"{name}_{analysis}_curve.tsv"
+            _output_columns(curve, {"Min_child_reads", "Through_min_child_reads", "N_sites", "Log10_CPI", "Matching_sites", "Mismatching_sites"})
+            analyses_artifacts.append({"analysis": analysis, "curve": _artifact(curve, root, output_dir),
+                "plot": _pdf_artifact(output_dir / "plots" / f"{name}_{analysis}_CPIplot.pdf", root, output_dir)})
+        trios.append({**binding, "sites": _artifact(sites, root, output_dir), "analyses": analyses_artifacts})
+    return {"summary": summary_artifact, "cpin-trios": trios, "quality_warnings": warnings,
+            "combined-plot": _pdf_artifact(output_dir / "All_CPIplots.pdf", root, output_dir)}
 
 def _pdf_artifact(path: Path, root: Path, output_dir: Path) -> dict:
     artifact = _artifact(path, root, output_dir)
@@ -129,7 +193,7 @@ def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path
         bindings = step["native_bindings"]
     else:
         _, bindings = _cpi_bindings(step)
-    cutoffs = ([None] if mode == "all" else [str(Path(request["work_dir"]) / "DNPpanel.txt")]
+    cutoffs = ([None] if mode == "all" else [str(Path(request["work_dir"]) / f"{request.get('marker_type', 'DNP')}panel.txt")]
                if mode == "panel" else [panel["label"] for panel in request["cutoffs"]])
     expected = {(pair["native_pair"], cutoff) for pair in bindings for cutoff in cutoffs}
     found = {}
@@ -143,7 +207,7 @@ def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path
         found[key] = number
         counts = [nonnegative_integer(row[column], summary, number + 1, column)
                   for column in ("N_sites_mother", "N_sites_father")]
-        warnings.extend(_numeric_warnings(row, _CPI_COLUMNS - {"Pair", "N_sites_mother", "N_sites_father"},
+        warnings.extend(_numeric_warnings(row, _CPI_COLUMNS - {"Pair", "Marker_type", "N_sites_mother", "N_sites_father"},
                                          summary, number + 1, allow_missing=0 in counts))
     if set(found) != expected:
         raise PlanExecutionError("execution.output", "CPI summary does not match the declared pairs and cutoffs.")
@@ -165,7 +229,7 @@ def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path
 
 def _numeric_warnings(row: dict, columns: set[str], path: Path, number: int, *, allow_missing: bool) -> list[dict]:
     warnings = []
-    context = {key: row[key] for key in ("chr", "pos", "pos1", "pos2", "Pair", "Cutoff", "individuo") if key in row}
+    context = {key: row[key] for key in ("chr", "pos", "pos1", "pos2", "Pair", "Trio", "Analysis", "Cutoff", "individuo") if key in row}
     for column in sorted(columns):
         raw = row[column].strip()
         if raw == "NA" and allow_missing:
@@ -187,6 +251,8 @@ def _numeric_warnings(row: dict, columns: set[str], path: Path, number: int, *, 
 
 
 def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
+    if step["workflow"] == "cpin":
+        return _collect_cpin_outputs(step, request, root, output_dir)
     if step["workflow"] == "cpi":
         return _collect_cpi_outputs(step, request, root, output_dir)
     if step["workflow"] == "snp-call":
@@ -236,7 +302,7 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
                         raise PlanExecutionError("execution.output", f"Invalid SNPcall {column}: NaN or +Inf.")
                 if row["GT"] not in {"NA", "0/0", "0/1", "1/1"}:
                     raise PlanExecutionError("execution.output", "SNPcall genotype must be 0/0, 0/1, 1/1 or NA.")
-                if ((not sum(counts[:2]) or counts[2] * 10 >= sum(counts)) and row["GT"] != "NA"):
+                if ((not sum(counts[:2]) or counts[2] / sum(counts) >= request.get("scientific_settings", {}).get("other_fraction_max", 0.1)) and row["GT"] != "NA"):
                     raise PlanExecutionError("execution.output", "SNPcall genotype violates the unassigned-genotype rule.")
                 if row["reads_discarded_for_indels"] != "NA":
                     nonnegative_integer(row["reads_discarded_for_indels"], path, number,
@@ -285,9 +351,9 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
 
     summary = output_dir / "contamination_summary.txt"
     artifact = _artifact(summary, root, output_dir)
-    _output_columns(summary, {"individuo", "informative_DNPs", "mean_contamination", "sd_contamination"})
+    _output_columns(summary, {"individuo", "informative_sites", "mean_contamination", "sd_contamination"})
     rows = [row for _, row in table_rows(summary, {
-        "individuo", "informative_DNPs", "mean_contamination", "sd_contamination",
+        "individuo", "informative_sites", "mean_contamination", "sd_contamination",
     }, "Contamination summary")]
     expected_names = [Path(sample["name"]).stem for sample in request["samples"]]
     if sorted(row["individuo"] for row in rows) != sorted(expected_names):
@@ -295,22 +361,23 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
     tables = []
     warnings = []
     for number, row in enumerate(rows, 2):
-        count = nonnegative_integer(row["informative_DNPs"], summary, number, "informative_DNPs")
+        count = nonnegative_integer(row["informative_sites"], summary, number, "informative_sites")
         warnings.extend(_numeric_warnings(row, {"mean_contamination"}, summary, number, allow_missing=count == 0))
         warnings.extend(_numeric_warnings(row, {"sd_contamination"}, summary, number, allow_missing=count <= 1))
     for reference, name in zip(step["inputs"]["samples"], expected_names, strict=True):
         path = output_dir / f"contamination_{name}.txt"
         table_artifact = _artifact(path, root, output_dir)
-        _output_columns(path, {"chr", "pos1", "pos2", "contamination"})
+        coordinate_columns = ({"chr", "pos"} if request.get("marker_type", "DNP") == "SNP" else {"chr", "pos1", "pos2"})
+        _output_columns(path, coordinate_columns | {"contamination"})
         found = set()
-        for number, row in table_rows(path, {"chr", "pos1", "pos2", "contamination"}, "Contamination output"):
+        for number, row in table_rows(path, coordinate_columns | {"contamination"}, "Contamination output"):
             key = locus_key(row, path, number)
             if key in found:
                 raise PlanExecutionError("execution.output", f"{path.name}: duplicate locus at row {number}.")
             found.add(key)
             warnings.extend(_numeric_warnings(row, {"contamination"}, path, number, allow_missing=False))
         summary_row = next(row for row in rows if row["individuo"] == name)
-        if len(found) != nonnegative_integer(summary_row["informative_DNPs"], summary, 0, "informative_DNPs"):
+        if len(found) != nonnegative_integer(summary_row["informative_sites"], summary, 0, "informative_sites"):
             raise PlanExecutionError("execution.output", f"{path.name}: informative site count differs from its summary.")
         tables.append({"sample": reference["sample"], "source": reference.copy(),
                        "native_name": name, **table_artifact})
@@ -319,10 +386,28 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
 
 def _collect_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
     try:
-        return _collect_outputs_unchecked(step, request, root, output_dir)
+        result = _collect_outputs_unchecked(step, request, root, output_dir)
+        settings = output_dir / "scientific-settings.json"
+        if settings.exists():
+            artifact = _artifact(settings, root, output_dir)
+            document = json.loads(settings.read_text(encoding="utf-8"))
+            from nipat_scientific.settings import normalize_settings, describe_settings
+            if (not isinstance(document, dict) or type(document.get("schema_version")) is not int
+                    or document["schema_version"] != 1 or document.get("workflow") != step["workflow"]
+                    or set(document) != {"schema_version", "workflow", "parameters", "constants"}):
+                raise PlanExecutionError("execution.output", "Scientific settings sidecar has an invalid schema or workflow.")
+            expected = normalize_settings(step["workflow"], request.get("scientific_settings"))
+            if step["workflow"] == "cpi" and request.get("err_const") is not None:
+                expected[f"err_const_{request.get('marker_type', 'DNP').lower()}"] = request["err_const"]
+            actual = normalize_settings(step["workflow"], document["parameters"])
+            if (not isinstance(document["parameters"], dict) or set(document["parameters"]) != set(expected)
+                    or actual != expected or document["constants"] != describe_settings(step["workflow"])["constants"]):
+                raise PlanExecutionError("execution.output", "Scientific settings sidecar differs from the requested parameters or model constants.")
+            result["scientific-settings"] = artifact
+        return result
     except PlanExecutionError:
         raise
-    except (ValidationError, UnicodeError, csv.Error) as exc:
+    except (ValidationError, UnicodeError, csv.Error, json.JSONDecodeError) as exc:
         raise PlanExecutionError("execution.output", str(exc)) from exc
 
 
@@ -337,13 +422,22 @@ def validate_standalone_outputs(request: dict) -> dict:
     elif workflow == "contamination":
         step["inputs"] = {"samples": [{"sample": Path(sample["name"]).stem}
                                       for sample in request["samples"]]}
+    elif workflow == "cpin":
+        bindings = []
+        marker = request.get("marker_type", "DNP")
+        for trio in request["trios"].split(","):
+            mother, father, child = [value.strip() for value in trio.split(":")]
+            bindings.append({"trio": f"{mother}:{father}:{child}", "mother": {"sample": mother},
+                             "father": {"sample": father}, "child": {"sample": child},
+                             "native_trio": f"Mother{mother}-Father{father}-Child{child}_{marker}s"})
+        step["native_bindings"] = bindings
     else:
         bindings = []
         for pair in request["pairs"].split(","):
             mother, father = [value.strip() for value in pair.split(":")]
             bindings.append({"pair": f"{mother}:{father}", "mother": {"sample": mother},
                              "father": {"sample": father},
-                             "native_pair": f"Mother{mother}-Father{father}_DNPs"})
+                             "native_pair": f"Mother{mother}-Father{father}_{request.get('marker_type', 'DNP')}s"})
         step["native_bindings"] = bindings
     output = Path(request["out_dir"])
     root = output.parent

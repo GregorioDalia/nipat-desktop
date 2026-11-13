@@ -51,7 +51,7 @@ def validate_request_presentation(request: dict) -> dict | None:
         else:
             sample_ids = {Path(sample["name"]).stem for sample in request["samples"]}
         pair_ids = ({":".join(part.strip() for part in pair.split(":"))
-                     for pair in request["pairs"].split(",")} if workflow == "cpi" else set())
+                     for pair in request["pairs" if workflow == "cpi" else "trios"].split(",")} if workflow in {"cpi", "cpin"} else set())
         return normalize_presentation(request["presentation"], sample_ids, pair_ids)
     except (KeyError, TypeError, AttributeError) as exc:
         raise ValidationError("Descrizione dei campioni non valida per la presentazione.") from exc
@@ -90,15 +90,19 @@ def _filename(label: str, identity: str) -> str:
 
 def _pair_map(request: dict, samples: dict[str, str], pairs: dict[str, str]) -> dict[str, str]:
     labels = {}
-    if request["workflow"] != "cpi":
+    workflow = request["workflow"]
+    if workflow not in {"cpi", "cpin"}:
         return labels
-    for pair in request["pairs"].split(","):
-        mother, father = (part.strip() for part in pair.split(":"))
-        identity = f"{mother}:{father}"
-        native = f"Mother{mother}-Father{father}_DNPs"
-        mother_name = samples[f"{request['mother_prefix']}{mother}"]
-        father_name = samples[f"{request['father_prefix']}{father}"]
-        labels[native] = pairs.get(identity, f"Madre: {mother_name} | Padre: {father_name}")
+    roles = ("mother", "father") if workflow == "cpi" else ("mother", "father", "child")
+    role_labels = {"mother": "Madre", "father": "Padre", "child": "Figlio"}
+    marker = request.get("marker_type", "DNP")
+    for family in request["pairs" if workflow == "cpi" else "trios"].split(","):
+        values = [part.strip() for part in family.split(":")]
+        identity = ":".join(values)
+        native = "-".join(role.title() + value for role, value in zip(roles, values, strict=True)) + f"_{marker}s"
+        description = " | ".join(f"{role_labels[role]}: {samples[request[role + '_prefix'] + value]}"
+                                 for role, value in zip(roles, values, strict=True))
+        labels[native] = pairs.get(identity, description)
     return _unique_labels(labels)
 
 
@@ -120,14 +124,16 @@ def step_presentation(plan: dict, step: dict, request: dict, bindings: list[dict
         selected = {f"table_{number:04d}": labels[reference["sample"]]
                     for number, reference in enumerate(step["inputs"]["samples"], 1)}
     else:
+        roles = ("mother", "father") if workflow == "cpi" else ("mother", "father", "child")
+        role_labels = {"mother": "Madre", "father": "Padre", "child": "Figlio"}
         for binding in bindings:
-            mother, father = binding["native_selection"].split(":")
-            mother_name = labels[binding["mother"]["sample"]]
-            father_name = labels[binding["father"]["sample"]]
-            selected[f"Mother{mother}"] = mother_name
-            selected[f"Father{father}"] = father_name
-            pair_labels[binding["native_selection"]] = value["pairs"].get(
-                binding["pair"], f"{binding['pair']} — Madre: {mother_name} | Padre: {father_name}")
+            description = []
+            for role, native in zip(roles, binding["native_selection"].split(":"), strict=True):
+                name = labels[binding[role]["sample"]]
+                selected[role.title() + native] = name
+                description.append(f"{role_labels[role]}: {name}")
+            identity = binding["pair" if workflow == "cpi" else "trio"]
+            pair_labels[binding["native_selection"]] = value["pairs"].get(identity, identity + " — " + " | ".join(description))
     return {"samples": selected, "pairs": pair_labels}
 
 
@@ -174,6 +180,18 @@ def prepare_presentation(request: dict, script: Path, arguments: list[str]) -> l
         export("contamination_summary.txt", "Contamination_summary.txt")
         for identity, label in samples.items():
             export(f"contamination_{identity}.txt", f"{_filename(label, identity)}_Contamination.txt", sample=identity)
+    elif workflow == "cpin":
+        export("Summary_Postnatal_CPI.txt", "Summary_Postnatal_CPI.txt")
+        selection = request.get("scientific_settings", {}).get("site_selection", "both")
+        analyses = {"other_allele": ["heterozygous_child_sites"], "all": ["all_compatible_sites"],
+                    "both": ["heterozygous_child_sites", "all_compatible_sites"]}[selection]
+        for identity, label in pairs.items():
+            stem = _filename(label, identity)
+            export(f"sites/{identity}_sites.tsv", f"{stem}_sites.tsv")
+            for analysis in analyses:
+                export(f"curves/{identity}_{analysis}_curve.tsv", f"{stem}_{analysis}_curve.tsv")
+                export(f"plots/{identity}_{analysis}_CPIplot.pdf", f"{stem}_{analysis}_CPI.pdf", kind="plot")
+        export("All_CPIplots.pdf", "All_CPIplots.pdf", kind="plot")
     else:
         # The original summary retains its exact numbers and row order.
         for source in ("Summary_FetalFraction_CPI.csv",):
@@ -203,7 +221,7 @@ def _copy_table(source: Path, target: Path, replacements: dict[str, str], *, sam
     if not rows:
         raise PlanExecutionError("presentation.table", f"Tabella senza intestazione: {source.name}")
     original_headers = rows[0][:]
-    identity_columns = {index for index, header in enumerate(original_headers) if header in {"Pair", "individuo", "sample"}}
+    identity_columns = {index for index, header in enumerate(original_headers) if header in {"Pair", "Trio", "individuo", "sample"}}
     rows[0] = [_spreadsheet_label(replacements.get(header, header)) if header.startswith("GT_") else header
                for header in original_headers]
     for row in rows[1:]:
@@ -291,7 +309,7 @@ def _interpretation_notes(workflow: str) -> str:
             "<p>SNPcall 2.0: N_REF, N_ALT e N_Other contano le osservazioni conservate; total_count è la loro somma. "
             "ratio è N_REF / (N_REF + N_ALT), quindi è la frazione di riferimento. GL0, GL1 e GL2 sono "
             "log-verosimiglianze naturali dei genotipi 0/0, 0/1 e 1/1: non sono probabilità né punteggi Phred. "
-            "GT è il genotipo assegnato dal modello; con almeno il 10% di osservazioni Other resta NA.</p>"
+            "GT è il genotipo assegnato dal modello; quando la frazione Other raggiunge la soglia configurata resta NA.</p>"
             "<p>reads_discarded_for_indels e la relativa ratio descrivono gli indel alla base centrale prima del filtro "
             "sull'intera finestra: non contano tutte le letture eliminate nei fianchi. Gli istogrammi includono una classe "
             "separata per zero; gli estremi delle classi positive sono inclusi. Il grafico UpSet confronta i loci con "
@@ -310,6 +328,12 @@ def _interpretation_notes(workflow: str) -> str:
             "Le colonne logCPI e, per compatibilità con lo script originale, CPI_medianFF contengono log10(CPI), "
             "non CPI grezzo. I grafici distinguono log10(CPI) dai conteggi dei siti matching/mismatching. "
             "I confronti senza siti informativi mantengono NA e sono indicati come privi di dati.</p>"),
+        "cpin": (
+            "<p>Log10_CPI è il logaritmo in base dieci dell'indice; CPI è il valore grezzo. Le analisi "
+            "heterozygous_child_sites e all_compatible_sites applicano selezioni diverse, riportate separatamente. "
+            "La tabella dei siti conserva anche esclusioni e motivi; le curve indicano intervalli inclusivi di "
+            "soglie Min_child_reads–Through_min_child_reads con identico risultato. "
+            "Un confronto privo di siti utilizzabili mantiene NA.</p>"),
         "contamination": (
             "<p>Le stime di contaminazione sono frazioni: 0,025 corrisponde al 2,5%. La tabella di riepilogo separa "
             "i campioni e riporta anche il numero di loci usati. Un campione senza loci informativi mantiene "

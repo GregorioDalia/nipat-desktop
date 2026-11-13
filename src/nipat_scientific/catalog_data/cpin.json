@@ -1,0 +1,810 @@
+{
+  "schema_version": 1,
+  "workflow": "cpin",
+  "source": {
+    "path": "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R",
+    "sha256": "cac401d40ed7b137d49d22e0ef99ef891a0bce5661e3df6ccc8a8c8b1cf9ae49",
+    "line_count": 549
+  },
+  "public_parameters": [
+    {
+      "id": "pileup_dir",
+      "r_names": [
+        "--pileup_dir"
+      ],
+      "position": null,
+      "type": "directory",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--input-dir"
+        ],
+        "request_fields": [
+          "samples"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Cartella delle tabelle di conteggi: il client seleziona i file richiesti dalle terne e il motore ne prepara copie identiche. Non è un pileup grezzo.",
+        "en": "Directory of count tables: the client selects the files required by the trios and the engine stages byte-identical copies. This is not a raw pileup."
+      },
+      "source_lines": [
+        17,
+        19
+      ]
+    },
+    {
+      "id": "out_dir",
+      "r_names": [
+        "--out_dir"
+      ],
+      "position": null,
+      "type": "directory",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--runs-dir",
+          "--run-name"
+        ],
+        "request_fields": [
+          "out_dir"
+        ],
+        "mapping": "managed"
+      },
+      "description": {
+        "it": "Cartella output di una nuova esecuzione, gestita da NIPAT. Una destinazione già popolata è rifiutata.",
+        "en": "Output directory of a new NIPAT-managed run. Existing outputs are rejected."
+      },
+      "source_lines": [
+        18,
+        20
+      ]
+    },
+    {
+      "id": "trios",
+      "r_names": [
+        "--trios"
+      ],
+      "position": null,
+      "type": "string",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--trios"
+        ],
+        "request_fields": [
+          "trios"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Terne madre:padre:figlio separate da virgole. Gli ID sono locali al ruolo: A:A:A è valido per MotherA, FatherA e ChildA distinti. Sono rifiutati duplicati e collisioni di file o risultati.",
+        "en": "Comma-separated mother:father:child trios. IDs are role-local: A:A:A is valid for distinct MotherA, FatherA and ChildA files. Duplicate tuples and input/output name collisions are rejected."
+      },
+      "source_lines": [
+        19,
+        21
+      ]
+    },
+    {
+      "id": "mother_prefix",
+      "r_names": [
+        "--mother_prefix"
+      ],
+      "position": null,
+      "type": "string",
+      "default": "full_output_",
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--mother-prefix"
+        ],
+        "request_fields": [
+          "mother_prefix"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Prefisso del file mother: prefisso + ID + .txt. R propone full_output_; NIPAT propone Mother. È ammesso il prefisso vuoto.",
+        "en": "Mother filename prefix: prefix + ID + .txt. R defaults to full_output_; NIPAT defaults to Mother. Empty prefixes are accepted."
+      },
+      "source_lines": [
+        21,
+        23
+      ]
+    },
+    {
+      "id": "father_prefix",
+      "r_names": [
+        "--father_prefix"
+      ],
+      "position": null,
+      "type": "string",
+      "default": "full_output_",
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--father-prefix"
+        ],
+        "request_fields": [
+          "father_prefix"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Prefisso del file father: prefisso + ID + .txt. R propone full_output_; NIPAT propone Father. È ammesso il prefisso vuoto.",
+        "en": "Father filename prefix: prefix + ID + .txt. R defaults to full_output_; NIPAT defaults to Father. Empty prefixes are accepted."
+      },
+      "source_lines": [
+        22,
+        24
+      ]
+    },
+    {
+      "id": "child_prefix",
+      "r_names": [
+        "--child_prefix"
+      ],
+      "position": null,
+      "type": "string",
+      "default": "full_output_",
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--child-prefix"
+        ],
+        "request_fields": [
+          "child_prefix"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "Prefisso del file child: prefisso + ID + .txt. R propone full_output_; NIPAT propone Child. È ammesso il prefisso vuoto.",
+        "en": "Child filename prefix: prefix + ID + .txt. R defaults to full_output_; NIPAT defaults to Child. Empty prefixes are accepted."
+      },
+      "source_lines": [
+        23,
+        25
+      ]
+    },
+    {
+      "id": "popfreq",
+      "r_names": [
+        "--popfreq"
+      ],
+      "position": null,
+      "type": "file",
+      "default": null,
+      "required": true,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--popfreq"
+        ],
+        "request_fields": [
+          "popfreq"
+        ],
+        "mapping": "direct"
+      },
+      "description": {
+        "it": "TSV delle frequenze REF/ALT, positive e al massimo 1, associate per coordinate SNP o DNP. Gli alleli, se presenti, devono concordare.",
+        "en": "TSV of REF/ALT frequencies, positive and at most 1, joined by SNP or DNP coordinates. Allele definitions must agree when supplied."
+      },
+      "source_lines": [
+        24,
+        26
+      ]
+    },
+    {
+      "id": "markers",
+      "r_names": [
+        "--markers"
+      ],
+      "position": null,
+      "type": "file",
+      "default": null,
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--panel"
+        ],
+        "request_fields": [
+          "markers"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Pannello opzionale: chr,pos,REF,ALT per SNP oppure chr,pos1,pos2,REF,ALT per DNP. Limita i loci senza modificarne gli alleli.",
+        "en": "Optional panel: chr,pos,REF,ALT for SNP or chr,pos1,pos2,REF,ALT for DNP. Restricts loci without changing their alleles."
+      },
+      "source_lines": [
+        25,
+        27
+      ]
+    },
+    {
+      "id": "min_child_reads",
+      "r_names": [
+        "--min_child_reads"
+      ],
+      "position": null,
+      "type": "integer",
+      "default": 2,
+      "required": false,
+      "unit": "reads",
+      "nipat": {
+        "cli": [
+          "--set"
+        ],
+        "request_fields": [
+          "scientific_settings.min_child_reads"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Supporto minimo di ciascun allele chiamato nel figlio; intero positivo. NIPAT usa il registro condiviso e inoltra il valore effettivo a R.",
+        "en": "Minimum support for each called child allele; a positive integer. NIPAT reads the shared registry and forwards the effective value to R."
+      },
+      "source_lines": [
+        26,
+        28
+      ]
+    },
+    {
+      "id": "err_const_snp",
+      "r_names": [
+        "--err_const_snp"
+      ],
+      "position": null,
+      "type": "number",
+      "default": 0.001,
+      "required": false,
+      "unit": "dimensionless",
+      "nipat": {
+        "cli": [
+          "--set"
+        ],
+        "request_fields": [
+          "scientific_settings.err_const_snp"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Costante di mismatch per SNP, finita in (0,1]. NIPAT usa il registro condiviso e inoltra il valore effettivo a R.",
+        "en": "Finite SNP mismatch constant in (0,1]. NIPAT reads the shared registry and forwards the effective value to R."
+      },
+      "source_lines": [
+        28,
+        30
+      ]
+    },
+    {
+      "id": "err_const_dnp",
+      "r_names": [
+        "--err_const_dnp"
+      ],
+      "position": null,
+      "type": "number",
+      "default": 8.92303778101497e-05,
+      "required": false,
+      "unit": "dimensionless",
+      "nipat": {
+        "cli": [
+          "--set"
+        ],
+        "request_fields": [
+          "scientific_settings.err_const_dnp"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "Costante di mismatch per DNP, finita in (0,1]. NIPAT usa il registro condiviso e inoltra il valore effettivo a R.",
+        "en": "Finite DNP mismatch constant in (0,1]. NIPAT reads the shared registry and forwards the effective value to R."
+      },
+      "source_lines": [
+        29,
+        31
+      ]
+    },
+    {
+      "id": "site_selection",
+      "r_names": [
+        "--site_selection"
+      ],
+      "position": null,
+      "type": "string",
+      "default": "both",
+      "required": false,
+      "unit": null,
+      "nipat": {
+        "cli": [
+          "--set"
+        ],
+        "request_fields": [
+          "scientific_settings.site_selection"
+        ],
+        "mapping": "adapted"
+      },
+      "description": {
+        "it": "other_allele: figlio eterozigote; all: tutti i figli compatibili; both: entrambe le analisi separate. NIPAT usa il registro condiviso e inoltra il valore effettivo a R.",
+        "en": "other_allele: heterozygous child; all: all compatible children; both: both analyses separately. NIPAT reads the shared registry and forwards the effective value to R."
+      },
+      "source_lines": [
+        30,
+        32
+      ]
+    }
+  ],
+  "fixed_settings": [
+    {
+      "id": "coordinate_identity",
+      "kind": "format",
+      "value": {
+        "SNP": [
+          "chr",
+          "pos"
+        ],
+        "DNP": [
+          "chr",
+          "pos1",
+          "pos2"
+        ]
+      },
+      "description": {
+        "it": "Coordinate univoche per tabella; gli alleli condivisi devono concordare. Sono ammessi conteggi interi non negativi e total_count uguale alla loro somma.",
+        "en": "Coordinates must be unique per table and shared alleles must agree. Counts are nonnegative integers and total_count must equal their sum."
+      },
+      "source_lines": [
+        100,
+        324
+      ]
+    },
+    {
+      "id": "sample_quality_and_genotypes",
+      "kind": "filter",
+      "value": {
+        "ratio": "N_REF/(N_REF+N_ALT)",
+        "quality": "total>0 and REF+ALT>0 and Other/total<=other_fraction_max",
+        "thresholds": "scientific_settings"
+      },
+      "description": {
+        "it": "Classi omozigoti/eterozigoti definite da soglie configurabili e inclusive; rapporti intermedi non assegnati. Il filtro Other si applica ai tre campioni separatamente.",
+        "en": "Homozygous and heterozygous classes use configurable inclusive thresholds; intermediate ratios are unassigned. Other filtering is applied separately to all three samples."
+      },
+      "source_lines": [
+        260,
+        275
+      ]
+    },
+    {
+      "id": "zero_coverage_normalization",
+      "kind": "format",
+      "value": "total_count=NA with all three counts zero -> zero in memory",
+      "description": {
+        "it": "Lo zero con totale mancante viene normalizzato soltanto in memoria; gli input non sono riscritti. Tutti gli altri conteggi mancanti sono errori.",
+        "en": "Zero coverage with missing total is normalized in memory only; original inputs are not rewritten. All other missing counts are errors."
+      },
+      "source_lines": [
+        280,
+        324
+      ]
+    },
+    {
+      "id": "mendelian_pi",
+      "kind": "formula",
+      "value": {
+        "heterozygous_transmission": 0.5,
+        "matching_homozygous_transmission": 1,
+        "mismatch_transmission": 0,
+        "PI": "if mismatch: epsilon / frequency; otherwise transmission / frequency"
+      },
+      "description": {
+        "it": "Il modello diploide richiede madre omozigote; il figlio compatibile determina l’allele paterno obbligato. Un mismatch paterno usa epsilon e resta incluso. Le probabilità di trasmissione sono invarianti del modello.",
+        "en": "The diploid model requires a homozygous mother; the compatible child determines the obligatory paternal allele. Paternal mismatch uses epsilon and remains included. Transmission probabilities are model invariants."
+      },
+      "source_lines": [
+        326,
+        337
+      ]
+    },
+    {
+      "id": "support_interval_curve",
+      "kind": "execution",
+      "value": {
+        "inclusive_interval": [
+          "Min_child_reads",
+          "Through_min_child_reads"
+        ],
+        "step": 1,
+        "filter": "Child_support >= threshold"
+      },
+      "description": {
+        "it": "Le curve conservano i loci già idonei al minimo per ciascun allele e aumentano il supporto dell’allele paterno obbligato. Intervalli costanti esatti, somme cumulative e memoria proporzionale ai siti, non alla profondità.",
+        "en": "Curves retain sites eligible at the initial per-called-allele minimum and increase obligatory paternal allele support. Exact constant intervals and cumulative sums use memory proportional to loci rather than read depth."
+      },
+      "source_lines": [
+        339,
+        355
+      ]
+    },
+    {
+      "id": "eligibility_status",
+      "kind": "filter",
+      "value": [
+        "missing_call",
+        "quality_filter",
+        "mother_not_homozygous",
+        "child_unassigned",
+        "insufficient_child_support",
+        "mother_child_incompatible",
+        "father_unassigned",
+        "missing_population_frequency",
+        "eligible"
+      ],
+      "description": {
+        "it": "Motivi di esclusione ordinati e mutuamente esclusivi esportati per ogni locus dell’unione. Madre e figlio omozigoti opposti sono esclusi. Le due analisi differiscono solo nell’inclusione dei figli omozigoti compatibili.",
+        "en": "Ordered mutually exclusive exclusion reasons are exported for every locus in the union. Opposite homozygous mother and child are excluded. The analyses differ only in including compatible homozygous children."
+      },
+      "source_lines": [
+        402,
+        431
+      ]
+    },
+    {
+      "id": "combined_paternity_index",
+      "kind": "formula",
+      "value": {
+        "log10_CPI": "sum(log10(Paternity_Index))",
+        "CPI": "10^log10_CPI",
+        "zero_sites": "NA"
+      },
+      "description": {
+        "it": "Il logCPI evita l’underflow del prodotto; CPI può essere 0 o Inf quando l’esponenziazione supera l’intervallo floating point. Nessun sito produce NA.",
+        "en": "LogCPI avoids product underflow; CPI can be 0 or Inf when exponentiation exceeds floating-point range. No eligible sites gives NA."
+      },
+      "source_lines": [
+        448,
+        461
+      ]
+    },
+    {
+      "id": "plot_format",
+      "kind": "presentation",
+      "value": {
+        "individual_pdf_inches": [
+          10,
+          4
+        ],
+        "aggregate": "paginated shared helper",
+        "log_regions": "configurable lower and upper display guides"
+      },
+      "description": {
+        "it": "Grafici individuali e aggregato paginato. Il minimo configurato è evidenziato; matching/mismatching hanno un asse distinto. Le guide cromatiche non modificano il calcolo.",
+        "en": "Individual plots and a paginated aggregate. The configured minimum is highlighted and matching/mismatching counts have a separate axis. Shaded display guides do not change calculations."
+      },
+      "source_lines": [
+        487,
+        540
+      ]
+    }
+  ],
+  "preparation_settings": [
+    {
+      "id": "validated_staging",
+      "origin": "NIPAT engine",
+      "applies_to": "cpin",
+      "value": {
+        "copies": "unique required sample files",
+        "input_mutation": false,
+        "marker_type": "inferred from population"
+      },
+      "description": {
+        "it": "Validazione completa prima di creare le cartelle: schema, frequenze, tabelle, terne, collisioni, presentazione e destinazioni. Pannelli normalizzati preservando REF/ALT.",
+        "en": "Complete validation before directory creation: schema, frequencies, counts, trios, collisions, presentation and destinations. Normalized panels preserve REF/ALT."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/cpin.py",
+        "sha256": "65f46c57f25c4158059ac73833089b9e191905ee3666ea04ea26ac139a065291",
+        "source_lines": [
+          1,
+          155
+        ],
+        "dependencies": [
+          {
+            "path": "src/nipat_scientific/files.py",
+            "sha256": "cb6d5e52658233b8f20f8f86739710a3a7af84d7901d02821f33e1fd182447d0",
+            "source_lines": [
+              1,
+              300
+            ]
+          },
+          {
+            "path": "src/nipat_scientific/panels.py",
+            "sha256": "fdb28f0935587088cfe3921171e37c5c075e9d30ffc2888edd162d9de64236c4",
+            "source_lines": [
+              1,
+              220
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "effective_scientific_settings",
+      "origin": "NIPAT engine",
+      "applies_to": "cpin",
+      "value": {
+        "workflow": "cpin",
+        "parameters": {
+          "other_fraction_max": {
+            "default": 0.1,
+            "type": "number",
+            "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "homozygous_ref_min": {
+            "default": 0.9,
+            "type": "number",
+            "description": "Frazione REF minima per classificare il sito come omozigote REF.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "homozygous_alt_max": {
+            "default": 0.1,
+            "type": "number",
+            "description": "Frazione REF massima per classificare il sito come omozigote ALT.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "heterozygous_min": {
+            "default": 0.4,
+            "type": "number",
+            "description": "Limite inferiore incluso della frazione REF per il genotipo eterozigote.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "heterozygous_max": {
+            "default": 0.6,
+            "type": "number",
+            "description": "Limite superiore incluso della frazione REF per il genotipo eterozigote.",
+            "unit": "proporzione",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "err_const_snp": {
+            "default": 0.001,
+            "type": "number",
+            "description": "Costante per un mismatch paterno su SNP.",
+            "unit": "probabilita",
+            "minimum": 0,
+            "maximum": 1,
+            "exclusive_minimum": true
+          },
+          "err_const_dnp": {
+            "default": 8.92303778101497e-05,
+            "type": "number",
+            "description": "Costante per un mismatch paterno su DNP.",
+            "unit": "probabilita",
+            "minimum": 0,
+            "maximum": 1,
+            "exclusive_minimum": true
+          },
+          "log_cpi_lower": {
+            "default": -4.0,
+            "type": "number",
+            "description": "Guida grafica inferiore del log10(CPI); non modifica il calcolo.",
+            "unit": "log10(CPI)"
+          },
+          "log_cpi_upper": {
+            "default": 4.0,
+            "type": "number",
+            "description": "Guida grafica superiore del log10(CPI); non modifica il calcolo.",
+            "unit": "log10(CPI)"
+          },
+          "min_child_reads": {
+            "default": 2,
+            "type": "integer",
+            "description": "Supporto minimo di ciascun allele chiamato nel figlio.",
+            "unit": "letture",
+            "minimum": 1,
+            "maximum": 2147483646
+          },
+          "site_selection": {
+            "default": "both",
+            "type": "string",
+            "description": "Selezione dei siti postnatali; both produce due analisi distinte.",
+            "unit": null,
+            "choices": [
+              "other_allele",
+              "all",
+              "both"
+            ]
+          }
+        },
+        "constants": {
+          "ploidy": {
+            "value": 2,
+            "description": "Modello diploide; cambiare ploidia richiede un diverso modello e schema di genotipi."
+          },
+          "allele_alphabet": {
+            "value": "ACGT",
+            "description": "Alfabeto degli alleli nel modello supportato."
+          },
+          "missing_result": {
+            "value": "NA",
+            "description": "Assenza di stima o genotipo; non equivale a zero."
+          },
+          "heterozygous_transmission": {
+            "value": 0.5,
+            "description": "Probabilita mendeliana di trasmissione paterna eterozigote."
+          },
+          "homozygous_transmission": {
+            "value": 1,
+            "description": "Probabilita mendeliana di trasmissione dell'allele omozigote."
+          },
+          "log_cpi_base": {
+            "value": 10,
+            "description": "Base del logaritmo riportato per il Combined Paternity Index."
+          },
+          "population_frequencies": {
+            "value": "(0, 1]",
+            "description": "Frequenze alleliche finite e positive per il modello corrente."
+          },
+          "pi_formula": {
+            "value": "paternal transmission (or mismatch constant) / obligatory allele population frequency",
+            "description": "Indice di paternita per sito."
+          },
+          "other_filter_comparison": {
+            "value": "<=",
+            "description": "La soglia Other e inclusa fra i siti ammessi."
+          },
+          "maternal_selection": {
+            "value": "homozygous mother only",
+            "description": "Entrambe le selezioni CPIN richiedono madre omozigote."
+          },
+          "curve_threshold_semantics": {
+            "value": "obligatory paternal allele support after initial child genotype support filter",
+            "description": "La curva aumenta il supporto dell'allele paterno obbligato dopo il filtro iniziale sugli alleli chiamati."
+          }
+        }
+      },
+      "description": {
+        "it": "Tutte le soglie scientifiche sono configurabili tramite scientific_settings o CLI --set cpin.nome=valore; definizioni, limiti, valori effettivi e costanti del modello sono consultabili e salvati nel run.",
+        "en": "All scientific thresholds are configurable using scientific_settings or CLI --set cpin.name=value; definitions, bounds, effective values and model constants are readable and saved with the run."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/settings_data.json",
+        "sha256": "e1284fe3489dc55b19c13a806ca461cbfc712c6047fb2499d8c3ac2c86692123",
+        "source_lines": [
+          1,
+          631
+        ],
+        "dependencies": [
+          {
+            "path": "src/nipat_scientific/settings.py",
+            "sha256": "6690241ce2ee41393433381dcb07a87fea60c7b664b9ad58a4ced8a27def7fc4",
+            "source_lines": [
+              1,
+              178
+            ]
+          },
+          {
+            "path": "src/nipat_scientific/settings.R",
+            "sha256": "d4e0db860501861132aa3fde280d371ab84a5fe7944d94482b7499f29687c392",
+            "source_lines": [
+              1,
+              96
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "parallel_budget",
+      "origin": "NIPAT engine",
+      "applies_to": "cpin",
+      "value": {
+        "unit": "trio",
+        "modes": [
+          "serial",
+          "auto"
+        ],
+        "cap": "NIPAT_MAX_WORKERS",
+        "cache": "shared samples preloaded before fork"
+      },
+      "description": {
+        "it": "Il budget comune limita processi, CPU e memoria; modalità seriale pura disponibile. I campioni condivisi sono caricati prima dei worker e i risultati mantengono l’ordine delle terne.",
+        "en": "The shared budget bounds workers using CPU and memory; pure serial execution is available. Shared samples are loaded before workers and results preserve trio order."
+      },
+      "evidence": {
+        "path": "src/nipat_scientific/parallel.R",
+        "sha256": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
+        "source_lines": [
+          1,
+          205
+        ]
+      }
+    }
+  ],
+  "audit_sections": [
+    {
+      "start": 1,
+      "end": 15,
+      "summary": {
+        "it": "Provenienza, dipendenze e parametri condivisi.",
+        "en": "Provenance, dependencies and shared parameters."
+      }
+    },
+    {
+      "start": 16,
+      "end": 93,
+      "summary": {
+        "it": "Interfaccia R e validazione delle terne.",
+        "en": "R interface and trio validation."
+      }
+    },
+    {
+      "start": 94,
+      "end": 219,
+      "summary": {
+        "it": "Frequenze, tipo di marcatore, pannello, alleli e controlli.",
+        "en": "Frequencies, marker type, panel, alleles and validation."
+      }
+    },
+    {
+      "start": 220,
+      "end": 323,
+      "summary": {
+        "it": "Cache dei campioni, classi genotipiche e qualità.",
+        "en": "Sample caches, genotype classes and quality."
+      }
+    },
+    {
+      "start": 324,
+      "end": 354,
+      "summary": {
+        "it": "Modello PI e curve a intervalli cumulativi.",
+        "en": "PI model and cumulative interval curves."
+      }
+    },
+    {
+      "start": 355,
+      "end": 430,
+      "summary": {
+        "it": "Preparazione condivisa, join dei tre ruoli ed eleggibilità.",
+        "en": "Shared preparation, three-role joins and eligibility."
+      }
+    },
+    {
+      "start": 431,
+      "end": 539,
+      "summary": {
+        "it": "PI per sito, tabelle, riepiloghi e grafici.",
+        "en": "Per-site PI, tables, summaries and plots."
+      }
+    },
+    {
+      "start": 540,
+      "end": 549,
+      "summary": {
+        "it": "Parallelismo delle terne e aggregazione ordinata.",
+        "en": "Trio parallelism and ordered aggregation."
+      }
+    }
+  ]
+}

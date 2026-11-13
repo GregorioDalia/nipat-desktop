@@ -1,8 +1,9 @@
-"""Acquire the unchanged DNP pileup within the shared scientific process budget.
+"""Acquire DNP pileup within the shared scientific process budget.
 
-The BED and all mpileup scientific options come from DNPcall. Indexed view only
-selects alignments overlapping the same BED; no reads are deduplicated by name,
-no quality/filter/depth options are changed, and original BAMs remain read-only.
+The BED comes from DNPcall and acquisition options from the scientific registry.
+Indexed view selects alignments overlapping the same BED; reads are not
+deduplicated by name and original BAMs remain read-only. Default quality,
+filter and depth options preserve the original acquisition behavior.
 An explicit R-owned budget enables whole-chromosome indexed tasks, with exactly
 one samtools process per task. Output is reassembled in BAM dictionary order.
 The unbudgeted API retains the 0.8.12 acquisition path for regression comparison.
@@ -29,6 +30,7 @@ import time
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from nipat_scientific import progress
+from nipat_scientific.settings import samtools_options, settings_from_environment
 
 MPILEUP_OPTIONS = ["--output-QNAME", "--no-output-ins", "--no-output-del", "--no-output-ends"]
 
@@ -392,7 +394,7 @@ def _budgeted_acquisition(bams, samples, bed, reference, staging, output, cancel
         selected.append(str(destination))
     selected_list.write_text("".join(name + "\n" for name in selected), encoding="utf-8")
     command = [samtools, "mpileup", "-l", str(bed), "-f", str(reference),
-               *MPILEUP_OPTIONS, "-b", str(selected_list)]
+               *document["mpileup_options"], "-b", str(selected_list)]
     _write_json(metadata, document)
     sample_ids = [sample["sample_id"] for sample in samples]
     with progress.phase("dnp-indexed-pileup" if contigs else "dnp-pileup",
@@ -405,6 +407,8 @@ def _budgeted_acquisition(bams, samples, bed, reference, staging, output, cancel
 
 def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, samtools="samtools", budget=None):
     """Return acquisition metadata only after both processes and output succeed."""
+    scientific = settings_from_environment("dnp-call")
+    mpileup_options = [*MPILEUP_OPTIONS, *samtools_options("dnp-call", scientific)]
     parallel = _budget(budget)
     bamlist, bed, reference = (Path(value).resolve() for value in (bamlist, bed, reference))
     scratch_dir = Path(scratch_dir)
@@ -443,7 +447,8 @@ def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, s
     document = {
         "schema_version": 1, "status": "running", "strategy": strategy, "samples": samples,
         "scratch": {"storage": "disk", "available_bytes_before": disk.f_bavail * disk.f_frsize},
-        "mpileup_options": MPILEUP_OPTIONS.copy(), "processes": [], "output_bytes": None,
+        "mpileup_options": mpileup_options, "scientific_settings": scientific,
+        "processes": [], "output_bytes": None,
         "elapsed_seconds": None,
         "timing_scope": "all acquisition work, including indexed selection and disk staging; pipeline stages overlap",
         "byte_scope": "input file sizes and disk intermediates; pipe transfer bytes are not measured",
@@ -498,7 +503,7 @@ def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, s
             inputs = ["-"] if strategy == "indexed-pipe" else ["-b", str(selected_list)]
             # samtools 1.21 accepts stdin as a positional input, but its -b
             # file-list reader rejects a list entry named "-" as missing.
-            command = [samtools, "mpileup", "-l", str(bed), "-f", str(reference), *MPILEUP_OPTIONS, *inputs]
+            command = [samtools, "mpileup", "-l", str(bed), "-f", str(reference), *mpileup_options, *inputs]
             descriptor, name = tempfile.mkstemp(prefix=".pileup-", suffix=".partial", dir=output.parent)
             partial = Path(name)
             sample_ids = [sample["sample_id"] for sample in samples]

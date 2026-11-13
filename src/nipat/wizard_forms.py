@@ -10,6 +10,9 @@ from typing import Any, Callable
 
 from nipat.adapters.panels import read_dnp_list, read_position_panel, read_snp_positions
 from nipat.errors import Cancelled, ValidationError
+from nipat.scientific_options import edit_scientific_settings
+from nipat_scientific.files import require_population_frequencies
+from nipat_scientific.panels import read_position_panel as read_typed_panel
 from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout, _SAFE_RUN_NAME
 from nipat.validation.files import (
@@ -59,7 +62,7 @@ def edit_parallel_options(ui: Any, options: ExecutionOptions) -> ExecutionOption
     """Edit a reviewed copy; cancelling leaves the caller's options untouched."""
     candidate = options
     while True:
-        ui.message("Il massimo di processi di calcolo vale per la preparazione del pileup DNP e per il successivo calcolo R. "
+        ui.message("Il massimo di processi di calcolo vale per la preparazione del pileup DNP/SNP e per il successivo calcolo R dei cinque moduli. "
                    "Campioni e blocchi condividono il limite; la scelta automatica considera CPU, memoria e lavoro disponibile.", kind="muted")
         ui.message("I processi di coordinamento possono aggiungersi ai processi di calcolo. "
                    "Questo massimo e' distinto dal limite dei processi del container, che include tutti i processi.", kind="muted")
@@ -161,8 +164,15 @@ def check_pairs(value: str) -> None:
 
 
 def check_popfreq(path: Path) -> None:
-    require_columns(path, {"chr", "pos1", "pos2", "Ref_f.pop", "Alt_f.pop"},
-                    "Frequenze di popolazione non compatibili")
+    require_population_frequencies(path)
+
+
+def check_count_panel(path: Path) -> None:
+    """Accept either coordinate schema; consumers validate the selected type."""
+    try:
+        read_typed_panel(path, "DNP")
+    except ValidationError:
+        read_typed_panel(path, "SNP")
 
 
 class WorkflowForm:
@@ -176,6 +186,7 @@ class WorkflowForm:
         # Saved defaults are proposed and validated again when each field is read.
         self.values: dict[str, Any] = dict(defaults or {})
         self.execution_options = ExecutionOptions()
+        self.scientific_settings = {}
 
     @property
     def title(self) -> str:
@@ -212,7 +223,7 @@ class WorkflowForm:
             result += ([Field("input_dir", "Cartella di input", "directory")]
                        if values.get("mode") == "2" else
                        [Field("inputs", "Tabella campione", "files", check=require_contamination_input)])
-            result += [Field("panel", "Pannello DNP", "file", check=read_position_panel)]
+            result += [Field("panel", "Pannello SNP o DNP", "file", check=check_count_panel)]
         else:
             result = [Field("input_dir", "Cartella cfDNA materno e presunto padre", "directory"),
                       Field("pairs", "Coppie (esempio A1:A1,A2:A2)", check=check_pairs),
@@ -221,17 +232,17 @@ class WorkflowForm:
                       Field("popfreq", "Frequenze di popolazione", "file", check=check_popfreq),
                       Field("cutoff_mode", "Selezione dei siti CPI", "choice", "0", options=(
                           ("0", "Tutti i siti", "Modalita' ALL"),
-                          ("1", "Pannello singolo", "Coordinate DNP"),
+                          ("1", "Pannello singolo", "Coordinate SNP o DNP"),
                           ("2", "Etichette e file", "Uno o piu' cutoff"),
                           ("3", "Mappa nativa", "etichetta=file,etichetta2=file2")))]
             cutoff_mode = values.get("cutoff_mode", "0")
             if cutoff_mode == "1":
-                result.append(Field("panel", "Pannello di coordinate DNP", "file", check=read_position_panel))
+                result.append(Field("panel", "Pannello di coordinate SNP o DNP", "file", check=check_count_panel))
             elif cutoff_mode == "2":
                 result.append(Field("cutoffs", "Cutoff con etichetta", "cutoffs"))
             elif cutoff_mode == "3":
                 result.append(Field("cutoff_map", "Mappa cutoff (etichetta=file,etichetta2=file2)"))
-            result.append(Field("err_const", "Costante di errore", "number", str(self.err_const)))
+            result.append(Field("err_const", "Costante di errore (vuoto = valore scientifico SNP/DNP)", "number", required=False))
         return result + [Field("run_name", "Nome nuova esecuzione (vuoto = automatico)", "run", required=False)]
 
     def _guide(self, field: Field, default: str = "") -> None:
@@ -242,15 +253,15 @@ class WorkflowForm:
             "bamlist": "Scegliere un file di testo con un percorso BAM per riga, senza intestazione. I percorsi nella lista sono relativi alla cartella della lista stessa, oppure completi.",
             "reference": "Selezionare il file FASTA delle sequenze, per esempio genome.fa, non il suo indice .fai o .gzi. Usare la stessa assembly del BAM e del pannello. L'indice .fai deve trovarsi accanto al FASTA; per FASTA compresso BGZF serve anche .gzi.",
             "pileup": "Scegliere un pileup separato da tabulazioni, senza intestazione, con i nomi delle letture (QNAME) nella settima colonna; e' il formato samtools --output-QNAME.",
-            "inputs": "Scegliere le tabelle dei campioni, una per volta. Colonne richieste: chr, pos1, pos2, N_REF, N_ALT, N_Other; separatore: tabulazione. La colonna ratio e' facoltativa.",
+            "inputs": "Scegliere le tabelle dei campioni, una per volta. Colonne richieste: chr, pos (SNP) oppure pos1 e pos2 (DNP), N_REF, N_ALT, N_Other; separatore: tabulazione. La colonna ratio e' facoltativa.",
             "pairs": "Indicare gli identificativi madre:padre, separando le coppie con una virgola. Esempio: A1:A1,A2:A2. Con i prefissi predefiniti, A1:A1 usa MotherA1.txt e FatherA1.txt.",
             "mother_prefix": "Il nome del file e' prefisso + identificativo materno + .txt. Esempio: Mother + A1 diventa MotherA1.txt. :vuoto elimina il prefisso.",
             "father_prefix": "Il nome del file e' prefisso + identificativo paterno + .txt. Esempio: Father + A1 diventa FatherA1.txt. :vuoto elimina il prefisso.",
-            "popfreq": "Scegliere la tabella delle frequenze di popolazione, separata da tabulazioni, con intestazione chr, pos1, pos2, Ref_f.pop, Alt_f.pop.",
+            "popfreq": "Scegliere la tabella delle frequenze di popolazione, separata da tabulazioni, con coordinate chr/pos (SNP) oppure chr/pos1/pos2 (DNP), Ref_f.pop e Alt_f.pop.",
             "cutoffs": "Per ciascun gruppo di siti inserire prima un'etichetta, poi il percorso del file di coordinate. Esempio di etichetta: pannello_A. Non usare virgole o '=' nell'etichetta.",
             "cutoff_file": "Scegliere il file di coordinate per l'etichetta appena inserita: colonne chr, pos1, pos2, oppure un pannello DNP a cinque colonne.",
-            "cutoff_map": "Inserire etichetta=percorso, separando i gruppi con una virgola. Esempio: pannello_A=panels/a.txt,pannello_B=panels/b.txt. I file devono contenere le coordinate DNP.",
-            "err_const": "Parametro del modello CPI: mantenere il valore proposto, salvo una scelta motivata per l'analisi. Per modificarlo usare un numero maggiore o uguale a zero, con il punto decimale.",
+            "cutoff_map": "Inserire etichetta=percorso, separando i gruppi con una virgola. Esempio: pannello_A=panels/a.txt,pannello_B=panels/b.txt. I file devono contenere le coordinate dello stesso tipo SNP/DNP delle tabelle.",
+            "err_const": "Lasciare vuoto per usare la costante SNP o DNP dei parametri scientifici. Un valore esplicito sovrascrive la costante del tipo di marcatori selezionato per questa analisi.",
             "run_name": "Il nome identifica una nuova cartella di esecuzione. Le cartelle gia' esistenti non vengono sovrascritte.",
             "cutoff_mode": "Scegliere se usare tutti i siti disponibili o limitare l'analisi a uno o piu' gruppi di coordinate. Ogni modalita' richiedera' solo i propri input.",
         }
@@ -269,7 +280,7 @@ class WorkflowForm:
                     if self.choice == "1" else
                     "Scegliere una tabella separata da tabulazioni con intestazione chr, pos, ref, alt. Esempio di riga: chr1, 1770788, C, G. E' accettato anche il formato precedente pos, ref, alt con coordinate chr1:1770788. Le posizioni devono essere comprese tra 2 e 2147483646."
                     if self.choice == "2" else
-                    "Scegliere le coordinate DNP da includere nell'analisi: colonne chr, pos1, pos2, con o senza intestazione. E' accettato anche il pannello DNP a cinque colonne. DNP_list.txt e' un nome di esempio: il file puo' avere un altro nome.")
+                    "Scegliere le coordinate SNP (chr, pos) oppure DNP (chr, pos1, pos2) da includere. Il tipo deve corrispondere alle tabelle. Sono accettati anche pannelli con REF e ALT.")
         else:
             text = guides[field.key]
         self.ui.message(text, kind="muted")
@@ -351,7 +362,7 @@ class WorkflowForm:
                         for item in current:
                             if field.kind == "cutoffs":
                                 self._file(Field("cutoff_file", "File cutoff", "file",
-                                                 check=read_position_panel), str(item[1]))
+                                                 check=check_count_panel), str(item[1]))
                             else:
                                 self._file(field, str(item))
                     except (ValidationError, OSError, ValueError, csv.Error) as exc:
@@ -384,7 +395,7 @@ class WorkflowForm:
                         raise ValidationError("Etichetta cutoff non valida: evitare virgole e '='.")
                     if label in {item[0] for item in current}:
                         raise ValidationError("Etichetta cutoff duplicata.")
-                    source = self._read(Field("cutoff_file", "File cutoff", "file", check=read_position_panel))
+                    source = self._read(Field("cutoff_file", "File cutoff", "file", check=check_count_panel))
                     item = (label, source)
                 else:
                     prompt = ("Altro file (Invio per continuare)" if current else
@@ -426,12 +437,16 @@ class WorkflowForm:
                 if field.kind == "directory":
                     return require_directory(Path(unquote(answer)), field.label)
                 if field.kind == "number":
+                    if not answer and not field.required:
+                        return None
                     try:
                         number = float(answer)
                     except ValueError:
                         number = float("nan")
                     if not math.isfinite(number) or number < 0:
                         raise ValidationError("Inserire un numero finito maggiore o uguale a zero, usando il punto decimale.")
+                    if field.key == "err_const" and not 0 < number <= 1:
+                        raise ValidationError("La costante di errore deve essere maggiore di zero e non superiore a uno.")
                     return number
                 if field.kind == "run":
                     if not answer:
@@ -506,6 +521,12 @@ class WorkflowForm:
             destination = self.layout.runs_dir / (self.values.get("run_name") or "<nome automatico>")
             self.ui.message(f"Destinazione: {destination}")
             self.ui.message(parallel_summary(self.execution_options))
+            if self.scientific_settings:
+                self.ui.message("Parametri scientifici personalizzati:")
+                for module, overrides in self.scientific_settings.items():
+                    for key, value in overrides.items():
+                        self.ui.message(f"  {module}.{key} = {value}")
+            self.ui.message("Parametri predefiniti, limiti e costanti sono consultabili e modificabili dalla voce 5.", kind="muted")
             self.ui.message("Controllare gli input. 'Modifica un campo' permette di correggerli conservando gli altri valori.", kind="muted")
             self.ui.message("La conferma preparera' file e comandi, senza eseguire il calcolo scientifico." if dry_run else
                             "Il calcolo scientifico iniziera' solo confermando 'Avvia analisi'.", kind="muted")
@@ -524,6 +545,7 @@ class WorkflowForm:
                 ("3", start_label + (" senza diagnostica" if performance_diagnostics else " con diagnostica prestazioni"),
                  "Solo per questa esecuzione"),
                 ("4", "Parallelismo e blocchi", "Modifica solo questa analisi; le preferenze salvate restano invariate"),
+                ("5", "Parametri scientifici e costanti", "Leggi tutti i valori e modifica i parametri per questa analisi"),
                 ("0", "Annulla", "Torna al menu senza avviare"),
             ], default="0")
             if choice in {"0", ":annulla", ":indietro"}:
@@ -531,6 +553,9 @@ class WorkflowForm:
             if choice in {"1", "3"}:
                 self.performance_diagnostics = performance_diagnostics if choice == "1" else not performance_diagnostics
                 return True
+            if choice == "5":
+                self.scientific_settings = edit_scientific_settings(self.ui, self.scientific_settings)
+                continue
             if choice == "4":
                 self.execution_options = edit_parallel_options(self.ui, self.execution_options)
                 continue

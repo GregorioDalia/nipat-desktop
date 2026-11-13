@@ -185,6 +185,8 @@ def step_sample_ids(step):
         result.append(item if isinstance(item, str) else item["sample"])
     for pair in inputs.get("pairs", []):
         result.extend(pair[role]["sample"] for role in ("mother", "father"))
+    for trio in inputs.get("trios", []):
+        result.extend(trio[role]["sample"] for role in ("mother", "father", "child"))
     return list(dict.fromkeys(result))
 
 

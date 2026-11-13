@@ -21,7 +21,7 @@ def _digest(path: Path) -> str:
 def _state(run: Path) -> dict:
     state = json.loads((run / "workflow-state.json").read_text(encoding="utf-8"))
     if (state.get("schema_version") != 1
-            or state.get("interface") != "workflow-plan-execution-v1"):
+            or state.get("interface") != "workflow-plan-execution-v2"):
         raise ValueError("Unexpected workflow execution report interface.")
     return state
 
@@ -103,7 +103,7 @@ def check_workflow_execution(identifier: str, root: Path, inputs: Path, *, run_i
     if len(summary) != 2:
         raise ValueError("Expected two Contamination summaries.")
     for row in summary:
-        if (int(row["informative_DNPs"]) != 2 or float(row["mean_contamination"]) != 0
+        if (int(row["informative_sites"]) != 2 or float(row["mean_contamination"]) != 0
                 or float(row["sd_contamination"]) != 0):
             raise ValueError(f"Contamination differs from the independent synthetic oracle: {row}.")
     contamination_tables = {
@@ -562,8 +562,8 @@ def check_cpi_chains(identifier: str, root: Path, dnp_inputs: Path, *, run_image
             mapped = {item["sample"]: item for item in contamination["artifacts"]["contamination-tables"]}
             maternal_row = summary[mapped["sample_0001"]["native_name"]]
             paternal_row = summary[mapped["sample_0002"]["native_name"]]
-            if (maternal_row["informative_DNPs"] != "3" or float(maternal_row["mean_contamination"]) != 0.04
-                    or float(maternal_row["sd_contamination"]) != 0 or paternal_row["informative_DNPs"] != "0"
+            if (maternal_row["informative_sites"] != "3" or float(maternal_row["mean_contamination"]) != 0.04
+                    or float(maternal_row["sd_contamination"]) != 0 or paternal_row["informative_sites"] != "0"
                     or paternal_row["mean_contamination"] != "NA" or paternal_row["sd_contamination"] != "NA"):
                 raise ValueError("Positive full-chain Contamination differs from the synthetic oracle.")
             # CPI must consume original DNP tables, not Contamination's filtered

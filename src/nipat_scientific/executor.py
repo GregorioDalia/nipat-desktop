@@ -1,13 +1,13 @@
 """Execute typed scientific plans in the image, including independent SNPcall.
 
-The plan validator and executor support the four bundled workflows.
+The plan validator and executor support the five bundled workflows.
 The executor never imports the desktop application,
 changes R sources, copies BAMs, executes shell fragments, or resumes an old run.
 """
 
 from __future__ import annotations
 
-from contextlib import nullcontext
+from contextlib import nullcontext, ExitStack
 from datetime import datetime, timezone
 import errno
 import hashlib
@@ -23,14 +23,16 @@ import time
 
 from nipat_scientific.contamination import prepare_contamination
 from nipat_scientific.cpi import prepare_cpi
+from nipat_scientific.cpin import prepare_cpin
+from nipat_scientific.settings import normalize_settings, settings_context
 from nipat_scientific.dnp import prepare_dnp
 from nipat_scientific.errors import PlanExecutionError, ValidationError
 from nipat_scientific.files import (
     require_contamination_input,
-    require_dnp_input, require_file, require_population_frequencies, require_sidecar, require_snp_pileup,
+    require_dnp_input, require_count_input, require_file, require_population_frequencies, require_sidecar, require_snp_pileup,
 )
 from nipat_scientific.panels import read_dnp_list, read_position_panel, read_snp_positions
-from nipat_scientific.outputs import _artifact, _collect_outputs, _cpi_bindings
+from nipat_scientific.outputs import _artifact, _collect_outputs, _cpi_bindings, _cpin_bindings
 from nipat_scientific.plan import validate_plan
 from nipat_scientific.snp import prepare_snp
 from nipat_scientific import progress
@@ -42,8 +44,8 @@ from nipat_scientific.presentation import (
 )
 
 
-SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi"})
-INTERFACE = "workflow-plan-execution-v1"
+SUPPORTED_WORKFLOWS = frozenset({"dnp-call", "snp-call", "contamination", "cpi", "cpin"})
+INTERFACE = "workflow-plan-execution-v2"
 _NATIVE_PATH = re.compile(r"[A-Za-z0-9_./:-]+\Z")
 
 
@@ -119,21 +121,26 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
 
     for step in plan["steps"]:
         inputs = step["inputs"]
-        if step["workflow"] == "cpi":
+        if step["workflow"] in {"cpi", "cpin"}:
+            marker = step["parameters"]["marker_type"]
             popfreq = require_file(Path(inputs["popfreq"]), "Population frequencies")
-            require_population_frequencies(popfreq)
+            require_population_frequencies(popfreq, marker_type=marker)
             sources.append(popfreq)
-            if inputs["cutoffs"] and any(char in str(root) for char in ",="):
+            panels = ([entry["path"] for entry in inputs["cutoffs"]] if step["workflow"] == "cpi"
+                      else [inputs["markers"]] if inputs["markers"] else [])
+            if step["workflow"] == "cpi" and panels and any(char in str(root) for char in ",="):
                 raise PlanExecutionError("execution.alias", "CPI cutoff staging requires a run path without comma or equals characters.")
-            for cutoff in inputs["cutoffs"]:
-                panel = require_file(Path(cutoff["path"]), "CPI cutoff panel")
-                read_position_panel(panel)
+            for path in panels:
+                panel = require_file(Path(path), "CPI marker panel")
+                read_position_panel(panel, marker_type=marker)
                 sources.append(panel)
-            for pair in inputs["pairs"]:
-                for role in ("mother", "father"):
-                    reference = pair[role]
+            family_key, roles = (("pairs", ("mother", "father")) if step["workflow"] == "cpi"
+                                 else ("trios", ("mother", "father", "child")))
+            for family in inputs[family_key]:
+                for role in roles:
+                    reference = family[role]
                     if "step" not in reference:
-                        require_dnp_input(samples[reference["sample"]])
+                        require_count_input(samples[reference["sample"]], marker_type=marker, cpi=True)
             continue
         panel = require_file(Path(inputs["panel"]), "Plan panel")
         sources.append(panel)
@@ -172,10 +179,10 @@ def _preflight(document: object, run_dir: Path, script_paths: dict[str, Path]) -
                         if sidecar.is_file():
                             sources.append(sidecar.resolve())
         else:
-            read_position_panel(panel)
+            read_position_panel(panel, marker_type=step["parameters"]["marker_type"])
             for reference in inputs["samples"]:
                 if "step" not in reference:
-                    require_contamination_input(samples[reference["sample"]])
+                    require_count_input(samples[reference["sample"]], marker_type=step["parameters"]["marker_type"], cpi=False)
     if any(path.is_relative_to(root) for path in [*sources, *scripts.values()]):
         raise PlanExecutionError("execution.overlap", "Inputs and bundled scripts must be outside the new run directory.")
     return report, root, scripts
@@ -249,16 +256,22 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
     aliases = ({f"sample_{index:04d}": value for index, value in enumerate(sample_ids, 1)}
                if step["workflow"] == "dnp-call" else {})
     with progress.context(step["workflow"], step_id=step["id"],
-                          sample_ids=sample_ids, sample_map=aliases):
+                          sample_ids=sample_ids, sample_map=aliases), ExitStack() as settings_stack:
         if cancellation.signum is not None:
             raise KeyboardInterrupt
         record["status"], record["started_utc"] = "running", _utc()
         persist()
         directory = root / "steps" / step["id"]
-        directory.mkdir(parents=True)
+        directory.mkdir(parents=True, exist_ok=True)
         work, output = directory / "work", directory / "output"
         request = {"schema_version": 1, "workflow": step["workflow"],
-                   "work_dir": str(work), "out_dir": str(output)}
+                   "work_dir": str(work), "out_dir": str(output),
+                   "scientific_settings": normalize_settings(step["workflow"], step["parameters"].get("scientific_settings"))}
+        if step["workflow"] in {"contamination", "cpi", "cpin"}:
+            request["marker_type"] = step["parameters"]["marker_type"]
+
+        def activate_settings():
+            settings_stack.enter_context(settings_context(step["workflow"], request["scientific_settings"], work))
 
         def record_request(bindings=()):
             presentation = step_presentation(plan, step, request, bindings)
@@ -274,6 +287,7 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
                                 "reference": step["inputs"]["reference"], "parallel": step["parameters"]["parallel"]})
                 record_request()
                 prepared = prepare_dnp(request)
+                activate_settings()
                 native, cwd = prepared.native_arguments, prepared.working_dir
             elif step["workflow"] == "snp-call":
                 mode = step["parameters"]["mode"]
@@ -286,6 +300,7 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
                 record_request()
                 persist()
                 prepared = prepare_snp(request)
+                activate_settings()
                 native, cwd = prepared.native_arguments, work
                 if prepared.preparation_command is not None:
                     if cancellation.signum is not None:
@@ -326,7 +341,8 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
                 request["samples"] = selected
                 record_request()
                 native, cwd = prepare_contamination(request), work
-            else:
+                activate_settings()
+            elif step["workflow"] == "cpi":
                 selections, pairs = _cpi_bindings(step)
                 # Retain the explicit identities even when R leaves only
                 # partial plots or preparation fails before any output exists.
@@ -340,13 +356,29 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
                     "pairs": ",".join(pair["native_selection"] for pair in pairs),
                     "mother_prefix": "Mother", "father_prefix": "Father",
                     "popfreq": step["inputs"]["popfreq"], "cutoffs": step["inputs"]["cutoffs"],
-                    "cutoff_mode": step["parameters"]["cutoff_mode"], "err_const": step["parameters"]["err_const"],
+                    "cutoff_mode": step["parameters"]["cutoff_mode"],
+                    **({"err_const": step["parameters"]["err_const"]} if "err_const" in step["parameters"] else {}),
                 })
                 record_request(pairs)
                 persist()
                 native, cwd = prepare_cpi(request), work
+                activate_settings()
+            else:
+                selections, trios = _cpin_bindings(step)
+                record["trio_mapping"] = [{key: item[key] for key in ("trio", "mother", "father", "child", "native_trio")} for item in trios]
+                request.update({
+                    "samples": [{"path": str(_resolve_table(item["source"], samples, outputs)), "name": item["name"]} for item in selections],
+                    "trios": ",".join(item["native_selection"] for item in trios),
+                    "mother_prefix": "Mother", "father_prefix": "Father", "child_prefix": "Child",
+                    "popfreq": step["inputs"]["popfreq"], "markers": step["inputs"]["markers"],
+                })
+                record_request(trios)
+                persist()
+                native, cwd = prepare_cpin(request), work
+                activate_settings()
         if cancellation.signum is not None:
             raise KeyboardInterrupt
+        record["scientific_settings"] = _artifact(work / "effective-scientific-settings.json", root, work)
         validation_report = work / "input-validation.json"
         record["input_validation"] = _artifact(validation_report, root, work)
         record["input_warnings"] = json.loads(validation_report.read_text(encoding="utf-8"))["warnings"]
@@ -382,8 +414,8 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
         if cancellation.signum is not None:
             raise KeyboardInterrupt
         record.update(status="succeeded", artifacts=artifacts, finished_utc=_utc())
-        if step["workflow"] == "dnp-call":
-            for artifact in artifacts["dnp-tables"]:
+        if step["workflow"] in {"dnp-call", "snp-call"}:
+            for artifact in artifacts["dnp-tables" if step["workflow"] == "dnp-call" else "snp-tables"]:
                 outputs[(step["id"], artifact["sample"])] = root / artifact["path"]
         persist()
 
@@ -430,16 +462,22 @@ def execute_plan(document: object, *, run_dir: Path, script_paths: dict[str, Pat
             previous[signum] = signal.getsignal(signum)
             signal.signal(signum, cancellation.receive)
         from nipat_scientific.snp_parallel import execute_independent_snp_steps
-        parallel_done = execute_independent_snp_steps(
-            plan, state, root, scripts, cancellation, atomic_json=_atomic_json,
-        ) if run_process is None else False
-        if not parallel_done:
-            for step, record in zip(plan["steps"], state["steps"], strict=True):
-                active = record
-                _execute_step(plan, step, record, root, scripts, samples, outputs,
-                              cancellation, run_process,
-                              lambda: _atomic_json(root / "workflow-state.json", state))
-                active = None
+        parallel_attempted = False
+        for step, record in zip(plan["steps"], state["steps"], strict=True):
+            if step["workflow"] == "snp-call" and not parallel_attempted and run_process is None:
+                parallel_attempted = True
+                execute_independent_snp_steps(plan, state, root, scripts, cancellation, atomic_json=_atomic_json)
+                for finished in state["steps"]:
+                    if finished["workflow"] == "snp-call" and finished["status"] == "succeeded":
+                        for artifact in finished["artifacts"]["snp-tables"]:
+                            outputs[(finished["id"], artifact["sample"])] = root / artifact["path"]
+            if record["status"] == "succeeded":
+                continue
+            active = record
+            _execute_step(plan, step, record, root, scripts, samples, outputs,
+                          cancellation, run_process,
+                          lambda: _atomic_json(root / "workflow-state.json", state))
+            active = None
         if cancellation.signum is not None:
             raise KeyboardInterrupt
         from nipat_scientific.snp_summary import finalize_snp_summaries

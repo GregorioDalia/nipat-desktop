@@ -10,6 +10,7 @@ from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, require_snp_pileup, write_input_report
 from nipat_scientific.panels import read_snp_list, write_snp_bed, write_snp_list
+from nipat_scientific.settings import defaults, normalize_settings, samtools_options, settings_from_environment
 
 
 REQUEST_FIELDS = {
@@ -39,13 +40,16 @@ def _absolute_path(value: object, label: str) -> Path:
 def prepare_snp(request: object) -> SnpPreparation:
     """Validate a request before writes and describe samtools/R execution.
 
-    SNPcall 2.0 uses three-base windows, base qualities and uncapped depth.
+    SNPcall 2.0 uses three-base windows and base qualities, with uncapped depth by default.
     Indexes are supplied as read-only sidecars, never generated next
     to user inputs. Only BAM mode writes the BED and later produces a pileup.
     """
-    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
+    if (not isinstance(request, dict) or not REQUEST_FIELDS <= set(request)
+            or set(request) - REQUEST_FIELDS - {"presentation", "scientific_settings"}):
         raise ValidationError("Richiesta SNPcall non valida: campi mancanti o inattesi.")
     validate_request_presentation(request)
+    scientific = (normalize_settings("snp-call", request["scientific_settings"])
+                  if "scientific_settings" in request else settings_from_environment("snp-call"))
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta SNPcall non supportata.")
     if request["workflow"] != "snp-call":
@@ -101,14 +105,23 @@ def prepare_snp(request: object) -> SnpPreparation:
     work_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
     write_snp_list(panel_rows, normalized_panel)
-    write_input_report(work_dir, "snp-call", [], normalized=[(panel, normalized_panel)])
+    warnings = []
+    if mode == "pileup":
+        acquisition_changes = [key for key, value in scientific.items()
+                               if key != "other_fraction_max" and value != defaults("snp-call")[key]]
+        if acquisition_changes:
+            warnings.append({"code": "input.existing_pileup_acquisition_settings", "path": str(pileup),
+                             "row": None, "message": "Pileup esistente: i parametri di acquisizione "
+                             "non possono modificarlo: " + ", ".join(acquisition_changes)})
+    write_input_report(work_dir, "snp-call", warnings, normalized=[(panel, normalized_panel)])
     command = None
     if mode == "bam":
         write_snp_bed(positions, bed_file)
         pileup = generated_pileup
         command = [
             "samtools", "mpileup", "-f", str(reference), "-l", str(bed_file),
-            "--output-QNAME", "-d", "0", "--no-output-ins", "--no-output-del", "--no-output-ends",
+            "--output-QNAME", *samtools_options("snp-call", scientific),
+            "--no-output-ins", "--no-output-del", "--no-output-ends",
             "-o", str(pileup), str(bam),
         ]
     return SnpPreparation(command, [

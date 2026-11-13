@@ -20,6 +20,15 @@ def job_text(workflow, identifier):
 
 
 class REquivalenceCI(unittest.TestCase):
+    def test_new_analysis_models_are_required_in_the_packaged_image(self):
+        for name, identifier in (("ci.yml", "scientific"),
+                                 ("windows-installer.yml", "linux-runtime")):
+            job = job_text((ROOT / ".github/workflows" / name).read_text(), identifier)
+            self.assertIn('scripts/verify_five_modules.py --image "$NIPAT_RUNTIME_IMAGE"', job)
+            self.assertIn('--output "$TMPDIR/artifacts" --full', job)
+            self.assertIn('${{ runner.temp }}/nipat-five-modules-check/', job)
+            self.assertNotIn("continue-on-error:", job)
+
     def test_ci_and_installer_build_require_equivalence_in_the_tested_image(self):
         for name, identifier in (("ci.yml", "scientific"),
                                  ("windows-installer.yml", "linux-runtime")):

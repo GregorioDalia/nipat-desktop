@@ -19,6 +19,20 @@ class RunReportTests(unittest.TestCase):
                 **base, "pid": pid, "task_index": index, "event": event, "observed_at_unix": when,
             }) for event, when in (("task-start", start), ("task-end", finish))) + "\n")
 
+    def test_effective_scientific_parameters_and_model_constants_are_readable(self):
+        work = self.root / "output/workflow/steps/snp_cpin/work"
+        work.mkdir(parents=True)
+        (work / "effective-scientific-settings.json").write_text(json.dumps({"schema_version": 1,
+            "workflow": "cpin", "parameters": {"min_child_reads": 5, "site_selection": "both"},
+            "constants": {"heterozygous_transmission": {"value": 0.5, "description": "Trasmissione mendeliana"}}}))
+        self.save()
+        write_run_report(self.root)
+        page = (self.root / "run-report.html").read_text()
+        self.assertIn("Parametri scientifici e costanti", page)
+        self.assertIn("min_child_reads</pre></td><td><pre>5", page)
+        self.assertIn("Trasmissione mendeliana", page)
+        self.assertIn("output/workflow/steps/snp_cpin/work/effective-scientific-settings.json", page)
+
     def test_modern_execution_settings_replace_legacy_flag_and_distinguish_observed_tasks(self):
         self.metadata["execution_options"] = {"execution_mode": "auto", "max_workers": 4,
             "dnp_block_mib": 32, "dnp_block_loci": 64, "performance_diagnostics": False}

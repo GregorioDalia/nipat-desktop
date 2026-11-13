@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# NIPAT 0.8.9 modification, 2026-11-07: reuse invariant CPI calculations and
+# NIPAT 0.8.50 integrates NEWPAT 9c2a8be SNP/DNP model; reuse invariant CPI calculations and
 # identical threshold selections; retain the formulas and every output row.
 # NIPAT 0.8.12: bounded, ordered parallel work across pairs, cutoffs or
 # independent threshold intervals. Scientific reductions retain their order.
@@ -18,6 +18,9 @@ source(Sys.getenv("NIPAT_PARALLEL_HELPER",
                   unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
 source(Sys.getenv("NIPAT_PLOTS_HELPER", unset = "/opt/nipat/lib/nipat_scientific/plots.R"))
 
+source(Sys.getenv("NIPAT_SETTINGS_HELPER", unset="/opt/nipat/lib/nipat_scientific/settings.R"))
+nipat_cfg <- nipat_settings("cpi")
+
 ## cli parser
 parser <- ArgumentParser()
 
@@ -28,85 +31,302 @@ parser$add_argument("--mother_prefix", required=TRUE)
 parser$add_argument("--father_prefix", required=TRUE)
 parser$add_argument("--popfreq",       required=TRUE)
 
-## optional cutoff and err_const
-parser$add_argument("--cutoff_map",    required=FALSE,
-                    help='optional mapping "0.3=/abs/fileA.xlsx,0.5=/abs/fileB.xlsx". if missing use ALL sites')
-parser$add_argument("--err_const",     default="0.0000892303778101497")
-
+parser$add_argument("--cutoff_map", required=FALSE,
+                    help='named marker panels: label=/path/panel.tsv,...')
+parser$add_argument("--markers", required=FALSE)
+parser$add_argument("--err_const", default=NULL,
+                    help="Explicit override for the detected marker type")
+parser$add_argument("--err_const_snp", default=NULL)
+parser$add_argument("--err_const_dnp", default=NULL)
+parser$add_argument("--min_fetal_reads", type="double", default=NULL)
 args <- parser$parse_args()
-err_const <- as.numeric(args$err_const)
-
-## make output dirs
-if (!dir.exists(args$out_dir)) dir.create(args$out_dir, recursive = TRUE, showWarnings = FALSE)
+args$err_const_snp <- if (is.null(args$err_const_snp)) nipat_cfg$err_const_snp else args$err_const_snp
+args$err_const_dnp <- if (is.null(args$err_const_dnp)) nipat_cfg$err_const_dnp else args$err_const_dnp
+min_fetal_reads <- if (is.null(args$min_fetal_reads)) nipat_cfg$min_fetal_reads else args$min_fetal_reads
+if (!is.finite(min_fetal_reads) || min_fetal_reads < 1 ||
+    min_fetal_reads != floor(min_fetal_reads) || min_fetal_reads >= .Machine$integer.max)
+  stop("--min_fetal_reads must be a positive integer below the R integer limit")
+min_fetal_reads <- as.integer(min_fetal_reads)
+if (!dir.exists(args$out_dir)) dir.create(args$out_dir, recursive=TRUE)
 plots_dir <- file.path(args$out_dir, "plots")
-if (!dir.exists(plots_dir)) dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(plots_dir, recursive=TRUE, showWarnings=FALSE)
+parts <- lapply(strsplit(args$pairs, ",", fixed=TRUE)[[1]], function(z) trimws(strsplit(z, ":", fixed=TRUE)[[1]]))
+if (!length(parts) || any(lengths(parts) != 2L) || any(!nzchar(unlist(parts)))) stop("Invalid mother:father pairs")
+keys <- vapply(parts, paste, collapse=":", FUN.VALUE="")
+if (anyDuplicated(tolower(keys))) stop("Duplicate mother:father pairs")
+coppie <- data.frame(mamma=vapply(parts, `[`, "", 1), papa=vapply(parts, `[`, "", 2))
+if (any(tolower(paste0(args$mother_prefix, coppie$mamma)) ==
+        tolower(paste0(args$father_prefix, coppie$papa))))
+  stop("Mother and father must refer to distinct input samples")
+if (any(!grepl("^[A-Za-z0-9_.-]+$", unlist(parts)))) stop("Invalid sample identifiers")
+if (anyDuplicated(tolower(paste0("Mother", coppie$mamma, "-Father", coppie$papa))))
+  stop("Distinct pairs would overwrite the same result")
 
-## parse pairs
-pairs_vec <- strsplit(args$pairs, ",")[[1]] |> trimws()
-coppie <- do.call(rbind, lapply(pairs_vec, function(x){
-  sp <- strsplit(x, ":", fixed=TRUE)[[1]] |> trimws()
-  data.frame(mamma=sp[1], papa=sp[2])
-}))
-rownames(coppie) <- NULL
+## Read coordinates from the frequency table and use them in every join.
+if (!file.exists(args$popfreq)) stop("popfreq file not found")
+population <- read.table(args$popfreq, header=TRUE, sep="\t",
+                         stringsAsFactors=FALSE, check.names=FALSE,
+                         quote="", comment.char="")
 
-## parse cutoff map OR set to ALL mode
-if (!is.null(args$cutoff_map) && nzchar(args$cutoff_map)) {
-
-  items <- strsplit(args$cutoff_map, ",")[[1]] |> trimws()
-
-  cutoff_list <- lapply(items, function(x){
-    if (grepl("=", x)) {
-      ## case: label=path
-      kv <- strsplit(x, "=", fixed=TRUE)[[1]] |> trimws()
-      if (length(kv) != 2) stop(paste0("invalid cutoff_map entry: ", x))
-      list(Cutoff = kv[1], Path = kv[2])
-    } else {
-      ## case: only filename provided → use filename as label too
-      list(Cutoff = x, Path = x)
-    }
-  })
-
-  cutoff_df <- do.call(rbind, lapply(cutoff_list, as.data.frame))
-  has_cutoffs <- TRUE
-
-} else {
-  cutoff_df <- data.frame(Cutoff="ALL", Path=NA_character_)
-  has_cutoffs <- FALSE
+marker_type <- function(x, label) {
+  has_snp <- "pos" %in% names(x)
+  has_dnp <- all(c("pos1", "pos2") %in% names(x))
+  if (has_snp == has_dnp) {
+    stop(label, ": use either pos for SNPs or pos1 and pos2 for DNPs")
+  }
+  if (has_snp) "SNP" else "DNP"
 }
 
+has_markers <- !is.null(args$markers) && nzchar(trimws(args$markers))
+marker_list <- NULL
+marker <- marker_type(population, "population frequencies")
+if (has_markers) {
+  # DNPcall lists have five columns without a header; SNPcall lists have four.
+  # A header is also accepted, with lower- or upper-case allele column names.
+  marker_list <- read.table(args$markers, header=FALSE, sep="", quote="",
+                            comment.char="", colClasses="character",
+                            stringsAsFactors=FALSE, check.names=FALSE)
+  marker_columns <- switch(as.character(ncol(marker_list)),
+    "4" = c("chr", "pos", "REF", "ALT"),
+    "5" = c("chr", "pos1", "pos2", "REF", "ALT"),
+    stop("Marker list must contain four SNP columns or five DNP columns")
+  )
+  first_row <- unlist(marker_list[1, ], use.names=FALSE)
+  if (identical(tolower(first_row), tolower(marker_columns))) {
+    marker_list <- marker_list[-1, , drop=FALSE]
+  }
+  names(marker_list) <- marker_columns
+  if (!nrow(marker_list)) stop("Marker list is empty")
+  marker <- marker_type(marker_list, "marker list")
+  if (marker_type(population, "population frequencies") != marker) {
+    stop("Population frequency coordinates do not match the marker list format")
+  }
+}
+message("Panel: ", if (has_markers) args$markers else "all calling-output sites")
+site_columns <- if (marker == "SNP") c("chr", "pos") else c("chr", "pos1", "pos2")
+message("Marker type: ", marker)
 
-## Panels are invariant across pairs and shared by plots and summaries.
-cutoff_panels <- lapply(cutoff_df$Path, function(path) {
-  if (is.na(path)) return(NULL)
-  read.table(path, header=TRUE, sep="\t", stringsAsFactors=FALSE)
-})
+# Select the constant for the detected marker type.
+read_error_constant <- function(value, option) {
+  if (is.null(value)) return(NULL)
+  number <- suppressWarnings(as.numeric(value))
+  if (length(number) != 1L || !is.finite(number) || number <= 0 || number > 1) {
+    stop(option, " must be a finite number in (0, 1], for example 1e-04")
+  }
+  number
+}
 
-## check popfreq
-if (!file.exists(args$popfreq)) stop("popfreq file not found")
-PopFreqDNPs <- read.table(args$popfreq, header=TRUE, sep="\t", stringsAsFactors=FALSE)
+error_constants <- list(
+  SNP = read_error_constant(args$err_const_snp, "--err_const_snp"),
+  DNP = read_error_constant(args$err_const_dnp, "--err_const_dnp")
+)
+err_const <- error_constants[[marker]]
+if (!is.null(args$err_const)) err_const <- read_error_constant(args$err_const, "--err_const")
+nipat_cfg$err_const_snp <- error_constants$SNP
+nipat_cfg$err_const_dnp <- error_constants$DNP
+nipat_cfg[[paste0("err_const_", tolower(marker))]] <- err_const
+nipat_cfg$min_fetal_reads <- min_fetal_reads
+message("Mismatch constant used for ", marker, ": ", sprintf("%.17g", err_const))
 
-# converto virgole in punti nelle due colonne di frequenza
-PopFreqDNPs$Ref_f.pop <- as.numeric(gsub(",", ".", PopFreqDNPs$Ref_f.pop))
-PopFreqDNPs$Alt_f.pop <- as.numeric(gsub(",", ".", PopFreqDNPs$Alt_f.pop))
+site_key <- function(x) {
+  do.call(paste, c(unname(as.list(x[site_columns])), sep="\t"))
+}
+
+check_sites <- function(x, required, label) {
+  missing <- setdiff(required, names(x))
+  if (length(missing)) stop(label, ": missing columns ", paste(missing, collapse=", "))
+  if (anyNA(x[site_columns]) || anyDuplicated(site_key(x))) {
+    stop(label, ": missing or duplicate coordinates")
+  }
+  if (any(!nzchar(trimws(as.character(x$chr))))) stop(label, ": empty chromosome")
+  for (column in setdiff(site_columns, "chr")) {
+    values <- suppressWarnings(as.numeric(x[[column]]))
+    if (any(!is.finite(values) | values < 1 | values != floor(values)))
+      stop(label, ": coordinates must be positive integers")
+  }
+}
+
+if (has_markers) {
+  check_sites(marker_list, marker_columns, "marker list")
+  for (column in setdiff(site_columns, "chr")) {
+    position <- suppressWarnings(as.numeric(marker_list[[column]]))
+    if (any(!is.finite(position) | position < 1 | position != floor(position))) {
+      stop("Marker list positions must be positive integers")
+    }
+    marker_list[[column]] <- position
+  }
+  marker_list$REF <- toupper(marker_list$REF)
+  marker_list$ALT <- toupper(marker_list$ALT)
+  allele_pattern <- if (marker == "SNP") "^[ACGT]$" else "^[ACGT]{2}$"
+  if (anyNA(marker_list[c("REF", "ALT")]) ||
+      any(!grepl(allele_pattern, marker_list$REF) |
+          !grepl(allele_pattern, marker_list$ALT) |
+          marker_list$REF == marker_list$ALT)) {
+    stop("Marker list must contain distinct REF and ALT alleles for the selected marker type")
+  }
+  # Check again after converting positions, so equivalent coordinates cannot repeat.
+  check_sites(marker_list, marker_columns, "marker list")
+  
+}
+
+check_sites(population, c(site_columns, "Ref_f.pop", "Alt_f.pop"),
+            "population frequencies")
+population$chr <- as.character(population$chr)
+if (has_markers) {
+  frequency_index <- match(site_key(marker_list), site_key(population))
+  if (anyNA(frequency_index)) {
+    missing_sites <- site_key(marker_list)[is.na(frequency_index)]
+    stop("Missing population frequencies for marker-list sites: ",
+         paste(head(missing_sites, 5), collapse=", "))
+  }
+  population <- population[frequency_index, , drop=FALSE]
+  if (all(c("REF", "ALT") %in% names(population))) {
+    if (anyNA(population[c("REF", "ALT")]) ||
+        any(toupper(population$REF) != marker_list$REF |
+            toupper(population$ALT) != marker_list$ALT)) {
+      stop("Population frequency alleles differ from the marker list")
+    }
+  }
+}
+population$Ref_f.pop <- as.numeric(gsub(",", ".", population$Ref_f.pop))
+population$Alt_f.pop <- as.numeric(gsub(",", ".", population$Alt_f.pop))
+if (any(!is.finite(population$Ref_f.pop) | !is.finite(population$Alt_f.pop) |
+        population$Ref_f.pop <= 0 | population$Ref_f.pop > 1 |
+        population$Alt_f.pop <= 0 | population$Alt_f.pop > 1)) {
+  stop("Population frequencies must be finite and in (0, 1]")
+}
+
+# Keep allele columns outside the join to avoid REF and ALT suffix conflicts.
+PopFreqDNPs <- population[, c(site_columns, "Ref_f.pop", "Alt_f.pop"), drop=FALSE]
+
+read_calls <- function(path) {
+  x <- read.table(path, header=TRUE, check.names=FALSE, stringsAsFactors=FALSE)
+  if (marker_type(x, path) != marker) stop(path, ": format differs from population frequencies")
+  check_sites(x, c(site_columns, "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count"), path)
+  x$chr <- as.character(x$chr)
+  if (has_markers) {
+    # Restrict all downstream calculations to the supplied marker list.
+    x <- x[site_key(x) %in% site_key(marker_list), , drop=FALSE]
+    j <- match(site_key(x), site_key(marker_list))
+    if (anyNA(x[c("REF", "ALT")]) ||
+        any(toupper(x$REF) != marker_list$REF[j] |
+            toupper(x$ALT) != marker_list$ALT[j])) {
+      stop(path, ": alleles differ from the marker list")
+    }
+  }
+  expected_length <- if (marker == "SNP") 1L else 2L
+  if (anyNA(x[c("REF", "ALT")]) ||
+      any(nchar(x$REF) != expected_length | nchar(x$ALT) != expected_length |
+          toupper(x$REF) == toupper(x$ALT))) {
+    stop(path, ": invalid REF or ALT alleles")
+  }
+  # Older DNP frequency tables have no REF or ALT columns.
+  if (all(c("REF", "ALT") %in% names(population))) {
+    j <- match(site_key(x), site_key(population))
+    present <- which(!is.na(j))
+    if (anyNA(population[j[present], c("REF", "ALT"), drop=FALSE])) {
+      stop("Population frequencies contain missing alleles")
+    }
+    if (any(toupper(x$REF[present]) != toupper(population$REF[j[present]]) |
+            toupper(x$ALT[present]) != toupper(population$ALT[j[present]]))) {
+      stop(path, ": alleles differ from population frequencies")
+    }
+  }
+  pattern <- if (marker == "SNP") "^[ACGT]$" else "^[ACGT]{2}$"
+  if (any(!grepl(pattern, toupper(x$REF)) | !grepl(pattern, toupper(x$ALT))))
+    stop(path, ": alleles must contain only A/C/G/T")
+  for (column in c("N_REF", "N_ALT", "N_Other"))
+    x[[column]] <- suppressWarnings(as.numeric(x[[column]]))
+  counts <- as.matrix(x[c("N_REF", "N_ALT", "N_Other")])
+  if (anyNA(counts) || any(!is.finite(counts) | counts < 0 | counts != floor(counts)))
+    stop(path, ": counts must be finite nonnegative integers")
+  allowed_missing <- is.na(x$total_count) & rowSums(counts) == 0
+  total <- suppressWarnings(as.numeric(x$total_count))
+  if (any(is.na(total) & !allowed_missing) ||
+      any(!is.finite(total[!allowed_missing]) | total[!allowed_missing] < 0 |
+          total[!allowed_missing] != floor(total[!allowed_missing])))
+    stop(path, ": invalid total_count")
+  x$total_count <- total
+  x
+}
+
+check_pair <- function(mother, father) {
+  j <- match(site_key(mother), site_key(father))
+  present <- which(!is.na(j))
+  if (any(toupper(mother$REF[present]) != toupper(father$REF[j[present]]) |
+          toupper(mother$ALT[present]) != toupper(father$ALT[j[present]]))) {
+    stop("Mother and father have different REF or ALT alleles at shared coordinates")
+  }
+}
+
+# Multiple panels are a NIPAT feature; preserve them with marker-aware validation.
+if (has_markers && !is.null(args$cutoff_map) && nzchar(args$cutoff_map))
+  stop("Choose --markers or --cutoff_map")
+if (has_markers) {
+  cutoff_df <- data.frame(Cutoff=args$markers, Path=args$markers)
+  cutoff_panels <- list(marker_list)
+  has_cutoffs <- TRUE
+} else if (!is.null(args$cutoff_map) && nzchar(args$cutoff_map)) {
+  panels <- lapply(strsplit(args$cutoff_map, ",", fixed=TRUE)[[1]], function(z) {
+    kv <- strsplit(z, "=", fixed=TRUE)[[1]]
+    if (length(kv) == 1L) list(Cutoff=kv[1], Path=kv[1]) else {
+      if (length(kv) != 2L || any(!nzchar(kv))) stop("Invalid cutoff_map entry")
+      list(Cutoff=kv[1], Path=kv[2])
+    }
+  })
+  cutoff_df <- do.call(rbind, lapply(panels, as.data.frame))
+  if (anyDuplicated(cutoff_df$Cutoff)) stop("Duplicate cutoff label")
+  cutoff_panels <- lapply(cutoff_df$Path, function(path) {
+    x <- read.table(path, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE)
+    if (marker_type(x, path) != marker) stop("Marker panel differs from population type")
+    check_sites(x, site_columns, path)
+    x$chr <- as.character(x$chr)
+    for (key in setdiff(site_columns, "chr")) {
+      x[[key]] <- suppressWarnings(as.numeric(x[[key]]))
+      if (any(!is.finite(x[[key]]) | x[[key]] < 1 | x[[key]] != floor(x[[key]]))) stop("Invalid panel coordinates")
+    }
+    check_sites(x, site_columns, path)
+    if (anyNA(match(site_key(x), site_key(population)))) stop("Missing population frequencies for marker panel")
+    x
+  })
+  has_cutoffs <- TRUE
+} else {
+  cutoff_df <- data.frame(Cutoff="ALL", Path=NA_character_)
+  cutoff_panels <- list(NULL)
+  has_cutoffs <- FALSE
+}
+# Cache raw tables by path so shared parents are read/validated only once.
+call_paths <- unique(c(file.path(args$pileup_dir, paste0(args$mother_prefix, coppie$mamma, ".txt")),
+                       file.path(args$pileup_dir, paste0(args$father_prefix, coppie$papa, ".txt"))))
+calls_cache <- setNames(lapply(call_paths, read_calls), call_paths)
+for (x in calls_cache) {
+  for (panel in cutoff_panels) {
+    if (is.null(panel) || !all(c("REF", "ALT") %in% names(panel))) next
+    j <- match(site_key(x), site_key(panel)); present <- which(!is.na(j))
+    if (any(toupper(x$REF[present]) != toupper(panel$REF[j[present]]) |
+            toupper(x$ALT[present]) != toupper(panel$ALT[j[present]]))) stop("Calling-output alleles differ from panel")
+  }
+}
 
 ## helper: compute fetal_reads on mother dataframe
+nipat_write_settings("cpi", nipat_cfg, args$out_dir)
 ## note: this mirrors the logic used in cpi iteration
 compute_madre_info <- function(madre_df) {
   madre_df %>%
     dplyr::filter(
-      (ratio_Ref_mother >= 0.9 & Alt_mother >= 2) |
-        (ratio_Ref_mother <= 0.1 & Ref_mother >= 2)
+      (ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & Alt_mother >= min_fetal_reads) |
+        (ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & Ref_mother >= min_fetal_reads)
     ) %>%
     dplyr::mutate(
-      fetal_reads = ifelse(ratio_Ref_mother >= 0.9, Alt_mother, Ref_mother)
+      fetal_reads = ifelse(ratio_Ref_mother >= nipat_cfg$homozygous_ref_min, Alt_mother, Ref_mother)
     )
 }
 
 ## core: compute cpi for one list (or all sites if dnp_list is NULL)
 run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_const) {
   if (!is.null(dnp_list)) {
-    madre <- madre_df %>% dplyr::semi_join(dnp_list, by=c("chr","pos1","pos2"))
-    padre <- padre_df %>% dplyr::semi_join(dnp_list, by=c("chr","pos1","pos2"))
+    madre <- madre_df %>% dplyr::semi_join(dnp_list, by=site_columns)
+    padre <- padre_df %>% dplyr::semi_join(dnp_list, by=site_columns)
   } else {
     madre <- madre_df
     padre <- padre_df
@@ -114,8 +334,12 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
 
   madre_info <- compute_madre_info(madre)
   max_fetal <- suppressWarnings(max(madre_info$fetal_reads, na.rm=TRUE))
-  if (!is.finite(max_fetal) || max_fetal < 2)
-    return(list(results=data.frame(), madre_info=madre_info))
+  if (!is.finite(max_fetal) || max_fetal < min_fetal_reads) {
+    empty <- data.frame(Iteration=integer(), InfSites_mother=integer(),
+      InfSites_father=integer(), CPI=double(), log_CPI=double(), Mismatch=integer(),
+      NotMismatch=integer(), Cutoff=character())
+    return(list(results=empty, madre_info=madre_info))
+  }
 
   ## Carry the maternal row identity through joins rather than relying on the
   ## joined fetal_reads name, which population metadata may also contain.
@@ -125,44 +349,44 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
   madre_indexed <- madre_info
   madre_indexed[[row_id]] <- seq_len(nrow(madre_indexed))
 
-  df_merged <- dplyr::inner_join(madre_indexed, padre, by=c("chr","pos1","pos2")) %>%
+  df_merged <- dplyr::inner_join(madre_indexed, padre, by=site_columns) %>%
     dplyr::mutate(threshold = dplyr::case_when(
-      ratio_Ref_mother >= 0.9 & Alt_father >= 0 ~ "informative",
-      ratio_Ref_mother <= 0.1 & Ref_father >= 0 ~ "informative",
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & Alt_father >= 0 ~ "informative",
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & Ref_father >= 0 ~ "informative",
       TRUE ~ "non informative"
     )) %>%
-    dplyr::inner_join(PopFreqDNPs, by=c("chr","pos1","pos2")) %>%
+    dplyr::inner_join(PopFreqDNPs, by=site_columns) %>%
     dplyr::mutate(dplyr::across(c(Ref_f.pop,Alt_f.pop), as.numeric))
 
   informative_all <- df_merged %>% dplyr::filter(threshold=="informative")
   PI_all <- informative_all %>%
     dplyr::mutate(Paternity_Index = dplyr::case_when(
-      ratio_Ref_mother >= 0.9 & ratio_Ref_father <= 0.1 ~ 1/Alt_f.pop,
-      ratio_Ref_mother >= 0.9 & between(ratio_Ref_father,0.4,0.6) ~ 0.5/Alt_f.pop,
-      ratio_Ref_mother >= 0.9 & ratio_Ref_father >= 0.9 ~ err_const/Alt_f.pop,
-      ratio_Ref_mother <= 0.1 & ratio_Ref_father <= 0.1 ~ err_const/Ref_f.pop,
-      ratio_Ref_mother <= 0.1 & between(ratio_Ref_father,0.4,0.6) ~ 0.5/Ref_f.pop,
-      ratio_Ref_mother <= 0.1 & ratio_Ref_father >= 0.9 ~ 1/Ref_f.pop,
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & ratio_Ref_father <= nipat_cfg$homozygous_alt_max ~ 1/Alt_f.pop,
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & between(ratio_Ref_father,nipat_cfg$heterozygous_min,nipat_cfg$heterozygous_max) ~ 0.5/Alt_f.pop,
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & ratio_Ref_father >= nipat_cfg$homozygous_ref_min ~ err_const/Alt_f.pop,
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & ratio_Ref_father <= nipat_cfg$homozygous_alt_max ~ err_const/Ref_f.pop,
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & between(ratio_Ref_father,nipat_cfg$heterozygous_min,nipat_cfg$heterozygous_max) ~ 0.5/Ref_f.pop,
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & ratio_Ref_father >= nipat_cfg$homozygous_ref_min ~ 1/Ref_f.pop,
       TRUE ~ NA_real_
     )) %>% tidyr::drop_na()
 
-  ## drop_na still covers all original columns, including population metadata.
+  ## Population metadata is projected out before joins; irrelevant NA cannot remove sites.
   ## The added row identity is always present and has no missing values.
   pi_fetal_reads <- madre_info$fetal_reads[PI_all[[row_id]]]
   informative_fetal_reads <- madre_info$fetal_reads[informative_all[[row_id]]]
-  mismatch <- (informative_all$ratio_Ref_mother >= 0.9 &
-                 informative_all$ratio_Ref_father >= 0.9) |
-    (informative_all$ratio_Ref_mother <= 0.1 &
-       informative_all$ratio_Ref_father <= 0.1)
+  mismatch <- (informative_all$ratio_Ref_mother >= nipat_cfg$homozygous_ref_min &
+                 informative_all$ratio_Ref_father >= nipat_cfg$homozygous_ref_min) |
+    (informative_all$ratio_Ref_mother <= nipat_cfg$homozygous_alt_max &
+       informative_all$ratio_Ref_father <= nipat_cfg$homozygous_alt_max)
 
-  iterations <- 2:max_fetal
+  iterations <- seq.int(min_fetal_reads, max_fetal)
   ## A locus with f fetal reads disappears at threshold floor(f) + 1.
-  ## Since iteration 1 corresponds to threshold 2, that change has index
-  ## floor(f). All joined rows originate from these maternal loci, so their
+  ## Index 1 corresponds to min_fetal_reads; disappearance has index
+  ## floor(f) - min_fetal_reads + 2. All joined rows originate from these maternal loci, so their
   ## PI and mismatch selections are constant between the same boundaries.
   ## Keep every threshold in the final table: its repetitions affect the
   ## summary statistics, median-threshold lookup and plots.
-  interval_starts <- sort(unique(c(1L, floor(madre_info$fetal_reads))))
+  interval_starts <- sort(unique(c(1L, floor(madre_info$fetal_reads) - min_fetal_reads + 2L)))
   interval_starts <- interval_starts[interval_starts <= length(iterations)]
   interval_lengths <- diff(c(interval_starts, length(iterations) + 1))
   interval_count <- length(interval_starts)
@@ -239,7 +463,7 @@ closest_logCPI <- function(res_df, target_i) {
 
 plot_CPI <- function(df, cutoff_label, pair_name,
                      cfDNA_percent = NA_real_,
-                     cpi_medff = NA_real_) {
+                     cpi_medff = NA_real_, median_reads = NA_real_) {
 
   if (nrow(df) == 0) {
     return(
@@ -253,15 +477,9 @@ plot_CPI <- function(df, cutoff_label, pair_name,
 
   max_iter <- max(df$Iteration, na.rm = TRUE)
 
-  ticks <- if (max_iter <= 20) {
-    2:max_iter
-  } else if (max_iter <= 100) {
-    unique(c(2, seq(10, max_iter, by = 10), max_iter))
-  } else if (max_iter <= 500) {
-    unique(c(2, seq(25, max_iter, by = 25), max_iter))
-  } else {
-    unique(c(2, seq(50, max_iter, by = 50), max_iter))
-  }
+  ticks <- sort(unique(c(min_fetal_reads, pretty(c(min_fetal_reads, max_iter), n=8), max_iter)))
+  ticks <- ticks[ticks >= min_fetal_reads & ticks <= max_iter]
+  median_threshold <- if (is.finite(median_reads)) df$Iteration[which.min(abs(df$Iteration - median_reads))] else numeric()
 
   cfDNA_lbl <- if (is.finite(cfDNA_percent)) {
     sprintf("%.2f", cfDNA_percent)
@@ -284,12 +502,13 @@ plot_CPI <- function(df, cutoff_label, pair_name,
 
   cpi_plot <- ggplot(df, aes(x = Iteration)) +
     annotate("rect", xmin = -Inf, xmax = Inf,
-             ymin = -Inf, ymax = -4, fill = "red", alpha = 0.05) +
+             ymin = -Inf, ymax = nipat_cfg$log_cpi_lower, fill = "red", alpha = 0.05) +
     annotate("rect", xmin = -Inf, xmax = Inf,
-             ymin = -4, ymax = 4, fill = "grey", alpha = 0.05) +
+             ymin = nipat_cfg$log_cpi_lower, ymax = nipat_cfg$log_cpi_upper, fill = "grey", alpha = 0.05) +
     annotate("rect", xmin = -Inf, xmax = Inf,
-             ymin = 4, ymax = Inf, fill = "green", alpha = 0.05) +
+             ymin = nipat_cfg$log_cpi_upper, ymax = Inf, fill = "green", alpha = 0.05) +
 
+    geom_vline(xintercept=median_threshold, colour="red", linetype="dashed") +
     geom_line(aes(y = log_CPI), colour = "black") +
     geom_point(aes(y = log_CPI), colour = "black", size = 1.3) +
 
@@ -314,7 +533,7 @@ plot_CPI <- function(df, cutoff_label, pair_name,
     scale_x_continuous(
       name = "minimum number of fetal reads considered",
       breaks = ticks,
-      limits = c(2, max(3, max_iter)),
+      limits = c(min_fetal_reads, max(min_fetal_reads + 1, max_iter)),
       expand = expansion(mult = c(0.02, 0.02))
     ) +
 
@@ -342,7 +561,7 @@ plot_CPI <- function(df, cutoff_label, pair_name,
     scale_colour_manual(name = NULL, values = c("Matching sites" = "#008A38", "Mismatching sites" = "#C46B00")) +
     scale_y_continuous(name = "Informative sites", limits = c(0, NA), breaks = nipat_integer_breaks) +
     scale_x_continuous(name = "Minimum number of fetal reads considered", breaks = ticks,
-      limits = c(2, max(3, max_iter)), expand = expansion(mult = c(0.02, 0.02))) +
+      limits = c(min_fetal_reads, max(min_fetal_reads + 1, max_iter)), expand = expansion(mult = c(0.02, 0.02))) +
     theme_bw(base_size = 9) +
     theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1, size = 7))
   (cpi_plot / sites_plot) + patchwork::plot_layout(heights = c(2, 1))
@@ -360,23 +579,25 @@ pair_cache$father_path <- NULL
 process_pair <- function(i) {
   mamma_id <- coppie$mamma[i]
   papa_id  <- coppie$papa[i]
-  pair_name <- paste0("Mother", mamma_id, "-Father", papa_id, "_DNPs")
+  pair_name <- paste0("Mother", mamma_id, "-Father", papa_id, "_", marker, "s")
 
   mother_path <- file.path(args$pileup_dir, paste0(args$mother_prefix, mamma_id, ".txt"))
   father_path <- file.path(args$pileup_dir, paste0(args$father_prefix, papa_id, ".txt"))
 
+  check_pair(calls_cache[[mother_path]], calls_cache[[father_path]])
+
   if (!identical(mother_path, pair_cache$mother_path)) {
-    madre <- read.table(mother_path, header=TRUE, check.names=FALSE)
+    madre <- calls_cache[[mother_path]]
     madre$chr <- as.character(madre$chr)
     madre <- madre %>%
       dplyr::transmute(
-        chr, pos1, pos2, REF, ALT,
+        dplyr::across(dplyr::all_of(site_columns)), REF, ALT,
         Ref_mother = N_REF,
         Alt_mother = N_ALT,
         Error_mother = N_Other,
         ratio_Ref_mother = N_REF / (N_REF + N_ALT),
         total_count = total_count
-      ) %>% dplyr::filter(Error_mother/total_count <= 0.10)
+      ) %>% dplyr::filter(Error_mother/total_count <= nipat_cfg$other_fraction_max)
     pair_cache$mother <- madre
     pair_cache$mother_path <- mother_path
   } else {
@@ -384,11 +605,11 @@ process_pair <- function(i) {
   }
 
   if (!identical(father_path, pair_cache$father_path)) {
-    padre <- read.table(father_path, header=TRUE, check.names=FALSE)
+    padre <- calls_cache[[father_path]]
     padre$chr <- as.character(padre$chr)
     padre <- padre %>%
       dplyr::transmute(
-        chr, pos1, pos2, REF, ALT,
+        dplyr::across(dplyr::all_of(site_columns)), REF, ALT,
         Ref_father = N_REF,
         Alt_father = N_ALT,
         Error_father = N_Other,
@@ -396,9 +617,9 @@ process_pair <- function(i) {
         total_count = total_count
       ) %>%
       dplyr::mutate(
-        Ref_father = ifelse(ratio_Ref_father < 0.1, 0, Ref_father),
-        Alt_father = ifelse(ratio_Ref_father > 0.9, 0, Alt_father)
-      ) %>% dplyr::filter(Error_father/total_count <= 0.10)
+        Ref_father = ifelse(ratio_Ref_father < nipat_cfg$homozygous_alt_max, 0, Ref_father),
+        Alt_father = ifelse(ratio_Ref_father > nipat_cfg$homozygous_ref_min, 0, Alt_father)
+      ) %>% dplyr::filter(Error_father/total_count <= nipat_cfg$other_fraction_max)
     pair_cache$father <- padre
     pair_cache$father_path <- father_path
   } else {
@@ -437,22 +658,22 @@ process_pair <- function(i) {
     madre_cutoff <- madre_cutoff %>%
       mutate(
         fetal_reads = case_when(
-          ratio_Ref_mother >= 0.9 ~ Alt_mother,
-          ratio_Ref_mother <= 0.1 ~ Ref_mother,
+          ratio_Ref_mother >= nipat_cfg$homozygous_ref_min ~ Alt_mother,
+          ratio_Ref_mother <= nipat_cfg$homozygous_alt_max ~ Ref_mother,
           TRUE ~ NA_real_
         ),
         fetal_fraction_site = 2*fetal_reads/(Ref_mother+Alt_mother)
-      ) %>% filter(!is.na(fetal_fraction_site), fetal_fraction_site > 0, fetal_reads >= 2)
+      ) %>% filter(!is.na(fetal_fraction_site), fetal_fraction_site > 0, fetal_reads >= min_fetal_reads)
 
     n_sites_mother <- nrow(madre_cutoff)
 
     ## Maternal keys are already limited to the panel. Joining the original
     ## father table therefore selects the same paternal rows (and duplicates)
     ## in the same order, without applying that panel a second time.
-    df_merge_tmp <- inner_join(madre_cutoff, padre, by=c("chr","pos1","pos2")) %>%
+    df_merge_tmp <- inner_join(madre_cutoff, padre, by=site_columns) %>%
       mutate(threshold = case_when(
-        ratio_Ref_mother >= 0.9 & Alt_father >= 0 ~ "informative",
-        ratio_Ref_mother <= 0.1 & Ref_father >= 0 ~ "informative",
+        ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & Alt_father >= 0 ~ "informative",
+        ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & Ref_father >= 0 ~ "informative",
         TRUE ~ "non informative"
       ))
 
@@ -480,7 +701,8 @@ process_pair <- function(i) {
         Min_logCPI = round(min_cpi,3),
         Median_logCPI = round(med_cpi,3),
         Mean_logCPI = round(mean_cpi,3),
-        CPI_medianFF = round(cpi_at_med,3)
+        CPI_medianFF = round(cpi_at_med,3),
+        Error_constant = err_const, Min_fetal_reads = min_fetal_reads, Marker_type = marker
       )
     } else {
       summary_row <- data.frame(
@@ -493,11 +715,12 @@ process_pair <- function(i) {
         Min_logCPI = round(min_cpi,3),
         Median_logCPI = round(med_cpi,3),
         Mean_logCPI = round(mean_cpi,3),
-        CPI_medianFF = round(cpi_at_med,3)
+        CPI_medianFF = round(cpi_at_med,3),
+        Error_constant = err_const, Min_fetal_reads = min_fetal_reads, Marker_type = marker
       )
     }
     list(label = cutoff_label, plot_data = res, summary = summary_row,
-         cfDNA_percent = cfDNA_percent, cpi_at_med = cpi_at_med)
+         cfDNA_percent = cfDNA_percent, cpi_at_med = cpi_at_med, median_reads=target_i)
   }, label = "cpi-cutoffs")
   list(pair_name = pair_name, cutoffs = cutoff_results)
 }
@@ -513,7 +736,12 @@ for (i in seq_along(pair_results)) {
     per_cutoff_plots[[cutoff_result$label]] <- plot_CPI(
       cutoff_result$plot_data, cutoff_result$label, pair_name,
       cfDNA_percent = cutoff_result$cfDNA_percent,
-      cpi_medff = cutoff_result$cpi_at_med)
+      cpi_medff = cutoff_result$cpi_at_med, median_reads=cutoff_result$median_reads)
+    curve_dir <- file.path(args$out_dir, "curves")
+    dir.create(curve_dir, showWarnings=FALSE)
+    write.table(cutoff_result$plot_data,
+      file.path(curve_dir, paste0(pair_name, "_panel_", k, ".tsv")),
+      sep="\t", quote=FALSE, row.names=FALSE, na="NA")
     summary_index <- (i - 1L) * nrow(cutoff_df) + k
     fetal_fraction_rows[[summary_index]] <- cutoff_result$summary
   }
