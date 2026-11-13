@@ -97,37 +97,7 @@ measure("dnp-central-extraction", "20000 reads / 200 coordinate and 16 quality p
           file.path(root, dnp_path), '# eliminate reads with "@", indicating reads with INDELs',
           "# for full* dataset final", list(DF=groups), "good_reads")))
 
-load_cpi <- function(root) {
-  environment <- new.env(parent=globalenv())
-  wanted <- c("compute_madre_info", "run_CPI_iteration")
-  for (expression in parse(file.path(root,
-      "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R"))) {
-    if (is.call(expression) && identical(expression[[1]], as.name("<-")) &&
-        is.symbol(expression[[2]]) && as.character(expression[[2]]) %in% wanted) {
-      eval(expression, environment)
-    }
-  }
-  environment
-}
-cores <- lapply(variants, load_cpi)
-for (shape in c("dense", "sparse")) {
-  fetal <- if (shape == "dense") 2:97 else rep(c(2, 25, 100, 300), 24)
-  n <- length(fetal)
-  coordinates <- data.frame(chr=rep("chr1", n), pos1=seq_len(n)*10L, pos2=seq_len(n)*10L+1L)
-  mother <- cbind(coordinates, data.frame(
-    REF="AA", ALT="CC", Ref_mother=9*fetal, Alt_mother=fetal,
-    Error_mother=0, ratio_Ref_mother=.9, total_count=10*fetal))
-  ratios <- rep(c(0, .5, .9), length.out=n)
-  father <- cbind(coordinates, data.frame(
-    REF="AA", ALT="CC", Ref_father=100*ratios, Alt_father=100*(1-ratios),
-    Error_father=0, ratio_Ref_father=ratios, total_count=100))
-  population <- cbind(coordinates, data.frame(Ref_f.pop=.75, Alt_f.pop=.25))
-  functions <- lapply(cores, function(core) {
-    core$PopFreqDNPs <- population
-    function() core$run_CPI_iteration(mother, father, NULL, "ALL", .0000892303778101497)
-  })
-  measure(paste0("cpi-", shape), paste(n, "loci /", max(fetal)-1, "thresholds"), functions)
-}
+# Updated CPI model has its own independent oracle/curve qualification.
 result <- do.call(rbind, observations)
 write.table(result, "performance-observations.tsv", sep="\t", row.names=FALSE, quote=FALSE, na="NA")
 cat("PASS synthetic performance cases: strict equality before each measurement.\n")

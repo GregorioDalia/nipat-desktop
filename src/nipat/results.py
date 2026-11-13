@@ -23,8 +23,9 @@ _WORKFLOW_STEPS = {
     "dnp-cpi": {"dnp": "dnp-call", "cpi": "cpi"},
     "dnp-contamination-cpi": {"dnp": "dnp-call", "contamination": "contamination", "cpi": "cpi"},
     "snp-batch": {},
+    "analysis": {},
 }
-_STEP_LABELS = {"dnp": "DNPcall", "contamination": "Contamination", "cpi": "CPI"}
+_STEP_LABELS = {"dnp-call": "DNPcall", "snp-call": "SNPcall", "contamination": "Contamination", "cpi": "CPI", "cpin": "CPIN"}
 _STATUS_LABELS = {
     "preparing": "Preparazione",
     "planned": "Pianificata (dry-run)",
@@ -129,6 +130,29 @@ def _workflow_steps(metadata: dict) -> list[dict]:
     parameters = metadata.get("parameters")
     parameters = parameters if isinstance(parameters, dict) else {}
     supplied = parameters.get("expected_steps")
+    if workflow == "analysis":
+        from nipat_scientific.plan import validate_plan
+        from nipat_scientific.errors import ValidationError
+        try:
+            plan = validate_plan(parameters.get("plan"))["plan"]
+        except ValidationError as exc:
+            raise ValueError("Piano registrato non valido") from exc
+        expected = [{"id": step["id"], "workflow": step["workflow"],
+                     **({"sample": step["inputs"]["sample"], "mode": step["parameters"]["mode"]}
+                        if step["workflow"] == "snp-call" else {})} for step in plan["steps"]]
+        if supplied != expected:
+            raise ValueError("Elenco dei passaggi e piano registrato non coerenti")
+        mapping = parameters.get("sample_mapping")
+        if not isinstance(mapping, list) or any(not isinstance(item, dict) for item in mapping):
+            raise ValueError("Associazioni dei campioni non valide")
+        sources = {item.get("sample_id"): item for item in mapping if isinstance(item.get("sample_id"), str)}
+        if len(sources) != len(mapping) or set(sources) != {item["id"] for item in plan["samples"]}:
+            raise ValueError("Campioni registrati non coerenti con il piano")
+        for sample in plan["samples"]:
+            source = sources[sample["id"]]
+            if source.get("container_path") != sample["path"] or not isinstance(source.get("original_path"), str):
+                raise ValueError("Percorsi registrati non coerenti con il piano")
+        return expected
     has_snp = workflow == "snp-batch" or parameters.get("snp_panel") is not None
     if supplied is None and not has_snp:
         # Runs produced before the per-sample extension had only fixed steps.
@@ -166,7 +190,7 @@ def _workflow_state(run_dir: Path, workflow: str = "dnp-contamination",
     steps = state.get("steps")
     allowed = {"pending", "running", "succeeded", "failed", "cancelled", "blocked"}
     expected = {step["id"]: step for step in _workflow_steps(metadata)}
-    if (state.get("interface") != "workflow-plan-execution-v1"
+    if (state.get("interface") != "workflow-plan-execution-v2"
             or not isinstance(state.get("status"), str)
             or state.get("status") not in {"running", "succeeded", "failed", "cancelled"}
             or not isinstance(steps, list) or len(steps) != len(expected)
@@ -226,7 +250,7 @@ def _show_workflow_summary(ui: Terminal, run_dir: Path, workflow: str, metadata:
         samples = parameters.get("sample_mapping", []) if isinstance(parameters, dict) else []
         for specification in declared[:_MAX_STEPS]:
             step_id = specification["id"]
-            label = (_STEP_LABELS[step_id] if specification["workflow"] != "snp-call" else
+            label = (_STEP_LABELS[specification["workflow"]] if specification["workflow"] != "snp-call" else
                      f"SNPcall {specification['sample']} ({specification['mode']})")
             step = steps[step_id]
             ui.message(f"  {label}: {_STATUS_LABELS[step['status']]}")
@@ -266,6 +290,33 @@ def _show_pair_mapping(ui: Terminal, metadata: dict) -> None:
                    f"{_short_value(pair['father_bam'])}")
     if len(pairs) > _MAX_PAIRS:
         ui.message("Altre coppie disponibili in run.json.")
+
+
+def _show_family_mapping(ui: Terminal, metadata: dict) -> None:
+    """Show explicit prenatal/postnatal roles from the same validated plan."""
+    try:
+        _workflow_steps(metadata)
+        parameters = metadata["parameters"]
+        names = {item["sample_id"]: Path(item["original_path"]).name for item in parameters["sample_mapping"]}
+        shown = 0
+        for step in parameters["plan"]["steps"]:
+            if step["workflow"] not in {"cpi", "cpin"}:
+                continue
+            role_names = {"mother": "cfDNA materno" if step["workflow"] == "cpi" else "Madre",
+                          "father": "Padre", "child": "Figlio"}
+            families = step["inputs"].get("pairs", step["inputs"].get("trios", []))
+            for family in families:
+                if shown == _MAX_PAIRS:
+                    ui.message("Altre associazioni familiari disponibili in run.json.")
+                    return
+                ui.message(f"  {_STEP_LABELS[step['workflow']]} {_short_value(family['id'])} ({step['parameters'].get('marker_type', '')})")
+                for role, title in role_names.items():
+                    if role in family:
+                        sample = family[role]["sample"]
+                        ui.message(f"    {title} ({sample}): {_short_value(names[sample])}")
+                shown += 1
+    except (ValueError, KeyError, TypeError):
+        ui.message("Associazioni familiari non consultabili in run.json.", kind="warning")
 
 
 def _show_quality_warnings(ui: Terminal, run_dir: Path) -> None:
@@ -341,7 +392,9 @@ def _show_summary(ui: Terminal, run_dir: Path, *, dry_run: bool) -> None:
         if isinstance(workflow, str) and workflow in _WORKFLOW_STEPS:
             if not dry_run:
                 _show_workflow_summary(ui, run_dir, workflow, metadata)
-            if "cpi" in _WORKFLOW_STEPS[workflow]:
+            if workflow == "analysis":
+                _show_family_mapping(ui, metadata)
+            elif "cpi" in _WORKFLOW_STEPS[workflow]:
                 _show_pair_mapping(ui, metadata)
     except (OSError, ValueError) as exc:
         ui.message(f"Metadati non consultabili: {exc}", kind="warning")

@@ -58,8 +58,8 @@ class LinuxInstallationEvidenceTests(unittest.TestCase):
             with self.subTest(version=version), self.assertRaises(RuntimeError):
                 check.checks_for_version(version)
 
-    def test_all_four_workflows_must_have_successful_run_records(self):
-        for workflow in ("dnp-call", "snp-call", "contamination", "cpi"):
+    def test_all_five_workflows_must_have_successful_run_records(self):
+        for workflow in ("dnp-call", "snp-call", "contamination", "cpi", "cpin"):
             directory = self.root / workflow
             directory.mkdir()
             (directory / "run.json").write_text(json.dumps({
@@ -68,11 +68,11 @@ class LinuxInstallationEvidenceTests(unittest.TestCase):
         uid = (self.root / "cpi/run.json").stat().st_uid
         check.check_workflows(self.root, uid)
         (self.root / "cpi/run.json").write_text(json.dumps({"workflow": "cpi", "status": "failed"}))
-        with self.assertRaisesRegex(RuntimeError, "all four"):
+        with self.assertRaisesRegex(RuntimeError, "all five"):
             check.check_workflows(self.root, uid)
 
     def test_foreign_owned_result_is_rejected(self):
-        for workflow in ("dnp-call", "snp-call", "contamination", "cpi"):
+        for workflow in ("dnp-call", "snp-call", "contamination", "cpi", "cpin"):
             directory = self.root / workflow
             directory.mkdir()
             (directory / "run.json").write_text(json.dumps({
@@ -212,6 +212,26 @@ class InstalledAutomaticPlanEvidenceTests(unittest.TestCase):
     def test_current_package_requires_complete_snp2_scientific_results(self):
         self.current_snp2_outputs()
         self.verify()
+
+    def test_0850_requires_five_modules_and_marker_neutral_contamination(self):
+        self.current_snp2_outputs()
+        self.manifest["version"] = "0.8.50"
+        self.record["source"]["nipat_version"] = "0.8.50"
+        self.record["runtime"]["engine"]["plan_execution"]["workflows"].append("cpin")
+        artifact = next(step for step in self.state["steps"] if step["id"] == "contamination")["artifacts"]["summary"]
+        rows = check.read_table(self.workflow / artifact["path"])
+        for row in rows:
+            row["informative_sites"] = row.pop("informative_DNPs")
+        artifact.update(self.table(artifact["path"], rows))
+        self.verify()
+        self.record["runtime"]["engine"]["plan_execution"]["workflows"].remove("cpin")
+        with self.assertRaisesRegex(RuntimeError, "complete plan interface"):
+            self.verify()
+
+    def test_0850_evidence_does_not_reinterpret_old_release_checks(self):
+        self.assertIn("all_five_workflows", check.checks_for_version("0.8.50"))
+        self.assertIn("all_four_workflows", check.checks_for_version("0.8.35"))
+        self.assertNotIn("all_four_workflows", check.checks_for_version("0.8.50"))
 
     def test_current_package_rejects_changed_likelihood_genotype_and_observations(self):
         self.current_snp2_outputs()

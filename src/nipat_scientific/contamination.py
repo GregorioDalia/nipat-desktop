@@ -13,7 +13,8 @@ import unicodedata
 
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
-from nipat_scientific.files import require_contamination_input, require_file, write_input_report
+from nipat_scientific.files import require_count_input, require_file, write_input_report, detect_marker_type
+from nipat_scientific.settings import normalize_settings
 from nipat_scientific.panels import read_position_panel, write_position_panel
 
 
@@ -46,7 +47,7 @@ def prepare_contamination(request: object) -> list[str]:
     output must be empty. Failed staging is left available for diagnosis;
     a subsequent invocation cannot overwrite it.
     """
-    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
+    if not isinstance(request, dict) or not REQUEST_FIELDS.issubset(request) or set(request) - REQUEST_FIELDS - {"presentation", "marker_type", "scientific_settings"}:
         raise ValidationError("Richiesta Contamination non valida: campi mancanti o inattesi.")
     validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
@@ -57,8 +58,13 @@ def prepare_contamination(request: object) -> list[str]:
     if not isinstance(selected, list) or not selected:
         raise ValidationError("Nessuna tabella di input per Contamination.")
 
-    panel = require_file(_absolute_path(request["panel"], "Pannello DNP"), "Pannello DNP")
-    records = read_position_panel(panel)
+    panel = require_file(_absolute_path(request["panel"], "Pannello marcatori"), "Pannello marcatori")
+    marker = request.get("marker_type")
+    if marker not in (None, "auto", "SNP", "DNP"):
+        raise ValidationError("Tipo di marcatore Contamination non valido.")
+    if marker == "auto":
+        marker = None
+    settings = normalize_settings("contamination", request.get("scientific_settings", {}))
     samples: list[tuple[Path, str]] = []
     names: set[str] = set()
     warnings = []
@@ -69,9 +75,16 @@ def prepare_contamination(request: object) -> list[str]:
         if name.casefold() in names:
             raise ValidationError(f"Nome file duplicato nello staging: {name}")
         names.add(name.casefold())
-        source = require_file(_absolute_path(item["path"], "Output DNPcall"), "Output DNPcall")
-        warnings.extend(require_contamination_input(source))
+        source = require_file(_absolute_path(item["path"], "Output del caller"), "Output del caller")
+        detected = detect_marker_type(source)
+        if marker is None:
+            marker = detected
+        if marker != detected:
+            raise ValidationError("Non mescolare tabelle SNP e DNP nella stessa analisi Contamination.")
+        warnings.extend(require_count_input(source, marker_type=marker, cpi=False))
         samples.append((source, name))
+
+    records = read_position_panel(panel, marker_type=marker)
 
     work_dir = _absolute_path(request["work_dir"], "Cartella di lavoro")
     out_dir = _absolute_path(request["out_dir"], "Cartella risultati")
@@ -86,7 +99,7 @@ def prepare_contamination(request: object) -> list[str]:
     if out_dir.is_dir() and any(out_dir.iterdir()):
         raise ValidationError("La cartella risultati deve essere vuota.")
     staged_dir = work_dir / "inputs"
-    native_panel = work_dir / "DNPpanel.txt"
+    native_panel = work_dir / f"{marker}panel.txt"
     for destination in (staged_dir, native_panel, work_dir / "input-validation.json"):
         if destination.exists() or destination.is_symlink():
             raise ValidationError(f"Preparazione già presente: {destination}")
@@ -97,6 +110,7 @@ def prepare_contamination(request: object) -> list[str]:
     staged_dir.mkdir()
     for source, name in samples:
         shutil.copy2(source, staged_dir / name)
-    write_position_panel(records, native_panel)
+    write_position_panel(records, native_panel, marker_type=marker)
     write_input_report(work_dir, "contamination", warnings, normalized=[(panel, native_panel)])
-    return [str(native_panel), str(staged_dir), str(out_dir)]
+    return [str(native_panel), str(staged_dir), str(out_dir),
+            "--include_zero" if settings["include_zero"] else "--exclude_zero"]

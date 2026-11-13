@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "version": "0.8.50",
+  "date": "2026-11-13",
+  "status": "development-validated-locally",
+  "published": false,
+  "base_remote_commit": "88b37ba9ff79d5985a989547c2072f58691b75a1",
+  "runtime": {
+    "python": "3.12.14",
+    "R": "Rscript (R) version 4.5.0 (2025-04-11)",
+    "samtools": "1.21",
+    "host": "Linux development environment"
+  },
+  "unit_tests": {
+    "status": "passed",
+    "tests": 1182,
+    "seconds": 34.971,
+    "skipped": 4,
+    "log_sha256": "8f1b1d27562c2d3c806bfbb4f4e1ceb08e211f7059c5c0cfbcbbd978702d2f8c"
+  },
+  "ci_contract_tests": {
+    "status": "passed",
+    "tests": 253,
+    "seconds": 1.336,
+    "skipped": 0,
+    "log_sha256": "cf94055d0572b63e60f6990e241ca2657dc6a254db42bd343f53f37d49761ce9"
+  },
+  "static_checks": {
+    "ruff": "passed",
+    "git_diff_check": "passed",
+    "wheel_build": "passed",
+    "source_catalog": "all five verified"
+  },
+  "downstream_scientific_qualification": {
+    "status": "passed",
+    "R_executions": 86,
+    "immutable_reference_comparisons": 16,
+    "batch_executions": 54,
+    "effective_settings_native_sidecar_checks": 70,
+    "all_tested_sources_and_verifier_match_current_checkout": true,
+    "worker_completions_and_overlap_rechecked": true,
+    "runtime": "Rscript (R) version 4.5.0 (2025-04-11)"
+  },
+  "three_bam_workflow": {
+    "status": "passed",
+    "bam_count": 3,
+    "scope": "all five modules, both marker branches, presentation and original inputs",
+    "runs": {
+      "serial": {
+        "status": "succeeded",
+        "steps": 10,
+        "snp_parallel": null
+      },
+      "capped": {
+        "status": "succeeded",
+        "steps": 10,
+        "snp_parallel": {
+          "interface": "nipat-parallel-v1",
+          "mode": "auto",
+          "max_workers": 2,
+          "workers": 2,
+          "tasks": 3,
+          "cpu_limit": 9,
+          "memory_available_mib": 8835.671875,
+          "memory_per_worker_mib": 2048,
+          "memory_worker_limit": 3,
+          "reason": "cpu-memory-task-budget",
+          "diagnostics": "parallel/snp"
+        }
+      }
+    },
+    "identical_scientific_tables": 30
+  },
+  "upstream_reference": {
+    "upstream_commit": "9c2a8be60afcb944153710da6a61cd0559e2b4cf",
+    "repository": "https://github.com/lpistacchia/NEWPAT",
+    "sha256": {
+      "CPI_postnatal/Postnatal_CPI.R": "66f260ef0d66b923b763d1115b36e797c6784b37b0b4793964fa53f55dfa658e",
+      "CPI_from_cffDNA/cfDNA_CPI_estimator.R": "8c8062b6110af7d957f152bb26539d72b22d7d90a26ebe251b27679c573d14f6",
+      "contamination/detect_contamination.R": "e82a71b90dfc73982b350b719bcbeedbb20502b353a9d735c590dc14635d6d1d"
+    }
+  },
+  "reference_comparisons": [
+    "SNP-cpin-0",
+    "SNP-cpi-0",
+    "SNP-cpi-1",
+    "SNP-cpi-2",
+    "SNP-cpi-3",
+    "SNP-cpi-4",
+    "SNP-contamination-0",
+    "SNP-contamination-1",
+    "DNP-cpin-0",
+    "DNP-cpi-0",
+    "DNP-cpi-1",
+    "DNP-cpi-2",
+    "DNP-cpi-3",
+    "DNP-cpi-4",
+    "DNP-contamination-0",
+    "DNP-contamination-1"
+  ],
+  "verification_script_sha256": "be8873a3f068b31e5b3662a39bacb50bd94c5e261242f74568dcd2e86496fc7d",
+  "scientific_and_helper_sha256": {
+    "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R": "cac401d40ed7b137d49d22e0ef99ef891a0bce5661e3df6ccc8a8c8b1cf9ae49",
+    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "d5a7518e5d4b41a2c1b2a780c186595edc617a0963ff7cdb63843f202f1c4f10",
+    "scientific/vendor/NEWPAT/contamination/detect_contamination.R": "3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0",
+    "lib/nipat_scientific/__init__.py": "8301723fab927956764f9fcf8726c449c2bc17e8c5aaa8333143eb8af9a17a23",
+    "lib/nipat_scientific/errors.py": "f004343c7d2cfa7994431cc8c0dcf59e592262063146a3cf5ad717747e68367f",
+    "lib/nipat_scientific/settings.py": "6690241ce2ee41393433381dcb07a87fea60c7b664b9ad58a4ced8a27def7fc4",
+    "lib/nipat_scientific/settings.R": "d4e0db860501861132aa3fde280d371ab84a5fe7944d94482b7499f29687c392",
+    "lib/nipat_scientific/settings_data.json": "e1284fe3489dc55b19c13a806ca461cbfc712c6047fb2499d8c3ac2c86692123",
+    "lib/nipat_scientific/parallel.R": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
+    "lib/nipat_scientific/plots.R": "4bb6d65e05d4cc6d69a0a8160b4405e48a7bab549bfe9cbe4ea7d7185ffa35a3"
+  },
+  "complete_workflow_engine_sha256": {
+    "scripts/verify_five_module_workflow.py": "9a46fa0277bc062a88b0c63101926509ce9cd412c5d53731287a19e55956f188",
+    "engine/main.py": "5667313e61ee8f13eedc026e0fd374f98a96fc6a852f77f234d53ff215417532",
+    "scientific/vendor/DNPcall/DNPcall.R": "4904721e258190ace5cb0fc7df367c0d6f2f68abfc5d794aea83ed0a43db2088",
+    "scientific/vendor/NEWPAT/SNPcall/SNPcall.R": "e27981da3e4c061068f1d17751e45223674b1a1fa01c177f1c5f858162f62c73",
+    "scientific/vendor/NEWPAT/contamination/detect_contamination.R": "3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0",
+    "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R": "d5a7518e5d4b41a2c1b2a780c186595edc617a0963ff7cdb63843f202f1c4f10",
+    "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R": "cac401d40ed7b137d49d22e0ef99ef891a0bce5661e3df6ccc8a8c8b1cf9ae49",
+    "src/nipat_scientific/scratch.py": "03b109cf778899a7c03de1ccf0753358b6890dae42feccc4ae8ec3be560c2dd6",
+    "src/nipat_scientific/dnp_pileup.py": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762",
+    "src/nipat_scientific/snp.py": "d508ce9ad617f27976941c870ff41edb9fea950a1dc3514fab5be53d8cd2541c",
+    "src/nipat_scientific/catalog.py": "6c2a89aae82e0f9382342b9266ea1a72a5e12bd161570a6585b7af8bf339e28d",
+    "src/nipat_scientific/contamination.py": "9a003fed6043cbbf0cd68ffe7b708dbbe4aeaa45552b07a3e8e89d78cea6b307",
+    "src/nipat_scientific/__init__.py": "8301723fab927956764f9fcf8726c449c2bc17e8c5aaa8333143eb8af9a17a23",
+    "src/nipat_scientific/presentation.py": "fb01b23f6183c3478ab97d869dfafcb11692428be63453e378f9a7742bb78c0a",
+    "src/nipat_scientific/settings.py": "6690241ce2ee41393433381dcb07a87fea60c7b664b9ad58a4ced8a27def7fc4",
+    "src/nipat_scientific/panels.py": "fdb28f0935587088cfe3921171e37c5c075e9d30ffc2888edd162d9de64236c4",
+    "src/nipat_scientific/errors.py": "f004343c7d2cfa7994431cc8c0dcf59e592262063146a3cf5ad717747e68367f",
+    "src/nipat_scientific/executor.py": "d67f3d715bad4b8b25a3cbcffb173c5a830871ffdb9fac73ba0dabd5515dbd4e",
+    "src/nipat_scientific/plan.py": "cc0a126a19f10c8315d367df7a328bf7b8730d1a2e0d705c124bd35ac8d4ebcd",
+    "src/nipat_scientific/files.py": "cb6d5e52658233b8f20f8f86739710a3a7af84d7901d02821f33e1fd182447d0",
+    "src/nipat_scientific/parallel.py": "bcdf3866e76419ac0b2879bf292be2a45eeb69ec6a590332652423f1aade87f7",
+    "src/nipat_scientific/dnp.py": "2b94fdc37c25a7a06a2ba719d3f4772bc70dcfec75dcf0d10c60e8bf12a1c4f8",
+    "src/nipat_scientific/outputs.py": "47970f4fe68ff0d92082926fe5a13ddeaf67b82c4d180a520f0fa69e4a40eb9c",
+    "src/nipat_scientific/snp_summary.py": "1269920773e53f4e658fd95680d6929fdd8c32eac487b263be7a9f2901527945",
+    "src/nipat_scientific/cpi.py": "c9874aea738ef305891969ff09f4d98a95cb03fefd21122a1d985e99aa6735d5",
+    "src/nipat_scientific/progress.py": "bdf580cdce8c88efbf93a10116d851162260c09d7b07d5713ea0f6c6c1200bec",
+    "src/nipat_scientific/performance.py": "2ad9c227734caebac0fe358c7eb3ce6f86342584bd3570b88ab013eb3a783382",
+    "src/nipat_scientific/cpin.py": "65f46c57f25c4158059ac73833089b9e191905ee3666ea04ea26ac139a065291",
+    "src/nipat_scientific/snp_parallel.py": "f8493ce29953ce44c0fbad945305ede8afdd20bd7bcabb4d089e151bf49b2ae1",
+    "src/nipat_scientific/plots.R": "4bb6d65e05d4cc6d69a0a8160b4405e48a7bab549bfe9cbe4ea7d7185ffa35a3",
+    "src/nipat_scientific/parallel.R": "2e8ebb3c0ccfa36e5e67f64392e5d8da166f149667d7b1d559de95054d307e42",
+    "src/nipat_scientific/progress.R": "f8171a8db9d24b057fe859e78b47c03694c512bf2480ca0f09ebf753c65f19e0",
+    "src/nipat_scientific/dnp_blocks.R": "8f26a73dc79b9f1ab78742f6dd151623e202154ef82560fe2388cec8cc4243da",
+    "src/nipat_scientific/settings.R": "d4e0db860501861132aa3fde280d371ab84a5fe7944d94482b7499f29687c392",
+    "src/nipat_scientific/presentation.R": "eb56110e3f793666cd9550e9112488ee662f8fecac0995ce06ab402ba46bb08b",
+    "src/nipat_scientific/settings_data.json": "e1284fe3489dc55b19c13a806ca461cbfc712c6047fb2499d8c3ac2c86692123"
+  },
+  "not_performed": [
+    "Docker image execution in this local environment",
+    "Windows/WSL installation",
+    "macOS installation",
+    "Ubuntu installed-package acceptance",
+    "release publication"
+  ],
+  "reproduce": [
+    "python -m unittest discover -s tests",
+    "python -m unittest discover -s .github/scripts",
+    "python scripts/verify_five_modules.py --output build/new-analysis-qualification --full",
+    "python scripts/verify_five_module_workflow.py --output build/new-bam-workflow-qualification"
+  ],
+  "scope_note": "Synthetic numerical/engineering verification; not clinical/domain validation or a measured performance claim on real BAMs."
+}

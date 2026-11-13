@@ -24,6 +24,8 @@ Un run esistente non viene sovrascritto.
 | `execution.log` | Comandi, messaggi del client e output combinato del motore; nei piani, il dettaglio scientifico è nei log dei passaggi. |
 | `work/input-validation.json` | Controlli degli input, avvisi e provenienza delle copie normalizzate dell'analisi singola. |
 | `work/scientific-validation.json` | Controlli degli output e segnalazioni di qualità dell'analisi singola. |
+| `work/effective-scientific-settings.json` | Parametri scientifici e costanti richiesti al singolo modulo. |
+| `output/scientific-settings.json` | Valori effettivamente usati da R, verificati prima del completamento. |
 
 I percorsi si possono aprire dalla schermata finale del menu oppure dal
 file system. **6 — Ultima esecuzione** richiama il run più recente della
@@ -62,6 +64,17 @@ o nel passaggio successivo corrispondente. La modalità BAM conserva
 `work/snp_regions.bed` e `work/pileup.txt` nella cartella del passaggio;
 la modalità pileup conserva il riferimento all'input e non lo rigenera.
 Questi percorsi sono relativi a `output/workflow`.
+
+Nel workflow generale `workflow analyze`, le analisi successive usano
+identificatori distinti per ramo: `dnp_contamination`, `snp_contamination`,
+`dnp_cpi`, `snp_cpi`, `dnp_cpin`, `snp_cpin`. Il piano e lo stato registrano
+i passaggi effettivamente selezionati. CPIN produce
+`Summary_Postnatal_CPI.txt`, le tabelle dei siti e delle curve e i PDF
+nella cartella `output` del proprio passaggio. Ogni passaggio conserva i due
+file delle impostazioni scientifiche, in `work` e `output`.
+Il report HTML riporta anche le associazioni familiari CPI/CPIN, comprese
+quelle presenti su un solo ramo. Le tabelle DNP e SNP non vengono aggregate
+in un unico indice di paternità.
 
 La fase SNP 2.0 salva inoltre quattro grafici del campione in
 `output/plots/sample_0001` e genotipi, valori non assegnati e `resources.tsv`
@@ -307,6 +320,7 @@ per ripeterlo occorre un nuovo run.
 | SNPcall | `work/SNPpanel.tsv` normalizzato; da BAM anche `work/snp_regions.bed` e `work/pileup.txt`. Da pileup: riferimento al file selezionato. | `output/SNPcall_output.txt`. |
 | Contamination | `work/DNPpanel.txt` e tabelle preparate in `work/inputs`. | `output/contamination_summary.txt` e tabelle `contamination_full_output_*.txt`. |
 | CPI | Tabelle parentali richieste in `work/inputs`; eventuale `work/DNPpanel.txt` o pannelli `work/cutoff_001.tsv`, ecc. | `output/Summary_FetalFraction_CPI.csv`, un PDF per coppia in `output/plots` e `output/plots/All_CPIplots.pdf`. |
+| CPIN | Tabelle di madre, padre e figlio in `work/inputs`; eventuale pannello normalizzato. | `output/Summary_Postnatal_CPI.txt`, tabelle dei siti e delle curve e PDF. |
 
 Il pileup e il BED generati internamente da DNPcall nella radice del run
 vengono eliminati al termine dallo script R; non sono intermedi conservati
@@ -317,10 +331,12 @@ Un campione presente in più coppie viene preparato una sola volta. La modalità
 ALL non genera pannelli e non aggiunge `Cutoff` al CSV. Un pannello singolo
 produce una colonna `Cutoff` con il percorso interno del pannello; i cutoff
 etichettati conservano le etichette selezionate. I nomi dei PDF e la colonna
-`Pair` usano `Mother<id>-Father<id>_DNPs`, anche quando i prefissi degli input
+`Pair` usano `Mother<id>-Father<id>_DNPs` o il corrispondente suffisso SNP,
+anche quando i prefissi degli input
 sono diversi. Nei piani gli ID nativi sono assegnati dal motore e documentati
-nella mappa delle coppie. Lo script produce il riepilogo CSV e i PDF, non
-tabelle di dettaglio per sito o per iterazione.
+nella mappa delle coppie. Lo script produce il riepilogo CSV, i PDF e le
+tabelle delle curve. CPIN conserva anche il dettaglio dei siti e i motivi
+di esclusione.
 
 ## Conservazione e uso successivo
 

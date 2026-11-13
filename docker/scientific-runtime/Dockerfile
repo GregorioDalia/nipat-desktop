@@ -82,6 +82,8 @@ COPY scientific/vendor/NEWPAT/LICENSE /opt/nipat/scientific/vendor/NEWPAT/LICENS
 COPY scientific/vendor/NEWPAT/SNPcall/SNPcall.R /opt/nipat/scientific/vendor/NEWPAT/SNPcall/SNPcall.R
 COPY scientific/vendor/NEWPAT/contamination/detect_contamination.R /opt/nipat/scientific/vendor/NEWPAT/contamination/detect_contamination.R
 COPY scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R /opt/nipat/scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R
+COPY scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R /opt/nipat/scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R
+COPY src/nipat_scientific/cpin.py src/nipat_scientific/settings.py src/nipat_scientific/settings.R src/nipat_scientific/settings_data.json /opt/nipat/lib/nipat_scientific/
 COPY engine/main.py /opt/nipat/engine/main.py
 COPY src/nipat_scientific/__init__.py src/nipat_scientific/errors.py src/nipat_scientific/panels.py src/nipat_scientific/files.py src/nipat_scientific/contamination.py src/nipat_scientific/snp.py src/nipat_scientific/snp_summary.py src/nipat_scientific/snp_parallel.py src/nipat_scientific/dnp.py src/nipat_scientific/cpi.py src/nipat_scientific/catalog.py src/nipat_scientific/plan.py src/nipat_scientific/executor.py src/nipat_scientific/outputs.py src/nipat_scientific/presentation.py src/nipat_scientific/presentation.R src/nipat_scientific/plots.R src/nipat_scientific/performance.py /opt/nipat/lib/nipat_scientific/
 COPY src/nipat_scientific/catalog_data/ /opt/nipat/lib/nipat_scientific/catalog_data/

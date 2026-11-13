@@ -67,18 +67,18 @@ class EnginePackageTests(unittest.TestCase):
                          hashlib.sha256(self.manifest.read_bytes()).hexdigest())
         self.assertEqual(set(metadata["workflows"]), set(engine.SCRIPT_PATHS))
         self.assertEqual(metadata["workflow_interfaces"], {
-            "contamination": "contamination-v1", "snp-call": "snp-call-v2", "dnp-call": "dnp-call-v1",
-            "cpi": "cpi-v1",
+            "contamination": "contamination-v2", "snp-call": "snp-call-v2", "dnp-call": "dnp-call-v1",
+            "cpi": "cpi-v2", "cpin": "cpin-v1",
         })
         self.assertEqual(metadata["plan_execution"], {
-            "interface": "workflow-plan-execution-v1", "schema_version": 1,
-            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
+            "interface": "workflow-plan-execution-v2", "schema_version": 1,
+            "workflows": ["dnp-call", "snp-call", "contamination", "cpi", "cpin"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
         })
         self.assertEqual(metadata["preparation"]["interface"], "workflow-preparation-v1")
         self.assertEqual(metadata["scientific_validation"], {
             "interface": "scientific-validation-v1",
-            "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
-            "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi", "cpin"],
+            "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi", "cpin"],
             "snp_alleles": "uppercase-working-copy",
             "snp_model": "SNPcall-2.0", "snp_output_columns": 17,
             "snp_panel_formats": ["chr-pos-ref-alt", "legacy-chr:pos-ref-alt"],
@@ -105,6 +105,36 @@ class EnginePackageTests(unittest.TestCase):
             self.assertEqual(actual["script"], f"scientific/{relative}")
             self.assertEqual(actual["sha256"],
                              hashlib.sha256((self.root / actual["script"]).read_bytes()).hexdigest())
+
+    def test_image_plan_gate_accepts_inferred_marker_and_rejects_wrong_marker(self):
+        spec = importlib.util.spec_from_file_location(
+            "nipat_package_plan_gate", PROJECT_ROOT / "scripts/verify_engine_package.py")
+        helper = importlib.util.module_from_spec(spec)
+        with patch.object(sys, "path", [str(PROJECT_ROOT / "scripts"), *sys.path]):
+            spec.loader.exec_module(helper)
+
+        def run_image(identifier, arguments, *, inputs, expected_returncode=0):
+            # The request itself uses platform-independent container paths; the
+            # host temporary filename is only passed to argparse's --plan file.
+            code, output, errors = self.call_main(["validate-plan", "--plan", str(inputs / "plan.json")])
+            self.assertEqual(code, expected_returncode, errors)
+            return output if code == 0 else output + errors
+
+        root = self.root / "valid plan check"
+        root.mkdir()
+        with patch.object(helper, "run_image", side_effect=run_image):
+            helper.check_plan_contract("fixture-image", root)
+
+        def wrong_marker(*args, **kwargs):
+            report = json.loads(run_image(*args, **kwargs))
+            report["plan"]["steps"][1]["parameters"]["marker_type"] = "SNP"
+            return json.dumps(report)
+
+        invalid = self.root / "wrong marker check"
+        invalid.mkdir()
+        with patch.object(helper, "run_image", side_effect=wrong_marker), \
+                self.assertRaisesRegex(ValueError, "unexpected plan"):
+            helper.check_plan_contract("fixture-image", invalid)
 
     def test_numeric_regression_provenance_accepts_complete_engine_source_inventory(self):
         from nipat.errors import ValidationError
@@ -311,7 +341,7 @@ class EnginePackageTests(unittest.TestCase):
         fake_rscript = fake_bin / "Rscript"
         fake_rscript.write_text(
             "#!/bin/sh\n"
-            '[ "$#" -eq 4 ] || exit 99\n'
+            '[ "$#" -eq 5 ] || exit 99\n'
             '[ -f "$2" ] || exit 98\n'
             '[ -f "$3/sample with spaces.txt" ] || exit 97\n'
             '[ -d "$4" ] || exit 96\n'
@@ -470,7 +500,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(json.loads(output), report)
         execute.assert_called_once_with(document, run_dir=run_dir, script_paths={
             name: self.root / "scientific" / engine.SCRIPT_PATHS[name]
-            for name in ("dnp-call", "snp-call", "contamination", "cpi")
+            for name in engine.SCRIPT_PATHS
         })
         self.assertFalse(run_dir.exists())
 
@@ -580,6 +610,20 @@ class EnginePackageTests(unittest.TestCase):
         request_file.write_text(json.dumps(request), encoding="utf-8")
         return request_file, request
 
+    def test_settings_normalization_resolves_auto_marker_and_preserves_requested_object(self):
+        _file, request = self.cpi_request()
+        request["marker_type"] = "auto"
+        before = json.dumps(request, sort_keys=True)
+        normalized = engine.normalize_request_settings(request, "cpi")
+        self.assertEqual(normalized["marker_type"], "DNP")
+        self.assertEqual(normalized["scientific_settings"]["err_const_dnp"], 0.01)
+        self.assertEqual(normalized["scientific_settings"]["err_const_snp"], 0.001)
+        self.assertEqual(json.dumps(request, sort_keys=True), before)
+        self.assertFalse(Path(request["work_dir"]).exists())
+        for invalid in ({}, [], {"workflow": "cpin"}, {**request, "workflow": "snp-call"}):
+            with self.subTest(request=invalid), self.assertRaises(engine.BundleError):
+                engine.normalize_request_settings(invalid, "cpi")
+
     def cpi_tools(self):
         fake_bin = self.root / "bin"
         fake_bin.mkdir()
@@ -588,7 +632,7 @@ class EnginePackageTests(unittest.TestCase):
             f"#!{sys.executable}\n"
             "import argparse, json, os, sys\nfrom pathlib import Path\n"
             "parser = argparse.ArgumentParser()\n"
-            "for key in ('pileup_dir','out_dir','pairs','mother_prefix','father_prefix','popfreq','err_const','cutoff_map'):\n"
+            "for key in ('pileup_dir','out_dir','pairs','mother_prefix','father_prefix','popfreq','err_const','min_fetal_reads','cutoff_map'):\n"
             "    parser.add_argument('--' + key, required=True)\n"
             "args = parser.parse_args(sys.argv[2:])\n"
             "samples = {p.name: p.read_bytes().hex() for p in Path(args.pileup_dir).iterdir()}\n"
@@ -621,7 +665,7 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(event["args"], {
             "pileup_dir": str(Path(request["work_dir"]) / "inputs"), "out_dir": request["out_dir"],
             "pairs": "A:B", "mother_prefix": "", "father_prefix": "--Father",
-            "popfreq": request["popfreq"], "err_const": "0.01",
+            "popfreq": request["popfreq"], "err_const": "0.01", "min_fetal_reads": "2",
             "cutoff_map": f"-Panel è={Path(request['work_dir']) / 'cutoff_001.tsv'}",
         })
         self.assertEqual(event["samples"], {
@@ -642,7 +686,7 @@ class EnginePackageTests(unittest.TestCase):
             capture_output=True, text=True, check=False, timeout=10,
         )
         self.assertEqual(result.returncode, 2, result.stderr)
-        self.assertIn("non negativa", result.stderr)
+        self.assertIn("limite ammesso", result.stderr)
         self.assertFalse(Path(environment["CPI_TEST_EVENTS"]).exists())
         self.assertFalse(Path(request["work_dir"]).parent.exists())
 
@@ -852,7 +896,7 @@ class EnginePackageTests(unittest.TestCase):
         commands = self.snp_events()
         self.assertEqual([Path(command[0]).name for command in commands], ["Rscript"])
         self.assertEqual(commands[0][commands[0].index("--pileup") + 1], request["pileup"])
-        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json", "parallel"})
+        self.assertEqual({p.name for p in Path(request["work_dir"]).iterdir()}, {"SNPpanel.tsv", "input-validation.json", "parallel", "effective-scientific-settings.json"})
 
     @unittest.skipIf(os.name == "nt", "POSIX executables exercise the Linux image entry point.")
     def test_standalone_zero_exit_without_output_is_a_failure(self):

@@ -1,5 +1,6 @@
 """Keep scientific equivalence mandatory without authorizing publication."""
 
+import ast
 from pathlib import Path
 import re
 import unittest
@@ -20,6 +21,56 @@ def job_text(workflow, identifier):
 
 
 class REquivalenceCI(unittest.TestCase):
+    def test_new_analysis_models_are_required_in_the_packaged_image(self):
+        for name, identifier in (("ci.yml", "scientific"),
+                                 ("windows-installer.yml", "linux-runtime")):
+            job = job_text((ROOT / ".github/workflows" / name).read_text(), identifier)
+            self.assertIn('scripts/verify_five_modules.py --image "$NIPAT_RUNTIME_IMAGE"', job)
+            self.assertIn('--output "$TMPDIR/artifacts" --full', job)
+            self.assertIn('${{ runner.temp }}/nipat-five-modules-check/', job)
+            self.assertNotIn("continue-on-error:", job)
+
+    def test_native_edge_and_settings_regressions_cannot_skip_in_image(self):
+        for name, identifier in (("ci.yml", "scientific"), ("windows-installer.yml", "linux-runtime")):
+            job = job_text((ROOT / ".github/workflows" / name).read_text(), identifier)
+            self.assertIn("/qualification/.github/scripts/check_native_r.py", job)
+            self.assertIn("--env PYTHONPATH=/opt/nipat/lib:/qualification/src", job)
+            self.assertIn("--network=none", job)
+            self.assertIn("${{ runner.temp }}/nipat-native-r-check/", job)
+        gate = (ROOT / ".github/scripts/check_native_r.py").read_text()
+        self.assertIn("result.skipped", gate)
+        self.assertIn("test_native_r_*.py", gate)
+        self.assertIn("test_scientific_settings.py", gate)
+
+    def test_native_gate_uses_shared_required_and_installed_r_packages(self):
+        helper = ast.parse((ROOT / "tests/native_r_helpers.py").read_text())
+        packages = next(ast.literal_eval(node.value) for node in ast.walk(helper)
+                        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name)
+                        and target.id == "packages" for target in node.targets))
+        installed = {line.split("\t")[0] for line in
+                     (ROOT / "docker/scientific-runtime/r-packages.tsv").read_text().splitlines()[1:]}
+        self.assertLessEqual(set(packages), installed)
+        required = {"jsonlite"}
+        for relative in ("CPI_postnatal/Postnatal_CPI.R", "CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+                         "contamination/detect_contamination.R"):
+            source = (ROOT / "scientific/vendor/NEWPAT" / relative).read_text()
+            required.update(re.findall(r"library\(([A-Za-z][A-Za-z0-9.]*)\)", source))
+        required.discard("tools")  # Included with base R, not a CRAN dependency.
+        self.assertEqual(set(packages), required)
+        gate = (ROOT / ".github/scripts/check_native_r.py").read_text()
+        self.assertIn("from native_r_helpers import NATIVE_R_AVAILABLE, NATIVE_R_REASON", gate)
+        self.assertIn("if not NATIVE_R_AVAILABLE:", gate)
+        self.assertNotIn("data.table", gate)
+
+    def test_python_collection_includes_pytest_functions_and_unittest_classes(self):
+        for name in ("ci.yml", "windows-installer.yml"):
+            workflow = (ROOT / ".github/workflows" / name).read_text()
+            self.assertIn("python -m coverage run -m pytest tests", workflow)
+        self.assertIn("'pytest', 'tests'", (ROOT / ".github/scripts/check_windows.ps1").read_text())
+        self.assertIn('"-m", "pytest", "tests"', (ROOT / ".github/scripts/check_macos.py").read_text())
+        self.assertIn('"-r", ".github/quality-requirements.txt"', (ROOT / ".github/scripts/check_macos.py").read_text())
+        self.assertIn("pytest==", (ROOT / ".github/quality-requirements.txt").read_text())
+
     def test_ci_and_installer_build_require_equivalence_in_the_tested_image(self):
         for name, identifier in (("ci.yml", "scientific"),
                                  ("windows-installer.yml", "linux-runtime")):

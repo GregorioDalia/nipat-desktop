@@ -11,7 +11,6 @@ from pathlib import Path
 # Embedded Python excludes the script directory from its default search path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from nipat.cli import DEFAULT_ERR_CONST
 from nipat.errors import NipatError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows
@@ -59,6 +58,10 @@ def check_outputs(run_dir: Path, expected_cutoff: str) -> None:
     for row in rows:
         if row.get("Cutoff") != expected_cutoff:
             raise ValidationError(f"{row['Pair']}: pannello Cutoff inatteso.")
+        if row.get("Marker_type") != "DNP":
+            raise ValidationError(f"{row['Pair']}: tipo di marcatore inatteso.")
+        check_number(row, "Min_fetal_reads", 2)
+        check_number(row, "Error_constant", 0.0000892303778101497)
 
     for column, expected in EXPECTED_INFORMATIVE.items():
         check_number(by_pair[INFORMATIVE_PAIR], column, expected)
@@ -106,7 +109,6 @@ def main() -> int:
             father_prefix="Father",
             popfreq=fixtures / "pop_allFreq.txt",
             panel=fixtures / "DNP_list.txt",
-            err_const=DEFAULT_ERR_CONST,
             run_name=args.run_name,
         )
         print(f"Risultati del test: {run_dir}", flush=True)

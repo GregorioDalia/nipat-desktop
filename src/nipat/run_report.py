@@ -25,7 +25,10 @@ _PARAMETERS = {"reference": "Genoma di riferimento", "panel": "Pannello", "snp_p
                "contamination_panel": "Pannello Contamination", "parallel": "Opzione parallela del codice storico",
                "popfreq": "Frequenze di popolazione", "err_const": "Costante di errore",
                "cutoff_mode": "Selezione dei siti CPI", "cutoffs": "Pannelli CPI",
-               "mother_prefix": "Prefisso materno", "father_prefix": "Prefisso paterno",
+               "mother_prefix": "Prefisso materno", "father_prefix": "Prefisso paterno", "child_prefix": "Prefisso del figlio",
+               "trios": "Trii CPIN", "caller": "Caller selezionato", "analyses": "Analisi successive",
+               "scientific_settings_requested": "Parametri scientifici richiesti",
+               "scientific_settings_effective": "Parametri scientifici del piano",
                "pairs": "Coppie CPI", "mode": "Modalità di input", "preset": "Workflow automatico",
                "input_dir": "Cartella degli input", "bamlist": "Lista BAM"}
 
@@ -68,6 +71,45 @@ def sample_rows(metadata: dict) -> list[dict[str, str]]:
                        "container_path": str(item.get("container_path", "")),
                        "role": str(item.get("role", ""))})
     return result
+
+
+def _family_section(metadata: dict, samples: list[dict[str, str]]) -> str:
+    """Keep explicit family assignments visible when the full plan is omitted.
+
+    Roles come from the recorded plan, never from a sample's filename. Validate
+    the complete plan and its sample mapping before displaying any assignment.
+    """
+    if metadata.get("workflow") != "analysis":
+        return ""
+    from nipat.results import _workflow_steps
+
+    try:
+        _workflow_steps(metadata)
+    except (ValueError, KeyError, TypeError):
+        return "<h2>Famiglie e ruoli dichiarati</h2><p>Associazioni familiari non consultabili: il piano o la corrispondenza dei campioni non sono validi.</p>"
+    sources = {sample["sample_id"]: sample for sample in samples}
+    rows = []
+    for step in metadata["parameters"]["plan"]["steps"]:
+        workflow = step["workflow"]
+        if workflow not in {"cpi", "cpin"}:
+            continue
+        roles = (("mother", "cfDNA materno" if workflow == "cpi" else "Madre"),
+                 ("father", "Padre"), ("child", "Figlio"))
+        families = step["inputs"].get("pairs", step["inputs"].get("trios", []))
+        for family in families:
+            for role, label in roles:
+                if role not in family:
+                    continue
+                identifier = family[role]["sample"]
+                source = sources[identifier]
+                rows.append([step["id"], step["parameters"]["marker_type"], family["id"],
+                             label, identifier, source["original_name"]])
+    if not rows:
+        return ""
+    return ("<h2>Famiglie e ruoli dichiarati</h2>"
+            "<p>Le associazioni sono quelle richieste nel piano. Il cfDNA materno del CPI prenatale "
+            "e il campione madre del CPIN postnatale sono riportati separatamente.</p>" +
+            _table(["Fase", "Marcatori", "Famiglia", "Ruolo", "Identificativo", "Nome originale"], rows))
 
 
 def _text(value: object) -> str:
@@ -352,6 +394,37 @@ def _performance_section(run_dir: Path, metadata: dict) -> str:
     return "\n".join(body)
 
 
+def _scientific_settings_section(run_dir: Path) -> str:
+    """Expose actual run parameters and readable constants from fixed owned files."""
+    paths = [("Analisi", "work/effective-scientific-settings.json")]
+    try:
+        steps = _performance_file(run_dir, "output/workflow/steps")
+        if steps.is_dir():
+            for entry in sorted(islice(steps.iterdir(), _MAX_PARALLEL_STEPS), key=lambda item: item.name):
+                if entry.is_dir():
+                    paths.append((entry.name, f"output/workflow/steps/{entry.name}/work/effective-scientific-settings.json"))
+    except (OSError, ValueError):
+        pass
+    sections = []
+    for label, relative in paths:
+        try:
+            path = _performance_file(run_dir, relative)
+            if not path.is_file():
+                continue
+            document = _read_json(path)
+            if document.get("schema_version") != 1 or not isinstance(document.get("parameters"), dict) or not isinstance(document.get("constants"), dict):
+                continue
+            rows = [[key, value] for key, value in document["parameters"].items()]
+            constants = [[key, value] for key, value in document["constants"].items()]
+            sections.append(f"<h3>{html.escape(label)} — {html.escape(str(document.get('workflow', '')))}</h3>" +
+                            _table(["Parametro effettivo", "Valore"], rows) +
+                            (_table(["Costante del modello", "Definizione"], constants) if constants else "") +
+                            f"<p><a href='{quote(relative)}'>Parametri e costanti registrati (JSON)</a></p>")
+        except (OSError, ValueError, RecursionError):
+            continue
+    return "<h2>Parametri scientifici e costanti</h2>" + "".join(sections) if sections else ""
+
+
 def write_run_report(run_dir: Path) -> dict:
     """Write a local HTML report and TSV map after final run metadata is saved.
 
@@ -395,13 +468,14 @@ def write_run_report(run_dir: Path) -> dict:
                     "i nomi esatti sono riportati qui e in run.json.</p>")
     else:
         body.append("<p>Questa esecuzione non registra una corrispondenza dei campioni. Consultare gli input in run.json.</p>")
+    body.append(_family_section(metadata, rows))
 
     parameters = metadata.get("parameters")
     options = metadata.get("execution_options")
     modern_parallel = isinstance(options, dict) and "execution_mode" in options
     if isinstance(parameters, dict):
         values = [[_PARAMETERS.get(key, key), value] for key, value in parameters.items()
-                  if key not in {"sample_mapping", "bams", "inputs", "expected_steps"}
+                  if key not in {"sample_mapping", "bams", "inputs", "expected_steps", "plan"}
                   and not (key == "parallel" and modern_parallel)]
         if values:
             body.extend(["<h2>Impostazioni registrate</h2>", _table(["Impostazione", "Valore"], values)])
@@ -437,6 +511,7 @@ def write_run_report(run_dir: Path) -> dict:
                 ["Massimo di loci per blocco DNP", options.get("dnp_block_loci")],
             ]), "<p>I MiB del blocco descrivono l'input grezzo, non la RAM occupata dal processo. "
                 "La modalità seriale usa un processo di calcolo alla volta, anche se il massimo richiesto è maggiore.</p>"])
+    body.append(_scientific_settings_section(run_dir))
     body.append(_parallel_section(run_dir, metadata))
     commands = metadata.get("commands")
     if isinstance(commands, list):

@@ -10,6 +10,7 @@ from typing import Callable
 from nipat_scientific.errors import PlanExecutionError
 from nipat_scientific.outputs import _artifact
 from nipat_scientific.presentation import _unique_labels
+from nipat_scientific.settings import normalize_settings
 
 
 RESOURCE_COLUMNS = ("sample", "seconds", "resident_MB_start", "resident_MB_end")
@@ -37,7 +38,7 @@ def finalize_snp_summaries(
     plan: dict, state: dict, root: Path,
     run_process: Callable[[list[str], Path, Path], int],
 ) -> list[dict]:
-    """Merge distinct samples only when panel, reference and input mode agree.
+    """Merge distinct samples only when panel, reference, input mode and scientific parameters agree.
 
     Single-sample steps already contain the native SNPcall 2.0 summary. Repeated
     analyses of the same sample are partitioned instead of becoming fictitious
@@ -49,7 +50,8 @@ def finalize_snp_summaries(
         if step["workflow"] != "snp-call" or records[step["id"]]["status"] != "succeeded":
             continue
         inputs = step["inputs"]
-        key = (inputs["panel"], inputs["reference"], step["parameters"]["mode"])
+        key = (inputs["panel"], inputs["reference"], step["parameters"]["mode"],
+               tuple(sorted(normalize_settings("snp-call", step["parameters"].get("scientific_settings")).items())))
         sample = inputs["sample"]
         group = next((item for item in groups if item["key"] == key and sample not in item["samples"]), None)
         if group is None:
@@ -128,9 +130,10 @@ def finalize_snp_summaries(
                 if handle.read(5) != b"%PDF-" or path.stat().st_size <= 5:
                     raise PlanExecutionError("execution.output", f"Invalid SNP summary PDF: {name}")
             plots.append(artifact)
-        panel, reference, mode = group["key"]
+        panel, reference, mode, settings = group["key"]
         summaries.append({
             "id": directory.name, "panel": panel, "reference": reference, "mode": mode,
+            "scientific_settings": dict(settings),
             "samples": group["samples"], "steps": group["steps"],
             "genotypes": _artifact(genotypes, root, directory),
             "resources": _artifact(resource_path, root, directory),

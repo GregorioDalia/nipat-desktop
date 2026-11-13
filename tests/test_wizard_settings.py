@@ -63,7 +63,7 @@ class WizardSettingsTests(unittest.TestCase):
         self.assertFalse(self.store.path.exists())
         self.assert_no_analyses()
         for text in ("Configura", "Guida e informazioni", "Verifica ambiente",
-                     "Contamination: tabelle", "costanti interne", "full_output_*.txt",
+                     "Contamination: tabelle", "Parametri scientifici e costanti", "full_output_*.txt",
                      "programma di installazione"):
             self.assertIn(text, output)
 

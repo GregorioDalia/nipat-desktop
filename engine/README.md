@@ -37,20 +37,21 @@ Solo `run` passa direttamente a R gli argomenti dopo il nome del workflow,
 rimuovendo un eventuale `--` iniziale. Questa modalità non esegue la
 preparazione prevista da `execute`.
 
-Prima di eseguire un workflow, tutti e quattro i sorgenti R devono corrispondere
+Prima di eseguire un workflow, tutti e cinque i sorgenti R devono corrispondere
 al manifest scientifico incluso. `describe --json` restituisce:
 
 | Campo | Contratto |
 | --- | --- |
 | `schema_version` | `1` |
 | `interface` | `native-r-v1` |
-| `workflow_interfaces` | `dnp-call-v1`, `snp-call-v2`, `contamination-v1`, `cpi-v1`, associati ai rispettivi workflow |
+| `workflow_interfaces` | `dnp-call-v1`, `snp-call-v2`, `contamination-v2`, `cpi-v2`, `cpin-v1`, associati ai rispettivi workflow |
 | `preparation.interface` | `workflow-preparation-v1` |
-| `plan_execution.interface` | `workflow-plan-execution-v1` |
-| `plan_execution.workflows` | `dnp-call`, `snp-call`, `contamination`, `cpi` |
+| `plan_execution.interface` | `workflow-plan-execution-v2` |
+| `plan_execution.workflows` | `dnp-call`, `snp-call`, `contamination`, `cpi`, `cpin` |
+| `scientific_settings.interface` | `scientific-settings-v1`; registro condiviso e valori effettivi per passaggio |
 | `plan_execution.scheduling` | `dependency-order-with-bounded-independent-snp` |
 | `plan_execution.resume` | `false` |
-| Identità scientifica | Hash del manifest e percorso/hash dei quattro script R |
+| Identità scientifica | Hash del manifest e percorso/hash dei cinque script R |
 | `preparation.file_sha256` | Hash dell'ingresso del motore, dei moduli Python condivisi, dell'adattatore R di presentazione e delle schede JSON del catalogo |
 
 Moduli mancanti e percorsi esterni al bundle sono rifiutati. Gli hash della
@@ -80,12 +81,11 @@ Al termine mostra l'esito e il percorso di `workflow-state.json`; `--json`
 restituisce invece il resoconto completo in formato JSON su stdout, con gli
 avvisi di avanzamento su stderr. In entrambe le modalità il codice di uscita
 riflette l'esito del piano.
-Sono supportati i passaggi DNPcall, SNPcall, Contamination e CPI. SNPcall
-usa un BAM con riferimento oppure un pileup importato: non consuma risultati
-degli altri passaggi e non produce tabelle DNP compatibili con essi.
-Le dipendenze determinano l'ordine nei piani misti; un piano di soli SNP
-indipendenti può distribuire i campioni entro il budget comune, lasciando
-seriali i pool interni ai worker. La modalità seriale rimane disponibile.
+Sono supportati DNPcall, SNPcall, Contamination, CPI e CPIN. Entrambi i caller
+producono tabelle tipizzate utilizzabili dai tre consumatori, senza mescolare
+SNP e DNP nella stessa analisi. CPI usa coppie esplicite e CPIN terne esplicite.
+Le dipendenze determinano l'ordine; anche nei piani misti gli SNP indipendenti
+pronti possono essere eseguiti entro un budget comune, con pool interni seriali. La modalità seriale rimane disponibile.
 Ogni passaggio conserva la
 propria richiesta, i file preparati, i risultati e il log; lo stato complessivo
 è registrato in `workflow-state.json`. Il processo del motore rimane attivo
@@ -307,3 +307,7 @@ Nomi omonimi ricevono un identificatore distintivo. I nomi dei file esportati
 sono adattati ai vincoli dei filesystem e possono essere abbreviati; la mappa
 conserva il nome completo. Le etichette CSV/TSV che potrebbero essere interpretate
 come formule sono protette come testo, senza modificare i valori scientifici.
+
+La [guida 0.8.50](../docs/DEVELOPMENT_0.8.50.md) descrive la configurazione
+scientifica e le nuove composizioni. Il motore verifica gli override prima
+dello staging e conserva i parametri effettivi in ogni passaggio.

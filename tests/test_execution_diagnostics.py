@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from nipat.errors import RuntimeExecutionError
-from nipat.execution.diagnostics import diagnose, inspect_container
+from nipat.execution.diagnostics import diagnose, inspect_container, settle_oom_observation
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.transport import DockerTransport
 from nipat.paths import ProjectLayout
@@ -38,6 +38,7 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
         self.runner = DockerComposeRunner(self.layout, transport=DockerTransport())
         self.runner._image_id = IMAGE
         self.enterContext(patch("nipat.execution.tracking.platform.platform", return_value="test host"))
+        self.enterContext(patch("nipat.execution.diagnostics.time.sleep"))
         self.enterContext(patch.object(self.runner, "_analysis_session", side_effect=lambda: nullcontext()))
         self.enterContext(patch.object(self.runner, "_prepare_runtime", side_effect=self.prepare))
         self.enterContext(patch.object(self.runner, "_describe_bundled_engine"))
@@ -63,8 +64,8 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
         return process
 
     def run_case(self, code, *, oom=False, missing=False, mismatched=False, interrupt=False,
-                 cleanup_failure=False):
-        run = self.layout.new_run_dir("test", "case")
+                 cleanup_failure=False, run_name="case"):
+        run = self.layout.new_run_dir("test", run_name)
         process = self.process(code, interrupt=interrupt)
         operations = []
         launched = []
@@ -130,10 +131,65 @@ class ExecutionDiagnosticsTests(unittest.TestCase):
         self.assertEqual(stage["container_cleanup"]["status"], "removed")
 
     def test_137_without_oom_flag_is_not_reported_as_confirmed_memory_failure(self):
-        _, record, error, _ = self.run_case(137)
+        with patch("nipat.execution.diagnostics.time.monotonic", return_value=10.0):
+            _, record, error, operations = self.run_case(137)
         self.assertIn("non e confermata", str(error))
         self.assertEqual(record["commands"][0]["container_diagnostics"]["diagnosis"]["kind"],
                          "sigkill_unconfirmed")
+        self.assertEqual(sum(argv[:3] == ["docker", "container", "inspect"] for argv in operations), 6)
+
+    def test_delayed_oom_flag_is_retained_before_cleanup_and_error_reporting(self):
+        def delayed(runner, name, labels, *, timeout):
+            self.assertGreater(timeout, 0)
+            self.assertLessEqual(timeout, 2)
+            return {"availability": "available", "owned": True, "container_id": CONTAINER,
+                    "state": {"status": "exited", "oom_killed": True, "exit_code": 137}}
+        with patch("nipat.execution.diagnostics.inspect_container", side_effect=delayed) as refreshed:
+            _, record, error, operations = self.run_case(137)
+        self.assertEqual(refreshed.call_count, 1)
+        self.assertIn("memoria insufficiente", str(error))
+        stage = record["commands"][0]
+        self.assertEqual(stage["returncode"], 137)
+        self.assertEqual(stage["container_diagnostics"]["diagnosis"]["kind"], "oom_confirmed")
+        self.assertEqual(stage["container_cleanup"]["status"], "removed")
+        self.assertEqual(operations[-1], ["docker", "rm", "--force", "--volumes", CONTAINER])
+
+    def test_failed_or_replaced_reinspection_preserves_original_identity_for_cleanup(self):
+        for number, updated in enumerate((
+            {"availability": "unavailable", "owned": False},
+            {"availability": "identity_mismatch", "owned": False},
+            {"availability": "available", "owned": True, "container_id": "c" * 64,
+             "state": {"status": "exited", "oom_killed": True}},
+        )):
+            with self.subTest(updated=updated), patch(
+                "nipat.execution.diagnostics.inspect_container", return_value=updated,
+            ) as refreshed:
+                _, record, error, operations = self.run_case(137, run_name=f"reinspection-{number}")
+            self.assertEqual(refreshed.call_count, 1)
+            self.assertIn("non e confermata", str(error))
+            stage = record["commands"][0]
+            self.assertEqual(stage["container_diagnostics"]["container_id"], CONTAINER)
+            self.assertEqual(stage["container_diagnostics"]["diagnosis"]["kind"], "sigkill_unconfirmed")
+            self.assertEqual(stage["container_cleanup"]["status"], "removed")
+            self.assertEqual(operations[-1], ["docker", "rm", "--force", "--volumes", CONTAINER])
+
+    def test_oom_settle_budget_includes_inspection_and_skips_unrelated_outcomes(self):
+        original = {"availability": "available", "owned": True, "container_id": CONTAINER,
+                    "state": {"status": "exited", "oom_killed": False}}
+        for observation, code in ((original, 0), (original, 17),
+                                   ({**original, "state": {"status": "running", "oom_killed": False}}, 137),
+                                   ({**original, "state": {"status": "exited", "oom_killed": True}}, 137)):
+            with self.subTest(observation=observation, code=code), patch(
+                "nipat.execution.diagnostics.inspect_container",
+            ) as refreshed:
+                self.assertIs(settle_oom_observation(self.runner, "name", {}, observation, code), observation)
+                refreshed.assert_not_called()
+        with patch("nipat.execution.diagnostics.time.monotonic", side_effect=[10.0, 10.0, 10.2, 12.1]), patch(
+            "nipat.execution.diagnostics.inspect_container", return_value=original,
+        ) as refreshed:
+            self.assertIs(settle_oom_observation(self.runner, "name", {}, original, -9), original)
+            self.assertEqual(refreshed.call_count, 1)
+            self.assertAlmostEqual(refreshed.call_args.kwargs["timeout"], 1.8)
 
     def test_cleanup_failure_preserves_confirmed_oom_evidence_and_original_error(self):
         _, record, error, operations = self.run_case(137, oom=True, cleanup_failure=True)

@@ -18,6 +18,7 @@ from nipat.i18n import translate
 from nipat.recovery_ui import recovery_lines
 from nipat.validation.self_test import run_self_tests
 from nipat.wizard import run_wizard
+from nipat.scientific_options import (WORKFLOWS, load_scientific_config, effective_config, settings_lines)
 
 
 DEFAULT_ERR_CONST = 0.0000892303778101497
@@ -53,9 +54,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--memory-mb", type=int, help="limite memoria del container in MiB")
     parser.add_argument("--pids-limit", type=int, help="limite dei processi nel container")
     parser.add_argument("--execution-mode", choices=("auto", "serial"),
-                        help="auto distribuisce preparazione pileup DNP e calcolo R entro le risorse disponibili; serial usa un processo di calcolo alla volta")
+                        help="auto distribuisce preparazione pileup DNP/SNP e calcolo R entro le risorse disponibili; serial usa un processo di calcolo alla volta")
     parser.add_argument("--max-workers", type=int,
-                        help="massimo di processi di calcolo condiviso dalle fasi di preparazione DNP e R, esclusi i coordinatori; rispetta anche CPU, RAM e lavoro disponibile")
+                        help="massimo di processi di calcolo condiviso dalle fasi di preparazione DNP/SNP e calcolo R, esclusi i coordinatori; rispetta anche CPU, RAM e lavoro disponibile")
     parser.add_argument("--dnp-block-mib", type=int,
                         help="dimensione obiettivo dei blocchi DNP in MiB di input grezzo (default 32), non un limite RAM")
     parser.add_argument("--dnp-block-loci", type=int,
@@ -64,17 +65,25 @@ def build_parser() -> argparse.ArgumentParser:
         "--performance-diagnostics", action="store_true", default=None,
         help="raccoglie misure locali delle prestazioni per questa analisi; nel wizard solo per la prossima analisi",
     )
+    parser.add_argument("--scientific-config", type=_path,
+                        help="JSON dei parametri scientifici, organizzati per modulo")
+    parser.add_argument("--set", dest="scientific_overrides", action="append", default=[],
+                        metavar="MODULO.PARAMETRO=VALORE", help="sovrascrive un parametro scientifico; ripetibile")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    settings = subparsers.add_parser("settings", help="mostra parametri effettivi, predefiniti e costanti dei cinque moduli")
+    settings.add_argument("workflow", nargs="?", choices=WORKFLOWS)
+    settings.add_argument("--json", action="store_true", help="schema dei parametri e valori effettivi")
+    settings.add_argument("--export", type=_path, help="salva un JSON riutilizzabile con --scientific-config")
 
     doctor = subparsers.add_parser("doctor", help="controlla ambiente e runtime")
     doctor.add_argument(
         "--runtime",
         action="store_true",
-        help="verifica R, samtools e i quattro workflow nell'immagine scientifica",
+        help="verifica R, samtools e i cinque workflow nell'immagine scientifica",
     )
 
     subparsers.add_parser("build-runtime", help="costruisce l'immagine R/samtools")
-    subparsers.add_parser("wizard", help="avvia la CLI guidata per i quattro workflow")
+    subparsers.add_parser("wizard", help="avvia la CLI guidata per i cinque workflow")
     subparsers.add_parser("self-test", help="esegue le verifiche numeriche distribuite")
 
     resources = subparsers.add_parser("resources", help="mostra o configura RAM e CPU dell'ambiente di calcolo")
@@ -114,7 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
     parameters = subparsers.add_parser(
         "parameters", help="consulta opzioni R, regole interne e preparazione degli input",
     )
-    parameters.add_argument("workflow", nargs="?", choices=("dnp-call", "snp-call", "contamination", "cpi"))
+    parameters.add_argument("workflow", nargs="?", choices=WORKFLOWS)
     parameters.add_argument("--lang", choices=("it", "en"), default="it")
     parameters.add_argument("--section", choices=("all", "parameters", "rules", "preparation"), default="all")
     parameters.add_argument("--json", action="store_true", help="catalogo strutturato bilingue")
@@ -123,6 +132,27 @@ def build_parser() -> argparse.ArgumentParser:
         "workflow", help="esegue automaticamente analisi scientifiche collegate",
     )
     workflow_presets = workflow.add_subparsers(dest="preset", required=True)
+    analyze = workflow_presets.add_parser("analyze", help="SNP/DNP verso qualunque combinazione di Contamination, CPI e CPIN")
+    analyze.add_argument("--caller", choices=("dnp", "snp", "both", "tables"), required=True)
+    analyze.add_argument("--analyses", default="", help="moduli separati da virgole: contamination,cpi,cpin; vuoto per solo calling")
+    for option, description in (("sample", "campione BAM"), ("pileup", "pileup SNP"),
+                                ("dnp-table", "tabella DNP esistente"), ("snp-table", "tabella SNP esistente")):
+        analyze.add_argument("--" + option, nargs=2, action="append", metavar=("ID", "PATH"), help=description + "; ripetibile")
+    analyze.add_argument("--pair", nargs=3, action="append", metavar=("ID", "CFDNA_ID", "FATHER_ID"),
+                         help="CPI prenatale: riferimenti agli ID campione; ripetibile")
+    analyze.add_argument("--trio", nargs=4, action="append", metavar=("ID", "MOTHER_ID", "FATHER_ID", "CHILD_ID"),
+                         help="CPIN postnatale: riferimenti agli ID campione; ripetibile")
+    analyze.add_argument("--reference", type=_path, help="FASTA indicizzato per input BAM")
+    for marker in ("dnp", "snp"):
+        analyze.add_argument(f"--{marker}-analyses", help="sovrascrive --analyses solo per questo ramo; stringa vuota per solo calling")
+        analyze.add_argument(f"--{marker}-panel", type=_path, help=f"pannello di calling {marker.upper()}")
+        analyze.add_argument(f"--{marker}-popfreq", type=_path, help=f"frequenze {marker.upper()} per CPI e CPIN")
+        analyze.add_argument(f"--{marker}-contamination-panel", type=_path,
+                             help="coordinate da analizzare; se omesso usa il pannello di calling")
+        analyze.add_argument(f"--{marker}-cpi-cutoff", nargs=2, action="append", metavar=("LABEL", "PATH"),
+                             help="cutoff CPI etichettato; ripetibile; se omesso usa ALL")
+        analyze.add_argument(f"--{marker}-cpin-panel", type=_path, help="pannello CPIN con coordinate e alleli REF/ALT; se omesso usa tutti i siti")
+    analyze.add_argument("--run-name")
     dnp_contamination = workflow_presets.add_parser(
         "dnp-contamination",
         help="esegue DNPcall e passa le tabelle individuali a Contamination",
@@ -157,7 +187,7 @@ def build_parser() -> argparse.ArgumentParser:
         composed_cpi.add_argument("--reference", type=_path, required=True)
         composed_cpi.add_argument("--panel", type=_path, required=True, help="pannello DNPcall")
         composed_cpi.add_argument("--popfreq", type=_path, required=True)
-        composed_cpi.add_argument("--err-const", type=float, default=DEFAULT_ERR_CONST)
+        composed_cpi.add_argument("--err-const", type=float, default=None, help="sovrascrive la costante di errore del tipo SNP/DNP; se omessa usa i parametri scientifici")
         cutoff = composed_cpi.add_mutually_exclusive_group()
         cutoff.add_argument("--cpi-panel", type=_path, help="singolo pannello cutoff CPI")
         cutoff.add_argument("--cutoff", nargs=2, action="append", metavar=("LABEL", "PATH"),
@@ -203,7 +233,7 @@ def build_parser() -> argparse.ArgumentParser:
     snp.add_argument("--run-name")
 
     contamination = subparsers.add_parser(
-        "contamination", help="stima la contaminazione da output DNPcall compatibili"
+        "contamination", help="stima la contaminazione da tabelle SNP o DNP"
     )
     contamination_input = contamination.add_mutually_exclusive_group(required=True)
     contamination_input.add_argument("--input", type=_path, action="append")
@@ -220,7 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
     cpi.add_argument("--father-prefix", default="Father")
     cpi.add_argument("--popfreq", type=_path, required=True)
     cpi_cutoff = cpi.add_mutually_exclusive_group()
-    cpi_cutoff.add_argument("--panel", type=_path, help="singolo pannello di coordinate DNP")
+    cpi_cutoff.add_argument("--panel", type=_path, help="singolo pannello di coordinate SNP o DNP")
     cpi_cutoff.add_argument(
         "--cutoff", nargs=2, action="append", metavar=("LABEL", "PATH"),
         help="associazione etichetta/file di cutoff; opzione ripetibile",
@@ -229,8 +259,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--cutoff-map", "--cutoff_map", dest="cutoff_map",
         help="mappa nativa CPI separata da virgole, es. label=percorso,label2=percorso2",
     )
-    cpi.add_argument("--err-const", type=float, default=DEFAULT_ERR_CONST)
+    cpi.add_argument("--err-const", type=float, default=None, help="sovrascrive la costante di errore del tipo SNP/DNP; se omessa usa i parametri scientifici")
     cpi.add_argument("--run-name")
+    cpin = subparsers.add_parser("cpin", help="CPI postnatale da madre, padre e figlio (SNP o DNP)")
+    cpin.add_argument("--input-dir", type=_path, required=True)
+    cpin.add_argument("--trios", required=True, help="ID madre:padre:figlio, per esempio M1:F1:C1,M2:F2:C2")
+    cpin.add_argument("--mother-prefix", default="Mother")
+    cpin.add_argument("--father-prefix", default="Father")
+    cpin.add_argument("--child-prefix", default="Child")
+    cpin.add_argument("--popfreq", type=_path, required=True)
+    cpin.add_argument("--panel", type=_path, help="pannello con coordinate SNP/DNP e REF/ALT; se omesso usa tutti i siti")
+    cpin.add_argument("--run-name")
     return parser
 
 
@@ -256,7 +295,7 @@ def main(argv: list[str] | None = None) -> int:
         if getattr(args, name) is not None
     }
     if execution_overrides and args.command not in {
-        "wizard", "workflow", "dnp-call", "snp-call", "contamination", "cpi",
+        "wizard", "workflow", "dnp-call", "snp-call", "contamination", "cpi", "cpin",
     }:
         parser.error("Le opzioni di provenienza, risorse e prestazioni si applicano alle analisi e al wizard; "
                      "rimuoverle per diagnostica, autotest e manutenzione.")
@@ -264,6 +303,25 @@ def main(argv: list[str] | None = None) -> int:
 
     activity = ExitStack()
     try:
+        scientific_config = load_scientific_config(args.scientific_config, args.scientific_overrides)
+        if args.command == "settings":
+            from nipat_scientific.settings import describe_settings
+            selected = [args.workflow] if args.workflow else WORKFLOWS
+            effective = effective_config(scientific_config, selected)
+            if args.export is not None:
+                with args.export.open("x", encoding="utf-8", newline="\n") as handle:
+                    json.dump(effective, handle, indent=2, ensure_ascii=False)
+                    handle.write("\n")
+            if args.json:
+                print(json.dumps({"modules": {name: describe_settings(name) for name in selected},
+                                  "effective": effective}, ensure_ascii=True, indent=2))
+            else:
+                for name in selected:
+                    for line in settings_lines(name, scientific_config):
+                        print(line)
+                if args.export is not None:
+                    print(f"Configurazione salvata: {args.export}")
+            return 0
         if args.command == "parameters":
             from nipat.catalog_ui import catalog_lines
             from nipat.terminal import Terminal
@@ -307,7 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         runner = DockerComposeRunner(layout, dry_run=args.dry_run,
                                      options=ExecutionOptions(**execution_overrides))
-        workflows = Workflows(layout, runner)
+        workflows = Workflows(layout, runner, scientific_settings=scientific_config)
         if args.command == "doctor":
             runner.doctor(args.runtime)
             print("Ambiente NIPAT disponibile.")
@@ -385,7 +443,20 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "self-test":
             run_self_tests(layout)
         elif args.command == "workflow":
-            if args.preset == "dnp-contamination":
+            if args.preset == "analyze":
+                run_dir = workflows.analyze(
+                    caller=args.caller, analyses=[part.strip().lower() for part in args.analyses.split(",") if part.strip()],
+                    samples=args.sample, pileups=args.pileup, dnp_tables=args.dnp_table, snp_tables=args.snp_table,
+                    pairs=args.pair, trios=args.trio, reference=args.reference,
+                    **{key: getattr(args, key) for key in (
+                        "dnp_panel", "snp_panel", "dnp_popfreq", "snp_popfreq",
+                        "dnp_contamination_panel", "snp_contamination_panel", "dnp_cpin_panel", "snp_cpin_panel")},
+                    dnp_cpi_cutoffs=args.dnp_cpi_cutoff, snp_cpi_cutoffs=args.snp_cpi_cutoff,
+                    dnp_analyses=[x.strip().lower() for x in args.dnp_analyses.split(",") if x.strip()] if args.dnp_analyses is not None else None,
+                    snp_analyses=[x.strip().lower() for x in args.snp_analyses.split(",") if x.strip()] if args.snp_analyses is not None else None,
+                    run_name=args.run_name,
+                )
+            elif args.preset == "dnp-contamination":
                 run_dir = workflows.dnp_contamination(
                     bams=args.bam, bamlist=args.bamlist, reference=args.reference,
                     panel=args.panel, contamination_panel=args.contamination_panel,
@@ -449,6 +520,12 @@ def main(argv: list[str] | None = None) -> int:
                 err_const=args.err_const,
                 run_name=args.run_name,
             )
+            print(f"{completion_label}: {run_dir}")
+        elif args.command == "cpin":
+            run_dir = workflows.cpin(input_dir=args.input_dir, trios=args.trios,
+                                     mother_prefix=args.mother_prefix, father_prefix=args.father_prefix,
+                                     child_prefix=args.child_prefix, popfreq=args.popfreq,
+                                     panel=args.panel, run_name=args.run_name)
             print(f"{completion_label}: {run_dir}")
         else:
             parser.error(f"Comando non gestito: {args.command}")

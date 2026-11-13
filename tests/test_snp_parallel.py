@@ -27,6 +27,15 @@ if args[0] == "-e":
     print(json.dumps({"mode":"auto", "max_workers":cap, "workers":min(tasks,cap),
                       "tasks":tasks,"reason":"controlled-test-budget"}))
     raise SystemExit(0)
+if pathlib.Path(args[0]).name == "contamination.R":
+    selected, output = pathlib.Path(args[2]), pathlib.Path(args[3])
+    (output / "scientific-settings.json").write_bytes(pathlib.Path(os.environ["NIPAT_SCIENTIFIC_SETTINGS"]).read_bytes())
+    names = [source.stem for source in sorted(selected.iterdir())]
+    for name in names:
+        (output / ("contamination_" + name + ".txt")).write_text("chr\tpos\tcontamination\nchr1\t10\t0.01\n")
+    (output / "contamination_summary.txt").write_text("individuo\tinformative_sites\tmean_contamination\tsd_contamination\n" +
+        "".join(name + "\t1\t0.01\tNA\n" for name in names))
+    raise SystemExit(0)
 work = pathlib.Path.cwd()
 (work / "observed-environment.json").write_text(json.dumps(dict(os.environ)))
 mode = os.environ.get("SNP_FIXTURE_MODE", "normal")
@@ -40,6 +49,7 @@ if mode != "normal":
     time.sleep(120)
 time.sleep(.25)
 out = pathlib.Path(args[args.index("--out")+1])
+(out.parent / "scientific-settings.json").write_bytes(pathlib.Path(os.environ["NIPAT_SCIENTIFIC_SETTINGS"]).read_bytes())
 out.write_text("chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tratio\tGL0\tGL1\tGL2\tGT\treads_discarded_for_indels\tratio_reads_discarded_for_indels\tcombined_bases\tcombined_counts\n"
                "chr1\t10\tA\tG\t1\t1\t0\t2\t0.5\t-9.21\t-1.386\t-9.21\t0/1\t0\t0\tA-G\t1-1\n")
 summary = out.parent / "summary"
@@ -120,16 +130,39 @@ class SnpParallelTests(unittest.TestCase):
                 worker_state = json.loads((run / "parallel/snp" / f"state-{record['id']}.json").read_text())
                 self.assertEqual(record, worker_state)
 
+    def test_mixed_plan_batches_ready_snp_samples_and_registers_each_result_for_downstream(self):
+        panel = self.root / "contamination_panel.tsv"
+        panel.write_text("chr\tpos\nchr1\t10\n")
+        script = self.root / "contamination.R"
+        script.write_text("# fake Rscript fixture dispatch\n")
+        self.plan["steps"].append({"id": "analysis", "workflow": "contamination", "inputs": {
+            "samples": [{"sample": "sample2", "step": "snp2", "output": "snp-tables"},
+                        {"sample": "sample0", "step": "snp0", "output": "snp-tables"}],
+            "panel": str(panel)}, "parameters": {}})
+        with patch.dict(os.environ, {**self.environment, "NIPAT_MAX_WORKERS": "2"}), \
+                patch("nipat_scientific.snp_summary.finalize_snp_summaries", return_value=[]):
+            run = self.root / "mixed"
+            state = execute_plan(self.plan, run_dir=run,
+                script_paths={"snp-call": self.script, "contamination": script})
+        self.assertEqual(state["status"], "succeeded", state)
+        self.assertEqual(state["snp_parallel"]["workers"], 2)
+        self.assertEqual(state["snp_parallel"]["tasks"], 3)
+        result = next(row for row in state["steps"] if row["id"] == "analysis")
+        self.assertEqual([row["sample"] for row in result["artifacts"]["contamination-tables"]], ["sample2", "sample0"])
+        request = json.loads((run / result["request"]).read_text())
+        self.assertIn("steps/snp2/output/SNPcall_output.txt", request["samples"][0]["path"])
+        self.assertIn("steps/snp0/output/SNPcall_output.txt", request["samples"][1]["path"])
+        self.assertTrue(all(row["status"] == "succeeded" for row in state["steps"]))
+
     def test_ineligible_plans_never_query_a_budget_or_launch_workers(self):
         scenarios = [({"NIPAT_EXECUTION_MODE": "serial"}, self.plan),
                      ({"NIPAT_MAX_WORKERS": "1"}, self.plan),
                      ({"NIPAT_PARALLEL_CHILD": "1"}, self.plan),
-                     ({}, {"steps": self.plan["steps"][:1]}),
-                     ({}, {"steps": [{"workflow": "cpi"}, *self.plan["steps"]]})]
+                     ({}, {"steps": self.plan["steps"][:1]})]
         with patch("nipat_scientific.snp_parallel._query_budget") as budget:
             for environment, plan in scenarios:
                 with self.subTest(environment=environment, plan=plan), patch.dict(os.environ, {**self.environment, **environment}):
-                    self.assertFalse(execute_independent_snp_steps(plan, {}, self.root / "unused", {}, _Cancellation(),
+                    self.assertFalse(execute_independent_snp_steps(plan, {"steps": [{"id": step["id"], "status": "pending"} for step in plan["steps"]]}, self.root / "unused", {}, _Cancellation(),
                                      atomic_json=_atomic_json))
             budget.assert_not_called()
 

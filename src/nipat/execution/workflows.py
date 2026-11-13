@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import math
+import copy
 from pathlib import Path, PurePosixPath
 
 from nipat.adapters.panels import (
     read_dnp_list,
-    read_position_panel,
     read_snp_positions,
 )
 from nipat.errors import ValidationError
@@ -21,7 +21,11 @@ from nipat.validation.files import (
     require_snp_pileup,
 )
 from nipat_scientific.cpi import normalize_pairs
-from nipat_scientific.files import require_dnp_input, require_population_frequencies
+from nipat_scientific.files import (
+    detect_marker_type, require_count_input, require_population_frequencies,
+)
+from nipat_scientific.panels import read_position_panel
+from nipat.scientific_options import normalize_config, effective_config
 from nipat_scientific.plan import validate_plan
 
 
@@ -104,7 +108,7 @@ def _select_bams(
 
 def _snp_steps(samples: list[dict], *, panel: PurePosixPath,
                reference: PurePosixPath | None, mode: str) -> list[dict]:
-    """Describe independent SNP analyses; never route SNP output into DNP analyses."""
+    """Describe SNP producers, whose typed tables can feed downstream analyses."""
     return [{"id": f"snp_{number:04d}", "workflow": "snp-call",
              "inputs": {"sample": sample["sample_id"], "panel": str(panel),
                         "reference": str(reference) if reference is not None else None},
@@ -135,16 +139,16 @@ def _append_snp_steps(plan: dict, *, samples: list[dict], panel: Path | None,
 
 def _validate_error_constant(err_const: object) -> None:
     try:
-        valid_error = type(err_const) in (int, float) and math.isfinite(err_const) and err_const >= 0
+        valid_error = type(err_const) in (int, float) and math.isfinite(err_const) and 0 < err_const <= 1
     except OverflowError:
         valid_error = False
     if not valid_error:
-        raise ValidationError("La costante di errore deve essere finita e non negativa.")
+        raise ValidationError("La costante di errore deve essere finita, maggiore di zero e non superiore a uno.")
 
 
 def _select_cpi_cutoffs(
     *, panel: Path | None, cutoffs: list[tuple[str, Path]] | None,
-    cutoff_map: str | None, panel_option: str = "--panel",
+    cutoff_map: str | None, panel_option: str = "--panel", marker_type: str = "DNP",
 ) -> tuple[str, list[tuple[str, Path]]]:
     if sum((panel is not None, cutoffs is not None, cutoff_map is not None)) > 1:
         raise ValidationError(f"Scegliere {panel_option}, --cutoff oppure --cutoff-map.")
@@ -176,16 +180,41 @@ def _select_cpi_cutoffs(
                 raise ValidationError(f"Etichetta cutoff duplicata: {label}")
             labels.add(label)
         source = require_file(source, "Pannello cutoff")
-        read_position_panel(source)
+        read_position_panel(source, marker_type)
         normalized_cutoffs.append((label, source))
     cutoff_mode = "panel" if panel is not None else "named" if normalized_cutoffs else "all"
     return cutoff_mode, normalized_cutoffs
 
 
 class Workflows:
-    def __init__(self, layout: ProjectLayout, runner: DockerComposeRunner) -> None:
+    def __init__(self, layout: ProjectLayout, runner: DockerComposeRunner,
+                 scientific_settings: dict | None = None) -> None:
         self.layout = layout
         self.runner = runner
+        self.scientific_settings = normalize_config(scientific_settings or {})
+
+    def _record_run(self, *args, **kwargs):
+        parameters = kwargs.setdefault("parameters", {})
+        parameters["scientific_settings_requested"] = copy.deepcopy(self.scientific_settings)
+        effective = effective_config(self.scientific_settings)
+        if parameters.get("err_const") is not None:
+            marker = parameters.get("marker_type", "DNP")
+            effective["cpi"][f"err_const_{marker.lower()}"] = parameters["err_const"]
+        parameters["scientific_settings_effective"] = effective
+        return self.runner.record_run(*args, **kwargs)
+
+    def _validate_plan(self, plan: dict) -> dict:
+        for step in plan["steps"]:
+            step.setdefault("parameters", {})["scientific_settings"] = copy.deepcopy(
+                self.scientific_settings.get(step["workflow"], {}))
+        return validate_plan(plan)
+
+    def _write_request(self, destination: Path, request: dict) -> None:
+        if "workflow" in request:
+            request["scientific_settings"] = copy.deepcopy(
+                self.scientific_settings.get(request["workflow"], {}))
+        _write_engine_request(destination, request)
+
 
     def dnp_call(
         self, *, bam: Path | None = None, bams: list[Path] | None = None,
@@ -211,7 +240,7 @@ class Workflows:
             samples.append({"sample_id": sample_id, "original_path": str(path),
                             "container_path": str(target)})
         run_dir = self.layout.new_run_dir("dnp-call", run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow="dnp-call", inputs=input_files, mounts=mounts,
             bundled_workflow="dnp-call",
             parameters={"bams": [str(path) for path in checked],
@@ -231,7 +260,7 @@ class Workflows:
                 "out_dir": str(self.layout.container_path(run_dir / "output")),
             }
             request_file = run_dir / "work" / "engine-request.json"
-            _write_engine_request(request_file, request)
+            self._write_request(request_file, request)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute", "dnp-call",
                  "--request", self.layout.container_path(request_file)],
@@ -297,9 +326,9 @@ class Workflows:
                                       reference=reference_path, mounts=mounts, input_files=input_files)
         # Reject invalid contracts before allocating an immutable run. The
         # bundled executor validates this same plan again against its version.
-        plan = validate_plan(plan)["plan"]
+        plan = self._validate_plan(plan)["plan"]
         run_dir = self.layout.new_run_dir("dnp-contamination", run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow="dnp-contamination", inputs=input_files, mounts=mounts,
             bundled_workflow="workflow-plan-with-snp" if snp_panel else "workflow-plan",
             parameters={"preset": "dnp-contamination",
@@ -312,7 +341,7 @@ class Workflows:
                         "expected_steps": _expected_steps(plan)},
         ):
             plan_file = run_dir / "work" / "engine-plan.json"
-            _write_engine_request(plan_file, plan)
+            self._write_request(plan_file, plan)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute-plan",
                  "--plan", self.layout.container_path(plan_file),
@@ -323,7 +352,7 @@ class Workflows:
 
     def dnp_cpi(
         self, *, pairs: list[tuple[str, Path, Path]], reference: Path, panel: Path,
-        popfreq: Path, err_const: float = 0.0000892303778101497,
+        popfreq: Path, err_const: float | None = None,
         cpi_panel: Path | None = None, cutoffs: list[tuple[str, Path]] | None = None,
         cutoff_map: str | None = None, include_contamination: bool = False,
         contamination_panel: Path | None = None, parallel: bool = False,
@@ -335,7 +364,8 @@ class Workflows:
             raise ValidationError("La selezione del passaggio Contamination deve essere booleana.")
         if not include_contamination and contamination_panel is not None:
             raise ValidationError("Il pannello Contamination richiede il workflow con Contamination.")
-        _validate_error_constant(err_const)
+        if err_const is not None:
+            _validate_error_constant(err_const)
         if not isinstance(pairs, list) or not pairs:
             raise ValidationError("Indicare almeno una coppia: ID, BAM cfDNA materno e BAM paterno.")
         checked: list[Path] = []
@@ -424,7 +454,7 @@ class Workflows:
         steps.append({
             "id": "cpi", "workflow": "cpi",
             "inputs": {"pairs": selected_pairs, "popfreq": str(popfreq_path), "cutoffs": mapped_cutoffs},
-            "parameters": {"err_const": err_const, "cutoff_mode": cutoff_mode},
+            "parameters": {**({"err_const": err_const} if err_const is not None else {}), "cutoff_mode": cutoff_mode},
         })
         plan = {
             "schema_version": 1, "presentation": _presentation(samples),
@@ -434,10 +464,10 @@ class Workflows:
         }
         snp_panel = _append_snp_steps(plan, samples=samples, panel=snp_panel,
                                       reference=reference_path, mounts=mounts, input_files=input_files)
-        plan = validate_plan(plan)["plan"]
+        plan = self._validate_plan(plan)["plan"]
         preset = "dnp-contamination-cpi" if include_contamination else "dnp-cpi"
         run_dir = self.layout.new_run_dir(preset, run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow=preset, inputs=list(dict.fromkeys(input_files)), mounts=mounts,
             bundled_workflow="workflow-plan-with-snp" if snp_panel else "workflow-plan-cpi",
             parameters={"preset": preset, "bams": [str(path) for path in checked],
@@ -453,7 +483,7 @@ class Workflows:
                         "expected_steps": _expected_steps(plan)},
         ):
             plan_file = run_dir / "work" / "engine-plan.json"
-            _write_engine_request(plan_file, plan)
+            self._write_request(plan_file, plan)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute-plan",
                  "--plan", self.layout.container_path(plan_file),
@@ -511,14 +541,14 @@ class Workflows:
                 input_files.append(path)
             samples.append({"sample_id": identifier, "original_path": str(path),
                             "container_path": str(target)})
-        plan = validate_plan({
+        plan = self._validate_plan({
             "schema_version": 1, "presentation": _presentation(samples),
             "samples": [{"id": sample["sample_id"], "kind": "bam" if mode == "bam" else "snp-pileup",
                          "path": sample["container_path"]} for sample in samples],
             "steps": _snp_steps(samples, panel=panel_path, reference=reference_path, mode=mode),
         })["plan"]
         run_dir = self.layout.new_run_dir("snp-batch", run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow="snp-batch", inputs=input_files, mounts=mounts,
             bundled_workflow="workflow-plan-snp",
             parameters={"preset": "snp-batch", "mode": mode,
@@ -529,7 +559,7 @@ class Workflows:
                         "sample_mapping": samples, "expected_steps": _expected_steps(plan)},
         ):
             plan_file = run_dir / "work" / "engine-plan.json"
-            _write_engine_request(plan_file, plan)
+            self._write_request(plan_file, plan)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute-plan",
                  "--plan", self.layout.container_path(plan_file),
@@ -571,7 +601,7 @@ class Workflows:
         sample_mapping = [{"sample_id": "sample_0001", "original_path": str(bam or pileup),
                            "container_path": str(bam_path or pileup_path)}]
         run_dir = self.layout.new_run_dir("snp-call", run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow="snp-call", inputs=input_files, mounts=mounts,
             bundled_workflow="snp-call",
             parameters={"mode": "bam" if bam is not None else "pileup",
@@ -592,7 +622,7 @@ class Workflows:
                 "out_dir": str(self.layout.container_path(run_dir / "output")),
             }
             request_file = run_dir / "work" / "engine-request.json"
-            _write_engine_request(request_file, request)
+            self._write_request(request_file, request)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute", "snp-call",
                  "--request", self.layout.container_path(request_file)],
@@ -606,8 +636,7 @@ class Workflows:
     ) -> Path:
         if (inputs is None) == (input_dir is None):
             raise ValidationError("Indicare --input oppure --input-dir per Contamination.")
-        panel = require_file(panel, "Pannello DNP")
-        read_position_panel(panel)
+        panel = require_file(panel, "Pannello Contamination SNP o DNP")
         if input_dir is not None:
             input_dir = require_directory(input_dir, "Directory input Contamination")
             selected = sorted(
@@ -623,13 +652,18 @@ class Workflows:
         checked_inputs = []
         names = set()
         for input_path in selected:
-            checked = require_file(input_path, "Output DNPcall")
+            checked = require_file(input_path, "Tabella di conteggi SNP o DNP")
             require_contamination_input(checked)
             name = (checked.stem + ".txt").casefold()
             if name in names:
                 raise ValidationError(f"Nome file duplicato nello staging: {checked.stem}.txt")
             names.add(name)
             checked_inputs.append(checked)
+        marker_types = {detect_marker_type(path) for path in checked_inputs}
+        if len(marker_types) != 1:
+            raise ValidationError("Una singola analisi Contamination richiede tabelle dello stesso tipo: SNP oppure DNP.")
+        marker_type = marker_types.pop()
+        read_position_panel(panel, marker_type)
         mounts = InputMounts(self.layout)
         panel_path = mounts.bind_file(panel, target=INPUT_ROOT / "contamination-panel.txt")
         samples = [
@@ -645,7 +679,7 @@ class Workflows:
                            "container_path": item["path"]}
                           for item, source in zip(samples, checked_inputs)]
         run_dir = self.layout.new_run_dir("contamination", run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow="contamination", inputs=[panel, *checked_inputs],
             mounts=mounts, bundled_workflow="contamination",
             parameters={"panel": str(panel), "inputs": [str(path) for path in checked_inputs],
@@ -654,13 +688,14 @@ class Workflows:
         ):
             request = {
                 "schema_version": 1, "workflow": "contamination", "panel": str(panel_path),
+                "marker_type": marker_type,
                 "presentation": _presentation(sample_mapping),
                 "samples": samples,
                 "work_dir": str(self.layout.container_path(run_dir / "work")),
                 "out_dir": str(self.layout.container_path(run_dir / "output")),
             }
             request_file = run_dir / "work" / "engine-request.json"
-            _write_engine_request(request_file, request)
+            self._write_request(request_file, request)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute", "contamination",
                  "--request", self.layout.container_path(request_file)],
@@ -671,15 +706,17 @@ class Workflows:
     def cpi(
         self, *, input_dir: Path, pairs: str, mother_prefix: str, father_prefix: str,
         popfreq: Path, panel: Path | None = None,
-        err_const: float = 0.0000892303778101497, run_name: str | None = None,
+        err_const: float | None = None, run_name: str | None = None,
         cutoffs: list[tuple[str, Path]] | None = None, cutoff_map: str | None = None,
     ) -> Path:
         if sum((panel is not None, cutoffs is not None, cutoff_map is not None)) > 1:
             raise ValidationError("Scegliere --panel, --cutoff oppure --cutoff-map.")
-        _validate_error_constant(err_const)
+        if err_const is not None:
+            _validate_error_constant(err_const)
         input_dir = require_directory(input_dir, "Directory input CPI")
         popfreq = require_file(popfreq, "Tabella frequenze di popolazione")
-        require_population_frequencies(popfreq)
+        marker_type = detect_marker_type(popfreq)
+        require_population_frequencies(popfreq, marker_type)
         pairs, names = normalize_pairs(pairs, mother_prefix, father_prefix)
         mounts = InputMounts(self.layout)
         popfreq_path = mounts.bind_file(popfreq, target=INPUT_ROOT / "population.tsv")
@@ -687,14 +724,16 @@ class Workflows:
         samples = []
         for number, name in enumerate(names, 1):
             source = require_file(input_dir / name, "Tabella campione CPI")
-            require_dnp_input(source)
+            require_count_input(source, marker_type)
+            if any(source.samefile(previous) for previous in checked_inputs[1:]):
+                raise ValidationError("La stessa tabella fisica non puo' rappresentare campioni CPI distinti.")
             sample_path = mounts.bind_file(
                 source, target=INPUT_ROOT / "cpi" / f"sample_{number:04d}.txt",
             )
             samples.append({"path": str(sample_path), "name": name})
             checked_inputs.append(source)
         cutoff_mode, normalized_cutoffs = _select_cpi_cutoffs(
-            panel=panel, cutoffs=cutoffs, cutoff_map=cutoff_map,
+            panel=panel, cutoffs=cutoffs, cutoff_map=cutoff_map, marker_type=marker_type,
         )
         checked_inputs.extend(source for _, source in normalized_cutoffs)
         mapped_cutoffs = [
@@ -707,12 +746,12 @@ class Workflows:
                            "original_path": str(input_dir / item["name"]),
                            "container_path": item["path"]} for item in samples]
         run_dir = self.layout.new_run_dir("cpi", run_name)
-        with self.runner.record_run(
+        with self._record_run(
             run_dir, workflow="cpi", inputs=list(dict.fromkeys(checked_inputs)), mounts=mounts,
             bundled_workflow="cpi",
             parameters={"pairs": pairs, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
                         "sample_mapping": sample_mapping,
-                        "err_const": err_const, "input_dir": str(input_dir), "popfreq": str(popfreq),
+                        "err_const": err_const, "marker_type": marker_type, "input_dir": str(input_dir), "popfreq": str(popfreq),
                         "panel": str(panel) if panel else None,
                         "cutoff_mode": cutoff_mode,
                         "cutoffs": [{"label": label, "path": str(source)}
@@ -720,18 +759,95 @@ class Workflows:
         ):
             request = {
                 "schema_version": 1, "workflow": "cpi", "samples": samples,
+                "marker_type": marker_type,
                 "presentation": _presentation(sample_mapping),
                 "pairs": pairs, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
                 "popfreq": str(popfreq_path), "cutoff_mode": cutoff_mode,
-                "cutoffs": mapped_cutoffs, "err_const": err_const,
+                "cutoffs": mapped_cutoffs,
+                **({"err_const": err_const} if err_const is not None else {}),
                 "work_dir": str(self.layout.container_path(run_dir / "work")),
                 "out_dir": str(self.layout.container_path(run_dir / "output")),
             }
             request_file = run_dir / "work" / "engine-request.json"
-            _write_engine_request(request_file, request)
+            self._write_request(request_file, request)
             self.runner.run(
                 ["python3", "/opt/nipat/engine/main.py", "execute", "cpi",
                  "--request", self.layout.container_path(request_file)],
                 working_dir=self.layout.container_path(run_dir / "work"),
             )
+        return run_dir
+
+    def analyze(self, *, caller: str, analyses: list[str], run_name: str | None = None,
+                **inputs) -> Path:
+        """Any subset of Contamination, CPI and CPIN, independently for SNP/DNP."""
+        from nipat.execution.analysis_plan import build_analysis_plan
+        plan, mounts, input_files, mapping = build_analysis_plan(
+            layout=self.layout, caller=caller, analyses=analyses, **inputs)
+        plan = self._validate_plan(plan)["plan"]
+        run_dir = self.layout.new_run_dir("analysis", run_name)
+        with self._record_run(
+            run_dir, workflow="analysis", inputs=input_files, mounts=mounts,
+            bundled_workflow="workflow-plan-all", parameters={
+                "caller": caller, "analyses": analyses,
+                "analyses_by_marker": {marker: inputs.get(marker.lower() + "_analyses")
+                    if inputs.get(marker.lower() + "_analyses") is not None else analyses for marker in ("DNP", "SNP")},
+                "sample_mapping": mapping,
+                "expected_steps": _expected_steps(plan), "plan": plan},
+        ):
+            plan_file = run_dir / "work" / "engine-plan.json"
+            self._write_request(plan_file, plan)
+            self.runner.run(
+                ["python3", "/opt/nipat/engine/main.py", "execute-plan", "--plan",
+                 self.layout.container_path(plan_file), "--run-dir",
+                 self.layout.container_path(run_dir / "output" / "workflow")],
+                working_dir=self.layout.container_path(run_dir / "work"))
+        return run_dir
+
+    def cpin(self, *, input_dir: Path, trios: str, mother_prefix: str = "Mother",
+             father_prefix: str = "Father", child_prefix: str = "Child",
+             popfreq: Path, panel: Path | None = None, run_name: str | None = None) -> Path:
+        from nipat_scientific.cpin import normalize_trios
+        input_dir = require_directory(input_dir, "Directory input CPIN")
+        popfreq = require_file(popfreq, "Frequenze di popolazione CPIN")
+        marker_type = detect_marker_type(popfreq)
+        require_population_frequencies(popfreq, marker_type)
+        trios, names = normalize_trios(trios, mother_prefix, father_prefix, child_prefix)
+        mounts = InputMounts(self.layout)
+        frequency_target = mounts.bind_file(popfreq, target=INPUT_ROOT / "population.tsv")
+        input_files, samples, mapping = [popfreq], [], []
+        for number, name in enumerate(names, 1):
+            source = require_file(input_dir / name, "Tabella campione CPIN")
+            require_count_input(source, marker_type)
+            if any(source.samefile(previous) for previous in input_files[1:]):
+                raise ValidationError("La stessa tabella fisica non puo' rappresentare campioni CPIN distinti.")
+            target = mounts.bind_file(source, target=INPUT_ROOT / "cpin" / f"sample_{number:04d}.txt")
+            input_files.append(source)
+            samples.append({"path": str(target), "name": name})
+            mapping.append({"sample_id": Path(name).stem, "original_path": str(source), "container_path": str(target)})
+        marker_target = None
+        if panel is not None:
+            panel = require_file(panel, "Pannello CPIN")
+            records = read_position_panel(panel, marker_type)
+            if any(not record.reference or not record.alternative for record in records):
+                raise ValidationError("Il pannello CPIN richiede anche gli alleli REF e ALT.")
+            input_files.append(panel)
+            marker_target = mounts.bind_file(panel, target=INPUT_ROOT / "cpin-markers.tsv")
+        run_dir = self.layout.new_run_dir("cpin", run_name)
+        with self._record_run(run_dir, workflow="cpin", inputs=input_files, mounts=mounts,
+                              bundled_workflow="cpin", parameters={
+                                  "trios": trios, "mother_prefix": mother_prefix, "father_prefix": father_prefix,
+                                  "child_prefix": child_prefix, "popfreq": str(popfreq), "input_dir": str(input_dir),
+                                  "panel": str(panel) if panel else None, "marker_type": marker_type,
+                                  "sample_mapping": mapping}):
+            request = {"schema_version": 1, "workflow": "cpin", "samples": samples,
+                       "presentation": _presentation(mapping), "trios": trios,
+                       "mother_prefix": mother_prefix, "father_prefix": father_prefix, "child_prefix": child_prefix,
+                       "popfreq": str(frequency_target), "markers": str(marker_target) if marker_target else None,
+                       "work_dir": str(self.layout.container_path(run_dir / "work")),
+                       "out_dir": str(self.layout.container_path(run_dir / "output"))}
+            request_file = run_dir / "work" / "engine-request.json"
+            self._write_request(request_file, request)
+            self.runner.run(["python3", "/opt/nipat/engine/main.py", "execute", "cpin", "--request",
+                             self.layout.container_path(request_file)],
+                            working_dir=self.layout.container_path(run_dir / "work"))
         return run_dir

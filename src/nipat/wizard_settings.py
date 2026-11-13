@@ -9,6 +9,7 @@ from typing import Any
 
 from nipat.adapters.panels import read_position_panel
 from nipat.errors import NipatError, ValidationError
+from nipat.scientific_options import edit_scientific_settings, settings_lines
 from nipat.execution.options import ExecutionOptions
 from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences, PreferencesStore
@@ -250,6 +251,10 @@ class GuidedSettings:
             ui.heading(form.title)
             for field in form.fields():
                 ui.message(f"{field.label}: {form.display_value(field)}")
+        if self.preferences.scientific_settings:
+            for workflow in self.preferences.scientific_settings:
+                for line in settings_lines(workflow, self.preferences.scientific_settings):
+                    ui.message(line)
         self.explain(ui)
         ui.message("Cartella dell'applicazione, runtime e cache di installazione: per cambiarle eseguire nuovamente il programma di installazione. Configura non sposta questi componenti.", kind="muted")
 
@@ -388,6 +393,7 @@ class GuidedSettings:
                 ("7", "Ripristina impostazioni", "Conferma richiesta; dati conservati"),
                 ("8", "Aggiornamenti", "Canale e verifica all'avvio"),
                 ("9", "Risorse, prestazioni e provenienza", "Parallelismo, blocchi, RAM, CPU e checksum degli input"),
+                ("s", "Parametri scientifici e costanti", "Valori dei cinque moduli, salvati per i prossimi avvii"),
                 ("0", "Torna al menu", ""),
             ], default="0")
             if action in {"0", ":indietro"}:
@@ -403,6 +409,11 @@ class GuidedSettings:
                     self._updates(ui)
                 elif action == "9":
                     self._execution(ui)
+                elif action == "s":
+                    candidate = edit_scientific_settings(ui, self.preferences.scientific_settings)
+                    if candidate != self.preferences.scientific_settings:
+                        self._save(replace(self.preferences, scientific_settings=candidate))
+                        self._saved_message(ui)
                 elif action == "1":
                     self._directories(ui)
                 elif action in {"2", "3", "4", "5"}:

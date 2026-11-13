@@ -89,14 +89,17 @@ class ScientificPreflightTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     require_population_frequencies(self.table)
 
-    def test_frequency_decimal_comma_preserved_and_endpoints_are_warned(self):
+    def test_frequency_decimal_comma_preserved_and_zero_is_rejected(self):
         self.table.write_text("chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\n"
                               "chr1\t10\t11\t0,5\t0,5\n"
-                              "chr1\t20\t21\t0\t0,5\n", encoding="utf-8")
+                              "chr1\t20\t21\t0,25\t0,5\n", encoding="utf-8")
         original = self.table.read_bytes()
         warnings = require_population_frequencies(self.table)
-        self.assertEqual({w["code"] for w in warnings}, {"input.zero_population_frequency", "input.frequency_sum"})
+        self.assertEqual({w["code"] for w in warnings}, {"input.frequency_sum"})
         self.assertEqual(self.table.read_bytes(), original)
+        self.table.write_text(original.decode().replace("0,25", "0"))
+        with self.assertRaises(ValidationError):
+            require_population_frequencies(self.table)
 
     def test_invalid_text_header_and_rows_raise_shared_validation_error(self):
         cases = [b"\xff\xfeinvalid", b"chr\tpos1\tpos2\tN_REF\tN_ALT\tN_Other\tN_REF\n",

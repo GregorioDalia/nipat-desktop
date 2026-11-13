@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import replace
+from copy import deepcopy
 from pathlib import Path
 from typing import Callable
 
@@ -23,14 +24,16 @@ from nipat.update_ui import HANDOFF_EXIT_CODE, run_updates
 from nipat.wizard_forms import Back, Cancelled, WorkflowForm
 from nipat.workflow_forms import DnpContaminationForm, DnpCpiForm, SnpBatchForm
 from nipat.wizard_settings import GuidedSettings
+from nipat.analysis_forms import AnalysisForm, CpinForm
 
 
 MAIN_MENU = [
     ("1", "DNPcall", "Dinucleotidi da uno o piu' BAM"),
     ("2", "SNPcall", "SNP da BAM o pileup esistente"),
     ("3", "Contamination", "Stima da tabelle compatibili"),
-    ("4", "CPI", "Frazione fetale e indice di paternita'"),
-    ("W", "Workflow automatici", "Analisi collegate e SNPcall su piu' campioni"),
+    ("4", "CPI prenatale", "Frazione fetale e indice di paternita'"),
+    ("N", "CPIN / CPI postnatale", "Trii madre, padre e figlio da SNP o DNP"),
+    ("W", "Workflow automatici", "SNP/DNP verso Contamination, CPI e CPIN"),
     ("5", "Configura", "Cartelle e parametri predefiniti"),
     ("6", "Ultima esecuzione", "Risultati e log della sessione"),
     ("7", "Guida e informazioni", "Cosa fa NIPAT e come utilizzarlo"),
@@ -51,11 +54,12 @@ def _select_workflow(ui: Terminal) -> str | None:
         "alle analisi successive, senza selezionare o copiare file intermedi.", kind="muted",
     )
     ui.message(
-        "SNPcall e' un'analisi indipendente: puo' essere aggiunta sui BAM dei workflow DNP "
-        "oppure eseguita su una lista di BAM o pileup. Le attivita' vengono eseguite in sequenza.", kind="muted",
+        "Il workflow completo collega DNPcall e/o SNPcall a qualsiasi combinazione di Contamination, "
+        "CPI prenatale e CPIN postnatale; accetta anche tabelle esistenti. SNP e DNP restano distinti.", kind="muted",
     )
     while True:
         selected = ui.menu("Workflow automatici", [
+            ("5", "Workflow completo: tutti i cinque moduli", "Scegli calling, analisi successive e ruoli familiari"),
             ("1", "DNPcall -> Contamination", "Conteggi DNP e stima della contaminazione"),
             ("2", "DNPcall -> CPI", "Coppie cfDNA materno / campione paterno"),
             ("3", "DNPcall -> Contamination e CPI", "Entrambe le analisi sulle tabelle DNPcall"),
@@ -64,9 +68,9 @@ def _select_workflow(ui: Terminal) -> str | None:
         ], default="0").strip().casefold()
         if selected in {"0", ":annulla", ":indietro"}:
             return None
-        if selected in {"1", "2", "3", "4"}:
+        if selected in {"1", "2", "3", "4", "5"}:
             return selected
-        ui.message("Scegliere un workflow da 1 a 4 oppure 0 per tornare al menu.", kind="muted")
+        ui.message("Scegliere un workflow da 1 a 5 oppure 0 per tornare al menu.", kind="muted")
 
 
 def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = False) -> bool:
@@ -86,10 +90,11 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "Con --dry-run vengono preparati i comandi, senza eseguire l'analisi o produrre risultati scientifici.",
         )),
         "2": ("Analisi disponibili", (
-            "NIPAT prepara gli input ed esegue quattro workflow scientifici R nell'ambiente distribuito con l'applicazione.",
+            "NIPAT prepara gli input ed esegue cinque moduli scientifici R nell'ambiente distribuito con l'applicazione.",
             "DNPcall: uno o piu' BAM, un FASTA indicizzato e un pannello DNP; produce conteggi, genotipi, riepiloghi e grafici.",
             "SNPcall: un BAM con FASTA oppure un pileup con QNAME, e una lista SNP; produce una tabella di conteggi allelici.",
-            "Contamination: tabelle compatibili con l'output DNPcall e coordinate DNP; produce stime per sito e un riepilogo per campione.",
+            "Contamination: tabelle SNP o DNP e coordinate dello stesso tipo; produce stime per sito e un riepilogo per campione.",
+            "CPIN / CPI postnatale: trii madre, padre e figlio, conteggi SNP o DNP e frequenze di popolazione; produce indici di paternita' e risultati per sito.",
             "CPI: tabelle cfDNA materno e presunto padre, coppie e frequenze di popolazione; produce stime di frazione fetale, CPI e grafici.",
             "Workflow automatici: la voce W propone DNPcall seguito da Contamination, CPI oppure entrambe le analisi. Una sola conferma avvia la sequenza selezionata.",
             "Dal menu W si puo' anche eseguire SNPcall su piu' BAM o pileup, oppure aggiungerlo ai workflow DNP con una lista SNP specifica. Ogni campione mantiene risultati separati.",
@@ -99,7 +104,7 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "Configura salva le cartelle e i valori predefiniti per i prossimi avvii della CLI guidata.",
             "Le preferenze vengono proposte nei campi dell'analisi: prima dell'avvio e' sempre possibile correggerle nel riepilogo.",
             "Campioni, coppie CPI e nome dell'esecuzione vengono scelti per ogni analisi; non sono memorizzati come preferenze.",
-            "Configura include le opzioni esposte dagli script, i checksum degli input e i limiti delle risorse del container. Le costanti interne dei codici R non vengono modificate.",
+            "Configura -> Parametri scientifici e costanti mostra i valori dei cinque moduli e permette di salvare parametri personalizzati. Il riepilogo di ogni analisi permette ulteriori modifiche valide solo per quella esecuzione.",
             "Cambiare cartella dati o risultati non sposta i file gia' presenti. App, runtime e cache si configurano attraverso il programma di installazione.",
             "Ripristina impostazioni elimina solo le preferenze: conserva dati, risultati e installazione.",
             "I comandi diretti mantengono le proprie opzioni e i propri valori predefiniti. --data-dir e --runs-dir espliciti prevalgono sulle cartelle salvate nella sessione guidata.",
@@ -112,13 +117,13 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "Le tabelle passano automaticamente alla seconda fase. Se DNPcall fallisce o non produce le tabelle attese, le analisi successive non vengono avviate; ogni errore arresta la sequenza.",
             "Per i workflow CPI, indicare un ID per ogni coppia e assegnare esplicitamente i BAM del cfDNA materno e del campione paterno. Uno stesso campione puo' essere riutilizzato in piu' coppie nello stesso ruolo.",
             "NIPAT prepara automaticamente i nomi e i prefissi dei file CPI. I ruoli derivano dalle coppie dichiarate, senza deduzioni dal nome dei BAM; il riepilogo mostra ID, file e ruoli.",
-            "Contamination e CPI usano le tabelle DNPcall: la stima di contaminazione non filtra o modifica gli input CPI. Le fasi sono eseguite in sequenza.",
-            "SNPcall analizza ogni BAM o pileup separatamente; i suoi risultati non sono input diretti di Contamination o CPI. Nei workflow DNP usa gli stessi BAM e FASTA, con una lista SNP scelta esplicitamente.",
+            "Contamination, CPI e CPIN possono usare conteggi DNPcall o SNPcall, in rami distinti. La stima di contaminazione non filtra gli input delle analisi di paternita'.",
+            "Il workflow completo (W -> 5) offre tutte le combinazioni di calling e analisi successive, incluse tabelle importate. Dichiarare separatamente i ruoli delle coppie CPI e dei trii CPIN.",
             "Un errore o un'interruzione arresta l'intero piano, comprese le analisi SNP indipendenti non ancora avviate. I risultati e i log gia' prodotti vengono conservati.",
             "Nel workflow automatico, output/workflow/workflow-state.json registra lo stato delle fasi; output/workflow/steps contiene una cartella per ciascuna fase, con work, output e log.",
             "Le tabelle individuali DNPcall si chiamano full_output_*.txt e si trovano nella sottocartella output/individual_outputs della fase DNPcall.",
             "Ogni fase SNPcall si chiama snp_0001, snp_0002 e cosi' via. La relativa cartella output contiene SNPcall_output.txt; work conserva i file intermedi e command.log i comandi della fase.",
-            "Le altre combinazioni richiedono la selezione esplicita dei risultati come input dell'analisi successiva. Verificare campioni, schema delle tabelle e pannelli pertinenti.",
+            "Il workflow completo permette anche di partire da tabelle esistenti. Verificare campioni, ruoli, tipo SNP/DNP e pannelli pertinenti.",
         )),
         "5": ("Informazioni su NIPAT", (
             f"NIPAT {__version__} - piattaforma locale per l'esecuzione e la validazione dei workflow scientifici.",
@@ -134,7 +139,7 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
         ui.message("Scegliere un argomento. La consultazione della guida non avvia analisi o strumenti scientifici.", kind="muted")
         action = ui.menu("Guida e informazioni", [
             ("1", "Come usare NIPAT", "Selezione dei file, navigazione e avvio"),
-            ("2", "Analisi disponibili", "Scopo, input e risultati dei quattro workflow"),
+            ("2", "Analisi disponibili", "Scopo, input e risultati dei cinque moduli"),
             ("3", "Cartelle e parametri", "Preferenze, modifiche e ripristino"),
             ("4", "Risultati e analisi in sequenza", "File intermedi, log e workflow successivi"),
             ("5", "Informazioni su NIPAT", "Versione, ambiente e documentazione"),
@@ -198,6 +203,14 @@ def run_wizard(
         from nipat.errors import ValidationError
         raise ValidationError("La diagnostica delle prestazioni deve essere attiva o disattiva.")
     settings = GuidedSettings(layout, preferences_store, directory_overrides, execution_overrides)
+    configured = getattr(workflows, "scientific_settings", {})
+    cli_scientific = deepcopy(configured) if isinstance(configured, dict) else {}
+
+    def scientific_defaults():
+        values = deepcopy(settings.preferences.scientific_settings)
+        for module, overrides in cli_scientific.items():
+            values.setdefault(module, {}).update(overrides)
+        return values
     layout = settings.layout
     workflows.layout = workflows.runner.layout = layout
     workflows.runner.options = settings.execution_options()
@@ -233,7 +246,7 @@ def run_wizard(
             if choice == ":indietro":
                 continue
             if choice not in {item[0].casefold() for item in MAIN_MENU}:
-                ui.message("Scegliere una delle opzioni indicate (0-9 oppure W).", kind="error")
+                ui.message("Scegliere una delle opzioni indicate (0-9, N oppure W).", kind="error")
                 continue
             try:
                 if choice == "5":
@@ -275,6 +288,8 @@ def run_wizard(
                             "1", ui, layout, err_const,
                             defaults=settings.preferences.workflow_defaults("1"),
                         )
+                    elif preset == "5":
+                        form = AnalysisForm("1", ui, layout, err_const)
                     elif preset == "4":
                         form = SnpBatchForm(
                             ui, layout, err_const,
@@ -286,12 +301,16 @@ def run_wizard(
                             defaults=settings.preferences.workflow_defaults("1"),
                             cpi_defaults=settings.preferences.workflow_defaults("4"),
                         )
+                elif choice == "n":
+                    form = CpinForm("n", ui, layout, err_const, defaults=settings.preferences.workflow_defaults("n"))
                 else:
                     form = WorkflowForm(choice, ui, layout, err_const,
                                         defaults=settings.preferences.workflow_defaults(choice))
                 form.execution_options = settings.execution_options()
+                form.scientific_settings = scientific_defaults()
                 form.collect()
                 while form.review(dry_run=dry_run, performance_diagnostics=requested_diagnostics):
+                    workflows.scientific_settings = deepcopy(form.scientific_settings)
                     workflows.runner.options = replace(
                         form.execution_options,
                         performance_diagnostics=form.performance_diagnostics,
@@ -314,10 +333,10 @@ def run_wizard(
                     try:
                         method = {
                             "1": workflows.dnp_contamination, "2": workflows.dnp_cpi,
-                            "3": workflows.dnp_cpi, "4": workflows.snp_batch,
+                            "3": workflows.dnp_cpi, "4": workflows.snp_batch, "5": workflows.analyze,
                         }[preset] if choice == "w" else {
                             "1": workflows.dnp_call, "2": workflows.snp_call,
-                            "3": workflows.contamination, "4": workflows.cpi,
+                            "3": workflows.contamination, "4": workflows.cpi, "n": workflows.cpin,
                         }[choice]
                         run_dir = method(**form.arguments())
                     except KeyboardInterrupt:
@@ -341,18 +360,21 @@ def run_wizard(
                         continue
                     finally:
                         workflows.runner.options = settings.execution_options()
+                        workflows.scientific_settings = scientific_defaults()
                     last_run = run_dir
                     ui.message(f"Tempo trascorso: {time.monotonic() - started:.1f} s")
                     if choice == "w" and not dry_run:
                         workflow_dir = run_dir / "output" / "workflow"
                         ui.message(f"Stati delle fasi: {workflow_dir / 'workflow-state.json'}")
-                        steps = [] if preset == "4" else [("dnp", "DNPcall")]
+                        steps = [] if preset in {"4", "5"} else [("dnp", "DNPcall")]
                         if preset in {"1", "3"}:
                             steps.append(("contamination", "Contamination"))
                         if preset in {"2", "3"}:
                             steps.append(("cpi", "CPI"))
                         for step, label in steps:
                             ui.message(f"Risultati {label}: {workflow_dir / 'steps' / step / 'output'}")
+                        if preset == "5":
+                            ui.message(f"Risultati di tutte le fasi: {workflow_dir / 'steps'}")
                         if preset == "4" or form.values.get("include_snp") == "2":
                             ui.message(f"Risultati SNPcall per campione: {workflow_dir / 'steps'} (cartelle snp_0001, snp_0002, ...)")
                     show_results(ui, run_dir, dry_run=dry_run)

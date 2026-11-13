@@ -1,5 +1,6 @@
 # NIPAT 0.8.13: one resource budget for pileup acquisition and R processing.
 # Scientific formulas and within-locus observation order remain unchanged.
+# NIPAT 0.8.50: declared scientific parameters and readable model constants.
 cat("\n###### DNPcall ######\n\n\n\n")
 
 
@@ -88,6 +89,10 @@ format_df_decimals <- function(df, digits = 3) {
 # The legacy --parallel argument remains accepted. The common execution policy
 # selects automatic or serial work for all R modules and caps the global pool.
 source(Sys.getenv("NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R"))
+source(Sys.getenv("NIPAT_SETTINGS_HELPER", unset = file.path(dirname(Sys.getenv(
+  "NIPAT_PARALLEL_HELPER", unset = "/opt/nipat/lib/nipat_scientific/parallel.R")), "settings.R")))
+nipat_cfg <- nipat_settings("dnp-call")
+nipat_write_settings("dnp-call", nipat_cfg, output)
 source(Sys.getenv("NIPAT_PLOTS_HELPER", unset = "/opt/nipat/lib/nipat_scientific/plots.R"))
 
 
@@ -733,9 +738,9 @@ prepare_individual <- function(i) {
                                  "N_Reference", "N_Alternative", "N_Altro",
                                  "GL0", "GL1", "GL2", "GT")
 
-  # compute ratio of other reads and total, mark GT as NA if ratio >= 0.1 (too many "errors" to assign the GT correctly)
+  # Mark GT as NA when Other reaches the configured fraction of all reads.
   dataframe_final2 <- dataframe_final %>%
-    mutate(GT=ifelse(N_Altro/(N_Altro+N_Reference+N_Alternative) >= 0.1, NA, GT))
+    mutate(GT=ifelse(N_Altro/(N_Altro+N_Reference+N_Alternative) >= nipat_cfg$other_fraction_max, NA, GT))
 
   result <- final_df_elab(dataframe_final2, df_grouped, dfIND_summary)
   result$has_likelihoods <- !is.null(res) && nrow(res) > 0L

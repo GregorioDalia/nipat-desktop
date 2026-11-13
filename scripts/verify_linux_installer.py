@@ -28,7 +28,7 @@ PACKAGE = "nipat-desktop"
 DOCKER = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
 CHECKS = (
     "package_installation", "initial_setup", "immutable_runtime_binding",
-    "all_four_workflows", "private_inputs_unchanged", "user_owned_results",
+    "all_five_workflows", "private_inputs_unchanged", "user_owned_results",
     "repeated_launch", "package_reinstallation",
     "package_removal_preserves_user_data", "shared_docker_unchanged",
     "automatic_workflow_plan", "preferences_preserved",
@@ -40,7 +40,15 @@ def checks_for_version(version: str) -> tuple[str, ...]:
             "The installed-package check supports Desktop 0.6, 0.7 and 0.8 releases.")
     require(not version.startswith("0.8.") or (re.fullmatch(r"0\.8\.[0-9]+", version) and int(version.split(".")[2]) >= 2),
             "The official Desktop check starts at 0.8.2.")
-    return CHECKS[:-2] if version.startswith("0.6.") else CHECKS
+    checks = CHECKS[:-2] if version.startswith("0.6.") else CHECKS
+    if not current_model(version):
+        checks = tuple("all_four_workflows" if key == "all_five_workflows" else key for key in checks)
+    return checks
+
+
+def current_model(version: str) -> bool:
+    parsed = re.match(r"^(\d+)\.(\d+)\.(\d+)", version)
+    return parsed is not None and tuple(map(int, parsed.groups())) >= (0, 8, 50)
 
 
 def sha256(path: Path) -> str:
@@ -104,12 +112,13 @@ def check_state(state: dict, manifest: dict, manifest_hash: str) -> str:
     return image
 
 
-def check_workflows(runs: Path, uid: int) -> None:
+def check_workflows(runs: Path, uid: int, *, five_modules: bool = True) -> None:
     records = [json.loads(path.read_text()) for path in runs.glob("*/run.json")]
     successful = {record.get("workflow") for record in records
                   if record.get("status") == "succeeded"}
-    require({"dnp-call", "snp-call", "contamination", "cpi"} <= successful,
-            f"Installed CLI did not complete all four workflows: {successful}")
+    required = {"dnp-call", "snp-call", "contamination", "cpi"} | ({"cpin"} if five_modules else set())
+    require(required <= successful,
+            f"Installed CLI did not complete all {'five' if five_modules else 'four'} workflows: {successful}")
     files = [path for path in runs.rglob("*") if path.is_file()]
     require(bool(files), "No installed CLI results were written.")
     require(all(path.stat().st_uid == uid for path in files),
@@ -170,8 +179,9 @@ def check_automatic_plan(run_directory: Path, fixture: Path, manifest: dict,
             and source["release"]["source_git"]["commit"] == manifest["source_commit"]
             and record["runtime"]["image_id"] == image,
             "Installed workflow does not identify the tested package and loaded image.")
+    modern = current_model(manifest["version"])
     require(set(record["runtime"]["engine"]["plan_execution"]["workflows"])
-            == {"dnp-call", "snp-call", "contamination", "cpi"},
+            == ({"dnp-call", "snp-call", "contamination", "cpi"} | ({"cpin"} if modern else set())),
             "Installed image lacks the complete plan interface.")
     require(len(record["commands"]) == 1 and "execute-plan" in record["commands"][0]["argv"],
             "Installed composition must execute in one scientific container.")
@@ -253,7 +263,7 @@ def check_automatic_plan(run_directory: Path, fixture: Path, manifest: dict,
     contamination = steps["contamination"]["artifacts"]
     rows = read_table(checked_artifact(root, contamination["summary"]))
     require(len(rows) == 2 and {row["individuo"] for row in rows} == {"table_0001", "table_0002"}
-            and all(int(row["informative_DNPs"]) == 2 and float(row["mean_contamination"]) == 0
+            and all(int(row["informative_sites" if modern else "informative_DNPs"]) == 2 and float(row["mean_contamination"]) == 0
                     and float(row["sd_contamination"]) == 0 for row in rows),
             "Installed Contamination differs from the two homozygous loci per sample.")
     for artifact in contamination["contamination-tables"]:
@@ -434,8 +444,8 @@ def verify(package: Path, manifest_path: Path, work: Path, output: Path) -> None
         require(snapshot(inputs) == originals, "The installed workflow changed original inputs.")
         require(snapshot(configuration) == preferences_before, "Installed analysis changed saved preferences.")
         evidence["checks"]["private_inputs_unchanged"] = True
-        check_workflows(data / "runs", os.getuid())
-        evidence["checks"]["all_four_workflows"] = True
+        check_workflows(data / "runs", os.getuid(), five_modules=current_model(manifest["version"]))
+        evidence["checks"]["all_five_workflows" if current_model(manifest["version"]) else "all_four_workflows"] = True
         evidence["checks"]["user_owned_results"] = True
         sentinel = data / "data/user-sentinel.txt"
         sentinel.write_text("User data must survive reinstall and removal.\n", encoding="utf-8")

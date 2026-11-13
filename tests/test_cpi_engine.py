@@ -59,6 +59,7 @@ class CpiEngineTests(unittest.TestCase):
             "--pileup_dir", str(self.run / "work/inputs"), "--out_dir", str(self.run / "output"),
             "--pairs=A:B,A:C", "--mother_prefix=Mother", "--father_prefix=Father",
             "--popfreq", str(self.popfreq), "--err_const", str(self.request["err_const"]),
+            "--min_fetal_reads", "2",
         ])
         staged = self.run / "work/inputs"
         self.assertEqual({path.name for path in staged.iterdir()}, {"MotherA.txt", "FatherB.txt", "FatherC.txt"})
@@ -89,7 +90,7 @@ class CpiEngineTests(unittest.TestCase):
 
     def test_prefixes_can_be_empty_or_start_with_a_hyphen(self):
         request = deepcopy(self.request)
-        request.update(pairs="A:B", mother_prefix="", father_prefix="--father=è", err_const=0)
+        request.update(pairs="A:B", mother_prefix="", father_prefix="--father=è", err_const=0.01)
         request["samples"] = [
             {**request["samples"][0], "name": "A.txt"},
             {**request["samples"][1], "name": "--father=èB.txt"},
@@ -97,23 +98,33 @@ class CpiEngineTests(unittest.TestCase):
         argv = prepare_cpi(request)
         self.assertIn("--mother_prefix=", argv)
         self.assertIn("--father_prefix=--father=è", argv)
-        self.assertEqual(argv[-1], "0")
+        self.assertEqual(argv[argv.index("--err_const") + 1], "0.01")
         self.assertTrue((self.run / "work/inputs/--father=èB.txt").is_file())
 
-    def test_exact_shared_mother_father_filename_is_allowed(self):
+    def test_exact_shared_mother_father_filename_is_rejected(self):
         request = deepcopy(self.request)
         request.update(pairs="A:A", mother_prefix="", father_prefix="")
         request["samples"] = [{**request["samples"][0], "name": "A.txt"}]
-        prepare_cpi(request)
-        self.assertEqual([p.name for p in (self.run / "work/inputs").iterdir()], ["A.txt"])
+        self.reject(request)
+
+    def test_same_file_cannot_impersonate_distinct_samples_through_paths_or_hardlinks(self):
+        source = Path(self.request["samples"][0]["path"])
+        linked = self.inputs / "same-sample-hardlink.txt"
+        linked.hardlink_to(source)
+        for path in (source, linked):
+            request = deepcopy(self.request)
+            request["samples"][1]["path"] = str(path)
+            self.reject(request)
 
     def test_schema_types_and_error_constant_reject_before_writes(self):
         cases = [None, [], "request", {}, {**self.request, "extra": 1}]
         for field in self.request:
+            if field == "err_const":
+                continue  # The detected marker type now selects its own default.
             cases.append({key: value for key, value in self.request.items() if key != field})
         for value in (True, False, "1", 1.0, 2, None):
             cases.append({**self.request, "schema_version": value})
-        for value in (True, False, "0.1", None, [], -1, math.nan, math.inf, -math.inf, 10**1000):
+        for value in (True, False, "0.1", [], 0, -1, math.nan, math.inf, -math.inf, 10**1000):
             cases.append({**self.request, "err_const": value})
         for value in ("dnp-call", [], None):
             cases.append({**self.request, "workflow": value})

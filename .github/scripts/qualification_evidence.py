@@ -12,7 +12,9 @@ ARCHIVE = "qualification-evidence.zip"
 DESCRIPTOR = "qualification-evidence.json"
 MAX_FILE = 8 * 1024 * 1024
 MAX_TOTAL = 64 * 1024 * 1024
-MAX_ENTRIES = 3000
+# The five-module qualification retains over 3,500 textual evidence files.
+# Leave bounded room for platform reports without raising byte/file limits.
+MAX_ENTRIES = 5000
 ALLOWED = {".json", ".jsonl", ".log", ".txt", ".tsv", ".csv", ".md"}
 
 
@@ -83,7 +85,10 @@ def build(output, installer_set, sources, replacements=None):
                     name = label + "/" + path.relative_to(root).as_posix()
                     require(safe_name(name), "Unsafe evidence path")
                     total += len(data)
-                    require(total <= MAX_TOTAL and len(entries) < MAX_ENTRIES, "Qualification bundle exceeds its bound")
+                    require(total <= MAX_TOTAL,
+                            f"Qualification expanded bytes {total} exceed limit {MAX_TOTAL} at {name}")
+                    require(len(entries) < MAX_ENTRIES,
+                            f"Qualification entry count {len(entries) + 1} exceeds limit {MAX_ENTRIES} at {name}")
                     info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
                     info.compress_type = zipfile.ZIP_DEFLATED
                     info.external_attr = (stat.S_IFREG | 0o644) << 16

@@ -202,6 +202,16 @@ class UpdateUITests(unittest.TestCase):
             self.wizard(["5", "8", "1", "1", "2", "2", "0", "0", "0"])
         self.assertEqual(store.load(), prefs)
 
+    def test_update_menu_can_switch_from_stable_to_testing_and_back(self):
+        with patch("nipat.wizard.run_updates") as updater:
+            status, store, _ = self.wizard(["5", "8", "1", "1", "9", "0", "0"])
+            self.assertEqual(status, 0)
+            self.assertEqual(store.load().update_channel, "testing")
+            status, store, _ = self.wizard(["5", "8", "1", "2", "9", "0", "0"])
+        self.assertEqual(status, 0)
+        self.assertEqual(store.load().update_channel, "stable")
+        updater.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

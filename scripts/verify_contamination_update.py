@@ -21,8 +21,10 @@ EXPECTED_SITES = {
     ("chr1", "200", "201"): (0.0, 0.0),
     ("chr1", "300", "301"): (0.95, 0.05),
     ("chr1", "400", "401"): (0.05, 0.05),
+    # The new denominator includes Other: 11 / 111 <= 0.1 retains this site.
+    ("chr1", "700", "701"): (0.95, 0.05),
 }
-EXPECTED_SD = 0.0288675134594813
+EXPECTED_SD = math.sqrt(0.00075)
 
 
 def read_tsv(path: Path, required: set[str]) -> list[dict[str, str]]:
@@ -48,7 +50,7 @@ def check_outputs(run_dir: Path) -> None:
     output = run_dir / "output"
     summary = read_tsv(
         output / "contamination_summary.txt",
-        {"individuo", "informative_DNPs", "mean_contamination", "sd_contamination"},
+        {"individuo", "informative_sites", "mean_contamination", "sd_contamination"},
     )
     if len(summary) != 3 or {row["individuo"] for row in summary} != {
         "NoRatio", "WithRatio", "NoSites"
@@ -57,8 +59,8 @@ def check_outputs(run_dir: Path) -> None:
     by_sample = {row["individuo"]: row for row in summary}
     for sample in ("NoRatio", "WithRatio"):
         for column, expected in (
-            ("informative_DNPs", 4),
-            ("mean_contamination", 0.025),
+            ("informative_sites", 5),
+            ("mean_contamination", 0.03),
             ("sd_contamination", EXPECTED_SD),
         ):
             check_number(by_sample[sample][column], expected, f"{sample}: {column}")
@@ -67,7 +69,7 @@ def check_outputs(run_dir: Path) -> None:
             {"chr", "pos1", "pos2", "ratio_REF_ALT", "contamination"},
         )
         coordinates = [(row["chr"], row["pos1"], row["pos2"]) for row in sites]
-        if len(sites) != 4 or set(coordinates) != set(EXPECTED_SITES):
+        if len(sites) != 5 or set(coordinates) != set(EXPECTED_SITES):
             raise ValidationError(f"{sample}: siti mantenuti diversi da quelli attesi.")
         for row, coordinate in zip(sites, coordinates):
             ratio, contamination = EXPECTED_SITES[coordinate]
@@ -76,7 +78,7 @@ def check_outputs(run_dir: Path) -> None:
             check_number(row["contamination"], contamination, f"{label} contamination")
 
     empty = by_sample["NoSites"]
-    check_number(empty["informative_DNPs"], 0, "NoSites: informative_DNPs")
+    check_number(empty["informative_sites"], 0, "NoSites: informative_sites")
     for column in ("mean_contamination", "sd_contamination"):
         if empty[column] != "NA":
             raise ValidationError(f"NoSites: {column} deve essere NA.")
@@ -111,9 +113,11 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
             raise ValidationError("Permessi dei mount non coerenti con input/output.")
     runtime = record["runtime"]
     engine = runtime.get("engine", {})
+    interfaces = {"dnp-call": "dnp-call-v1", "snp-call": "snp-call-v2",
+                  "contamination": "contamination-v2", "cpi": "cpi-v2", "cpin": "cpin-v1"}
     if (record["status"] != "succeeded" or record["source"].get("role") != "client"
             or record.get("workflow") != workflow
-            or engine.get("workflow_interfaces", {}).get(workflow) != ("snp-call-v2" if workflow == "snp-call" else f"{workflow}-v1")
+            or engine.get("workflow_interfaces", {}) != interfaces
             or engine.get("preparation", {}).get("interface") != "workflow-preparation-v1"
             or not re.fullmatch(r"sha256:[0-9a-f]{64}", runtime.get("image_id", ""))):
         raise ValidationError("Identità dell'immagine o provenienza del motore mancanti.")
@@ -121,11 +125,12 @@ def check_bundled_run(run_dir: Path, layout: ProjectLayout, *, workflow: str = "
     required = {"engine/main.py", *(f"lib/nipat_scientific/{name}.py" for name in (
         "__init__", "errors", "panels", "files", "contamination", "snp", "snp_summary", "snp_parallel", "dnp", "cpi",
         "catalog", "plan", "executor", "outputs", "presentation", "performance",
-        "scratch", "dnp_pileup", "progress", "parallel",
+        "scratch", "dnp_pileup", "progress", "parallel", "cpin", "settings",
     )), "lib/nipat_scientific/presentation.R", "lib/nipat_scientific/progress.R",
         "lib/nipat_scientific/dnp_blocks.R", "lib/nipat_scientific/parallel.R", "lib/nipat_scientific/plots.R",
+        "lib/nipat_scientific/settings.R", "lib/nipat_scientific/settings_data.json",
         *(f"lib/nipat_scientific/catalog_data/{name}.json" for name in (
-        "dnp-call", "snp-call", "contamination", "cpi",
+        "dnp-call", "snp-call", "contamination", "cpi", "cpin",
     ))}
     if set(hashes) != required or any(not re.fullmatch(r"[0-9a-f]{64}", digest) for digest in hashes.values()):
         raise ValidationError("Hash del codice di preparazione incompleti o non validi.")
@@ -170,7 +175,7 @@ def main() -> int:
         print(f"Verifica Contamination fallita: {exc}", file=sys.stderr)
         return 1
     print("Verifica Contamination superata: riepilogo e valori per sito attesi.")
-    print("Con/senza ratio: 4 siti, media 0.025 (2.5%), SD 0.0288675134594813.")
+    print("Con/senza ratio: 5 siti, media 0.03 (3%), SD sqrt(0.00075).")
     print("Campione senza siti informativi: conteggio 0, media e SD NA.")
     return 0
 

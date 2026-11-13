@@ -113,8 +113,10 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
-Per Desktop 0.8.2–0.8.8 il modello usa lo **schema 5**; dalla 0.8.9 usa lo
-**schema 6** per i sorgenti R revisionati. La decisione iniziale è `pending`.
+Per Desktop 0.8.2–0.8.8 il modello usa lo **schema 5**; da 0.8.9 a 0.8.49
+usa lo **schema 6**. Dalla **0.8.50 richiede lo schema 7**, che qualifica
+separatamente i due caller e i tre modelli aggiornati. La decisione iniziale
+è `pending`.
 Una distribuzione per ricerca richiede:
 
 - versione, commit, build e checksum dei quattro installatori, del manifest
@@ -123,13 +125,12 @@ Una distribuzione per ricerca richiede:
 - prova storica identificata come `historical-platform-evidence`, senza
   attribuirla all'installazione della candidata;
 - elenco completo delle modifiche operative con hash prima/dopo, secondo
-  `reviewed-operative-changes-with-tested-r-equivalence-v1` nello schema 6
-  (`reviewed-operative-changes-with-unchanged-vendored-r-v1` nello schema 5);
-- R vendorizzato invariato nello schema 5; nello schema 6, revisione esplicita
-  dei quattro script e confronto con i riferimenti congelati applicabili:
-  dalla 0.8.30, SNPcall 2.0 per SNP e NIPAT 0.8.5 per gli altri tre moduli;
-  regressioni della candidata e rapporto permanente
-  di qualificazione, con prova dell'aggiornamento Ubuntu;
+  `reviewed-operative-changes-with-versioned-scientific-models-v1` nello schema 7
+  (gli schemi storici mantengono i propri contratti);
+- revisione esplicita dei cinque script e confronto con riferimenti congelati:
+  NIPAT 0.8.5 per DNP, SNPcall 2.0 per SNP e NEWPAT del 13 novembre 2026
+  per CPI, Contamination e CPIN; regressioni della candidata e rapporti
+  permanenti, con prova dell'aggiornamento Ubuntu;
 - `macos_validation` distinto per `arm64` e `x86_64`: `passed` con evidenze
   HTTPS oppure `not-performed` con elenco vuoto;
 - scenari desktop rinviati e `domain_validation: pending-domain-researchers`.
@@ -159,6 +160,41 @@ verifica i byte Git, non si limita a leggere gli hash dichiarati. Gli schemi
 precedenti rimangono utilizzati per le rispettive release storiche. Il
 [protocollo di accettazione](../docs/ACCETTAZIONE_INSTALLATORI.md) descrive
 prove e registrazione senza trasformare i casi non svolti in esiti positivi.
+
+## Contratto scientifico della 0.8.50
+
+Lo schema 7 aggiunge `scientific_analysis_qualification`, con gli stessi quattro
+campi di `scientific_equivalence`. Il commit di riferimento è
+`9c2a8be60afcb944153710da6a61cd0559e2b4cf`; `report_path` identifica
+`five-module-qualification.json` nel sottoalbero `scientific/` del bundle.
+Entrambi i rapporti devono indicare il medesimo ID immutabile dell'immagine
+contenuta nei pacchetti. I percorsi effettivi e gli hash si ricavano dal bundle
+verificato della build, dopo la normalizzazione dei percorsi, senza ricrearli
+con prove locali.
+
+Il rapporto caller richiede 17 casi DNP/SNP con gli oracoli precedenti. Il
+rapporto aggiornato richiede 86 esecuzioni R: 16 confronti con NEWPAT e 54 prove
+batch, per entrambi i tipi di marcatore, 2/3/5 famiglie o campioni e modalità
+seriale/automatica/limite 2. Il publisher controlla sorgenti e helper installati,
+verificatore, fixture, immutabilità degli input, parametri e costanti effettivi,
+identità e completamento dei worker, hash dei risultati e confronti dichiarati.
+Le tolleranze dei confronti numerici upstream sono esplicite nel verificatore;
+non si dichiara equivalenza byte per byte tra modelli scientifici differenti.
+
+I digest dei singoli output e log scientifici descrivono i byte originali della
+prova; la sanitizzazione dei percorsi nell'archivio può cambiarli. Sono il digest
+del rapporto conservato e quello dell'archivio accettato a identificare i byte
+pubblicati. Gli hash Git e delle fixture restano verificati direttamente.
+`scientific-equivalence-check.json` contiene entrambi gli esiti; la provenienza
+pubblicata include separatamente i digest dei due rapporti. Il manifest
+scientifico deve identificare esattamente tutti e cinque gli script.
+
+La CI raccoglie i test Python con pytest, includendo anche le classi unittest.
+I test nativi possono essere saltati sull'host privo dei pacchetti R, ma la build
+esegue obbligatoriamente le regressioni di casi vuoti/copertura zero e parametri
+nell'immagine installata: dipendenze mancanti, errori o test saltati bloccano il
+job. Il gate completo dei workflow usa inoltre tre BAM, tutti e cinque i moduli,
+modalità seriale e limite 2, con il client distribuito e l'immagine finale.
 
 ## Protezioni della pubblicazione
 

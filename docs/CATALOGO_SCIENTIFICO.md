@@ -1,6 +1,6 @@
 # Catalogo scientifico
 
-Il catalogo descrive le interfacce pubbliche e le regole interne dei quattro
+Il catalogo descrive le interfacce pubbliche e le regole interne dei cinque
 script R distribuiti con NIPAT. È consultabile in italiano e inglese, senza
 avviare l'ambiente scientifico o elaborare campioni.
 
@@ -31,7 +31,7 @@ non crea run e non richiede Docker o WSL.
 | Sezione | Significato |
 | --- | --- |
 | Opzioni pubbliche R | Argomenti accettati dallo script, obbligatorietà, default R e corrispondenza con CLI e richiesta al motore. |
-| Regole interne R | Soglie fisse, formule, filtri, assunzioni di formato e impostazioni di presentazione, consultabili in sola lettura. |
+| Regole interne R | Regole, formule, filtri, assunzioni di formato e impostazioni di presentazione, consultabili in sola lettura. |
 | Preparazione degli input | Trasformazioni NIPAT e impostazioni delle dipendenze, con origine e ambito di applicazione. |
 
 Una corrispondenza **diretta** conserva il significato del parametro nativo.
@@ -47,12 +47,16 @@ distinti da quelli dichiarati da R. Per un pileup importato, le impostazioni
 samtools applicate a monte possono non essere ricostruibili: il catalogo
 non attribuisce a quel file le impostazioni della preparazione BAM di NIPAT.
 
-Le costanti interne non sono nuove opzioni modificabili. Renderle visibili
-non cambia il modello scientifico e non autorizza automaticamente a modificarlo.
+Dalla 0.8.50 le soglie e le costanti d'errore elencate nel registro scientifico
+sono configurabili. `nipat settings` mostra default, limiti, costanti e vincoli;
+`--scientific-config` e `--set` applicano modifiche validate. Gli invarianti del
+modello sono leggibili e restano distinti dai parametri modificabili. Ogni run
+conserva `effective-scientific-settings.json`; la [guida di sviluppo](DEVELOPMENT_0.8.50.md)
+mostra esempi completi.
 I pannelli CPI chiamati *cutoff* selezionano coordinate; i loro nomi non
 applicano soglie numeriche ai campioni.
 
-La policy di esecuzione comune ai quattro moduli R è invece configurabile:
+La policy di esecuzione comune ai cinque moduli R è invece configurabile:
 `--execution-mode auto` è il default, `serial` impone un solo processo di
 calcolo e `--max-workers` pone un tetto al pool automatico. Nella CLI queste
 opzioni globali precedono il sottocomando dell'analisi. Il numero effettivo

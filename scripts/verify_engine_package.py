@@ -1,12 +1,13 @@
 """Check bundled R scripts without mounting the application or source checkout.
 
-This verifies native R invocation and all four complete scientific workflows.
+This verifies native R invocation and all five complete scientific workflows.
 Only fixture input and result directories are mounted into the image.
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -29,10 +30,12 @@ from nipat_scientific.catalog import load_catalog
 from verify_contamination_update import check_bundled_run
 from verify_contamination_update import check_outputs as check_contamination
 from verify_cpi_update import check_outputs as check_cpi
+from verify_cpin_update import check_outputs as check_cpin
 from verify_dnp_engine import check_dnp_client_without_host_scripts, check_dnp_workflow
 from verify_cpi_engine import check_cpi_client_without_host_scripts, check_cpi_workflow
 from verify_workflow_execution import check_workflow_execution, check_cpi_chains, check_imported_cpi_plans
 from verify_snp_workflow import check_snp_plans
+from verify_five_module_workflow import qualify_image
 
 
 PROJECT = Path(__file__).resolve().parents[1]
@@ -156,23 +159,25 @@ def check_metadata(identifier: str) -> dict:
         raise ValueError("Unexpected bundled engine interface.")
     if description.get("manifest", {}).get("sha256") != expected_digest:
         raise ValueError("Bundled scientific manifest differs from this checkout.")
-    if description.get("workflow_interfaces", {}).get("contamination") != "contamination-v1":
+    if description.get("workflow_interfaces", {}).get("contamination") != "contamination-v2":
         raise ValueError("The engine lacks the complete Contamination interface.")
     if description.get("workflow_interfaces", {}).get("snp-call") != "snp-call-v2":
         raise ValueError("The engine lacks the complete SNPcall interface.")
     if description.get("workflow_interfaces", {}).get("dnp-call") != "dnp-call-v1":
         raise ValueError("The engine lacks the complete DNPcall interface.")
-    if description.get("workflow_interfaces", {}).get("cpi") != "cpi-v1":
+    if description.get("workflow_interfaces", {}).get("cpi") != "cpi-v2":
         raise ValueError("The engine lacks the complete CPI interface.")
+    if description.get("workflow_interfaces", {}).get("cpin") != "cpin-v1":
+        raise ValueError("The engine lacks the complete CPIN interface.")
     if description.get("plan_execution") != {
-        "interface": "workflow-plan-execution-v1", "schema_version": 1,
-        "workflows": ["dnp-call", "snp-call", "contamination", "cpi"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
+        "interface": "workflow-plan-execution-v2", "schema_version": 1,
+        "workflows": ["dnp-call", "snp-call", "contamination", "cpi", "cpin"], "scheduling": "dependency-order-with-bounded-independent-snp", "resume": False,
     }:
         raise ValueError("Unexpected supported workflow plan execution interface.")
     if description.get("scientific_validation") != {
         "interface": "scientific-validation-v1",
-        "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
-        "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+        "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi", "cpin"],
+        "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi", "cpin"],
         "snp_alleles": "uppercase-working-copy",
         "snp_model": "SNPcall-2.0",
         "snp_output_columns": 17,
@@ -185,9 +190,9 @@ def check_metadata(identifier: str) -> dict:
     source_files = {"engine/main.py": PROJECT / "engine/main.py"}
     for name in (
         "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "snp_summary.py", "snp_parallel.py",
-        "dnp.py", "cpi.py", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "plots.R", "performance.py",
+        "dnp.py", "cpi.py", "cpin.py", "settings.py", "settings.R", "settings_data.json", "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "plots.R", "performance.py",
         "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R", "parallel.py", "parallel.R", "catalog_data/dnp-call.json",
-        "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json",
+        "catalog_data/snp-call.json", "catalog_data/contamination.json", "catalog_data/cpi.json", "catalog_data/cpin.json",
     ):
         source_files[f"lib/nipat_scientific/{name}"] = PROJECT / "src/nipat_scientific" / name
     expected_sources = {
@@ -209,7 +214,7 @@ def check_catalog(identifier: str) -> None:
         selected = json.loads(run_image(identifier, ["catalog", workflow, "--json"]))
         if selected.get("workflows") != {workflow: expected["workflows"][workflow]}:
             raise ValueError(f"The image returned an incorrect catalog selection: {workflow}.")
-    print("PASS: source-verified catalog for four R scripts, without host source mounts.", flush=True)
+    print("PASS: source-verified catalog for five R scripts, without host source mounts.", flush=True)
 
 
 def check_plan_contract(identifier: str, root: Path) -> None:
@@ -237,7 +242,11 @@ def check_plan_contract(identifier: str, root: Path) -> None:
     report = json.loads(run_image(
         identifier, ["validate-plan", "--plan", "/inputs/plan.json"], inputs=inputs,
     ))
-    expected_plan = {**plan, "steps": list(reversed(plan["steps"]))}
+    expected_plan = copy.deepcopy(plan)
+    expected_plan["steps"].reverse()
+    # Consumers now declare their inferred marker type in the canonical plan.
+    # Keep this expectation explicit rather than using the validator as oracle.
+    expected_plan["steps"][1]["parameters"] = {"marker_type": "DNP"}
     if report.get("execution_order") != ["dnp", "contamination"] or report.get("plan") != expected_plan:
         raise ValueError("The bundled validator returned an unexpected plan or execution order.")
     if plan_file.read_bytes() != before:
@@ -598,9 +607,37 @@ def check_doctor_without_host_scripts(identifier: str, root: Path) -> None:
         DockerComposeRunner(layout).doctor(True)
     if {path.name for path in project.iterdir()} != {"compose.yaml"}:
         raise ValueError("Runtime diagnostics unexpectedly populated the application directory.")
-    print("PASS: runtime diagnostics verify all four bundled interfaces without host scientific sources.",
+    print("PASS: runtime diagnostics verify all five bundled interfaces without host scientific sources.",
           flush=True)
 
+
+
+def check_cpin_workflow(identifier: str, root: Path) -> None:
+    """Check SNP and DNP postnatal models through the source-free client."""
+    project = root / "CPIN client without scientific sources"
+    project.mkdir()
+    (project / "compose.yaml").write_text(
+        f"services:\n  scientific:\n    image: {identifier}\n", encoding="utf-8")
+    layout = ProjectLayout(project, root / "CPIN workspace", root / "CPIN data",
+                           root / "CPIN runs", project / "compose.yaml")
+    workflow = Workflows(layout, DockerComposeRunner(layout))
+    for marker in ("SNP", "DNP"):
+        inputs = root / ("CPIN " + marker + " inputs")
+        shutil.copytree(PROJECT / "tests/fixtures/cpin" / marker, inputs)
+        originals = {path: path.read_bytes() for path in inputs.iterdir() if path.is_file()}
+        run = workflow.cpin(input_dir=inputs, trios="M1:F1:C1",
+                            popfreq=inputs / "population.txt", run_name="cpin-" + marker.lower())
+        check_cpin(run, marker)
+        check_bundled_run(run, layout, workflow="cpin")
+        effective = json.loads((run / "work/effective-scientific-settings.json").read_text())
+        if effective.get("workflow") != "cpin" or effective["parameters"]["min_child_reads"] != 2:
+            raise ValueError("CPIN did not preserve its effective scientific settings.")
+        if any(path.read_bytes() != content for path, content in originals.items()):
+            raise ValueError("CPIN changed an original input.")
+    if {path.name for path in project.iterdir()} != {"compose.yaml"}:
+        raise ValueError("CPIN client unexpectedly populated its application directory.")
+    print("PASS: complete CPIN SNP/DNP, analytical PI and curves, site exclusions, PDFs, "
+          "effective settings and immutable inputs without host scientific sources.", flush=True)
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -636,6 +673,10 @@ def main() -> int:
         cpi_inputs = check_cpi_workflow(identifier, root, run_image=run_image, write_request=write_request)
         check_cpi_client_without_host_scripts(identifier, root, cpi_inputs)
         check_contamination_client_without_host_scripts(identifier, root)
+        check_cpin_workflow(identifier, root)
+        composed = qualify_image(identifier, root / "five-module BAM workflow", run_container=run_container)
+        print(f"PASS: source-free five-module client, three BAMs, ten steps per run, "
+              f"serial/cap2 and {composed['identical_scientific_tables']} identical scientific tables.", flush=True)
     except (NipatError, OSError, RuntimeError, ValueError, KeyError) as exc:
         print(f"Engine package verification failed: {exc}", file=sys.stderr)
         if root is not None:
@@ -643,7 +684,8 @@ def main() -> int:
         return 1
     shutil.rmtree(root)
     print("PASS: numeric regressions and validation failures without application/source mounts or network.")
-    print("Complete DNPcall, SNPcall, Contamination and CPI, plus automatic DNPcall -> Contamination/CPI plans and independent SNP batches/tasks, verified inside the bundled engine.")
+    print("Complete DNPcall, SNPcall, Contamination, CPI and CPIN, including both caller branches "
+          "feeding all three consumers in a three-BAM serial/cap2 workflow, verified inside the bundled engine.")
     return 0
 
 

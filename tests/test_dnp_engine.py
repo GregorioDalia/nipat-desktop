@@ -78,6 +78,16 @@ class DnpEngineTests(unittest.TestCase):
         self.assertEqual((self.run / "work/bamlist.txt").read_text().splitlines(),
                          [Path(sample["path"]).as_posix() for sample in samples])
 
+    def test_scientific_settings_are_validated_before_staging(self):
+        for settings in ({"other_fraction_max": -0.1}, {"max_depth": -1},
+                         {"unsupported": 1}, {"min_base_quality": True}):
+            with self.subTest(settings=settings):
+                self.assert_rejected_without_writes({**self.request, "scientific_settings": settings})
+        prepared = prepare_dnp({**self.request, "scientific_settings": {
+            "other_fraction_max": 0.05, "min_base_quality": 20,
+        }})
+        self.assertEqual(prepared.working_dir, self.run)
+
     def test_panel_at_first_base_fails_before_staging_or_output_creation(self):
         self.panel.write_text("chr1\t1\t2\tAC\tGT\n", encoding="utf-8")
         before = self.snapshot()
@@ -85,6 +95,21 @@ class DnpEngineTests(unittest.TestCase):
             prepare_dnp(self.request)
         self.assertEqual(self.snapshot(), before)
         self.assertFalse(self.run.exists())
+
+    def test_ambiguous_chromosomes_or_identical_alleles_fail_before_staging(self):
+        for row in ("chr1:alt\t100\t101\tAC\tGT\n", "chr1|alt\t100\t101\tAC\tGT\n",
+                    "chr1\t100\t101\tAC\tac\n"):
+            with self.subTest(row=row):
+                self.panel.write_text(row)
+                self.assert_rejected_without_writes(self.request)
+                self.assertFalse(self.run.exists())
+
+    def test_hardlink_cannot_count_the_same_bam_twice(self):
+        alias = self.inputs / "sample_0002.bam"
+        alias.hardlink_to(self.bam)
+        request = deepcopy(self.request)
+        request["samples"].append({"path": str(alias), "sample_id": "sample_0002"})
+        self.assert_rejected_without_writes(request)
 
     def test_safe_reference_alias_cannot_change_native_option_selection(self):
         # These are the actual unanchored regular expressions in upstream R.

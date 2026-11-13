@@ -1,7 +1,7 @@
 # Integrazione continua e distribuzione
 
 NIPAT verifica separatamente il client, il motore scientifico, gli installatori
-e il funzionamento sui dispositivi reali. La versione 0.8.30 distribuisce
+e il funzionamento sui dispositivi reali. La versione 0.8.50 distribuisce
 Windows 10/11 x64, Ubuntu 24.04 x86_64 e macOS 14 o successivo Intel/Apple Silicon.
 Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
@@ -33,7 +33,7 @@ Gli installatori completi vengono costruiti su richiesta, non a ogni push.
 | Windows | Prerequisiti, bootstrap, layout, riparazione/rimozione, compilazione e verifica del Python incorporato. | Il payload preparato non equivale a installazione Inno Setup e avvio WSL su un desktop pulito. |
 | Ubuntu | Installazione APT, dipendenze, analisi da utente non root, reinstallazione/rimozione e aggiornamento dalla 0.7.2. | Il runner configurato non rappresenta ogni Ubuntu Desktop. |
 | macOS | Pacchetti ARM64/Intel, launcher e componenti nativi, trasporto e configurazione Lima. | La costruzione del `.pkg` non prova l'avvio della VM o l'accettazione Gatekeeper. |
-| Motore scientifico | Quattro analisi, piani composti, BAM sintetici, confronti numerici, input errati e originali invariati. | Non costituisce validazione di dominio su tutti i campioni reali. |
+| Motore scientifico | Cinque analisi, piani composti, BAM sintetici, confronti numerici, input errati e originali invariati. | Non costituisce validazione di dominio su tutti i campioni reali. |
 | Documentazione | File, immagini, link relativi e sezioni Markdown. | Non verifica disponibilità dei siti esterni o contenuto scientifico della prosa. |
 
 Ogni difetto riproducibile deve essere coperto dal test del livello pertinente.
@@ -43,20 +43,31 @@ prove eseguite, fallite, saltate e non eseguite; un job facoltativo saltato non
 
 ## Regressioni scientifiche
 
-Dalla 0.8.9 le modifiche R richiedono un confronto differenziale con i
-sorgenti congelati della 0.8.5. Dalla 0.8.30 si usa invece il riferimento
-originale SNPcall 2.0 per SNP e si mantiene NIPAT 0.8.5 per DNP, Contamination e
-CPI. `scripts/verify_r_equivalence.py` esegue candidata e riferimento
-pertinente nello stesso runtime e conserva risultati, log e rapporto
-`r-equivalence.json`. Un errore o una differenza impedisce il completamento
-del job scientifico. La build degli installatori applica lo stesso controllo
-prima dell'esportazione del runtime. I riferimenti di test non sono inclusi
-nel payload installato. I criteri sono descritti nel
-[piano di verifica 0.8.9](OPTIMIZATION_0.8.9.md) e nelle
-[note della 0.8.30](RELEASE_0.8.30.md).
+La 0.8.50 verifica i due caller con `scripts/verify_r_equivalence.py`:
+17 casi contro NIPAT 0.8.5 per DNP e SNPcall 2.0 per SNP, con rapporto
+`r-equivalence.json`. I riferimenti rimangono congelati. CPI e Contamination
+adottano il modello NEWPAT aggiornato; CPIN usa il nuovo modello postnatale.
+Non si richiede a questi tre moduli l'equivalenza con le formule precedenti.
 
-Le tabelle esportate e i valori R non arrotondati devono coincidere con il
-rispettivo riferimento scientifico. Dalla 0.8.30, i grafici aggiornati sono
+`scripts/verify_five_modules.py --image IMMAGINE --full` confronta i tre moduli
+con NEWPAT al commit `9c2a8be60afcb944153710da6a61cd0559e2b4cf` e oracoli
+analitici indipendenti. Conserva `five-module-qualification.json`: 86 esecuzioni,
+16 confronti upstream e 54 prove batch con 2/3/5 famiglie o campioni, marcatori
+SNP/DNP, modalità seriale/automatica/limite 2. Registra sorgenti e fixture,
+input invariati, parametri e costanti effettivi, output, completamento e budget
+dei worker. La tolleranza numerica dei confronti upstream è `1e-11` assoluta
+e relativa; le identità di campioni, coppie e trii devono coincidere.
+
+Entrambi i gate sono obbligatori nella CI scientifica e nella build, prima
+dell'esportazione del runtime. Il publisher schema 7 lega i due rapporti alla
+stessa immagine immutabile e ai byte Git della candidata. I riferimenti di test
+non sono inclusi nell'applicazione. I test Python sono raccolti con pytest,
+comprese le classi unittest. Le regressioni native sui campioni vuoti o privi
+di copertura e sui parametri vengono eseguite anche nell'immagine finale:
+una dipendenza R mancante o un test saltato impedisce il completamento.
+
+Per DNP/SNP le tabelle esportate e i valori R non arrotondati devono
+coincidere con il rispettivo riferimento scientifico. Dalla 0.8.30, i grafici aggiornati sono
 verificati per contenuto, dimensioni e classi degli istogrammi; i rendering
 devono essere identici tra le modalità seriale e parallele della candidata.
 Le versioni precedenti conservano il confronto esatto con i PDF della baseline.
@@ -64,7 +75,10 @@ Le versioni precedenti conservano il confronto esatto con i PDF della baseline.
 Il container contiene R, samtools, gli script scientifici, gli adattatori e
 l'orchestrazione. Il client verifica i contratti e non monta gli script R
 dalla cartella dell'applicazione. I workflow composti vengono confrontati
-con le analisi singole equivalenti, usando risultati attesi.
+con le analisi singole equivalenti, usando risultati attesi. Il gate
+dell'immagine finale esercita anche un piano di dieci passi su tre BAM:
+DNP, SNP e le tre analisi a valle per entrambi i caller, in seriale e con
+limite 2, verificando tabelle, immagine usata, impostazioni e input invariati.
 
 La verifica della presentazione confronta le tabelle numeriche con e senza
 etichette leggibili e controlla il testo estratto dai PDF. Gli output canonici
@@ -80,16 +94,16 @@ trasporto su Mac. I risultati attesi rimangono gli stessi.
 
 Avviare **Installers (review build)** sul commit da distribuire, su `main`,
 `release/VERSIONE` o `release/VERSIONE-...`, con la stessa versione dichiarata
-dai sorgenti, ad esempio `release/0.8.30`. Il controllo
+dai sorgenti, ad esempio `release/0.8.50`. Il controllo
 `installer-required` verifica sorgenti, manifest, checksum e archivio scientifico
 comune ai quattro pacchetti. La build produce:
 
 | Artefatto Actions | Pacchetto |
 | --- | --- |
 | `nipat-windows-setup` | `NIPAT-Setup.exe`. |
-| `nipat-linux-setup` | `nipat-desktop_0.8.30_amd64.deb`. |
-| `nipat-macos-setup-arm64` | `NIPAT-0.8.30-macos-arm64.pkg`. |
-| `nipat-macos-setup-x86_64` | `NIPAT-0.8.30-macos-x86_64.pkg`. |
+| `nipat-linux-setup` | `nipat-desktop_0.8.50_amd64.deb`. |
+| `nipat-macos-setup-arm64` | `NIPAT-0.8.50-macos-arm64.pkg`. |
+| `nipat-macos-setup-x86_64` | `NIPAT-0.8.50-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
 
 La release espone direttamente il file da installare per ciascuna piattaforma.

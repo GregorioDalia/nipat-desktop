@@ -104,6 +104,7 @@ class WindowsPayloadTests(unittest.TestCase):
         # transport. Only the Windows host/embedded-Python bridge is outside scope.
         shutil.copytree(ROOT / "src", self.app / "src", ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copyfile(ROOT / "compose.yaml", self.app / "compose.yaml")
+        shutil.copytree(ROOT / "tests/fixtures/cpin", self.app / "tests/fixtures/cpin")
         manifest = {"version": __import__("nipat").__version__, "source_commit": "a" * 40,
                     "runtime_image": "sha256:" + "b" * 64}
         self.write("release.json", json.dumps({"source_git": {"commit": manifest["source_commit"]}}))

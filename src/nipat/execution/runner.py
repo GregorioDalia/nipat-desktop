@@ -15,7 +15,7 @@ from typing import Any, Callable, Iterable, Iterator, TextIO
 
 from nipat import __version__
 from nipat.errors import RuntimeExecutionError, ValidationError
-from nipat.execution.diagnostics import diagnose, inspect_container
+from nipat.execution.diagnostics import diagnose, inspect_container, settle_oom_observation
 from nipat.execution.mounts import InputMounts
 from nipat.execution.options import ExecutionOptions
 from nipat.execution.performance import ContainerPerformanceObserver
@@ -31,19 +31,23 @@ from nipat.validation.integrity import verify_sha256_manifest
 
 BUNDLED_WORKFLOW_INTERFACES = {
     "dnp-call": "dnp-call-v1",
-    "contamination": "contamination-v1",
+    "contamination": "contamination-v2",
     "snp-call": "snp-call-v2",
-    "cpi": "cpi-v1",
+    "cpi": "cpi-v2",
+    "cpin": "cpin-v1",
 }
 BUNDLED_WORKFLOW_LABELS = {
     "contamination": "Contamination", "dnp-call": "DNPcall", "snp-call": "SNPcall", "cpi": "CPI",
+    "cpin": "CPI postnatale",
+    "workflow-plan-all": "Workflow con cinque moduli",
     "workflow-plan": "Workflow automatico",
     "workflow-plan-cpi": "Workflow automatico con CPI",
     "workflow-plan-snp": "Workflow SNPcall su piu' campioni",
     "workflow-plan-with-snp": "Workflow automatico con SNPcall",
 }
-PLAN_EXECUTION_INTERFACE = "workflow-plan-execution-v1"
+PLAN_EXECUTION_INTERFACE = "workflow-plan-execution-v2"
 PLAN_WORKFLOWS = {
+    "workflow-plan-all": ("dnp-call", "snp-call", "contamination", "cpi", "cpin"),
     "workflow-plan": ("dnp-call", "contamination"),
     "workflow-plan-cpi": ("dnp-call", "contamination", "cpi"),
     "workflow-plan-snp": ("snp-call",),
@@ -257,13 +261,15 @@ class DockerComposeRunner:
     ) -> dict[str, Any]:
         """Validate the negotiated contract, recording image-owned source hashes."""
         digest = re.compile(r"[0-9a-f]{64}\Z")
-        required_workflows = {"dnp-call", "snp-call", "contamination", "cpi"}
+        required_workflows = set(BUNDLED_WORKFLOW_INTERFACES)
         required_preparation = {
             "engine/main.py", "lib/nipat_scientific/__init__.py",
             "lib/nipat_scientific/errors.py", "lib/nipat_scientific/panels.py",
             "lib/nipat_scientific/files.py", "lib/nipat_scientific/contamination.py",
             "lib/nipat_scientific/snp.py", "lib/nipat_scientific/dnp.py",
-            "lib/nipat_scientific/cpi.py",
+            "lib/nipat_scientific/cpi.py", "lib/nipat_scientific/cpin.py",
+            "lib/nipat_scientific/settings.py", "lib/nipat_scientific/settings.R",
+            "lib/nipat_scientific/settings_data.json",
             "lib/nipat_scientific/outputs.py",
             "lib/nipat_scientific/presentation.py", "lib/nipat_scientific/presentation.R",
             "lib/nipat_scientific/parallel.py", "lib/nipat_scientific/parallel.R",
@@ -297,6 +303,7 @@ class DockerComposeRunner:
             preparation = description.get("preparation")
             validation = description.get("scientific_validation")
             parallel = description.get("parallel_execution")
+            settings = description.get("scientific_settings")
             valid = (
                 type(description.get("schema_version")) is int
                 and description.get("schema_version") == 1
@@ -317,6 +324,11 @@ class DockerComposeRunner:
                 and isinstance(preparation.get("file_sha256"), dict)
                 and isinstance(validation, dict)
                 and isinstance(parallel, dict)
+                and isinstance(settings, dict)
+                and settings.get("interface") == "scientific-settings-v1"
+                and isinstance(settings.get("workflows"), list)
+                and all(isinstance(name, str) for name in settings["workflows"])
+                and required_workflows.issubset(settings["workflows"])
                 and parallel.get("interface") == "nipat-parallel-v1"
                 and type(parallel.get("schema_version")) is int
                 and parallel.get("schema_version") == 1
@@ -355,7 +367,7 @@ class DockerComposeRunner:
                 )
         if not valid:
             label = (BUNDLED_WORKFLOW_LABELS.get(workflow, workflow)
-                     if workflow is not None else "dei quattro workflow")
+                     if workflow is not None else "dei cinque workflow")
             contracts = ", ".join(str(value) for value in expected_interfaces.values())
             if is_plan:
                 contracts = PLAN_EXECUTION_INTERFACE + ", " + contracts
@@ -759,6 +771,9 @@ class DockerComposeRunner:
             stage["returncode"] = process.wait()
             with _finish_cleanup():
                 stage["container_diagnostics"] = inspect_container(self, container_name, expected_labels)
+                stage["container_diagnostics"] = settle_oom_observation(
+                    self, container_name, expected_labels, stage["container_diagnostics"], stage["returncode"],
+                )
                 stage["container_diagnostics"]["diagnosis"] = diagnose(
                     stage["container_diagnostics"], stage["returncode"], interrupted=False,
                 )
@@ -930,6 +945,6 @@ class DockerComposeRunner:
             try:
                 self._prepare_runtime()
                 self._describe_bundled_engine()
-                self._write("Contratti scientifici verificati: DNPcall, SNPcall, Contamination, CPI.\n")
+                self._write("Contratti scientifici verificati: DNPcall, SNPcall, Contamination, CPI, CPIN.\n")
             finally:
                 self._image_id = None

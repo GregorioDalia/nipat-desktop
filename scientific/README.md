@@ -1,6 +1,6 @@
 # Componenti scientifici
 
-Il motore NIPAT integra quattro programmi R dei progetti
+Il motore NIPAT integra cinque programmi R dei progetti
 [DNPcall](https://github.com/fravasini/DNPcall) e
 [NEWPAT](https://github.com/lpistacchia/NEWPAT). I sorgenti distribuiti sono
 identificati da [`SHA256SUMS`](SHA256SUMS), incluso nell'immagine insieme agli
@@ -11,7 +11,8 @@ script. Il motore verifica tutti gli hash prima di eseguire un'analisi.
 | DNPcall | [`vendor/DNPcall/DNPcall.R`](vendor/DNPcall/DNPcall.R) |
 | SNPcall | [`vendor/NEWPAT/SNPcall/SNPcall.R`](vendor/NEWPAT/SNPcall/SNPcall.R) |
 | Contamination | [`vendor/NEWPAT/contamination/detect_contamination.R`](vendor/NEWPAT/contamination/detect_contamination.R) |
-| CPI | [`vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R`](vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R) |
+| CPI prenatale | [`vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R`](vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R) |
+| CPIN postnatale | [`vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R`](vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R) |
 
 L'immagine comprende anche R, samtools, le dipendenze e la libreria Python
 `nipat_scientific`, che convalida e prepara i file richiesti dai programmi R.
@@ -21,10 +22,11 @@ ispezionabile: le analisi eseguono le copie contenute nell'immagine verificata.
 
 ## Provenienza e identità
 
-Le versioni di riferimento di CPI e Contamination derivano dal
-[commit NEWPAT `17d2b8bbd09b1a0ff0651198c21e544aef197824`](https://github.com/lpistacchia/NEWPAT/tree/17d2b8bbd09b1a0ff0651198c21e544aef197824).
-Il blob CPI originale è `a362c976f9e9280e64f5bc2ec4a7b83b1e9647e6`; il blob
-Contamination è `142e6fc65b3aa1c8c5f6406d33180937d6d04ae1`.
+CPI, Contamination e CPIN derivano dal
+[commit NEWPAT `9c2a8be60afcb944153710da6a61cd0559e2b4cf`](https://github.com/lpistacchia/NEWPAT/tree/9c2a8be60afcb944153710da6a61cd0559e2b4cf).
+Le copie upstream immutabili sono in `tests/reference_r/NEWPAT_20261113`.
+La [guida 0.8.50](../docs/DEVELOPMENT_0.8.50.md) documenta parametri,
+modifiche del modello e workflow; questa revisione è di sviluppo, non pubblicata.
 SNPcall 2.0 deriva dal
 [commit NEWPAT `ce59f4beeeec710b1b42d425cb87d7aad729f71d`](https://github.com/lpistacchia/NEWPAT/tree/ce59f4beeeec710b1b42d425cb87d7aad729f71d/SNPcall),
 blob `7a2e01e94c9e278af52aa861646fec3b16df8b1c`. Il sorgente upstream
@@ -49,27 +51,22 @@ conservano i valori iniziali di 32 MiB e 64 loci. La
 [guida al parallelismo R](../docs/PARALLELISMO_0.8.12.md) documentano queste
 basi. I file conservano attribuzioni e licenze e indicano le modifiche NIPAT.
 
-Per **DNPcall, CPI e Contamination** il riferimento numerico rimane **NIPAT v0.8.5**, commit
-`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copie congelate in
-[`tests/reference_r/0.8.5`](../tests/reference_r/0.8.5/README.md). Comprende
-le modifiche di compatibilità già distribuite in quella versione: non è
-una dichiarazione di identità con sorgenti upstream mai modificati. La
-baseline non viene aggiornata per far passare un candidato. **SNPcall usa
-invece il riferimento upstream 2.0 congelato**: il nuovo raggruppamento per
-SNP e lettura, le qualità e le likelihood rappresentano una modifica
-scientifica richiesta, non un'ottimizzazione da confrontare con il vecchio SNP.
-Le correzioni dei grafici hanno verifiche proprie, distinte dall'equivalenza
-delle tabelle. Il
-[piano iniziale](../docs/OPTIMIZATION_0.8.9.md) e il
-[contratto delle verifiche R](../tests/r_optimization/README.md) documentano
-copertura, controlli di equivalenza e limiti delle evidenze.
+Per **DNPcall** il riferimento numerico rimane **NIPAT v0.8.5**, commit
+`eafadf7002a9c7d7c1b9af9ccafc47d698a059e5`, con copia congelata in
+`tests/reference_r/0.8.5`. SNPcall usa il riferimento upstream 2.0 congelato.
+CPI, Contamination e CPIN sono confrontati con NEWPAT 20261113 e con oracoli
+analitici indipendenti. Il filtro Other di Contamination è cambiato per
+richiesta scientifica; l'equivalenza con il precedente algoritmo non è
+un criterio valido per queste nuove analisi. I riferimenti storici restano
+immutabili. Le correzioni dei grafici hanno verifiche proprie.
 
 | Componente | SHA-256 |
 | --- | --- |
-| DNPcall | `7163c685a41b65431c86c7e65fe68cf66df5aba4a270bd3c3c7cc40f7e37a5b9` |
-| SNPcall | `cc1bf385969adaac24834234b811ba4497aa2397872f0500139a5c534964899d` |
-| Contamination | `d5423528268602cd57b8ee6bb9e059457529a3fcaa48cf81b252e7b071445a26` |
-| CPI | `64497a6d542300c29bb225202d4c2555e8ac1888f963495356f49e6c962481d7` |
+| DNPcall | `4904721e258190ace5cb0fc7df367c0d6f2f68abfc5d794aea83ed0a43db2088` |
+| SNPcall | `e27981da3e4c061068f1d17751e45223674b1a1fa01c177f1c5f858162f62c73` |
+| Contamination | `3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0` |
+| CPI | `d5a7518e5d4b41a2c1b2a780c186595edc617a0963ff7cdb63843f202f1c4f10` |
+| CPIN | `cac401d40ed7b137d49d22e0ef99ef891a0bce5661e3df6ccc8a8c8b1cf9ae49` |
 
 Le versioni delle dipendenze R sono dichiarate in
 [`r-packages.tsv`](../docker/scientific-runtime/r-packages.tsv) e controllate
@@ -167,35 +164,39 @@ un numero di thread aggiuntivi rispetto al budget di calcolo.
 
 ### Contamination
 
-Le tabelle richiedono `chr`, `pos1`, `pos2`, `N_REF`, `N_ALT` e `N_Other`.
-In assenza di `ratio_REF_ALT`, R calcola `N_REF / (N_REF + N_ALT)`;
-i siti con denominatore nullo sono esclusi. Una colonna ratio fornita viene
-passata allo script. I siti informativi con zero letture inattese contribuiscono
-ai riepiloghi. Un campione senza siti informativi ha conteggio zero e stime `NA`.
+Accetta conteggi SNP (`chr`, `pos`) o DNP (`chr`, `pos1`, `pos2`) e un
+pannello coerente. Filtra Other usando `Other/(REF+ALT+Other)` e calcola la
+contaminazione per sito come `unexpected/(REF+ALT)`. Soglie genotipiche,
+filtro Other e inclusione degli zeri sono configurabili. Il riepilogo usa
+`informative_sites`, media aritmetica e deviazione standard. Senza siti
+informativi riporta conteggio zero e stime `NA`.
 
-La preparazione copia le tabelle senza modificarne il contenuto, normalizzando
-l'estensione a `.txt` affinché il lettore R le includa. Nomi risultanti ambigui
-vengono rifiutati. Il riepilogo è `contamination_summary.txt`, tabulato, con
-numero dei DNP informativi, media e deviazione standard.
+### CPI prenatale
 
-### CPI
+Accetta coppie cfDNA materno–padre, frequenze SNP/DNP e pannelli facoltativi,
+anche multipli. Legge una sola volta campioni condivisi e calcola curve
+tramite intervalli esatti. La soglia minima di letture fetali vale 2 di
+default; le costanti d'errore differiscono per SNP e DNP. Le colonne di
+metadata non partecipano al filtro sui valori scientifici mancanti.
+Esporta frazione fetale, logCPI, curve e PDF paginati.
 
-CPI usa coppie di tabelle materne/paterne, frequenze di popolazione e una
-costante d'errore. Può analizzare tutti i siti disponibili oppure pannelli
-selezionati, anche con più etichette di cutoff. Il motore conserva i nomi
-richiesti dai prefissi e prepara ogni campione condiviso una sola volta.
+### CPIN postnatale
 
-Il riepilogo esclude i siti con meno di due letture fetali. CSV e grafici
-riportano le stime previste dallo script, comprese frazione fetale e CPI.
-La 0.8.14 riusa le righe materne già selezionate dal calcolo CPI per
-preparare il riepilogo, applicando ancora la formula e i filtri originali
-del riepilogo. Le chiavi materne già limitate al pannello selezionano le
-righe paterne nella join: non serve filtrare nuovamente il padre sullo
-stesso pannello. Ordine, duplicati, formule e prodotto dei contributi CPI
-rimangono parte del contratto di equivalenza.
+Accetta terne madre–padre–figlio e frequenze SNP/DNP. Entrambe le modalità
+`other_allele` e `all` richiedono madre omozigote; `both` le produce insieme.
+Il supporto iniziale controlla ogni allele chiamato nel figlio. La curva
+successiva aumenta il supporto dell'allele paterno obbligato. Il modello PI
+rimane quello upstream, con costanti d'errore configurabili.
+Esporta riepilogo, siti e motivi di esclusione, curve e PDF. Cache dei campioni,
+parallelismo fra terne e intervalli di supporto riducono lavoro ripetuto.
 
-Un risultato mancante (`NA`) non equivale a una stima nulla. Parametri e
-formati di input sono descritti nella [guida per l'utilizzo](../docs/GUIDA_UTILIZZO.md).
+### Configurazione e tracciabilità
+
+`nipat settings` mostra parametri, limiti e costanti; `--scientific-config`
+e `--set modulo.parametro=valore` configurano i calcoli. Il registro comune
+è incluso nel runtime verificato. Ogni passaggio salva le impostazioni
+effettive e i riferimenti al codice; le formule e gli invarianti sono leggibili
+nel registro e nel catalogo. `NA` resta distinto da zero.
 
 ## Verifica e manutenzione
 
@@ -206,13 +207,15 @@ calcoli e limiti:
 - [DNPcall completo](../tests/fixtures/dnp_engine/README.md);
 - [SNPcall da BAM](../tests/fixtures/snp_engine/README.md);
 - [Contamination](../tests/fixtures/contamination/README.md);
-- [CPI](../tests/fixtures/cpi/README.md) e [costante d'errore CPI](../tests/fixtures/cpi_engine/README.md).
+- [CPI](../tests/fixtures/cpi/README.md) e [costante d'errore CPI](../tests/fixtures/cpi_engine/README.md);
+- [CPIN](../tests/fixtures/cpin/README.md) e [modelli aggiornati](../tests/fixtures/five_modules/README.md).
 
 Qualsiasi modifica ai sorgenti scientifici richiede una revisione dedicata,
 provenienza verificabile, aggiornamento del manifest e regressioni pertinenti.
 La verifica differenziale `scripts/verify_r_equivalence.py` confronta i
 candidati con i riferimenti immutabili nello stesso runtime: SNPcall 2.0
-per SNP, NIPAT 0.8.5 per gli altri tre moduli. Confronta tabelle complete e
+per SNP, NIPAT 0.8.5 per DNP. `scripts/verify_five_modules.py` verifica
+CPI, Contamination e CPIN contro NEWPAT 20261113, per SNP e DNP. Confronta tabelle complete e
 valori non arrotondati; i grafici corretti hanno controlli di presentazione
 dedicati, senza imporre l'identità visiva con un istogramma difettoso.
 I confronti sono obbligatori

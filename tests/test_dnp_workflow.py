@@ -86,7 +86,7 @@ class DnpWorkflowTests(unittest.TestCase):
         self.assertEqual(record["bundled_workflow"], "dnp-call")
         self.assertEqual(
             self.request_for(run), {
-                "schema_version": 1, "workflow": "dnp-call",
+                "schema_version": 1, "workflow": "dnp-call", "scientific_settings": {},
                 "panel": "/workspace/inputs/dnp-panel.txt",
                 "presentation": {"samples": {"sample_0001": self.bam.name}, "pairs": {}},
                 "samples": [{"path": "/workspace/inputs/bams/sample_0001.bam",

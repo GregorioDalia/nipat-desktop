@@ -42,6 +42,10 @@ def read_dnp_list(path: Path) -> list[DnpRecord]:
             chromosome, pos1_text, pos2_text, reference, alternative = (
                 value.strip() for value in row
             )
+            # The caller builds locus keys as chr:pos1|chr:pos2 and splits
+            # them using these delimiters. Reject ambiguous names up front.
+            if any(char in chromosome for char in (":", "|", "\0")):
+                raise ValidationError(f"DNP_list: cromosoma non rappresentabile alla riga {line_number}.")
             try:
                 pos1 = int(pos1_text)
                 pos2 = int(pos2_text)
@@ -70,6 +74,8 @@ def read_dnp_list(path: Path) -> list[DnpRecord]:
                 raise ValidationError(
                     f"DNP_list: allele non valido alla riga {line_number}."
                 )
+            if reference == alternative:
+                raise ValidationError(f"DNP_list: REF e ALT devono essere distinti alla riga {line_number}.")
             key = (chromosome, pos1, pos2)
             if key in seen:
                 raise ValidationError(f"DNP_list: posizione duplicata alla riga {line_number}.")
@@ -89,15 +95,21 @@ def write_dnp_list(records: list[DnpRecord], destination: Path) -> None:
                              record.reference, record.alternative])
 
 
-def write_position_panel(records: list[DnpRecord], destination: Path) -> None:
+def write_position_panel(records: list[DnpRecord | SnpRecord], destination: Path, marker_type: str | None = None) -> None:
+    """Normalize positions and retain optional reference/alternative alleles."""
     destination.parent.mkdir(parents=True, exist_ok=True)
+    snp = marker_type == "SNP" or (records and isinstance(records[0], SnpRecord))
+    alleles = bool(records) and all(record.reference and record.alternative for record in records)
+    if any(bool(record.reference or record.alternative) != alleles for record in records):
+        raise ValidationError("Il pannello deve contenere REF/ALT per tutti i siti oppure per nessuno.")
     with destination.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(["n°DNP", "chr", "pos1", "pos2"])
-        for index, record in enumerate(records, start=1):
-            writer.writerow(
-                [f"DNP{index:03d}", record.chromosome, record.pos1, record.pos2]
-            )
+        writer.writerow((["chr", "pos"] if snp else ["chr", "pos1", "pos2"] if alleles else ["n°DNP", "chr", "pos1", "pos2"]) + (["REF", "ALT"] if alleles else []))
+        for index, record in enumerate(records, 1):
+            values = ([record.chromosome, record.position] if snp else
+                      ([record.chromosome, record.pos1, record.pos2] if alleles else
+                       [f"DNP{index:03d}", record.chromosome, record.pos1, record.pos2]))
+            writer.writerow(values + ([record.reference, record.alternative] if alleles else []))
 
 
 def read_snp_list(path: Path, *, for_bed: bool = True) -> list[SnpRecord]:
@@ -153,49 +165,54 @@ def write_snp_list(records: list[SnpRecord], destination: Path) -> None:
             writer.writerow([row.chromosome, row.position, row.reference, row.alternative])
 
 
-def read_position_panel(path: Path) -> list[DnpRecord]:
-    """Read coordinates without imposing the allele schema used by DNPcall.
-
-    CPI and contamination consume only chr/pos1/pos2. Accept their native
-    headered tables, headerless coordinates and the legacy five-column panel.
-    The caller writes a normalized tabular copy; originals are never changed.
-    """
+def read_position_panel(path: Path, marker_type: str = "DNP") -> list[DnpRecord | SnpRecord]:
+    """Read typed coordinates, preserving optional alleles for downstream CPI."""
+    if marker_type not in {"SNP", "DNP"}:
+        raise ValidationError("Tipo marcatore non valido: usare SNP oppure DNP.")
     with input_text(path) as handle:
         rows = [(number, next(csv.reader([line], delimiter="\t", strict=True)))
                 for number, line in enumerate(handle, 1) if line.strip()]
     if not rows:
         raise ValidationError(f"Pannello vuoto: {path}")
-    first = rows[0][1]
-    if len(first) == 1:
-        # Legacy DNP lists may also use whitespace like the upstream DNP reader.
+    if len(rows[0][1]) == 1:
         rows = [(number, row[0].split()) for number, row in rows]
-        first = rows[0][1]
-    names = [re.sub(r"[^a-z0-9]", "", name.lower()) for name in first]
-    if all(name in names for name in ("chr", "pos1", "pos2")):
-        if any(names.count(name) != 1 for name in ("chr", "pos1", "pos2")):
-            raise ValidationError(f"Colonne coordinate duplicate nel pannello: {path}")
-        columns = [names.index(name) for name in ("chr", "pos1", "pos2")]
+    names = [re.sub(r"[^a-z0-9]", "", name.lower()) for name in rows[0][1]]
+    if marker_type == "SNP" and set(names) == {"pos", "ref", "alt"}:
+        return read_snp_list(path, for_bed=False)
+    coordinates = ["chr", "pos"] if marker_type == "SNP" else ["chr", "pos1", "pos2"]
+    if all(name in names for name in coordinates):
+        if any(names.count(name) != 1 for name in coordinates + [x for x in ("ref", "alt") if x in names]):
+            raise ValidationError(f"Colonne duplicate nel pannello: {path}")
+        columns = [names.index(name) for name in coordinates]
+        if ("ref" in names) != ("alt" in names):
+            raise ValidationError(f"Il pannello richiede entrambe le colonne REF e ALT: {path}")
+        allele_columns = [names.index(name) for name in ("ref", "alt")] if "ref" in names else []
         rows = rows[1:]
     else:
-        columns = [0, 1, 2]
-    records = []
-    seen = set()
+        columns = list(range(len(coordinates)))
+        allele_columns = [len(coordinates), len(coordinates) + 1] if len(rows[0][1]) == len(coordinates) + 2 else []
+    records, seen = [], set()
     for number, row in rows:
-        if len(row) <= max(columns):
-            raise ValidationError(f"Pannello: mancano coordinate alla riga {number}.")
-        chromosome, pos1, pos2 = (row[index].strip() for index in columns)
+        if len(row) <= max(columns + allele_columns):
+            raise ValidationError(f"Pannello: mancano campi alla riga {number}.")
+        chromosome = row[columns[0]].strip()
         try:
-            first_pos, second_pos = int(pos1), int(pos2)
+            positions = [int(row[index]) for index in columns[1:]]
         except ValueError as exc:
             raise ValidationError(f"Pannello: coordinate non intere alla riga {number}.") from exc
-        if (not chromosome or any(char.isspace() for char in chromosome)
-                or min(first_pos, second_pos) < 1 or second_pos <= first_pos):
+        if (not chromosome or any(char.isspace() for char in chromosome) or min(positions) < 1
+                or (marker_type == "DNP" and positions[1] <= positions[0])):
             raise ValidationError(f"Pannello: coordinate non valide alla riga {number}.")
-        key = chromosome, first_pos, second_pos
+        key = (chromosome, *positions)
         if key in seen:
             raise ValidationError(f"Pannello: coordinate duplicate alla riga {number}.")
         seen.add(key)
-        records.append(DnpRecord(chromosome, first_pos, second_pos, "", ""))
+        alleles = [row[index].strip().upper() for index in allele_columns] if allele_columns else ["", ""]
+        length = 1 if marker_type == "SNP" else 2
+        if allele_columns and (any(len(value) != length or set(value) - set("ACGT") for value in alleles) or alleles[0] == alleles[1]):
+            raise ValidationError(f"Pannello: REF/ALT devono essere alleli {marker_type} distinti alla riga {number}.")
+        record_class = SnpRecord if marker_type == "SNP" else DnpRecord
+        records.append(record_class(chromosome, *positions, *alleles))
     if not records:
         raise ValidationError(f"Pannello senza siti: {path}")
     return records

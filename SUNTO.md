@@ -1,6 +1,7 @@
 # NIPAT in sintesi
 
-**NIPAT Desktop 0.8.20** esegue DNPcall, SNPcall, Contamination e CPI sul computer
+**NIPAT Desktop 0.8.50** esegue DNPcall, SNPcall 2.0, Contamination, CPI
+prenatale e CPIN postnatale sul computer
 dell'utente attraverso una CLI guidata. Le analisi possono essere avviate
 singolarmente oppure collegate in un workflow automatico con una sola conferma.
 
@@ -9,21 +10,29 @@ configurabile. DNP prepara il pileup per cromosoma e distribuisce il calcolo
 R su una coda comune di blocchi di tutti i campioni, con un budget unico anche
 per un numero di BAM maggiore dei processi disponibili. I blocchi iniziali
 sono da 32 MiB di input grezzo / 64 loci. La diagnostica delle prestazioni è
-facoltativa. Le [note della versione](docs/RELEASE_0.8.20.md) distinguono
-le correzioni del setup, i controlli delle firme e i limiti delle prove.
+facoltativa. Le [note della versione](docs/RELEASE_0.8.50.md) descrivono
+l'integrazione dei cinque moduli e distinguono le verifiche automatiche dalle
+prove sulle piattaforme finali.
 
 | Analisi | Funzione |
 | --- | --- |
 | DNPcall | Conteggi e genotipi di dinucleotidi da uno o più BAM. |
-| SNPcall | Conteggi SNP da BAM o pileup con nomi delle letture. |
-| Contamination | Stima della contaminazione da tabelle di conteggi compatibili. |
-| CPI | Stima della frazione fetale e calcolo dell'indice di paternità. |
+| SNPcall 2.0 | Conteggi, likelihood e genotipi SNP da BAM o pileup con qualità e nomi delle letture. |
+| Contamination | Stima della contaminazione da tabelle di conteggi SNP oppure DNP. |
+| CPI prenatale | Stima della frazione fetale e indice di paternità da cfDNA materno e padre, su SNP oppure DNP. |
+| CPIN postnatale | Indice di paternità da madre, padre e figlio, su SNP oppure DNP. |
 
-I workflow automatici collegano **DNPcall → Contamination**, **DNPcall → CPI**
-oppure **DNPcall → Contamination e CPI**. SNPcall può essere aggiunto sugli stessi
-BAM, con il proprio pannello, o eseguito su più campioni. Le coppie per CPI
-richiedono l'assegnazione esplicita dei ruoli; il programma non deduce relazioni
-biologiche dai nomi dei file.
+I workflow automatici collegano DNPcall e/o SNPcall a qualsiasi combinazione di
+Contamination, CPI e CPIN. I due rami mantengono risultati separati e possono
+eseguire analisi successive differenti. È possibile partire anche da pileup
+SNP o tabelle già disponibili. Coppie CPI e trii CPIN richiedono ruoli espliciti;
+il programma non deduce relazioni biologiche dai nomi dei file. Contamination
+non modifica i conteggi destinati alle analisi di paternità.
+
+La versione aggiorna CPI e Contamination rispetto ai sorgenti NEWPAT congelati
+il 13 novembre 2026 e introduce CPIN. Contamination usa la quota
+`N_Other / (N_REF + N_ALT + N_Other)`, quindi le stime possono differire dalle
+versioni precedenti. DNP e SNP mantengono i rispettivi riferimenti scientifici.
 
 Il client Python raccoglie gli input e controlla l'esecuzione. Una sola immagine
 scientifica contiene R, samtools, dipendenze, script scientifici e orchestrazione.
@@ -68,6 +77,9 @@ in modo univoco le fasi; una mappa leggibile associa ogni campione ai suoi input
 e risultati. File omonimi mantengono identità distinte.
 
 **5 — Configura** gestisce cartelle, valori predefiniti e risorse.
+La voce **Parametri scientifici e costanti** espone parametri modificabili,
+intervalli ammessi e regole invarianti leggibili. Il riepilogo consente modifiche
+per la sola analisi; i valori effettivamente applicati sono registrati nel run.
 La schermata risorse distingue memoria del computer, memoria dell'ambiente
 virtuale e limite del container. Le modifiche all'ambiente richiedono un'anteprima
 e una conferma; quelle che richiedono un riavvio restano indicate come non ancora
@@ -76,6 +88,9 @@ attive. Configurazione salvata, risorse effettive e suggerimenti sono distinti:
 anche le altre distribuzioni.
 
 **6 — Ultima esecuzione** riapre risultati e log della sessione.
+**N** avvia CPIN; **W → 5** prepara il workflow con tutti i moduli e i ruoli
+familiari. Il canale aggiornamenti iniziale è **Stabile**, modificabile in
+**Configura → Aggiornamenti**; una scelta Testing già salvata viene mantenuta.
 `:indietro` corregge un campo, `:annulla` torna al menu e **Ctrl+C** interrompe
 l'operazione corrente attraverso la procedura di arresto.
 Il catalogo scientifico in **Guida e informazioni** descrive parametri,
@@ -88,4 +103,5 @@ affidata alle persone esperte di dominio.
 - [Guida per l'utilizzo](docs/GUIDA_UTILIZZO.md)
 - [Risultati e tracciabilità](docs/ESECUZIONI.md)
 - [Risorse e memoria](docs/RISORSE.md)
-- [Note della versione](docs/RELEASE_0.8.20.md)
+- [Guida ai cinque moduli](docs/DEVELOPMENT_0.8.50.md)
+- [Note della versione](docs/RELEASE_0.8.50.md)

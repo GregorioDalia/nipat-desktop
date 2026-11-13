@@ -75,6 +75,15 @@ class SnpSummaryTests(unittest.TestCase):
         self.assertEqual(self.finalize(), [])
         self.assertFalse((self.root / "snp_summary").exists())
 
+    def test_different_scientific_parameters_form_distinct_comparison_groups(self):
+        for sample in ("a", "b", "c", "d"):
+            self.add_sample(sample, "0/1")
+        self.plan["steps"][0]["parameters"]["scientific_settings"] = {"other_fraction_max": 0.2}
+        self.plan["steps"][2]["parameters"]["scientific_settings"] = {"other_fraction_max": 0.2}
+        result = self.finalize()
+        self.assertEqual([group["samples"] for group in result], [["a", "c"], ["b", "d"]])
+        self.assertEqual([group["scientific_settings"]["other_fraction_max"] for group in result], [0.2, 0.1])
+
     def test_repeated_analysis_does_not_duplicate_an_individual(self):
         self.add_sample("a", "0/0")
         self.add_sample("a", "0/1")

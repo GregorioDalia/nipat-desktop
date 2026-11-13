@@ -54,8 +54,8 @@ class DnpContaminationForm(WorkflowForm):
         if self.values.get("include_snp") == "2":
             self.ui.message(
                 "SNPcall verra' eseguito anche su ciascun BAM distinto, con lo stesso FASTA "
-                "e la lista SNP indicata. Produce risultati separati; le tabelle SNP "
-                "non vengono usate da Contamination o CPI.", kind="muted",
+                "e la lista SNP indicata. Produce risultati separati; questo preset "
+                "usa i conteggi DNP nelle analisi successive. Per collegare i conteggi SNP scegliere il workflow completo W -> 5.", kind="muted",
             )
 
     def _guide(self, field: Field, default: str = "") -> None:
@@ -70,7 +70,7 @@ class DnpContaminationForm(WorkflowForm):
         if field.key == "include_snp":
             self.ui.message(
                 "SNPcall puo' analizzare gli stessi BAM come attivita' indipendente. "
-                "Non utilizza le tabelle DNP e non produce input per Contamination o CPI. "
+                "In questo preset le analisi successive usano DNP; W -> 5 permette anche le analisi sui conteggi SNP. "
                 "Se si sceglie Si, occorre una lista SNP specifica; il FASTA resta quello gia' selezionato.",
                 kind="muted",
             )
@@ -187,7 +187,7 @@ class DnpCpiForm(DnpContaminationForm):
             result.append(Field("cutoffs", "Cutoff con etichetta", "cutoffs"))
         elif mode == "3":
             result.append(Field("cutoff_map", "Mappa cutoff (etichetta=file,etichetta2=file2)"))
-        result += [Field("err_const", "Costante di errore", "number", str(self.err_const))]
+        result += [Field("err_const", "Costante di errore (vuoto = parametri scientifici)", "number", required=False)]
         result += self._snp_fields() + [dnp_fields["run_name"]]
         return result
 

@@ -29,7 +29,7 @@ because they were produced with NIPAT, place scientific results under the GPL.
 
 | Component | Upstream source | Included license and scope |
 | --- | --- | --- |
-| NEWPAT | <https://github.com/lpistacchia/NEWPAT> | [Upstream LICENSE](scientific/vendor/NEWPAT/LICENSE), containing the GNU GPL version 3 text. Includes the supplied SNPcall, CPI and Contamination files and accompanying examples. |
+| NEWPAT | <https://github.com/lpistacchia/NEWPAT> | [Upstream LICENSE](scientific/vendor/NEWPAT/LICENSE), containing the GNU GPL version 3 text. Includes the supplied SNPcall, prenatal CPI, postnatal CPI and Contamination files and accompanying examples. |
 | DNPcall | <https://github.com/fravasini/DNPcall> | [Upstream LICENSE](scientific/vendor/DNPcall/LICENSE), containing the GNU GPL version 3 text. Includes the supplied DNPcall files and accompanying examples. |
 
 These components retain their original authorship, license texts and notices.
@@ -108,3 +108,8 @@ Changing the license of a future release does not revoke rights already granted
 for copies distributed under the GPL while its conditions are met. Any future
 alternative licensing must account for the rights of all relevant contributors
 and the separate terms of third-party components.
+
+NIPAT 0.8.50 incorporates CPI, Contamination and Postnatal CPI from NEWPAT
+commit `9c2a8be60afcb944153710da6a61cd0559e2b4cf`. The unmodified sources
+are frozen in `tests/reference_r/NEWPAT_20261113`; operational copies add
+validated configuration, shared execution budgets and readable exports.

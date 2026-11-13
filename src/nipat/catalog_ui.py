@@ -103,7 +103,7 @@ def show_catalog(ui: Terminal) -> None:
         if choice == "l":
             language = "en" if language == "it" else "it"
             continue
-        if choice not in {"1", "2", "3", "4"}:
+        if choice not in {str(index + 1) for index in range(len(WORKFLOWS))}:
             ui.message(text["choose"], kind="muted")
             continue
         workflow = WORKFLOWS[int(choice) - 1]

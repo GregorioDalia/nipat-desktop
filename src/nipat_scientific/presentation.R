@@ -60,7 +60,7 @@ present_plot <- function(plot) {
   text <- function(label) {
     if (!is.character(label)) return(label)
     presented <- replace_label(label)
-    if (!identical(presented, label) && identical(config$workflow, "cpi")) {
+    if (!identical(presented, label) && config$workflow %in% c("cpi", "cpin")) {
       # Full names remain in sample-map.tsv and readable tables. Very long
       # custom pair labels get an explicit display-only ellipsis, preventing
       # a title alone from exceeding a readable PDF page.
@@ -124,7 +124,7 @@ display_ggsave <- function(filename, plot = ggplot2::last_plot(), ...) {
     replace_grob(grob)
   })
   extra_height <- 0
-  if (identical(config$workflow, "cpi")) {
+  if (config$workflow %in% c("cpi", "cpin")) {
     # Four cutoff panels per page, at most two rows. The number of pairs no
     # longer makes a PDF page arbitrarily tall.
     maximum_lines <- max(vapply(presented, function(page) page$maximum_lines, 1L))

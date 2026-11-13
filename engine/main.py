@@ -1,6 +1,6 @@
 """Execute the bundled R scripts without importing the desktop application.
 
-Native script invocation remains available. All four workflows also
+Native script invocation remains available. All five workflows also
 accept versioned requests prepared with the bundled shared adapters.
 """
 
@@ -24,17 +24,18 @@ SCRIPT_PATHS = {
     "snp-call": "vendor/NEWPAT/SNPcall/SNPcall.R",
     "contamination": "vendor/NEWPAT/contamination/detect_contamination.R",
     "cpi": "vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+    "cpin": "vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R",
 }
 PREPARATION_FILES = (
     "__init__.py", "errors.py", "panels.py", "files.py", "contamination.py", "snp.py", "dnp.py", "cpi.py",
     "catalog.py", "plan.py", "executor.py", "outputs.py", "presentation.py", "presentation.R", "performance.py",
     "scratch.py", "dnp_pileup.py", "dnp_blocks.R", "progress.py", "progress.R",
-    "parallel.py", "parallel.R", "plots.R", "snp_summary.py", "snp_parallel.py",
+    "parallel.py", "parallel.R", "plots.R", "snp_summary.py", "snp_parallel.py", "cpin.py", "settings.py", "settings.R", "settings_data.json",
 )
 CATALOG_FILES = tuple(f"catalog_data/{workflow}.json" for workflow in SCRIPT_PATHS)
 WORKFLOW_INTERFACES = {
-    "contamination": "contamination-v1", "snp-call": "snp-call-v2", "dnp-call": "dnp-call-v1",
-    "cpi": "cpi-v1",
+    "contamination": "contamination-v2", "snp-call": "snp-call-v2", "dnp-call": "dnp-call-v1",
+    "cpi": "cpi-v2", "cpin": "cpin-v1",
 }
 
 
@@ -135,20 +136,23 @@ def verify_bundle(bundle_root: Path) -> dict:
         "workflow_interfaces": WORKFLOW_INTERFACES.copy(),
         "scientific_validation": {
             "interface": "scientific-validation-v1",
-            "input_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
-            "output_workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "input_workflows": list(SCRIPT_PATHS),
+            "output_workflows": list(SCRIPT_PATHS),
             "snp_alleles": "uppercase-working-copy",
             "snp_model": "SNPcall-2.0",
             "snp_output_columns": 17,
             "snp_panel_formats": ["chr-pos-ref-alt", "legacy-chr:pos-ref-alt"],
         },
         "plan_execution": {
-            "interface": "workflow-plan-execution-v1",
+            "interface": "workflow-plan-execution-v2",
             "schema_version": 1,
-            "workflows": ["dnp-call", "snp-call", "contamination", "cpi"],
+            "workflows": list(SCRIPT_PATHS),
             "scheduling": "dependency-order-with-bounded-independent-snp",
             "resume": False,
         },
+        "scientific_settings": {"interface": "scientific-settings-v1", "workflows": list(SCRIPT_PATHS),
+                                "effective_file": "work/effective-scientific-settings.json"},
+        "workflow-plan-all": {"interface": "workflow-plan-execution-v2", "workflows": list(SCRIPT_PATHS)},
         "progress": {
             "interface": "nipat-progress-v1", "schema_version": 1,
             "independent_of_diagnostics": True, "transport": "per-process-jsonl",
@@ -240,6 +244,33 @@ def run_preparation(command: list[str]) -> int:
             signal.signal(signum, handler)
 
 
+def normalize_request_settings(request: dict, workflow: str | None = None) -> dict:
+    """Resolve effective settings before creating a work directory."""
+    from nipat_scientific.errors import ValidationError
+    from nipat_scientific.files import detect_marker_type
+    from nipat_scientific.settings import normalize_settings
+
+    try:
+        if not isinstance(request, dict) or request.get("workflow") not in SCRIPT_PATHS:
+            raise ValidationError("Invalid scientific request workflow.")
+        request = dict(request)
+        if workflow is not None and request["workflow"] != workflow:
+            raise ValidationError("Request workflow differs from the selected module.")
+        if not isinstance(request.get("work_dir"), str) or not Path(request["work_dir"]).is_absolute():
+            raise ValidationError("The scientific working directory must be an absolute path.")
+        workflow = request["workflow"]
+        if workflow in {"cpi", "cpin", "contamination"} and request.get("marker_type") in (None, "auto"):
+            source = request["popfreq"] if workflow in {"cpi", "cpin"} else request["samples"][0]["path"]
+            request["marker_type"] = detect_marker_type(Path(source))
+        overrides = normalize_settings(workflow, request.get("scientific_settings"))
+        if workflow == "cpi" and request.get("err_const") is not None:
+            overrides[f"err_const_{request['marker_type'].lower()}"] = request["err_const"]
+        request["scientific_settings"] = normalize_settings(workflow, overrides)
+        return request
+    except (ValidationError, ValueError, KeyError, TypeError, IndexError, AttributeError) as exc:
+        raise BundleError(f"Invalid scientific request: {exc}") from exc
+
+
 def run_validated_request(request: dict, script: Path, native_arguments: list[str]) -> int:
     """Supervise unchanged R and validate the same outputs as a plan step."""
     from nipat_scientific.executor import _Cancellation, _run_process, _atomic_json
@@ -248,7 +279,9 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
     from nipat_scientific.progress import observed_phase as phase
     from nipat_scientific.scratch import dnp_environment
     from nipat_scientific.parallel import execution_environment
+    from nipat_scientific.settings import normalize_settings, settings_context
 
+    request = normalize_request_settings(request)
     cancellation = _Cancellation()
     previous = {signum: signal.getsignal(signum) for signum in (signal.SIGINT, signal.SIGTERM)}
     try:
@@ -256,7 +289,8 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
             signal.signal(signum, cancellation.receive)
         with phase("presentation-preparation", workflow=request["workflow"]):
             command = prepare_presentation(request, script, native_arguments)
-        with dnp_environment(request["workflow"], Path(request["work_dir"])), \
+        with settings_context(request["workflow"], request["scientific_settings"], Path(request["work_dir"])), \
+                dnp_environment(request["workflow"], Path(request["work_dir"])), \
                 execution_environment(Path(request["work_dir"])), \
                 phase("r-execution", workflow=request["workflow"]) as progress_state:
             code = _run_process(command, Path.cwd(), None, cancellation)
@@ -275,7 +309,8 @@ def run_validated_request(request: dict, script: Path, native_arguments: list[st
         report = Path(request["work_dir"]) / "scientific-validation.json"
         _atomic_json(report, {"schema_version": 1, "workflow": request["workflow"],
                               "status": "validated", "artifacts": artifacts,
-                              "quality_warnings": artifacts.get("quality_warnings", [])})
+                              "quality_warnings": artifacts.get("quality_warnings", []),
+                              "scientific_settings": request["scientific_settings"]})
         for warning in artifacts.get("quality_warnings", []):
             print(f"NIPAT output warning [{warning['code']}]: {warning}", file=sys.stderr, flush=True)
         print(f"Scientific output contract verified: {report}", flush=True)
@@ -343,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
                     document, run_dir=arguments.run_dir,
                     script_paths={
                         workflow: BUNDLE_ROOT / description["workflows"][workflow]["script"]
-                        for workflow in ("dnp-call", "snp-call", "contamination", "cpi")
+                        for workflow in SCRIPT_PATHS
                     },
                 )
                 if arguments.json:
@@ -368,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
                 request = json.loads(arguments.request.read_text(encoding="utf-8"))
             except (ValueError, UnicodeError) as exc:
                 raise BundleError(str(exc)) from exc
+            from nipat_scientific.settings import normalize_settings, settings_context
+            request = normalize_request_settings(request, arguments.workflow)
             with progress.context(arguments.workflow, sample_ids=progress.request_sample_ids(request)):
                 try:
                     with phase("preparation", workflow=arguments.workflow) as preparation_state:
@@ -377,6 +414,9 @@ def main(argv: list[str] | None = None) -> int:
                         elif arguments.workflow == "cpi":
                             from nipat_scientific.cpi import prepare_cpi
                             native_arguments = prepare_cpi(request)
+                        elif arguments.workflow == "cpin":
+                            from nipat_scientific.cpin import prepare_cpin
+                            native_arguments = prepare_cpin(request)
                         elif arguments.workflow == "dnp-call":
                             from nipat_scientific.dnp import prepare_dnp
                             prepared = prepare_dnp(request)

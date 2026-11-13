@@ -207,6 +207,29 @@ La CI verifica la raccolta su casi sintetici, l'invarianza dei risultati e la
 gestione degli errori. Non impone soglie di velocità sui runner condivisi.
 I benchmark grandi restano controllati e separati dai test automatici rapidi.
 
+## Collaudo dei cinque moduli nella 0.8.50
+
+Per confrontare seriale, automatico e limiti manuali usare gli stessi input,
+parametri, pannelli e associazioni familiari. Provare anche più campioni o
+famiglie dei worker disponibili, compresi genitori condivisi fra più coppie
+o terne. Nei workflow composti separare acquisizione pileup, calling e analisi
+successive; il tempo totale comprende tutte queste fasi.
+
+Il confronto numerico deve rispettare il riferimento di ciascun modulo:
+DNP usa la baseline 0.8.5, SNP il modello NEWPAT 2.0, mentre CPI, Contamination
+e CPIN usano i nuovi riferimenti NEWPAT congelati nella 0.8.50. Non interpretare
+una differenza dovuta al modello come una regressione di parallelismo.
+I nuovi parametri di acquisizione possono cambiare il lavoro e i risultati:
+conservarli identici e verificare i file delle impostazioni effettive.
+
+Le prove automatiche verificano parità delle tabelle, identità dei campioni
+e budget dei processi su casi sintetici. Non applicano soglie di velocità
+dipendenti dal carico del runner. Un miglioramento della sola pianificazione
+dei blocchi non equivale allo stesso miglioramento nell'intera analisi BAM.
+Per confrontare tempi sul portatile mantenere alimentazione da rete,
+profilo energetico, risorse VM/container, politica di checksum e ordine delle
+prove documentati; usare più ripetizioni e riportare mediana e variabilità.
+
 ## Collaudo del parallelismo 0.8.12
 
 Il confronto scientifico resta contro **NIPAT v0.8.5**, commit

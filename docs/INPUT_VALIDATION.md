@@ -28,7 +28,7 @@ con un errore da correggere nel file sorgente.
 ## Formati e interpretazione
 
 Le tabelle devono rispettare colonne, delimitatori e modalità descritti
-nella [guida per l'utilizzo](GUIDA_UTILIZZO.md#input-dei-quattro-workflow).
+nella [guida per l'utilizzo](GUIDA_UTILIZZO.md#input-dei-cinque-moduli).
 I file testuali vengono letti come UTF-8; un errore di codifica o una tabella
 malformata produce una segnalazione di validazione. Le intestazioni richieste
 devono essere presenti, senza nomi vuoti o duplicati; ogni riga deve avere
@@ -42,8 +42,8 @@ decimale, secondo il formato dello script.
 | Pannello SNPcall 2.0 | Colonne `chr`, `pos`, `ref`, `alt`; resta accettato il formato precedente `pos`, `ref`, `alt` con `pos=chr:posizione`. Coordinate univoche, posizione da 2 a 2147483646 in entrambe le modalità e cromosoma senza spazi o `:`; alleli distinti di una base A/C/G/T, normalizzati in maiuscolo. La copia di lavoro usa sempre quattro colonne. |
 | Pileup SNPcall | Almeno sette colonne samtools: riferimento nella terza, profondità nella quarta, basi nella quinta, qualità nella sesta e QNAME nella settima; cromosoma presente, posizione positiva e profondità non negativa su tutte le righe non vuote. Il file importato non può essere vuoto. |
 | Tabelle Contamination | Colonne richieste; coordinate positive e ordinate; loci univoci; `N_REF`, `N_ALT` e `N_Other` finiti, interi e non negativi. |
-| Tabelle CPI | Requisiti dei conteggi, `REF` e `ALT` dinucleotidi A/C/G/T e `total_count` intero non negativo. |
-| Frequenze CPI | Loci univoci; `Ref_f.pop` e `Alt_f.pop` finite comprese tra 0 e 1. La tabella deve contenere almeno un locus. |
+| Tabelle CPI/CPIN | Requisiti dei conteggi; `REF` e `ALT` di una base per SNP o due per DNP; `total_count` intero non negativo, con i valori mancanti previsti nei siti senza copertura. |
+| Frequenze CPI/CPIN | Tipo di marcatore coerente con le tabelle; loci univoci; `Ref_f.pop` e `Alt_f.pop` finite comprese tra 0 e 1. La tabella deve contenere almeno un locus. |
 
 BAM e FASTA sono verificati per presenza, accessibilità e file di indice
 richiesti; la decodifica effettiva dei dati binari e del riferimento compete
@@ -52,6 +52,13 @@ non ricostruisce il procedimento di produzione e non verifica l'intera
 grammatica delle basi codificate. Le tabelle di conteggi con sola intestazione
 sono ammesse per rappresentare l'assenza di siti; pannelli e frequenze di
 popolazione vuoti sono invece rifiutati.
+
+CPI e CPIN verificano anche l'identità fisica dei file: campioni distinti
+non possono riferirsi allo stesso file attraverso alias o hard link.
+Nei workflow automatici coppie e terne fanno riferimento agli ID espliciti
+dei campioni. Nei comandi singoli gli identificativi sono locali al ruolo:
+per esempio `A:A:A` è valido per CPIN soltanto quando i prefissi individuano
+tre file distinti.
 
 Quando `ratio_REF_ALT` è presente, un valore numerico deve essere finito e
 compreso tra 0 e 1. Un rapporto mancante con letture REF/ALT disponibili
@@ -97,6 +104,12 @@ SNPcall 2.0 distingue anche `-Inf` nelle likelihood: una qualità Phred zero
 può produrre `log(0)`, previsto dal modello. `NaN` e `+Inf` nelle colonne GL
 non sono accettati. I conteggi e le coordinate del risultato devono
 corrispondere al pannello; i genotipi sono `0/0`, `0/1`, `1/1` oppure `NA`.
+
+Tutti i moduli devono produrre `output/scientific-settings.json` coerente
+con i valori richiesti e con il registro distribuito. Un file assente,
+parametri mancanti o estranei, tipi errati o valori diversi interrompono
+il completamento. CPI e CPIN verificano inoltre tipo di marcatore, letture
+minime e costante d'errore dichiarati nei riepiloghi.
 
 Per un'analisi singola il resoconto è in
 `work/scientific-validation.json`. Nei piani automatici gli avvisi sono

@@ -23,6 +23,7 @@ PYTHON_SHA256 = "4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c
 CHECKS = (
     "payload_integrity", "embedded_python", "packaged_imports", "scientific_catalog",
     "wizard_navigation", "composed_workflow_plans", "snp_batch_plans",
+    "scientific_settings", "cpin_dry_run", "five_module_plan",
     "read_only_input_mounts", "original_inputs_unchanged",
 )
 
@@ -119,13 +120,13 @@ def verify_plan(run: Path, *, workflows: list[str], mode: str, originals: list[P
     mapping = record["parameters"]["sample_mapping"]
     require([Path(item["original_path"]) for item in mapping] == originals,
             "Original sample selection/order was lost.")
-    require([(item["sample_id"], item["container_path"]) for item in mapping] ==
-            [(item["id"], item["path"]) for item in plan["samples"]], "Sample mapping mismatch.")
+    require({item["sample_id"]: item["container_path"] for item in mapping} ==
+            {item["id"]: item["path"] for item in plan["samples"]}, "Sample mapping mismatch.")
     for step in plan["steps"]:
         if step["workflow"] == "snp-call":
             require(step["parameters"]["mode"] == mode and
                     (step["inputs"]["reference"] is None) == (mode == "pileup"), "Incorrect SNP input mode.")
-        if step["workflow"] == "cpi":
+        if step["workflow"] == "cpi" and record.get("workflow") != "analysis":
             pair = step["inputs"]["pairs"]
             require(len(pair) == 1 and pair[0]["id"] == "family_a" and
                     pair[0]["mother"] == {"step": "dnp", "output": "dnp-tables", "sample": "sample_0001"} and
@@ -152,11 +153,14 @@ def fixtures(work: Path) -> dict[str, Path]:
     contents = {
         "mother.bam": "DRY-RUN PLACEHOLDER mother; not a scientific BAM\n",
         "father.bam": "DRY-RUN PLACEHOLDER father; not a scientific BAM\n",
+        "child.bam": "DRY-RUN PLACEHOLDER child; not a scientific BAM\n",
+        "plasma.bam": "DRY-RUN PLACEHOLDER maternal cfDNA; not a scientific BAM\n",
         "reference.fa": ">chr1\n" + "ACGT" * 10 + "\n",
         "reference.fa.fai": "chr1\t40\t6\t40\t41\n",
         "dnp.tsv": "chr1\t10\t11\tAC\tGT\nchr1\t20\t21\tTA\tCG\n",
         "snp.tsv": "pos\tref\talt\nchr1:10\tA\tG\nchr1:20\tT\tC\n",
         "population.tsv": "chr\tpos1\tpos2\tRef_f.pop\tAlt_f.pop\nchr1\t10\t11\t0.75\t0.25\n",
+        "snp-population.tsv": "chr\tpos\tRef_f.pop\tAlt_f.pop\nchr1\t10\t0.75\t0.25\n",
         "one.pileup": "chr1\t10\tA\t2\t.G\tII\tread1,read2\n",
         "two.pileup": "chr1\t20\tT\t2\t.C\tII\tread3,read4\n",
     }
@@ -192,11 +196,21 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
     require(invoke("version", ["--version"]).strip() == f"NIPAT {manifest['version']}", "Wrong packaged version.")
     catalog = json.loads(invoke("catalog", ["parameters", "--json"]))
     require(set(catalog["workflows"]) ==
-            {"dnp-call", "snp-call", "contamination", "cpi"}, "Incomplete packaged scientific catalog.")
+            {"dnp-call", "snp-call", "contamination", "cpi", "cpin"}, "Incomplete packaged scientific catalog.")
+    settings_path = work / "scientific-settings.json"
+    settings = json.loads(invoke("settings", ["settings", "--json", "--export", settings_path]))
+    require(set(settings["effective"]) == set(catalog["workflows"]) and
+            read_json(settings_path) == settings["effective"] and settings["modules"]["cpin"]["constants"],
+            "Packaged scientific settings/defaults/constants are incomplete.")
+    configured = json.loads(invoke("configured-settings", ["--scientific-config", settings_path,
+                               "--set", "cpin.min_child_reads=4", "settings", "cpin", "--json"]))
+    require(configured["effective"]["cpin"]["min_child_reads"] == 4 and
+            configured["modules"]["cpin"]["parameters"]["min_child_reads"]["default"] ==
+            settings["effective"]["cpin"]["min_child_reads"], "Scientific settings override/default separation failed.")
     menu = invoke("wizard", ["--dry-run", "wizard"], "w\n0\n0\n")
     require(all(label in menu for label in ("Workflow automatici", "DNPcall -> Contamination",
             "DNPcall -> CPI", "DNPcall -> Contamination e CPI", "SNPcall su piu' campioni",
-            "Analisi singole", "Configurazione e strumenti", "Ctrl+C")),
+            "CPIN / CPI postnatale", "Workflow completo", "Analisi singole", "Configurazione e strumenti", "Ctrl+C")),
             "Packaged workflow menu is incomplete.")
     cancelled = invoke("wizard-cancellation", ["--dry-run", "wizard"],
                        "7\n6\n1\n:annulla\nW\n1\n1\n:annulla\n5\n1\n2\n:annulla\n0\n")
@@ -204,7 +218,10 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
             not list((work / "runs").rglob("run.json")),
             "Packaged cancellation did not return to the main menu without creating runs.")
     paths = fixtures(work)
-    hashes = {path: digest(path) for path in paths.values()}
+    packaged_fixtures = app / "tests/fixtures/cpin"
+    require(packaged_fixtures.is_dir(), "Packaged CPIN analytical fixtures are missing.")
+    original_files = [*paths.values(), *(path for path in packaged_fixtures.rglob("*") if path.is_file())]
+    hashes = {path: digest(path) for path in original_files}
     bams = [paths["mother.bam"], paths["father.bam"]]
     common = ["--reference", paths["reference.fa"], "--panel", paths["dnp.tsv"], "--snp-panel", paths["snp.tsv"]]
     for preset in ("dnp-contamination", "dnp-cpi", "dnp-contamination-cpi"):
@@ -223,7 +240,56 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
         invoke(name, ["--dry-run", "workflow", "snp-batch", *selected, "--panel", paths["snp.tsv"], "--run-name", name])
         verify_plan(work / "runs" / name, workflows=["snp-call"] * 2, mode=mode,
                     originals=originals, commit=manifest["source_commit"])
-    require(hashes == {path: digest(path) for path in paths.values()}, "Original inputs were changed.")
+    for marker in ("SNP", "DNP"):
+        directory = packaged_fixtures / marker
+        name = "cpin-" + marker.lower()
+        invoke(name, ["--dry-run", "--scientific-config", settings_path, "--set", "cpin.min_child_reads=4",
+                      "cpin", "--input-dir", directory, "--trios", "M1:F1:C1",
+                      "--popfreq", directory / "population.txt", "--panel", directory / "markers.tsv", "--run-name", name])
+        run = work / "runs" / name
+        record = read_json(run / "run.json")
+        request = read_json(run / "work/engine-request.json")
+        require(record.get("status") == "planned" and record.get("engine_verification") == "not_run_dry_run" and
+                record.get("workflow") == "cpin", "CPIN dry-run must not claim scientific success.")
+        require(request["workflow"] == "cpin" and request["trios"] == "M1:F1:C1" and
+                {sample["name"] for sample in request["samples"]} == {"MotherM1.txt", "FatherF1.txt", "ChildC1.txt"} and
+                request["scientific_settings"]["min_child_reads"] == 4 and request["markers"] is not None,
+                "CPIN native request lost roles, panel or scientific settings.")
+        volumes = read_json(run / "work/engine-compose.json")["services"]["scientific"]["volumes"]
+        require(all(any(mount["target"] == sample["path"] and mount.get("read_only") is True for mount in volumes)
+                    for sample in request["samples"]) and not list((run / "output").iterdir()),
+                "CPIN dry-run inputs must remain read-only and outputs empty.")
+
+    all_samples = [("Plasma", paths["plasma.bam"]), ("Mother", paths["mother.bam"]),
+                   ("Father", paths["father.bam"]), ("Child", paths["child.bam"])]
+    selected = [part for identity, path in all_samples for part in ("--sample", identity, path)]
+    name = "all-five-modules"
+    invoke(name, ["--dry-run", "--set", "cpin.min_child_reads=3", "workflow", "analyze", "--caller", "both",
+                  "--analyses", "contamination,cpi,cpin", *selected, "--reference", paths["reference.fa"],
+                  "--dnp-panel", paths["dnp.tsv"], "--snp-panel", paths["snp.tsv"],
+                  "--dnp-popfreq", paths["population.tsv"], "--snp-popfreq", paths["snp-population.tsv"],
+                  "--pair", "Prenatal", "Plasma", "Father", "--trio", "Postnatal", "Mother", "Father", "Child",
+                  "--run-name", name])
+    run = work / "runs" / name
+    verify_plan(run, workflows=["dnp-call", "contamination", "cpi", "cpin"] + ["snp-call"] * 4 +
+                ["contamination", "cpi", "cpin"], mode="bam", originals=[path for _, path in all_samples],
+                commit=manifest["source_commit"])
+    plan = read_json(run / "work/engine-plan.json")
+    samples = {sample["id"]: sample for sample in plan["samples"]}
+    steps = {step["id"]: step for step in plan["steps"]}
+    require(steps["dnp"]["inputs"]["samples"] == [identity for identity, _ in all_samples] and
+            all(PurePosixPath(samples[identity]["path"]).name == f"sample_{index:04d}.bam"
+                for index, (identity, _) in enumerate(all_samples, 1)), "Generic DNP aliases violate the native contract.")
+    for marker in ("dnp", "snp"):
+        pair = steps[marker + "_cpi"]["inputs"]["pairs"][0]
+        trio = steps[marker + "_cpin"]["inputs"]["trios"][0]
+        require(pair["id"] == "Prenatal" and pair["mother"]["sample"] == "Plasma" and
+                pair["father"]["sample"] == "Father" and trio["id"] == "Postnatal" and
+                [trio[role]["sample"] for role in ("mother", "father", "child")] == ["Mother", "Father", "Child"] and
+                all(trio[role]["output"] == marker + "-tables" for role in ("mother", "father", "child")) and
+                steps[marker + "_cpin"]["parameters"]["scientific_settings"]["min_child_reads"] == 3,
+                "Generic family roles, typed outputs or settings changed.")
+    require(hashes == {path: digest(path) for path in original_files}, "Original inputs were changed.")
 
 
 def main() -> None:
@@ -237,7 +303,9 @@ def main() -> None:
             app / ".runtime/python/python.exe", "The staged embedded Python must execute this check.")
     require(args.installer.is_file() and not args.output.exists(), "Missing installer or existing evidence.")
     manifest, inventory = verify_payload(app)
-    for name in ("nipat", "nipat.workflow_forms", "nipat.catalog_ui", "nipat_scientific.plan", "nipat_scientific.executor"):
+    for name in ("nipat", "nipat.workflow_forms", "nipat.analysis_forms", "nipat.scientific_options",
+                 "nipat.catalog_ui", "nipat_scientific.settings", "nipat_scientific.cpin",
+                 "nipat_scientific.plan", "nipat_scientific.executor"):
         module = importlib.import_module(name)
         require(Path(module.__file__).resolve().is_relative_to(app / "src"), f"Import escaped packaged sources: {name}")
     require(importlib.import_module("nipat").__version__ == manifest["version"], "Manifest/version mismatch.")

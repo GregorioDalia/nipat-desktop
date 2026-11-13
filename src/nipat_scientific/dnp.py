@@ -16,6 +16,7 @@ from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, write_input_report
 from nipat_scientific.panels import read_dnp_list, write_dnp_list
+from nipat_scientific.settings import normalize_settings
 
 
 REQUEST_FIELDS = {
@@ -54,13 +55,15 @@ def _native_path(path: Path, label: str) -> str:
 
 def prepare_dnp(request: object) -> DnpPreparation:
     """Validate all inputs before writing the native R panel and sample list."""
-    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
+    if (not isinstance(request, dict) or not REQUEST_FIELDS.issubset(request)
+            or set(request) - REQUEST_FIELDS - {"presentation", "scientific_settings"}):
         raise ValidationError("Richiesta DNPcall non valida: campi mancanti o inattesi.")
     validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta DNPcall non supportata.")
     if request["workflow"] != "dnp-call":
         raise ValidationError("Workflow della richiesta DNPcall non valido.")
+    normalize_settings("dnp-call", request.get("scientific_settings"))
     if type(request["parallel"]) is not bool:
         raise ValidationError("La modalità parallela DNPcall deve essere booleana.")
     selected = request["samples"]
@@ -87,7 +90,7 @@ def prepare_dnp(request: object) -> DnpPreparation:
         native_bam = _native_path(bam, "BAM")
         if bam.name != f"{expected_id}.bam":
             raise ValidationError(f"Il BAM deve usare il nome alias {expected_id}.bam.")
-        if bam in seen:
+        if any(bam.samefile(previous) for previous in seen):
             raise ValidationError("Lo stesso BAM compare più volte nella richiesta DNPcall.")
         seen.add(bam)
         bams.append(native_bam)

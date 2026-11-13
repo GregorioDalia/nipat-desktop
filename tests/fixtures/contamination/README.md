@@ -18,22 +18,23 @@ which the upstream directory reader requires. Original files stay unchanged.
 | 400 | 5 | 95 | 0 | Included: contamination 0.05 |
 | 500 | 50 | 50 | 0 | Excluded: ratio 0.5 |
 | 600 | 0 | 0 | 0 | Excluded: zero denominator |
-| 700 | 95 | 5 | 11 | Excluded: Other/(REF+ALT) = 0.11 |
+| 700 | 95 | 5 | 11 | Included: Other/(REF+ALT+Other) = 11/111 <= 0.10 |
 | 800 | 90 | 10 | 0 | Excluded: outside the panel |
 
-Both samples must have four informative DNPs, mean contamination
-`(0 + 0 + 0.05 + 0.05) / 4 = 0.025` (2.5%), and sample standard deviation
-`sqrt(0.0025 / (4 - 1)) = 0.0288675134594813`.
+Both samples must have five informative sites, mean contamination
+`(0 + 0 + 0.05 + 0.05 + 0.05) / 5 = 0.03` (3%), and sample standard deviation
+`sqrt(0.003 / (5 - 1)) = sqrt(0.00075)`.
 The calculation includes zero-contamination sites; excluding them would instead yield
-two sites and a mean of 0.05. The verifier checks exact retained coordinates as
+three sites and a mean of 0.05. The verifier checks exact retained coordinates as
 well as ratios and per-site contamination, so a matching aggregate alone cannot pass.
 
-`NoSites.txt` includes only the four excluded cases and supplies the minimal
+`NoSites.txt` includes only four excluded cases; its position 700 has 12 Other
+reads, so `12/112 > 0.10` remains excluded under the updated denominator. It supplies the minimal
 six-column schema: chr, pos1, pos2, N_REF, N_ALT, N_Other. It must yield count 0,
 literal `NA` for mean and SD, and a per-site TXT containing only its header.
 
 The summary must be `contamination_summary.txt`, tab-separated with three sample
-rows and the columns individuo, informative_DNPs, mean_contamination,
+rows and the columns individuo, informative_sites, mean_contamination,
 sd_contamination. Per-site files are `contamination_<sample>.txt`.
 
 The expected values are derived analytically. The integration check executes

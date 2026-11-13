@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import copy
+import csv
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -21,6 +24,12 @@ class ScientificOutputTests(unittest.TestCase):
         self.request = {"workflow": "snp-call", "panel": str(panel), "mode": "pileup",
                         "work_dir": str(self.root / "work"), "out_dir": str(self.output)}
 
+    def settings(self, workflow):
+        from nipat_scientific.settings import defaults, describe_settings
+        (self.output / "scientific-settings.json").write_text(json.dumps({
+            "schema_version": 1, "workflow": workflow, "parameters": defaults(workflow),
+            "constants": describe_settings(workflow)["constants"]}))
+
     def snp(self, ratio, ref=1):
         path = self.output / "SNPcall_output.txt"
         path.write_text("chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tratio\tGL0\tGL1\tGL2\tGT\treads_discarded_for_indels\tratio_reads_discarded_for_indels\tcombined_bases\tcombined_counts\n"
@@ -29,6 +38,32 @@ class ScientificOutputTests(unittest.TestCase):
                         + "\t0\t0\tNA\tNA\n", encoding="utf-8")
         write_snp_auxiliary(self.output)
         return path
+
+    def test_scientific_settings_sidecar_must_match_schema_parameters_and_constants(self):
+        from nipat_scientific.settings import normalize_settings, describe_settings
+        self.snp("1")
+        self.request["scientific_settings"] = {"other_fraction_max": 0.25}
+        document = {"schema_version": 1, "workflow": "snp-call",
+            "parameters": normalize_settings("snp-call", self.request["scientific_settings"]),
+            "constants": describe_settings("snp-call")["constants"]}
+        path = self.output / "scientific-settings.json"
+        path.write_text(json.dumps(document))
+        self.assertIn("scientific-settings", validate_standalone_outputs(self.request))
+        for mutation in (lambda value: value.update(schema_version=999),
+                         lambda value: value.update(schema_version=True),
+                         lambda value: value["parameters"].update(other_fraction_max=0.9),
+                         lambda value: value["parameters"].update(max_depth=False),
+                         lambda value: value["parameters"].pop("max_depth"),
+                         lambda value: value.update(constants={}),
+                         lambda value: value.update(workflow="dnp-call")):
+            invalid = copy.deepcopy(document)
+            mutation(invalid)
+            path.write_text(json.dumps(invalid))
+            with self.assertRaises(PlanExecutionError):
+                validate_standalone_outputs(self.request)
+        path.unlink()
+        with self.assertRaisesRegex(PlanExecutionError, "scientific-settings.json"):
+            validate_standalone_outputs(self.request)
 
     def test_expected_na_and_anomalous_estimates_have_distinct_outcomes(self):
         for value, count, expected in (("NA", 0, None), ("NA", 1, "output.missing_estimate"),
@@ -94,10 +129,11 @@ class ScientificOutputTests(unittest.TestCase):
                 validate_standalone_outputs(self.request)
 
     def test_contamination_summary_and_site_rows_must_agree(self):
+        self.settings("contamination")
         request = {"workflow": "contamination", "samples": [{"name": "sample.txt"}],
                    "work_dir": str(self.root / "work"), "out_dir": str(self.output)}
         summary = self.output / "contamination_summary.txt"
-        summary.write_text("individuo\tinformative_DNPs\tmean_contamination\tsd_contamination\n"
+        summary.write_text("individuo\tinformative_sites\tmean_contamination\tsd_contamination\n"
                            "sample\t1\t0.01\tNA\n", encoding="utf-8")
         table = self.output / "contamination_sample.txt"
         table.write_text("chr\tpos1\tpos2\tcontamination\nchr1\t10\t11\t0.01\n", encoding="utf-8")
@@ -105,12 +141,58 @@ class ScientificOutputTests(unittest.TestCase):
         table.write_text("chr\tpos1\tpos2\tcontamination\n", encoding="utf-8")
         with self.assertRaisesRegex(PlanExecutionError, "site count"):
             validate_standalone_outputs(request)
-        summary.write_text("individuo\tinformative_DNPs\tmean_contamination\tsd_contamination\n"
+        summary.write_text("individuo\tinformative_sites\tmean_contamination\tsd_contamination\n"
                            "sample\t1\t0.01\n", encoding="utf-8")
         with self.assertRaises(PlanExecutionError):
             validate_standalone_outputs(request)
 
+    def test_cpin_summary_and_provenance_must_match_requested_settings(self):
+        from nipat_scientific.settings import normalize_settings, describe_settings
+        request = {"workflow": "cpin", "trios": "M:F:C", "marker_type": "SNP",
+            "scientific_settings": {"min_child_reads": 5, "err_const_snp": 0.02},
+            "work_dir": str(self.root / "work"), "out_dir": str(self.output)}
+        effective = normalize_settings("cpin", request["scientific_settings"])
+        sidecar = self.output / "scientific-settings.json"
+        sidecar.write_text(json.dumps({"schema_version": 1, "workflow": "cpin", "parameters": effective,
+            "constants": describe_settings("cpin")["constants"]}))
+        native = "MotherM-FatherF-ChildC_SNPs"
+        columns = ["Trio", "Marker_type", "Analysis", "N_sites", "N_heterozygous_child_sites",
+            "N_homozygous_child", "Matching_sites", "Mismatching_sites", "Log10_CPI", "CPI",
+            "Error_constant", "Min_child_reads"]
+        rows = [dict(zip(columns, [native, "SNP", analysis, "1", "1", "0", "1", "0", "0", "1", "0.02", "5"]))
+                for analysis in ("heterozygous_child_sites", "all_compatible_sites")]
+        summary = self.output / "Summary_Postnatal_CPI.txt"
+
+        def write_rows(values):
+            with summary.open("w", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=columns, delimiter="\t")
+                writer.writeheader()
+                writer.writerows(values)
+
+        write_rows(rows)
+        for name in ("sites", "curves", "plots"):
+            (self.output / name).mkdir()
+        (self.output / "sites" / f"{native}_sites.tsv").write_text("Status\tPaternity_Index\tMismatch\nvalid\t1\tFALSE\n")
+        for row in rows:
+            (self.output / "curves" / f"{native}_{row['Analysis']}_curve.tsv").write_text(
+                "Min_child_reads\tThrough_min_child_reads\tN_sites\tLog10_CPI\tMatching_sites\tMismatching_sites\n5\t5\t1\t0\t1\t0\n")
+            (self.output / "plots" / f"{native}_{row['Analysis']}_CPIplot.pdf").write_bytes(b"%PDF-1.7 fixture")
+        (self.output / "All_CPIplots.pdf").write_bytes(b"%PDF-1.7 fixture")
+        self.assertIn("scientific-settings", validate_standalone_outputs(request))
+        for field, value in (("Marker_type", "DNP"), ("Min_child_reads", "2"),
+                             ("Error_constant", "0.001"), ("Error_constant", "NaN")):
+            changed = copy.deepcopy(rows)
+            changed[0][field] = value
+            write_rows(changed)
+            with self.subTest(field=field, value=value), self.assertRaises(PlanExecutionError):
+                validate_standalone_outputs(request)
+        write_rows(rows)
+        sidecar.unlink()
+        with self.assertRaisesRegex(PlanExecutionError, "scientific-settings.json"):
+            validate_standalone_outputs(request)
+
     def test_dnp_preserves_uncovered_panel_locus_but_rejects_truncation(self):
+        self.settings("dnp-call")
         panel = self.root / "DNP_list.txt"
         panel.write_text("chr1\t10\t11\tAA\tGG\nchr1\t20\t21\tAA\tGG\n", encoding="utf-8")
         request = {"workflow": "dnp-call", "panel": str(panel),

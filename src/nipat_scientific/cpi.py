@@ -1,24 +1,25 @@
-"""Validate and prepare CPI inputs inside the scientific image, without R changes."""
+"""Validate and stage marker-aware prenatal CPI inputs inside the runtime."""
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
+import re
 import shutil
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import (
-    POPFREQ_COLUMNS, require_dnp_input, require_file, require_population_frequencies,
+    require_count_input, require_file, require_population_frequencies, detect_marker_type,
     write_input_report,
 )
 from nipat_scientific.panels import read_position_panel, write_position_panel
+from nipat_scientific.settings import normalize_settings
 
 
 REQUEST_FIELDS = {
     "schema_version", "workflow", "samples", "pairs", "mother_prefix", "father_prefix",
-    "popfreq", "cutoff_mode", "cutoffs", "err_const", "work_dir", "out_dir",
+    "popfreq", "cutoff_mode", "cutoffs", "work_dir", "out_dir",
 }
 
 
@@ -59,6 +60,10 @@ def normalize_pairs(pairs: object, mother_prefix: object, father_prefix: object)
         identifiers = [part.strip() for part in pair.split(":")]
         if len(identifiers) != 2 or not all(identifiers):
             raise ValidationError(f"Coppia CPI non valida: {pair}")
+        if any(re.fullmatch(r"[A-Za-z0-9_.-]+", identifier) is None for identifier in identifiers):
+            raise ValidationError("Identificativi CPI: usare lettere, numeri, punto, trattino o underscore.")
+        if f"{mother}{identifiers[0]}".casefold() == f"{father}{identifiers[1]}".casefold():
+            raise ValidationError("Madre e padre devono riferirsi a campioni distinti.")
         for label, prefix, identifier in (
             ("Madre", mother, identifiers[0]), ("Padre", father, identifiers[1]),
         ):
@@ -82,21 +87,24 @@ def normalize_pairs(pairs: object, mother_prefix: object, father_prefix: object)
 
 
 def prepare_cpi(request: object) -> list[str]:
-    """Validate a cpi-v1 request before writing byte-preserving staged inputs."""
-    if not isinstance(request, dict) or set(request) not in (REQUEST_FIELDS, REQUEST_FIELDS | {"presentation"}):
+    """Validate a CPI request before writing byte-preserving staged inputs."""
+    if not isinstance(request, dict) or not REQUEST_FIELDS.issubset(request) or set(request) - REQUEST_FIELDS - {"presentation", "marker_type", "scientific_settings", "err_const"}:
         raise ValidationError("Richiesta CPI non valida: campi mancanti o inattesi.")
     validate_request_presentation(request)
     if type(request["schema_version"]) is not int or request["schema_version"] != 1:
         raise ValidationError("Versione della richiesta CPI non supportata.")
     if request["workflow"] != "cpi":
         raise ValidationError("Workflow della richiesta CPI non valido.")
-    error = request["err_const"]
-    try:
-        valid_error = type(error) in (int, float) and math.isfinite(error) and error >= 0
-    except OverflowError:
-        valid_error = False
-    if not valid_error:
-        raise ValidationError("La costante di errore deve essere finita e non negativa.")
+    popfreq = require_file(_absolute_path(request["popfreq"], "Frequenze di popolazione"),
+                           "Frequenze di popolazione")
+    marker = detect_marker_type(popfreq)
+    if request.get("marker_type") not in (None, "auto", marker):
+        raise ValidationError("Tipo di marcatore diverso dalle frequenze di popolazione.")
+    overrides = normalize_settings("cpi", request.get("scientific_settings", {}))
+    if request.get("err_const") is not None:
+        overrides[f"err_const_{marker.lower()}"] = request["err_const"]
+    settings = normalize_settings("cpi", overrides)
+    error = settings[f"err_const_{marker.lower()}"]
     pairs, required_names = normalize_pairs(
         request["pairs"], request["mother_prefix"], request["father_prefix"],
     )
@@ -111,14 +119,14 @@ def prepare_cpi(request: object) -> list[str]:
         name = _name_component(item["name"], "Nome campione")
         if name not in required_names or name in samples:
             raise ValidationError(f"Campione CPI inatteso o duplicato: {name}")
-        source = require_file(_absolute_path(item["path"], "Output DNPcall"), "Output DNPcall")
-        warnings.extend(require_dnp_input(source))
+        source = require_file(_absolute_path(item["path"], "Output del caller"), "Output del caller")
+        if any(source.samefile(previous) for previous in samples.values()):
+            raise ValidationError("Uno stesso file non può rappresentare campioni CPI distinti.")
+        warnings.extend(require_count_input(source, marker_type=marker, cpi=True))
         samples[name] = source
     if set(samples) != set(required_names):
         raise ValidationError("Mancano campioni richiesti dalle coppie CPI.")
-    popfreq = require_file(_absolute_path(request["popfreq"], "Frequenze di popolazione"),
-                           "Frequenze di popolazione")
-    warnings.extend(require_population_frequencies(popfreq))
+    warnings.extend(require_population_frequencies(popfreq, marker_type=marker))
 
     mode = request["cutoff_mode"]
     cutoffs = request["cutoffs"]
@@ -147,7 +155,7 @@ def prepare_cpi(request: object) -> list[str]:
             raise ValidationError(f"Etichetta cutoff duplicata: {label}")
         labels.add(label)
         source = require_file(_absolute_path(item["path"], "Pannello cutoff"), "Pannello cutoff")
-        panels.append((label, source, read_position_panel(source)))
+        panels.append((label, source, read_position_panel(source, marker_type=marker)))
 
     work_dir = _absolute_path(request["work_dir"], "Cartella di lavoro")
     out_dir = _absolute_path(request["out_dir"], "Cartella risultati")
@@ -167,7 +175,7 @@ def prepare_cpi(request: object) -> list[str]:
     if panels and any(char in str(work_dir) for char in ",="):
         raise ValidationError("Il percorso di lavoro CPI per i cutoff non può contenere virgole o '='.")
     staged_dir = work_dir / "inputs"
-    native_panels = [work_dir / ("DNPpanel.txt" if mode == "panel" else f"cutoff_{number:03d}.tsv")
+    native_panels = [work_dir / (f"{marker}panel.txt" if mode == "panel" else f"cutoff_{number:03d}.tsv")
                      for number in range(1, len(panels) + 1)]
     for destination in [staged_dir, *native_panels, work_dir / "input-validation.json"]:
         if destination.exists() or destination.is_symlink():
@@ -181,7 +189,7 @@ def prepare_cpi(request: object) -> list[str]:
         shutil.copy2(samples[name], staged_dir / name)
     maps = []
     for (label, _, records), destination in zip(panels, native_panels):
-        write_position_panel(records, destination)
+        write_position_panel(records, destination, marker_type=marker)
         maps.append(f"{label}={destination}" if label else str(destination))
     write_input_report(work_dir, "cpi", warnings,
                        normalized=[(source, destination) for (_, source, _), destination
@@ -190,7 +198,7 @@ def prepare_cpi(request: object) -> list[str]:
         "--pileup_dir", str(staged_dir), "--out_dir", str(out_dir),
         f"--pairs={pairs}", f"--mother_prefix={request['mother_prefix']}",
         f"--father_prefix={request['father_prefix']}", "--popfreq", str(popfreq),
-        "--err_const", str(error),
+        "--err_const", str(error), "--min_fetal_reads", str(settings["min_fetal_reads"]),
     ]
     if maps:
         arguments.append("--cutoff_map=" + ",".join(maps))

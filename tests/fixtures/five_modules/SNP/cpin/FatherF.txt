@@ -1,0 +1,10 @@
+chr	pos	REF	ALT	N_REF	N_ALT	N_Other	total_count
+chr1	100	A	C	50	50	0	100
+chr1	200	A	C	100	0	0	100
+chr1	300	A	C	100	0	0	100
+chr1	400	A	C	100	0	0	100
+chr1	500	A	C	100	0	0	100
+chr1	600	A	C	100	0	0	100
+chr1	700	A	C	0	0	0	NA
+chr1	800	A	C	100	0	0	100
+chr1	900	A	C	70	30	0	100

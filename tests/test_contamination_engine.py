@@ -45,10 +45,10 @@ class ContaminationEngineTests(unittest.TestCase):
         (self.work / "request.json").write_text("metadata already recorded", encoding="utf-8")
         native = prepare_contamination(self.request)
         self.assertEqual(native, [str(self.work / "DNPpanel.txt"),
-                                  str(self.work / "inputs"), str(self.output)])
+                                  str(self.work / "inputs"), str(self.output), "--include_zero"])
         self.assertEqual((self.work / "inputs/Campione à 1.txt").read_bytes(), original[self.sample])
         self.assertEqual((self.work / "DNPpanel.txt").read_text(encoding="utf-8"),
-                         "n°DNP\tchr\tpos1\tpos2\nDNP001\tchr1\t100\t101\n")
+                         "chr\tpos1\tpos2\tREF\tALT\nchr1\t100\t101\tAA\tCC\n")
         for source, contents in original.items():
             self.assertEqual(source.read_bytes(), contents)
 
@@ -62,7 +62,9 @@ class ContaminationEngineTests(unittest.TestCase):
                 request = {**self.request, "work_dir": str(self.root / f"work{index}"),
                            "out_dir": str(self.root / f"out{index}")}
                 native = prepare_contamination(request)
-                self.assertIn("DNP001\tchr1\t100\t105", Path(native[0]).read_text(encoding="utf-8"))
+                expected = ("chr\tpos1\tpos2\tREF\tALT\nchr1\t100\t105\tAA\tCC\n"
+                            if index == 2 else "n°DNP\tchr\tpos1\tpos2\nDNP001\tchr1\t100\t105\n")
+                self.assertEqual(expected, Path(native[0]).read_text(encoding="utf-8"))
 
     def test_schema_errors_fail_before_any_preparation(self):
         cases = [None, [], {}, {**self.request, "schema_version": True},

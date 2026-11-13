@@ -1,0 +1,631 @@
+{
+  "schema_version": 1,
+  "workflows": {
+    "dnp-call": {
+      "workflow": "dnp-call",
+      "parameters": {
+        "other_fraction_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_base_quality": {
+          "default": 13,
+          "type": "integer",
+          "description": "Qualita minima delle basi/BAQ incluse da samtools mpileup. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "Phred",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "min_mapping_quality": {
+          "default": 0,
+          "type": "integer",
+          "description": "Qualita minima di allineamento delle letture incluse da samtools. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "Phred",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "max_depth": {
+          "default": 8000,
+          "type": "integer",
+          "description": "Profondita massima per BAM di mpileup; 0 disabilita il limite. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "letture",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "mapping_quality_adjustment": {
+          "default": 0,
+          "type": "integer",
+          "description": "Coefficiente di riduzione della qualita di mappatura; 0 disabilita la correzione. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "coefficiente",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "baq": {
+          "default": true,
+          "type": "boolean",
+          "description": "Applica BAQ alle qualita delle basi durante il pileup. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "redo_baq": {
+          "default": false,
+          "type": "boolean",
+          "description": "Ricalcola BAQ ignorando i valori BQ memorizzati. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "count_overlaps": {
+          "default": false,
+          "type": "boolean",
+          "description": "Conta entrambe le osservazioni di coppie sovrapposte disabilitando la rimozione degli overlap. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "include_orphans": {
+          "default": false,
+          "type": "boolean",
+          "description": "Include coppie di letture anomale nel pileup. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "excluded_flags": {
+          "default": 1796,
+          "type": "integer",
+          "description": "Maschera SAM dei flag da escludere; default UNMAP, SECONDARY, QCFAIL e DUP. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "bitmask SAM",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "constants": {
+        "ploidy": {
+          "value": 2,
+          "description": "Modello diploide; cambiare ploidia richiede un diverso modello e schema di genotipi."
+        },
+        "allele_alphabet": {
+          "value": "ACGT",
+          "description": "Alfabeto degli alleli nel modello supportato."
+        },
+        "missing_result": {
+          "value": "NA",
+          "description": "Assenza di stima o genotipo; non equivale a zero."
+        },
+        "phred_offset": {
+          "value": 33,
+          "description": "Codifica Phred+33 del pileup; non e una soglia di qualita."
+        },
+        "phred_error_probability": {
+          "value": "10^(-Q/10)",
+          "description": "Conversione definitoria della qualita Phred in probabilita di errore."
+        },
+        "genotypes": {
+          "value": [
+            "0/0",
+            "0/1",
+            "1/1"
+          ],
+          "description": "Stati diploidi del modello biallelico."
+        },
+        "likelihood_log_base": {
+          "value": "e",
+          "description": "GL0/GL1/GL2 sono somme di logaritmi naturali, non probabilita normalizzate."
+        },
+        "other_filter_comparison": {
+          "value": ">=",
+          "description": "La chiamata del genotipo viene rimossa alla soglia Other inclusa."
+        },
+        "indel_policy": {
+          "value": "discard observation if any window position contains an indel",
+          "description": "Semantica di chiamata del modello originale, applicata alla finestra completa."
+        },
+        "window_bases": {
+          "value": 4,
+          "description": "Locus e una base fiancheggiante per lato; parte del modello scientifico."
+        },
+        "count_ratio": {
+          "value": "N_REF/(N_REF+N_ALT)",
+          "description": "Rapporto REF fra le sole osservazioni REF/ALT."
+        },
+        "likelihood_quality": {
+          "value": "arithmetic mean of both central Phred qualities",
+          "description": "Qualita usata per il modello delle likelihood; le basi fiancheggianti determinano la presenza della finestra completa."
+        },
+        "likelihood_formula": {
+          "value": "logL(g)=sum(log((2-g)/2*(1-eps)+g/2*eps)) for REF; REF/ALT weights exchanged for ALT; eps=10^(-Q/10)",
+          "description": "Modello diploide biallelico, g in {0,1,2}; il genotipo massimizza logL. Gli alleli Other non contribuiscono a GL."
+        }
+      },
+      "source_files": [
+        "scientific/vendor/DNPcall/DNPcall.R",
+        "src/nipat_scientific/dnp_pileup.py"
+      ],
+      "constraints": [
+        "redo_baq=true richiede baq=true"
+      ]
+    },
+    "snp-call": {
+      "workflow": "snp-call",
+      "parameters": {
+        "other_fraction_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "min_base_quality": {
+          "default": 13,
+          "type": "integer",
+          "description": "Qualita minima delle basi/BAQ incluse da samtools mpileup. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "Phred",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "min_mapping_quality": {
+          "default": 0,
+          "type": "integer",
+          "description": "Qualita minima di allineamento delle letture incluse da samtools. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "Phred",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "max_depth": {
+          "default": 0,
+          "type": "integer",
+          "description": "Profondita massima per BAM di mpileup; 0 disabilita il limite. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "letture",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "mapping_quality_adjustment": {
+          "default": 0,
+          "type": "integer",
+          "description": "Coefficiente di riduzione della qualita di mappatura; 0 disabilita la correzione. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "coefficiente",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "baq": {
+          "default": true,
+          "type": "boolean",
+          "description": "Applica BAQ alle qualita delle basi durante il pileup. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "redo_baq": {
+          "default": false,
+          "type": "boolean",
+          "description": "Ricalcola BAQ ignorando i valori BQ memorizzati. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "count_overlaps": {
+          "default": false,
+          "type": "boolean",
+          "description": "Conta entrambe le osservazioni di coppie sovrapposte disabilitando la rimozione degli overlap. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "include_orphans": {
+          "default": false,
+          "type": "boolean",
+          "description": "Include coppie di letture anomale nel pileup. Applicato solo nella produzione del pileup da BAM.",
+          "unit": null
+        },
+        "excluded_flags": {
+          "default": 1796,
+          "type": "integer",
+          "description": "Maschera SAM dei flag da escludere; default UNMAP, SECONDARY, QCFAIL e DUP. Applicato solo nella produzione del pileup da BAM.",
+          "unit": "bitmask SAM",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "constants": {
+        "ploidy": {
+          "value": 2,
+          "description": "Modello diploide; cambiare ploidia richiede un diverso modello e schema di genotipi."
+        },
+        "allele_alphabet": {
+          "value": "ACGT",
+          "description": "Alfabeto degli alleli nel modello supportato."
+        },
+        "missing_result": {
+          "value": "NA",
+          "description": "Assenza di stima o genotipo; non equivale a zero."
+        },
+        "phred_offset": {
+          "value": 33,
+          "description": "Codifica Phred+33 del pileup; non e una soglia di qualita."
+        },
+        "phred_error_probability": {
+          "value": "10^(-Q/10)",
+          "description": "Conversione definitoria della qualita Phred in probabilita di errore."
+        },
+        "genotypes": {
+          "value": [
+            "0/0",
+            "0/1",
+            "1/1"
+          ],
+          "description": "Stati diploidi del modello biallelico."
+        },
+        "likelihood_log_base": {
+          "value": "e",
+          "description": "GL0/GL1/GL2 sono somme di logaritmi naturali, non probabilita normalizzate."
+        },
+        "other_filter_comparison": {
+          "value": ">=",
+          "description": "La chiamata del genotipo viene rimossa alla soglia Other inclusa."
+        },
+        "indel_policy": {
+          "value": "discard observation if any window position contains an indel",
+          "description": "Semantica di chiamata del modello originale, applicata alla finestra completa."
+        },
+        "window_bases": {
+          "value": 3,
+          "description": "Locus e una base fiancheggiante per lato; parte del modello scientifico."
+        },
+        "count_ratio": {
+          "value": "N_REF/(N_REF+N_ALT)",
+          "description": "Rapporto REF fra le sole osservazioni REF/ALT."
+        },
+        "likelihood_quality": {
+          "value": "central SNP Phred quality",
+          "description": "Qualita usata per il modello delle likelihood; le basi fiancheggianti determinano la presenza della finestra completa."
+        },
+        "likelihood_formula": {
+          "value": "logL(g)=sum(log((2-g)/2*(1-eps)+g/2*eps)) for REF; REF/ALT weights exchanged for ALT; eps=10^(-Q/10)",
+          "description": "Modello diploide biallelico, g in {0,1,2}; il genotipo massimizza logL. Gli alleli Other non contribuiscono a GL."
+        }
+      },
+      "source_files": [
+        "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
+        "src/nipat_scientific/snp.py"
+      ],
+      "constraints": [
+        "redo_baq=true richiede baq=true"
+      ]
+    },
+    "contamination": {
+      "workflow": "contamination",
+      "parameters": {
+        "other_fraction_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "homozygous_ref_min": {
+          "default": 0.9,
+          "type": "number",
+          "description": "Frazione REF minima per classificare il sito come omozigote REF.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "homozygous_alt_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Frazione REF massima per classificare il sito come omozigote ALT.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "include_zero": {
+          "default": true,
+          "type": "boolean",
+          "description": "Include i siti informativi con zero letture inattese nel conteggio, media e deviazione standard.",
+          "unit": null
+        }
+      },
+      "constants": {
+        "other_fraction_denominator": {
+          "value": "N_REF+N_ALT+N_Other",
+          "description": "Denominatore del filtro Other, modello NEWPAT 2026-11-13."
+        },
+        "site_contamination": {
+          "value": "N_unexpected/(N_REF+N_ALT)",
+          "description": "Stima di contaminazione per sito."
+        },
+        "sample_contamination": {
+          "value": "arithmetic mean of retained sites",
+          "description": "Media non pesata fra i siti trattenuti."
+        },
+        "one_site_sd": {
+          "value": "NA",
+          "description": "La deviazione standard non e definita con un solo sito."
+        },
+        "missing_result": {
+          "value": "NA",
+          "description": "Assenza di stima o genotipo; non equivale a zero."
+        }
+      },
+      "source_files": [
+        "scientific/vendor/NEWPAT/contamination/detect_contamination.R"
+      ],
+      "constraints": [
+        "homozygous_alt_max < homozygous_ref_min"
+      ]
+    },
+    "cpi": {
+      "workflow": "cpi",
+      "parameters": {
+        "other_fraction_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "homozygous_ref_min": {
+          "default": 0.9,
+          "type": "number",
+          "description": "Frazione REF minima per classificare il sito come omozigote REF.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "homozygous_alt_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Frazione REF massima per classificare il sito come omozigote ALT.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "heterozygous_min": {
+          "default": 0.4,
+          "type": "number",
+          "description": "Limite inferiore incluso della frazione REF per il genotipo eterozigote.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "heterozygous_max": {
+          "default": 0.6,
+          "type": "number",
+          "description": "Limite superiore incluso della frazione REF per il genotipo eterozigote.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "err_const_snp": {
+          "default": 0.001,
+          "type": "number",
+          "description": "Costante per un mismatch paterno su SNP.",
+          "unit": "probabilita",
+          "minimum": 0,
+          "maximum": 1,
+          "exclusive_minimum": true
+        },
+        "err_const_dnp": {
+          "default": 8.92303778101497e-05,
+          "type": "number",
+          "description": "Costante per un mismatch paterno su DNP.",
+          "unit": "probabilita",
+          "minimum": 0,
+          "maximum": 1,
+          "exclusive_minimum": true
+        },
+        "log_cpi_lower": {
+          "default": -4.0,
+          "type": "number",
+          "description": "Guida grafica inferiore del log10(CPI); non modifica il calcolo.",
+          "unit": "log10(CPI)"
+        },
+        "log_cpi_upper": {
+          "default": 4.0,
+          "type": "number",
+          "description": "Guida grafica superiore del log10(CPI); non modifica il calcolo.",
+          "unit": "log10(CPI)"
+        },
+        "min_fetal_reads": {
+          "default": 2,
+          "type": "integer",
+          "description": "Supporto minimo dell'allele minoritario nel cfDNA materno.",
+          "unit": "letture",
+          "minimum": 1,
+          "maximum": 2147483646
+        }
+      },
+      "constants": {
+        "ploidy": {
+          "value": 2,
+          "description": "Modello diploide; cambiare ploidia richiede un diverso modello e schema di genotipi."
+        },
+        "allele_alphabet": {
+          "value": "ACGT",
+          "description": "Alfabeto degli alleli nel modello supportato."
+        },
+        "missing_result": {
+          "value": "NA",
+          "description": "Assenza di stima o genotipo; non equivale a zero."
+        },
+        "heterozygous_transmission": {
+          "value": 0.5,
+          "description": "Probabilita mendeliana di trasmissione paterna eterozigote."
+        },
+        "homozygous_transmission": {
+          "value": 1,
+          "description": "Probabilita mendeliana di trasmissione dell'allele omozigote."
+        },
+        "log_cpi_base": {
+          "value": 10,
+          "description": "Base del logaritmo riportato per il Combined Paternity Index."
+        },
+        "population_frequencies": {
+          "value": "(0, 1]",
+          "description": "Frequenze alleliche finite e positive per il modello corrente."
+        },
+        "pi_formula": {
+          "value": "paternal transmission (or mismatch constant) / obligatory allele population frequency",
+          "description": "Indice di paternita per sito."
+        },
+        "other_filter_comparison": {
+          "value": "<=",
+          "description": "La soglia Other e inclusa fra i siti ammessi."
+        },
+        "fetal_fraction_formula": {
+          "value": "median(2 * fetal_reads/(N_REF+N_ALT))",
+          "description": "Il fattore 2 deriva dal modello diploide; non e un parametro empirico."
+        }
+      },
+      "source_files": [
+        "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R"
+      ],
+      "constraints": [
+        "homozygous_alt_max < heterozygous_min <= heterozygous_max < homozygous_ref_min",
+        "log_cpi_lower < log_cpi_upper"
+      ]
+    },
+    "cpin": {
+      "workflow": "cpin",
+      "parameters": {
+        "other_fraction_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Soglia della frazione di letture Other. Nei caller GT non assegnato quando la frazione raggiunge la soglia; nei moduli a valle sono ammessi valori fino alla soglia inclusa.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "homozygous_ref_min": {
+          "default": 0.9,
+          "type": "number",
+          "description": "Frazione REF minima per classificare il sito come omozigote REF.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "homozygous_alt_max": {
+          "default": 0.1,
+          "type": "number",
+          "description": "Frazione REF massima per classificare il sito come omozigote ALT.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "heterozygous_min": {
+          "default": 0.4,
+          "type": "number",
+          "description": "Limite inferiore incluso della frazione REF per il genotipo eterozigote.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "heterozygous_max": {
+          "default": 0.6,
+          "type": "number",
+          "description": "Limite superiore incluso della frazione REF per il genotipo eterozigote.",
+          "unit": "proporzione",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "err_const_snp": {
+          "default": 0.001,
+          "type": "number",
+          "description": "Costante per un mismatch paterno su SNP.",
+          "unit": "probabilita",
+          "minimum": 0,
+          "maximum": 1,
+          "exclusive_minimum": true
+        },
+        "err_const_dnp": {
+          "default": 8.92303778101497e-05,
+          "type": "number",
+          "description": "Costante per un mismatch paterno su DNP.",
+          "unit": "probabilita",
+          "minimum": 0,
+          "maximum": 1,
+          "exclusive_minimum": true
+        },
+        "log_cpi_lower": {
+          "default": -4.0,
+          "type": "number",
+          "description": "Guida grafica inferiore del log10(CPI); non modifica il calcolo.",
+          "unit": "log10(CPI)"
+        },
+        "log_cpi_upper": {
+          "default": 4.0,
+          "type": "number",
+          "description": "Guida grafica superiore del log10(CPI); non modifica il calcolo.",
+          "unit": "log10(CPI)"
+        },
+        "min_child_reads": {
+          "default": 2,
+          "type": "integer",
+          "description": "Supporto minimo di ciascun allele chiamato nel figlio.",
+          "unit": "letture",
+          "minimum": 1,
+          "maximum": 2147483646
+        },
+        "site_selection": {
+          "default": "both",
+          "type": "string",
+          "description": "Selezione dei siti postnatali; both produce due analisi distinte.",
+          "unit": null,
+          "choices": [
+            "other_allele",
+            "all",
+            "both"
+          ]
+        }
+      },
+      "constants": {
+        "ploidy": {
+          "value": 2,
+          "description": "Modello diploide; cambiare ploidia richiede un diverso modello e schema di genotipi."
+        },
+        "allele_alphabet": {
+          "value": "ACGT",
+          "description": "Alfabeto degli alleli nel modello supportato."
+        },
+        "missing_result": {
+          "value": "NA",
+          "description": "Assenza di stima o genotipo; non equivale a zero."
+        },
+        "heterozygous_transmission": {
+          "value": 0.5,
+          "description": "Probabilita mendeliana di trasmissione paterna eterozigote."
+        },
+        "homozygous_transmission": {
+          "value": 1,
+          "description": "Probabilita mendeliana di trasmissione dell'allele omozigote."
+        },
+        "log_cpi_base": {
+          "value": 10,
+          "description": "Base del logaritmo riportato per il Combined Paternity Index."
+        },
+        "population_frequencies": {
+          "value": "(0, 1]",
+          "description": "Frequenze alleliche finite e positive per il modello corrente."
+        },
+        "pi_formula": {
+          "value": "paternal transmission (or mismatch constant) / obligatory allele population frequency",
+          "description": "Indice di paternita per sito."
+        },
+        "other_filter_comparison": {
+          "value": "<=",
+          "description": "La soglia Other e inclusa fra i siti ammessi."
+        },
+        "maternal_selection": {
+          "value": "homozygous mother only",
+          "description": "Entrambe le selezioni CPIN richiedono madre omozigote."
+        },
+        "curve_threshold_semantics": {
+          "value": "obligatory paternal allele support after initial child genotype support filter",
+          "description": "La curva aumenta il supporto dell'allele paterno obbligato dopo il filtro iniziale sugli alleli chiamati."
+        }
+      },
+      "source_files": [
+        "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R"
+      ],
+      "constraints": [
+        "homozygous_alt_max < heterozygous_min <= heterozygous_max < homozygous_ref_min",
+        "log_cpi_lower < log_cpi_upper"
+      ]
+    }
+  }
+}

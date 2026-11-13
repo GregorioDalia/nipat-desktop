@@ -71,7 +71,7 @@ class WorkflowWizardTests(unittest.TestCase):
 
     def test_menu_preserves_existing_numbers_and_single_character_navigation(self):
         keys = [item[0] for item in MAIN_MENU]
-        self.assertEqual(set(keys), set("0123456789") | {"W"})
+        self.assertEqual(set(keys), set("0123456789") | {"W", "N"})
         self.assertTrue(all(len(key) == 1 for key in keys))
         self.assertEqual(dict((key, label) for key, label, _ in MAIN_MENU)["5"], "Configura")
 
@@ -187,13 +187,13 @@ class WorkflowWizardTests(unittest.TestCase):
         self.workflows.runner.doctor.assert_not_called()
         self.assert_no_single_analysis()
         self.assertIn("Le tabelle passano automaticamente alla seconda fase", output)
-        self.assertIn("Le altre combinazioni richiedono la selezione esplicita", output)
+        self.assertIn("Il workflow completo permette anche di partire da tabelle esistenti", output)
         self.assertNotIn("La concatenazione non e' automatica", output)
 
     def test_submenu_cancel_and_invalid_choice_do_not_collect_or_execute(self):
         status, output = self.invoke(["W", "8", "", "0"])
         self.assertEqual(status, 0)
-        self.assertIn("Scegliere un workflow da 1 a 4", output)
+        self.assertIn("Scegliere un workflow da 1 a 5", output)
         self.workflows.dnp_contamination.assert_not_called()
         self.workflows.dnp_cpi.assert_not_called()
 
@@ -202,7 +202,7 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertEqual(status, 0)
         self.workflows.dnp_cpi.assert_called_once_with(
             pairs=[("Pair1", self.bam, self.father)], reference=self.reference, panel=self.panel,
-            parallel=False, popfreq=self.popfreq, err_const=DEFAULT_ERR_CONST,
+            parallel=False, popfreq=self.popfreq, err_const=None,
             cpi_panel=None, cutoffs=None, cutoff_map=None, include_contamination=False,
             contamination_panel=None, snp_panel=None, run_name="cpi-chain",
         )
@@ -342,7 +342,7 @@ class WorkflowWizardTests(unittest.TestCase):
         self.assertEqual(arguments["snp_panel"], self.snp_panel)
         self.assertEqual(output.count("Riepilogo prima dell'avvio"), 1)
         self.assertIn("Il pannello DNP non viene riutilizzato", output)
-        self.assertIn("non vengono usate da Contamination o CPI", output)
+        self.assertIn("Per collegare i conteggi SNP scegliere il workflow completo", output)
         self.assertIn("Risultati SNPcall per campione:", output)
         self.assert_no_single_analysis()
 
