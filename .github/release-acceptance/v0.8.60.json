@@ -1,0 +1,178 @@
+{
+  "schema_version": 7,
+  "version": "0.8.60",
+  "source_commit": "d19e6bf58941a349d26d2f32ebb79bd24b6b7fcc",
+  "installer_manifest_sha256": "363e5698bd4afec93c8b2d2593ccd9ad51c395bbaf211918ddae0122c13ae9a0",
+  "scientific_archive_sha256": "586f26aa2234bed6f085b3949b6488d77141ece3c999495f94b40450e207b5c2",
+  "windows_installer_sha256": "9046bad3afd54cdf33238654a01f12fca64b82d43777eb246b3abcb862bf98b2",
+  "linux_installer_sha256": "4eb427f77fe1e7501c1a25afdb8b22d85f479f2e94e0a4ad529e23222a2117c4",
+  "macos_arm64_installer_sha256": "b6cdad2e7b8a161bd097ac8ee31c910089399afc3dc1fe3f9b42eb41d038e5bc",
+  "macos_x86_64_installer_sha256": "4d631c78fba73f4e03a8ec2effa79a1443709d61986ccfd11af712663e3b08d4",
+  "build_run_id": 43484430540,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "Codex (authorized by GregorioDalia)",
+    "reviewed_at": "2026-11-13T19:02:52Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/43484430540",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/43480846870",
+      "https://github.com/GregorioDalia/nipat-desktop/blob/d19e6bf58941a349d26d2f32ebb79bd24b6b7fcc/docs/AUDIT_0.8.60.md"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "b54ef493ba7f0539a8786b97874fe946b2d26393",
+    "observations": [
+      "installation_ready",
+      "runtime_diagnostics",
+      "scientific_self_tests",
+      "dnp_sample_analysis",
+      "automatic_workflow_sample_analysis"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/d19e6bf58941a349d26d2f32ebb79bd24b6b7fcc/docs/AUDIT_0.8.60.md"
+    ],
+    "role": "historical-platform-evidence",
+    "source_comparison_scope": "reviewed-operative-changes-with-versioned-scientific-models-v1"
+  },
+  "reviewed_source_changes": [
+    {
+      "path": "compose.yaml",
+      "before_sha256": "69ecded74f593e664270cd0612d7f30241aeedacf6651d77e3a7bf84fc36cc81",
+      "after_sha256": "3f2c4107e2cb4c350675e57309b8f1409d8bcce3b699c72fe361ed0638b1ebd8"
+    },
+    {
+      "path": "installer/windows/bootstrap-common.ps1",
+      "before_sha256": "786283562fd597045a01321c84aef0b4ccfc45ba253f2205b1294fb18d834cc4",
+      "after_sha256": "150671b1e1a037e87b830eb84218a245d666a18c0bba6ec364701834367580b6"
+    },
+    {
+      "path": "installer/windows/bootstrap.ps1",
+      "before_sha256": "d6172417e1a53f913126772d2765072e8e0d030fc7bd0d8a3884960f5ae7033c",
+      "after_sha256": "f701c08f95a01471d2831d4d5ed0ebf3485d2e505b09ed8262b2f34267b05ec1"
+    },
+    {
+      "path": "installer/windows/test-bootstrap.ps1",
+      "before_sha256": "a56b51e6f570e99b4267de705df1b72ad692e0a59df3dd46a149ff1a3669d713",
+      "after_sha256": "43a1871cfcaf6e8ec35010091f19da071009a060e142610cb39872716d5faa10"
+    },
+    {
+      "path": "installer/windows/test-update-handoff.ps1",
+      "before_sha256": "3fbcb6b6e82834a1c8142cdb552906f1ebe77a123088393171202e52bb075713",
+      "after_sha256": "0fe6f4c2dacd8811b0a88c98d0d1a83aeb6701144669972102ead01f7448acd2"
+    },
+    {
+      "path": "pyproject.toml",
+      "before_sha256": "2c1cfbbfd17a67842838f1537b3e6595806afe8eaba088b4c26b4bf345d4bf01",
+      "after_sha256": "b3868e9837eb0decc5e2002e7b87f3e922751928ffd3c63ae07edb9e5c15cba2"
+    },
+    {
+      "path": "scripts/acceptance/bundle-manifest.json",
+      "before_sha256": null,
+      "after_sha256": "d6c40349c21bd8218ed348fd286ad2279ac9c5088389d661ce24c0e683a07dc2"
+    },
+    {
+      "path": "scripts/acceptance/fixtures.json",
+      "before_sha256": null,
+      "after_sha256": "a820357e9de658e466bb136ecfbed02bb20d5a5b1deb3806c130839b8df86554"
+    },
+    {
+      "path": "scripts/acceptance/installed_models.py",
+      "before_sha256": null,
+      "after_sha256": "7d5f1aae8faf76b7b7093874d2d644e9ca4f05b91d55cb25a9964bd53acb5b8b"
+    },
+    {
+      "path": "scripts/acceptance/installed_suite.py",
+      "before_sha256": null,
+      "after_sha256": "e78178b70af9fe17efb12c3e7a21b2e21515aabd1ab94ef5ea4c1227dbd7631a"
+    },
+    {
+      "path": "scripts/acceptance/installed_workflows.py",
+      "before_sha256": null,
+      "after_sha256": "985b26f66f9f3ede061485ca4c6c4b677add70ae2f34f0be1dd44963e13d8189"
+    },
+    {
+      "path": "scripts/verify_cpin_update.py",
+      "before_sha256": "e66854186e85f75d9ee7843e90a7b513556b1249f1dada78f687601db598529a",
+      "after_sha256": "22d68e6a0851d1ee1fb00799dc9447bdbffbc17645061ff03deaf7875dab6cbf"
+    },
+    {
+      "path": "scripts/verify_windows_payload.py",
+      "before_sha256": "5bc5123c4ee8bb393cee4dadd3e295ff79e668c7368dfd73817b0aee49c72a18",
+      "after_sha256": "74f6f3a360bf54a6c0f1088d625b1fbb5a6c771b1d11973f992b27561158b37d"
+    },
+    {
+      "path": "scripts/windows/repair-0850-self-test.ps1",
+      "before_sha256": null,
+      "after_sha256": "06851eccfa325dcd35f86254d96923033b01f163d8d9d7ffe9a8ac33dabbc917"
+    },
+    {
+      "path": "scripts/windows/test-installed.ps1",
+      "before_sha256": null,
+      "after_sha256": "fb234a00ada9cd87858da5e0c34c43d3132b4af5116b009adc25a0259ed4ddf9"
+    },
+    {
+      "path": "src/nipat/__init__.py",
+      "before_sha256": "c920f10d52edcd05012f6a54bc03d18867f71c57967f0c59a037bfffce3253e9",
+      "after_sha256": "647afed1865dff3f937029baca1aca21c181910f79cdb8181514dbc0a4e8d349"
+    },
+    {
+      "path": "src/nipat/terminal.py",
+      "before_sha256": "180e56a433d01077ec95bbdc9d2c5c822d81ac5c04596c87a32b7920e3d5a983",
+      "after_sha256": "2daeaff2f3fa02bb7150d1d46238fd1ed94f44654974612eaf8e1590242dcbd0"
+    },
+    {
+      "path": "src/nipat/validation/self_test.py",
+      "before_sha256": "45d8631ea6cce41606ca3d625aacdf94c3ca1b4355e454025c1c7b8a0c41c5b5",
+      "after_sha256": "09d0782e7e31cd117f3f8022952415f14e9da4dcc50bc6d1edfbc7a6fb323d49"
+    },
+    {
+      "path": "tests/test_cli_validation.py",
+      "before_sha256": "718315d4f4a4657d3506da0bab64a39319294cb0a75e9df674d2dcc5de518e48",
+      "after_sha256": "1bb9bfb8230510d0de96f22735b92331bafc113eb0dce6858e12301f25d9c5e0"
+    },
+    {
+      "path": "tests/test_terminal.py",
+      "before_sha256": "bdb6cf962cc54d98d7cb12bfd464019cbcc0072baf3796518d0248da710926f3",
+      "after_sha256": "bc77f9161e5f190a7d600cfe820550bfaf5f6b01557a1f8e0357a165cdfca1cf"
+    },
+    {
+      "path": "tests/test_windows_payload.py",
+      "before_sha256": "0fd0d435c63041dd49f2501795c0bcfcf5fe88293b2080ed3a21a3582ce2f702",
+      "after_sha256": "3555902f320557b9987368104fc73e56b30d04c8c3b567ec30654a3efe2c2191"
+    }
+  ],
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "pending-domain-researchers",
+  "qualification_evidence_sha256": "30f791092bb2c0dc437a3ebd210686dffdb7caf8091930aecbf3ddfe13da54ea",
+  "linux_upgrade_check_sha256": "9d5e539781b47f3569e538d1399b5e4f296ec6058e1715a5cdada300641e9b5c",
+  "macos_validation": {
+    "arm64": {
+      "status": "not-performed",
+      "evidence": []
+    },
+    "x86_64": {
+      "status": "not-performed",
+      "evidence": []
+    }
+  },
+  "scientific_equivalence": {
+    "reference_source_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+    "report_path": "scientific/_temp/nipat-r-equivalence-check/artifacts/r-equivalence.json",
+    "report_sha256": "185176907f14d2ba362d33600947a2288006b331e5f6056e930555af5983b300",
+    "runtime_image": "sha256:7948e25ddd883eefe84d09a86142e0ed0922495a45fa834607c6615122896fed"
+  },
+  "scientific_analysis_qualification": {
+    "reference_source_commit": "9c2a8be60afcb944153710da6a61cd0559e2b4cf",
+    "report_path": "scientific/_temp/nipat-five-modules-check/artifacts/five-module-qualification.json",
+    "report_sha256": "d04b678f95d872c7e7dbba4281607b312ed414d40325569021ce00ab745e14f6",
+    "runtime_image": "sha256:7948e25ddd883eefe84d09a86142e0ed0922495a45fa834607c6615122896fed"
+  }
+}
