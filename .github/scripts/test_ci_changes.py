@@ -159,6 +159,9 @@ class ScientificSelection(unittest.TestCase):
     def test_r_equivalence_reference_harness_and_cases_require_scientific_integration(self):
         for name in (
             ".github/scripts/test_r_equivalence_ci.py",
+            ".github/scripts/scientific_reuse.py",
+            ".github/scripts/test_scientific_reuse.py",
+            ".github/scripts/test_scientific_reuse_workflows.py",
             "scripts/verify_r_equivalence.py",
             "tests/test_r_equivalence.py",
             "tests/reference_r/0.8.5/manifest.json",

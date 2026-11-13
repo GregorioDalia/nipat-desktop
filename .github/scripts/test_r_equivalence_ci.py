@@ -101,7 +101,11 @@ class REquivalenceCI(unittest.TestCase):
                     job, re.MULTILINE | re.DOTALL,
                 )[1]
                 self.assertNotIn("continue-on-error:", job)
-                self.assertNotRegex(step, r"(?m)^        if:")
+                if name == "windows-installer.yml":
+                    self.assertEqual(re.findall(r"(?m)^        if: (.+)$", step),
+                                     ["steps.scientific_reuse.outputs.reused != 'true'"])
+                else:
+                    self.assertNotRegex(step, r"(?m)^        if:")
                 self.assertIn('set -o pipefail', step)
                 self.assertIn('scripts/verify_r_equivalence.py --image "$NIPAT_RUNTIME_IMAGE"', step)
                 self.assertIn('--output-dir "$TMPDIR/artifacts"', step)
