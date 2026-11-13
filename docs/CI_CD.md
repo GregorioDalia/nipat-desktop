@@ -9,21 +9,31 @@ Tutti i pacchetti incorporano lo stesso archivio scientifico Linux AMD64.
 
 | Workflow | Attivazione | Risultato |
 | --- | --- | --- |
-| [CI](../.github/workflows/ci.yml) | Push, pull request, avvio manuale. | Test del client e dei contratti, controlli dei sorgenti e della documentazione, componenti di piattaforma e regressioni scientifiche applicabili. |
+| [CI](../.github/workflows/ci.yml) | Pull request, push su `main`, avvio manuale. | Controlli applicabili ai file modificati; per i soli record di accettazione, verifica Linux delle evidenze della build. |
 | [Installers (review build)](../.github/workflows/windows-installer.yml) | Avvio manuale su un commit revisionato. | Quattro installatori con manifest, checksum e rapporti; nessuna pubblicazione automatica. |
 | [Prepare or publish verified release](../.github/workflows/publish-windows-release.yml) | Avvio manuale su `main`. | Bozza e pubblicazione dei pacchetti accettati, in fasi separate oppure in un'unica esecuzione esplicita, senza ricompilarli. |
+| [Publish accepted release](../.github/workflows/publish-accepted-release.yml) | CI riuscita dopo un push su `main` contenente soltanto record di accettazione. | Verifica e pubblicazione automatica degli installer accettati. |
 | [Published runtime security report](../.github/workflows/security-monitoring.yml) | Pianificazione e avvio manuale. | Inventari e segnalazioni sulle immagini pubblicate, da esaminare separatamente. |
 
 La CI seleziona i controlli in base ai file modificati. Contratti, runtime,
 installer e pipeline attivano i livelli corrispondenti; un confronto Git non
 disponibile non viene interpretato come una modifica della sola documentazione.
 Il controllo aggregato `required` verifica l'esito dei job richiesti.
-I controlli della pull request rimangono attivi quando il push viene deduplicato.
+I branch di sviluppo ricevono la CI tramite la pull request, evitando la seconda
+esecuzione sul push dello stesso commit. Su un branch senza PR si può avviare
+la CI manualmente.
 Gli installatori completi vengono costruiti su richiesta, non a ogni push.
 Una modifica al solo workflow di pubblicazione richiede i controlli di packaging
 e i controlli rapidi obbligatori; non riesegue il runtime scientifico. Le modifiche
 al selettore, alla CI, alla build o a workflow non riconosciuti conservano tutti
 i livelli. Una modifica scientifica concomitante riattiva sempre quel livello.
+
+Una modifica limitata a `.github/release-acceptance/vVERSIONE.json` esegue
+`acceptance` su Linux e il controllo `required`. Verifica il commit, il successo
+della build e di tutti i job dei pacchetti, gli hash dei quattro installer,
+il manifest, la baseline e i rapporti scientifici usando il bundle di evidenze
+vincolato alla build. Il download è limitato alle evidenze testuali. Record
+mancanti, alterati o riferiti a build diverse fanno fallire il controllo.
 
 ## Copertura e limiti
 
@@ -111,6 +121,12 @@ comune ai quattro pacchetti. La build produce:
 | `nipat-macos-setup-arm64` | `NIPAT-0.8.50-macos-arm64.pkg`. |
 | `nipat-macos-setup-x86_64` | `NIPAT-0.8.50-macos-x86_64.pkg`. |
 | `nipat-installer-set-evidence` | Identità e verifica congiunta dei pacchetti. |
+
+Ogni job conserva il proprio pacchetto nell'artefatto originale. Il job finale
+li scarica per la verifica congiunta e pubblica il riepilogo degli hash, evitando
+quattro ulteriori caricamenti delle stesse copie binarie. Gli artefatti Actions
+sono archivi di revisione con pacchetti e rapporti; la release offre i file
+EXE/DEB/PKG da installare direttamente.
 
 I controlli Windows e il runtime Linux partono in parallelo dopo la verifica
 della sorgente. Il compilatore Windows attende entrambi; il controllo finale
@@ -207,6 +223,17 @@ pacchetto. Una prova su un'architettura non qualifica l'altra. Le prove di VM
 non sostituiscono quelle di interazione Finder o delle policy del dispositivo.
 
 ## Pubblicazione
+
+Integrare il record accettato con una PR contenente soltanto i JSON di accettazione
+avvia la CI Linux dedicata su `main`. Al suo successo, **Publish accepted release**
+usa esattamente quel commit e pubblica la build indicata. Le versioni senza
+suffisso vengono pubblicate su `stable` come `Latest`; `a`, `b` e `rc` usano
+`testing`. Una modifica mista richiede l'avvio manuale descritto sotto.
+L'automazione verifica che il run provenga dal push su `main` di questo repository,
+con `acceptance` e `required` riusciti. Il publisher verifica nuovamente i pacchetti
+e i digest remoti. I rilanci riconoscono una release già pubblicata e possono
+riprendere una bozza coerente. Il workflow manuale e quello automatico condividono
+lo stesso limite di concorrenza.
 
 Sorgenti e record di accettazione vengono integrati in `main` conservando il
 commit compilato. Il publisher crea una bozza con gli stessi byte verificati;

@@ -656,7 +656,7 @@ def process_release(operation, files, commit, tag, version, notes, root, channel
     return published
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--operation", choices=("prepare", "publish", "prepare-and-publish"), default="prepare")
     parser.add_argument("--run-id", required=True)
@@ -664,7 +664,7 @@ def main():
     parser.add_argument("--draft-release-id", default="")
     parser.add_argument("--preparation-commit", default="")
     parser.add_argument("--channel", choices=("testing", "stable"), default="testing")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     require(re.fullmatch(r"[1-9][0-9]*", args.run_id), "Invalid run ID")
     require(re.fullmatch(r"[0-9a-f]{40}", args.source_commit), "Full source SHA is required")
     require(not args.draft_release_id or re.fullmatch(r"[1-9][0-9]*", args.draft_release_id), "Invalid draft ID")
@@ -674,11 +674,20 @@ def main():
             "Publishing requires the exact prepared draft ID and preparation commit")
     require(os.environ.get("GITHUB_REPOSITORY") == REPO
             and os.environ.get("GITHUB_REF") == "refs/heads/main"
-            and os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch",
-            "Publication must run through the manual workflow on this repository's main branch")
+            and os.environ.get("GITHUB_EVENT_NAME") in {"workflow_dispatch", "workflow_run"},
+            "Publication must run through an authorized workflow on this repository's main branch")
     commit = args.source_commit
     procedure_commit = command("git", "rev-parse", "HEAD")
     require(re.fullmatch(r"[0-9a-f]{40}", procedure_commit), "Invalid publication procedure commit")
+    if os.environ["GITHUB_EVENT_NAME"] == "workflow_run":
+        from automatic_release import accepted_paths, validate_publication
+        from acceptance_ci import read_record
+        event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8"))
+        paths = accepted_paths(event, procedure_commit)
+        record_path = f".github/release-acceptance/v{committed_version(commit)}.json"
+        require(record_path in paths and args.operation == "prepare-and-publish" and not args.preparation_commit,
+                "Automatic publication must use the acceptance verified by the completed main CI")
+        validate_publication(read_record(record_path, procedure_commit), args.run_id, commit, args.channel)
     require(args.operation == "publish" or not args.preparation_commit,
             "Preparation uses the current main commit; leave preparation_commit empty")
     # Keep the generated provenance byte-for-byte stable across the two phases.

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -23,6 +23,8 @@ jobs:
       run_checks: ${{ steps.ownership.outputs.run_checks }}
       duplicate_pr: ${{ steps.ownership.outputs.duplicate_pr }}
       ownership_reason: ${{ steps.ownership.outputs.ownership_reason }}
+      acceptance_only: ${{ steps.select.outputs.acceptance_only }}
+      acceptance_paths: ${{ steps.select.outputs.acceptance_paths }}
       client: ${{ steps.select.outputs.client }}
       scientific: ${{ steps.select.outputs.scientific }}
       runtime: ${{ steps.select.outputs.runtime }}
@@ -50,9 +52,30 @@ jobs:
           CI_EVENT: ${{ github.event_name }}
         run: python .github/scripts/ci_changes.py --base "$CI_BASE" --head "$CI_HEAD" --event "$CI_EVENT" --output "$GITHUB_OUTPUT"
 
+  acceptance:
+    needs: changes
+    if: needs.changes.outputs.run_checks == 'true' && needs.changes.outputs.acceptance_only == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout acceptance and source history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Verify accepted build identity and scientific evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACCEPTANCE_PATHS: ${{ needs.changes.outputs.acceptance_paths }}
+        run: python .github/scripts/acceptance_ci.py
+
   linux-checks:
     needs: changes
-    if: needs.changes.outputs.run_checks == 'true'
+    if: needs.changes.outputs.run_checks == 'true' && needs.changes.outputs.acceptance_only != 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
@@ -98,7 +121,7 @@ jobs:
   windows-checks:
     name: Windows client (Server 2022; simulated Windows 10/11 decisions)
     needs: changes
-    if: needs.changes.outputs.run_checks == 'true'
+    if: needs.changes.outputs.run_checks == 'true' && needs.changes.outputs.acceptance_only != 'true'
     runs-on: windows-2022
     timeout-minutes: 15
     env:
@@ -132,7 +155,7 @@ jobs:
   macos-checks:
     name: macOS client (${{ matrix.architecture }})
     needs: changes
-    if: needs.changes.outputs.run_checks == 'true'
+    if: needs.changes.outputs.run_checks == 'true' && needs.changes.outputs.acceptance_only != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -347,7 +370,7 @@ jobs:
     # A delegated branch push cannot satisfy the protected PR/main context.
     name: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' && 'branch-required' || 'required' }}
     if: always()
-    needs: [changes, linux-checks, windows-checks, macos-checks, scientific, runtime, packaging]
+    needs: [changes, linux-checks, windows-checks, macos-checks, scientific, runtime, packaging, acceptance]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

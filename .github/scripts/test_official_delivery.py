@@ -45,18 +45,23 @@ class OfficialDeliveryTests(unittest.TestCase):
             with self.subTest(ref=ref), self.assertRaises(ValueError):
                 source.validate_dispatch("workflow_dispatch", ref, "0.8.5", source.PROFILE)
 
-    def test_four_downloads_match_exact_bound_packages(self):
+    def test_candidate_summary_reuses_original_package_artifacts(self):
         record = {"publication_authorized": False}
-        environment = {}
-        for key, prefix, value in (("windows", "WINDOWS", "a"), ("linux", "LINUX", "b"),
-                                   ("macos_arm64", "ARM64", "c"), ("macos_x86_64", "INTEL", "d")):
+        for key, value in (("windows", "a"), ("linux", "b"), ("macos_arm64", "c"), ("macos_x86_64", "d")):
             record[key] = {"file": key, "sha256": value * 64}
-            environment[prefix + "_SHA256"] = value * 64
-            environment[prefix + "_URL"] = "https://github.com/GregorioDalia/nipat-desktop/actions/runs/123/artifacts/456"
-        self.assertEqual(len(downloads.download_rows(record, environment)), 4)
-        for prefix in ("WINDOWS", "LINUX", "ARM64", "INTEL"):
-            with self.subTest(prefix=prefix), self.assertRaises(ValueError):
-                downloads.download_rows(record, dict(environment, **{prefix + "_SHA256": "0" * 64}))
+        rows = downloads.download_rows(record)
+        self.assertEqual({row[2] for row in rows}, {
+            "nipat-windows-setup", "nipat-linux-setup", "nipat-macos-setup-arm64", "nipat-macos-setup-x86_64",
+        })
+        for key in ("windows", "linux", "macos_arm64", "macos_x86_64"):
+            original = record[key]["sha256"]
+            record[key]["sha256"] = "invalid"
+            with self.subTest(platform=key), self.assertRaises(ValueError):
+                downloads.download_rows(record)
+            record[key]["sha256"] = original
+        workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()
+        self.assertNotIn("archive: false", workflow)
+        self.assertNotIn("Provide Windows as one downloadable installer", workflow)
 
     def test_review_build_restores_real_ubuntu_upgrade_and_requires_all_platforms(self):
         workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()

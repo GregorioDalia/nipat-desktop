@@ -120,6 +120,15 @@ python .github/scripts/release_acceptance.py \
   --output /percorso/accettazione-da-compilare.json
 ```
 
+Per la pubblicazione automatica, integrare prima i sorgenti e poi il record
+revisionato con una PR contenente soltanto i JSON di accettazione. La CI esegue
+su Linux i controlli delle evidenze della build, degli hash e dei rapporti.
+Il successo della stessa verifica su `main` avvia **Publish accepted release**.
+L'integrazione del record accettato autorizza quindi la pubblicazione della
+build indicata: `stable`/`Latest` per versioni senza suffisso, `testing` per
+versioni `a`, `b` o `rc`. Il workflow procede autonomamente su GitHub.
+Modifiche miste e pubblicazioni in due fasi mantengono l'avvio manuale.
+
 Per Desktop 0.8.2–0.8.8 il modello usa lo **schema 5**; da 0.8.9 a 0.8.49
 usa lo **schema 6**. Dalla **0.8.50 richiede lo schema 7**, che qualifica
 separatamente i due caller e i tre modelli aggiornati. La decisione iniziale
