@@ -7,6 +7,9 @@ import math
 from pathlib import Path
 import sys
 
+# Embedded Python excludes the script directory from its default search path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from nipat.errors import NipatError, ValidationError
 from nipat.execution.runner import DockerComposeRunner
 from nipat.execution.workflows import Workflows

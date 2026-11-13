@@ -39,7 +39,8 @@ Write-Host '::endgroup::'
 $tests = @(
     'test-windows-environment.ps1', 'test-bootstrap.ps1', 'test-scientific-image.ps1', 'test-migration.ps1',
     'test-install-layout.ps1', 'test-uninstall.ps1', 'test-repair-installation.ps1',
-    'test-update-handoff.ps1', 'test-activity-lock.ps1', 'test-maintenance.ps1', 'test-trust-report.ps1'
+    'test-update-handoff.ps1', 'test-activity-lock.ps1', 'test-maintenance.ps1', 'test-trust-report.ps1',
+    'test-self-test-hotfix.ps1'
 )
 foreach ($test in $tests) {
     Write-Host "::group::$test"

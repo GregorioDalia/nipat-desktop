@@ -146,6 +146,53 @@ function ConvertTo-NipatNativeArgument([string] $Value) {
     return '"' + $escaped + '"'
 }
 
+function Invoke-NipatSetupCheck([string] $Executable, [string[]] $Arguments,
+    [string] $LogDirectory, [string] $Name) {
+    if ($Name -cnotmatch '^[a-z][a-z0-9-]*$') { throw 'Nome del controllo di preparazione non valido.' }
+    [IO.Directory]::CreateDirectory($LogDirectory) | Out-Null
+    $stdoutPath = Join-Path $LogDirectory ($Name + '.stdout.log')
+    $stderrPath = Join-Path $LogDirectory ($Name + '.stderr.log')
+    $exitPath = Join-Path $LogDirectory ($Name + '.exit-code.txt')
+    if (Test-Path -LiteralPath $exitPath) { Remove-Item -LiteralPath $exitPath -Force }
+    Write-Host ("NIPAT: controllo $Name in corso. Diagnostica: $stdoutPath ; $stderrPath")
+    $start = New-Object Diagnostics.ProcessStartInfo
+    $start.FileName = $Executable
+    $start.Arguments = (($Arguments | ForEach-Object { ConvertTo-NipatNativeArgument $_ }) -join ' ')
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $start.StandardErrorEncoding = [Text.Encoding]::UTF8
+    $process = New-Object Diagnostics.Process
+    $process.StartInfo = $start
+    $encoding = New-Object Text.UTF8Encoding($false)
+    try {
+        [IO.File]::WriteAllText($stdoutPath, '', $encoding)
+        [IO.File]::WriteAllText($stderrPath, '', $encoding)
+        if (-not $process.Start()) { throw "Impossibile avviare il controllo $Name." }
+        # Drain both pipes concurrently. Native stderr must not
+        # become a terminating PowerShell 5.1 error before the exit code is read.
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        [IO.File]::WriteAllText($stdoutPath, $stdout.GetAwaiter().GetResult(), $encoding)
+        [IO.File]::WriteAllText($stderrPath, $stderr.GetAwaiter().GetResult(), $encoding)
+        $code = $process.ExitCode
+        [IO.File]::WriteAllText($exitPath, ([string]$code + "`n"), $encoding)
+    } finally {
+        $process.Dispose()
+    }
+    foreach ($path in @($stdoutPath, $stderrPath)) {
+        $text = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
+        if ($text) { Write-Host $text }
+    }
+    Write-Host ("NIPAT: controllo $Name terminato (codice $code).")
+    if ($code -ne 0) {
+        throw "Controllo $Name non superato (codice $code). Dettagli: $stdoutPath ; $stderrPath"
+    }
+}
+
 function Invoke-NipatWsl([string[]] $Arguments, [switch] $AllowFailure, [int] $TimeoutSeconds = 1800) {
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $script:NipatWsl

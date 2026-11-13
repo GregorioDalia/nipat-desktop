@@ -128,6 +128,7 @@ scripts/verify_snp_example.py
 scripts/verify_snp_workflow.py
 scripts/windows/common.ps1
 scripts/windows/run.ps1
+scripts/windows/repair-0850-self-test.ps1
 scripts/windows/setup.ps1
 src/nipat/__init__.py
 src/nipat/__main__.py

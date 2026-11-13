@@ -537,7 +537,7 @@ class SnpReferenceTests(unittest.TestCase):
 
 
 class SelfTestCommandTests(unittest.TestCase):
-    def test_input_mode_check_starts_with_isolated_runtime_search_path(self):
+    def test_all_distributed_checks_start_with_isolated_runtime_search_path(self):
         project = Path(__file__).resolve().parents[1]
         # Match portable Python: stdlib plus project/src, without automatic
         # script-directory injection, PYTHONPATH, site-packages or caller cwd.
@@ -545,18 +545,27 @@ class SelfTestCommandTests(unittest.TestCase):
 from pathlib import Path
 project = Path(sys.argv[1])
 sys.path[:0] = [str(project / "src"), str(project)]
-script = project / "scripts" / "verify_input_modes.py"
+script = project / "scripts" / sys.argv[2]
 sys.argv = [str(script), "--help"]
 runpy.run_path(str(script), run_name="__main__")
 '''
+        scripts = (
+            ('verify_snp_example.py', '--run-name'),
+            ('verify_cpi_update.py', '--run-name'),
+            ('verify_contamination_update.py', '--run-name'),
+            ('verify_cpin_update.py', '--run-name'),
+            ('verify_input_modes.py', '--fixture-parent'),
+        )
         with tempfile.TemporaryDirectory() as directory:
-            result = subprocess.run(
-                [sys.executable, '-I', '-S', '-c', bootstrap, str(project)],
-                cwd=directory, capture_output=True, text=True,
-                encoding='utf-8', errors='replace', timeout=30,
-            )
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn('--fixture-parent', result.stdout)
+            for filename, option in scripts:
+                with self.subTest(script=filename):
+                    result = subprocess.run(
+                        [sys.executable, '-I', '-S', '-c', bootstrap, str(project), filename],
+                        cwd=directory, capture_output=True, text=True,
+                        encoding='utf-8', errors='replace', timeout=30,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn(option, result.stdout)
 
     def test_runs_distributed_checks_and_stops_on_failure(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -574,7 +583,9 @@ runpy.run_path(str(script), run_name="__main__")
                     with self.assertRaisesRegex(RuntimeExecutionError, 'CPI'):
                         run_self_tests(layout)
                 self.assertEqual(run.call_count, 2)
-                self.assertEqual(Path(run.call_args_list[0].args[0][1]).name,
+                for invocation in run.call_args_list:
+                    self.assertEqual(invocation.args[0][:4], [sys.executable, '-X', 'utf8', '-u'])
+                self.assertEqual(Path(run.call_args_list[0].args[0][4]).name,
                                  'verify_snp_example.py')
                 self.assertEqual(run.call_args_list[0].kwargs['env']['NIPAT_PROJECT_DIR'],
                                  str(project))

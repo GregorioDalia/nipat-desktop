@@ -98,11 +98,32 @@ class WindowsPayloadTests(unittest.TestCase):
             with self.subTest(relative=relative), self.assertRaises(ValueError):
                 check.payload_file(self.app, relative)
 
+    def test_broken_packaged_self_test_import_blocks_client_qualification(self):
+        shutil.copytree(ROOT / "src", self.app / "src", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(ROOT / "scripts", self.app / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
+        self.write("scripts/verify_cpin_update.py", "import missing_packaged_self_test_helper\n")
+        manifest = {"version": __import__("nipat").__version__, "runtime_image": "sha256:" + "b" * 64}
+        original_run = subprocess.run
+
+        def packaged_run(*args, **kwargs):
+            environment = {**kwargs["env"], "PYTHONPATH": str(self.app / "src")}
+            return original_run(*args, **{**kwargs, "env": environment})
+
+        with patch.object(check.subprocess, "run", side_effect=packaged_run):
+            with self.assertRaisesRegex(ValueError, "Packaged command failed: self-test-verify_cpin_update"):
+                check.exercise_client(self.app, self.root, manifest)
+        log = (self.root / "logs/self-test-verify_cpin_update.log").read_text(encoding="utf-8")
+        self.assertIn("ModuleNotFoundError", log)
+        self.assertIn("missing_packaged_self_test_helper", log)
+        self.assertFalse((self.root / "logs/catalog.log").exists())
+        self.assertFalse((self.root / "runs").exists())
+
     @unittest.skipIf(__import__("os").name == "nt", "Native Linux harness; real embedded Windows smoke runs in installer CI")
     def test_real_relocated_client_dry_runs_and_rejects_false_success_or_writable_inputs(self):
         # Run genuine CLI subprocesses from copied sources using the native dry-run
         # transport. Only the Windows host/embedded-Python bridge is outside scope.
         shutil.copytree(ROOT / "src", self.app / "src", ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(ROOT / "scripts", self.app / "scripts", ignore=shutil.ignore_patterns("__pycache__"))
         shutil.copyfile(ROOT / "compose.yaml", self.app / "compose.yaml")
         shutil.copytree(ROOT / "tests/fixtures/cpin", self.app / "tests/fixtures/cpin")
         manifest = {"version": __import__("nipat").__version__, "source_commit": "a" * 40,
@@ -118,6 +139,13 @@ class WindowsPayloadTests(unittest.TestCase):
 
         with patch.object(check.subprocess, "run", side_effect=native_run):
             check.exercise_client(self.app, self.root, manifest)
+        for filename in ("verify_snp_example", "verify_cpi_update", "verify_contamination_update",
+                         "verify_cpin_update", "verify_input_modes"):
+            log = (self.root / "logs" / f"self-test-{filename}.log").read_text(encoding="utf-8")
+            command = json.loads(log.splitlines()[0])
+            self.assertEqual(Path(command[-2]), self.app / "scripts" / f"{filename}.py")
+            self.assertEqual(command[-1], "--help")
+            self.assertIn("usage:", log)
         run = self.root / "runs/dnp-contamination-cpi"
         originals = [self.root / "external inputs $ ,= è" / name for name in ("mother.bam", "father.bam")]
         arguments = {"workflows": ["dnp-call", "contamination", "cpi", "snp-call", "snp-call"],
