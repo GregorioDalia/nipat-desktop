@@ -1,5 +1,6 @@
 """Typed five-module plans preserve biological roles and caller identities."""
 import copy
+import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -46,6 +47,7 @@ def plan_for(marker="SNP", *, called=True):
 
 
 class FiveModulePlans(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "Engine preflight uses Linux container paths; exercised on Linux")
     def test_imported_shared_parents_are_scanned_once_per_validation_contract(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
