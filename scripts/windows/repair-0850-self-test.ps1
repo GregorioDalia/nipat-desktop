@@ -31,7 +31,7 @@ function Invoke-HotfixCheck([string] $Executable, [string[]] $Arguments, [string
         $stdout = $process.StandardOutput.BaseStream.CopyToAsync($stdoutFile)
         $stderr = $process.StandardError.BaseStream.CopyToAsync($stderrFile)
         $process.WaitForExit()
-        $stdout.GetAwaiter().GetResult(); $stderr.GetAwaiter().GetResult()
+        [void]$stdout.GetAwaiter().GetResult(); [void]$stderr.GetAwaiter().GetResult()
         return $process.ExitCode
     } finally {
         if ($null -ne $stdoutFile) { $stdoutFile.Dispose() }
