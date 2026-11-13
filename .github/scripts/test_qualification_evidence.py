@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location("qualification", Path(__file__).with_name("qualification_evidence.py"))
@@ -96,6 +97,41 @@ class QualificationEvidenceTests(unittest.TestCase):
         self.write_descriptor(self.descriptor)
         with self.assertRaisesRegex(ValueError, "entries differ"):
             qualification.verify(self.output, self.installer_set)
+
+    def test_entry_count_boundary_and_cleanup_preserve_all_evidence(self):
+        accepted = self.root / "exact-entry-limit"
+        rejected = self.root / "excess-entry-limit"
+        with patch.object(qualification, "MAX_ENTRIES", 3):
+            descriptor = qualification.build(accepted, self.installer_set, {"science": self.source})
+            self.assertEqual(len(descriptor["entries"]), 3)
+            qualification.verify(accepted, self.installer_set)
+        with patch.object(qualification, "MAX_ENTRIES", 2):
+            with self.assertRaisesRegex(ValueError, r"Qualification entry count 3 exceeds limit 2 at science/"):
+                qualification.build(rejected, self.installer_set, {"science": self.source})
+            with self.assertRaisesRegex(ValueError, "Invalid qualification entries"):
+                qualification.verify(accepted, self.installer_set)
+        self.assertFalse((rejected / qualification.ARCHIVE).exists())
+        self.assertFalse((rejected / qualification.DESCRIPTOR).exists())
+
+    def test_expanded_bytes_boundary_and_cleanup_are_independent_of_entry_limit(self):
+        # Compressible evidence keeps ZIP overhead below the expanded-byte cap.
+        (self.source / "large.log").write_text("retained scientific evidence\n" * 400, encoding="utf-8")
+        expected_total = sum(path.stat().st_size for path in self.source.iterdir()
+                             if path.suffix in qualification.ALLOWED)
+        accepted = self.root / "exact-byte-limit"
+        rejected = self.root / "excess-byte-limit"
+        with patch.object(qualification, "MAX_TOTAL", expected_total):
+            descriptor = qualification.build(accepted, self.installer_set, {"science": self.source})
+            self.assertEqual(sum(entry["size"] for entry in descriptor["entries"]), expected_total)
+            qualification.verify(accepted, self.installer_set)
+        with patch.object(qualification, "MAX_TOTAL", expected_total - 1):
+            with self.assertRaisesRegex(ValueError,
+                    rf"Qualification expanded bytes {expected_total} exceed limit {expected_total - 1} at science/"):
+                qualification.build(rejected, self.installer_set, {"science": self.source})
+            with self.assertRaisesRegex(ValueError, "Qualification expanded size exceeds its bound"):
+                qualification.verify(accepted, self.installer_set)
+        self.assertFalse((rejected / qualification.ARCHIVE).exists())
+        self.assertFalse((rejected / qualification.DESCRIPTOR).exists())
 
 
 if __name__ == "__main__":

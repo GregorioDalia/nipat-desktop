@@ -36,6 +36,13 @@ Senza quel flag, la causa resta non confermata; il codice 137 da solo non prova
 un esaurimento della memoria. Il test di integrazione continua a richiedere
 la conferma esplicita di Docker per l'OOM provocato intenzionalmente.
 
+La matrice completa dei cinque moduli produce oltre 3.500 file testuali di
+evidenza. Il tetto del numero di file nell'archivio di qualificazione passa
+da 3.000 a 5.000 per conservarli integralmente. Restano i limiti di 64 MiB
+complessivi e 8 MiB per file, l'elenco dei formati ammessi e la verifica
+indipendente di identità, nomi, dimensioni e hash. Gli errori distinguono
+ora il superamento del numero di file da quello dei byte complessivi.
+
 La preparazione CPI/CPIN conserva una cache limitata al singolo preflight per
 evitare nuove scansioni delle tabelle dei genitori condivisi. La cache non
 persiste tra esecuzioni e non sostituisce la convalida nel runtime.
