@@ -255,6 +255,21 @@ jobs:
           mkdir -p "$TMPDIR"
           set -o pipefail
           python scripts/verify_r_equivalence.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
+      - name: Seal successful scientific qualification for exact-image reuse
+        id: scientific_qualification
+        run: |
+          python .github/scripts/scientific_reuse.py seal \
+            --image "$NIPAT_RUNTIME_IMAGE" --output-dir build/scientific-qualification
+          echo "source_tree=$(git rev-parse 'HEAD^{tree}')" >> "$GITHUB_OUTPUT"
+      - name: Retain reusable scientific qualification
+        # A failed/cancelled check never produces reusable evidence. Attempts
+        # have separate immutable artifacts; ordinary diagnostics remain below.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nipat-scientific-qualification-${{ github.run_attempt }}-${{ steps.scientific_qualification.outputs.source_tree }}
+          path: build/scientific-qualification/
+          retention-days: 14
+          if-no-files-found: error
       - name: Retain scientific diagnostics
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

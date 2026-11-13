@@ -29,8 +29,15 @@ Il branch di sviluppo permette di costruire e verificare la candidata prima
 dell'integrazione in `main`. Conservare il commit completo, non soltanto il
 nome del branch o il numero di versione.
 
-La build verifica il client, costruisce l'immagine scientifica, esegue le
-regressioni, esporta l'archivio comune e confeziona i quattro installatori.
+La build verifica il client, costruisce l'immagine scientifica, acquisisce le
+regressioni verificate, esporta l'archivio comune e confeziona i quattro installatori.
+Se una CI riuscita ha già verificato lo stesso albero Git e l'identico ID Docker
+Linux AMD64, la build riusa i suoi rapporti senza ripetere i sette controlli
+scientifici. Ogni altra situazione esegue tutti i controlli nella build.
+Per beneficiare del riuso, allineare e congelare la candidata prima della CI,
+quindi avviare la build dopo il suo completamento. La build non attende una CI
+ancora in esecuzione. La [procedura CI](../docs/CI_CD.md#riuso-delle-evidenze-scientifiche)
+descrive verifiche, provenienza e fallback.
 Il builder include soltanto i file ammessi da `distribution-files.txt` e i
 componenti identificati dai manifest. Il controllo `installer-required`
 confronta i pacchetti e le loro evidenze. Una build di pull request non è una
@@ -43,7 +50,7 @@ build di pubblicazione.
 | `nipat-linux-setup` | DEB, manifest, rapporti di confezionamento, installazione, dipendenze e aggiornamento. |
 | `nipat-macos-setup-arm64` | PKG Apple Silicon e rapporto del pacchetto nativo. |
 | `nipat-macos-setup-x86_64` | PKG Intel e rapporto del pacchetto nativo. |
-| `nipat-scientific-check-logs` | Metadati e registri delle regressioni scientifiche. |
+| `nipat-scientific-check-logs` | Rapporti scientifici e `reuse.json`, che distingue esecuzione nuova e riuso dalla CI identificata. |
 | `nipat-installer-set-evidence` | `installer-set-check.json`, identità congiunta dei quattro pacchetti. |
 
 Il manifest collega versione, commit, architettura, archivio scientifico e

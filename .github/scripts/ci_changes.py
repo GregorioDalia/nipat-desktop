@@ -16,6 +16,8 @@ SCIENTIFIC_FILES = {
     ".github/scripts/ci_changes.py", ".github/scripts/test_ci_changes.py",
     ".github/scripts/ci_control.py", ".github/scripts/test_ci_control.py",
     ".github/scripts/test_r_equivalence_ci.py",
+    ".github/scripts/scientific_reuse.py", ".github/scripts/test_scientific_reuse.py",
+    ".github/scripts/test_scientific_reuse_workflows.py",
 }
 
 

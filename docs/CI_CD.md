@@ -62,8 +62,10 @@ input invariati, parametri e costanti effettivi, output, completamento e budget
 dei worker. La tolleranza numerica dei confronti upstream è `1e-11` assoluta
 e relativa; le identità di campioni, coppie e trii devono coincidere.
 
-Entrambi i gate sono obbligatori nella CI scientifica e nella build, prima
-dell'esportazione del runtime. Il publisher schema 7 lega i due rapporti alla
+Entrambi i gate sono obbligatori nella CI scientifica. Prima dell'esportazione,
+la build richiede i loro rapporti: li esegue oppure riusa una qualificazione CI
+verificata dello stesso albero Git e della stessa immagine, come descritto sotto.
+Il publisher schema 7 lega i due rapporti alla
 stessa immagine immutabile e ai byte Git della candidata. I riferimenti di test
 non sono inclusi nell'applicazione. I test Python sono raccolti con pytest,
 comprese le classi unittest. Le regressioni native sui campioni vuoti o privi
@@ -121,6 +123,57 @@ La release espone direttamente il file da installare per ciascuna piattaforma.
 I pacchetti **Source code** non contengono l'ambiente pronto all'uso. Gli archivi
 del runtime e i rapporti servono a verifica e recupero, non richiedono operazioni
 manuali durante l'installazione ordinaria.
+
+## Riuso delle evidenze scientifiche
+
+Dopo il successo dei sette controlli scientifici, la CI produce l'artefatto
+`nipat-scientific-qualification-N-TREE`, dove `N` identifica il tentativo del run
+e `TREE` l'albero Git completo. Il nome evita di scaricare prove di sorgenti
+diverse, ma non sostituisce la verifica dei contenuti.
+Contiene un descrittore e un archivio limitato alle evidenze testuali sintetiche;
+non trasferisce un'altra copia dell'immagine Docker. Le diagnostiche dei run
+falliti vengono conservate separatamente e non sono riutilizzabili.
+
+La build costruisce l'immagine usando la cache e cerca una CI già completata
+con successo nello stesso repository. Il riuso richiede tutte queste condizioni:
+
+- albero Git completo identico, file tracciati invariati e nessun file non tracciato,
+  includendo
+  sorgenti, verificatori, fixture, workflow e definizioni delle dipendenze;
+- ID Docker completo, sistema Linux e architettura AMD64 identici;
+- provenienza del checkout CI verificabile tramite GitHub, distinguendo il
+  commit di merge delle pull request dalla testa del loro ramo;
+- successo del run, del job scientifico e dei sette controlli nello stesso
+  tentativo; esclusione delle esecuzioni provenienti da fork;
+- identità dell'artefatto, checksum del trasporto e corrispondenza di ogni file
+  al descrittore, con limiti su dimensioni, numero e percorsi.
+
+Un cambio di commit con albero Git identico può riusare la prova. Anche una
+modifica della sola documentazione cambia invece l'albero e provoca un nuovo
+controllo: questa prima versione privilegia un contratto conservativo.
+Il confronto dell'ID dell'immagine include i byte effettivi delle dipendenze;
+la sola uguaglianza del Dockerfile o del tag non basta.
+
+I rapporti vengono ripristinati senza riscrivere immagine, timestamp o risultati.
+`build/scientific-reuse/reuse.json` registra la decisione, la nuova build e il
+produttore CI, con artefatto e digest quando il riuso riesce. Il record entra nei
+log scientifici e nel bundle finale. Il record di accettazione continua a
+identificare la nuova build installer; non attribuisce alla build l'esecuzione
+originale dei test CI.
+
+Se non esiste una prova compatibile, è scaduta, l'API non è disponibile o una
+verifica fallisce, la build esegue tutti e sette i controlli. Non attende run CI
+ancora attivi e non considera la cache mancante un esito scientifico positivo.
+La ricerca considera al massimo 30 run completati, con un budget complessivo
+di due minuti; un errore di rete interrompe la ricerca senza ripetere la stessa
+attesa per tutti i candidati.
+I controlli del client, il preflight delle evidenze, il runtime WSL, il caricamento
+dell'archivio esportato nel motore distribuito e le verifiche dei quattro pacchetti
+restano obbligatori nella nuova build.
+
+Il beneficio dipende dal numero di corrispondenze effettive. Il profilo precedente
+attribuiva circa 14 minuti ai sette controlli: il risparmio netto sottrae ricerca,
+download e verifica delle evidenze, e va misurato sulla build reale.
 
 ## Audit Windows e concorrenza dalla 0.8.20
 
@@ -209,6 +262,6 @@ richiede evidenze corrispondenti alla nuova candidata. La modalità combinata di
 pubblicazione evita il secondo download e la seconda qualificazione locale degli
 stessi pacchetti, mantenendo la verifica dei contenuti della bozza.
 
-Il riuso della qualificazione tra CI e build non è ancora implementato: richiede
-un contratto che identifichi sorgenti, verificatori, fixture, dipendenze e immagine
-esatti. Il numero dei test, da solo, non motiva l'eliminazione di controlli numerici.
+Il riuso della qualificazione tra CI e build segue il contratto descritto sopra.
+La CI produce sempre evidenze nuove quando esegue il livello scientifico; la build
+può consumarle soltanto dopo averne verificato l'identità completa.

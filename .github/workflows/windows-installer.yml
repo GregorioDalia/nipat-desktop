@@ -85,6 +85,9 @@ jobs:
     needs: release-source
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
     env:
       PYTHONPATH: src
       NIPAT_RUNTIME_IMAGE: nipat-scientific-runtime:installer-test
@@ -130,7 +133,16 @@ jobs:
           provenance: false
           cache-from: type=gha,version=2,scope=nipat-scientific-linux-amd64
           cache-to: type=gha,version=2,scope=nipat-scientific-linux-amd64,mode=max,ignore-error=true
+      - name: Restore verified CI qualification for the exact source and image
+        id: scientific_reuse
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python .github/scripts/scientific_reuse.py restore \
+            --image "$NIPAT_RUNTIME_IMAGE" --output-dir build/scientific-reuse \
+            --runner-temp "$RUNNER_TEMP" --output "$GITHUB_OUTPUT"
       - name: Verify bundled scientific scripts without host sources
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           TMPDIR: ${{ runner.temp }}/nipat-engine-check
         run: |
@@ -138,6 +150,7 @@ jobs:
           set -o pipefail
           python scripts/verify_engine_package.py --image "$NIPAT_RUNTIME_IMAGE" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Verify original sample labels and unchanged scientific results
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           TMPDIR: ${{ runner.temp }}/nipat-presentation-check
         run: |
@@ -147,6 +160,7 @@ jobs:
           set -o pipefail
           python scripts/verify_presentation.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Scientific regression and input-mode checks
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           NIPAT_DATA_DIR: ${{ runner.temp }}/nipat-validation/data
           NIPAT_RUNS_DIR: ${{ runner.temp }}/nipat-validation/runs
@@ -155,6 +169,7 @@ jobs:
           python -m nipat doctor --runtime
           python -m nipat self-test
       - name: Verify optional performance evidence and unchanged DNP results
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           TMPDIR: ${{ runner.temp }}/nipat-performance-check
         run: |
@@ -162,6 +177,7 @@ jobs:
           set -o pipefail
           python scripts/verify_performance.py --image "$NIPAT_RUNTIME_IMAGE" --output-dir "$TMPDIR/artifacts" 2>&1 | tee "$TMPDIR/verification.log"
       - name: Verify native scientific edge cases and settings in the installed image
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           TMPDIR: ${{ runner.temp }}/nipat-native-r-check
         run: |
@@ -173,6 +189,7 @@ jobs:
             --entrypoint python3 "$NIPAT_RUNTIME_IMAGE" /qualification/.github/scripts/check_native_r.py \
             2>&1 | tee "$TMPDIR/verification.log"
       - name: Verify updated CPI Contamination and CPIN models
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           TMPDIR: ${{ runner.temp }}/nipat-five-modules-check
         run: |
@@ -180,6 +197,7 @@ jobs:
           set -o pipefail
           python scripts/verify_five_modules.py --image "$NIPAT_RUNTIME_IMAGE" --output "$TMPDIR/artifacts" --full 2>&1 | tee "$TMPDIR/verification.log"
       - name: Compare scientific cores with immutable versioned references
+        if: steps.scientific_reuse.outputs.reused != 'true'
         env:
           TMPDIR: ${{ runner.temp }}/nipat-r-equivalence-check
         run: |
@@ -198,6 +216,7 @@ jobs:
             --source five-modules "$RUNNER_TEMP/nipat-five-modules-check" \
             --source r-equivalence "$RUNNER_TEMP/nipat-r-equivalence-check" \
             --source quality build/quality \
+            --source scientific-origin build/scientific-reuse \
             --source synthetic-fixtures tests/fixtures \
             --redact-root "$GITHUB_WORKSPACE" --redact-root "$RUNNER_TEMP"
       - name: Build dedicated WSL filesystem from pinned dependencies
@@ -291,6 +310,7 @@ jobs:
             ${{ runner.temp }}/nipat-five-modules-check/
             ${{ runner.temp }}/nipat-native-r-check/
             build/quality/
+            build/scientific-reuse/reuse.json
           retention-days: 14
           if-no-files-found: ignore
 
