@@ -106,6 +106,36 @@ class EnginePackageTests(unittest.TestCase):
             self.assertEqual(actual["sha256"],
                              hashlib.sha256((self.root / actual["script"]).read_bytes()).hexdigest())
 
+    def test_image_plan_gate_accepts_inferred_marker_and_rejects_wrong_marker(self):
+        spec = importlib.util.spec_from_file_location(
+            "nipat_package_plan_gate", PROJECT_ROOT / "scripts/verify_engine_package.py")
+        helper = importlib.util.module_from_spec(spec)
+        with patch.object(sys, "path", [str(PROJECT_ROOT / "scripts"), *sys.path]):
+            spec.loader.exec_module(helper)
+
+        def run_image(identifier, arguments, *, inputs, expected_returncode=0):
+            # The request itself uses platform-independent container paths; the
+            # host temporary filename is only passed to argparse's --plan file.
+            code, output, errors = self.call_main(["validate-plan", "--plan", str(inputs / "plan.json")])
+            self.assertEqual(code, expected_returncode, errors)
+            return output if code == 0 else output + errors
+
+        root = self.root / "valid plan check"
+        root.mkdir()
+        with patch.object(helper, "run_image", side_effect=run_image):
+            helper.check_plan_contract("fixture-image", root)
+
+        def wrong_marker(*args, **kwargs):
+            report = json.loads(run_image(*args, **kwargs))
+            report["plan"]["steps"][1]["parameters"]["marker_type"] = "SNP"
+            return json.dumps(report)
+
+        invalid = self.root / "wrong marker check"
+        invalid.mkdir()
+        with patch.object(helper, "run_image", side_effect=wrong_marker), \
+                self.assertRaisesRegex(ValueError, "unexpected plan"):
+            helper.check_plan_contract("fixture-image", invalid)
+
     def test_numeric_regression_provenance_accepts_complete_engine_source_inventory(self):
         from nipat.errors import ValidationError
         from nipat.paths import ProjectLayout

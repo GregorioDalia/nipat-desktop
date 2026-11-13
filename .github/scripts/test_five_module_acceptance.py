@@ -174,6 +174,16 @@ class FiveModuleAcceptanceTests(unittest.TestCase):
         self.assertFalse(acceptance.reviewable_path("scientific/vendor/NEWPAT/new.R", reliability=True,
             multiplatform=True, revised_r=True, version="0.8.50"))
 
+    def test_only_known_development_provenance_is_reviewable_from_schema7(self):
+        path = "docs/validation/0.8.50-development.json"
+        for version, wanted in (("0.8.35", False), ("0.8.49", False), ("0.8.50", True)):
+            self.assertEqual(acceptance.reviewable_path(path, reliability=True, multiplatform=True,
+                revised_r=True, version=version), wanted)
+        self.assertFalse(acceptance.reviewable_path(path, reliability=True, multiplatform=True,
+            revised_r=False, version="0.8.50"))
+        self.assertFalse(acceptance.reviewable_path("docs/validation/other.json", reliability=True,
+            multiplatform=True, revised_r=True, version="0.8.50"))
+
     def test_rejects_incomplete_or_relabelled_matrix_and_sources(self):
         original = copy.deepcopy(self.report)
         mutations = [lambda r: r.update(schema_version=1), lambda r: r.update(status="failed"),

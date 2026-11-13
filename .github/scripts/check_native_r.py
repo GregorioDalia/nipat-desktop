@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-import subprocess
 import sys
 import unittest
 
@@ -17,9 +16,10 @@ def main():
     from nipat_scientific.settings import REGISTRY
     if REGISTRY.resolve() != PAYLOAD / "lib/nipat_scientific/settings_data.json":
         raise RuntimeError("Native regressions must use the installed scientific settings")
-    subprocess.run(["Rscript", "-e", 'stopifnot(requireNamespace("jsonlite", quietly=TRUE), '
-                    'requireNamespace("data.table", quietly=TRUE), requireNamespace("ggplot2", quietly=TRUE))'],
-                   check=True, timeout=60)
+    sys.path.insert(0, str(ROOT / "tests"))
+    from native_r_helpers import NATIVE_R_AVAILABLE, NATIVE_R_REASON
+    if not NATIVE_R_AVAILABLE:
+        raise RuntimeError("Packaged R prerequisites are incomplete: " + NATIVE_R_REASON)
     os.environ["NIPAT_NATIVE_TEST_PAYLOAD_ROOT"] = str(PAYLOAD)
     loader = unittest.TestLoader()
     suite = unittest.TestSuite(loader.discover(str(ROOT / "tests"), pattern=pattern)

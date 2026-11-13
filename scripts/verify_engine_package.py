@@ -7,6 +7,7 @@ Only fixture input and result directories are mounted into the image.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -241,7 +242,11 @@ def check_plan_contract(identifier: str, root: Path) -> None:
     report = json.loads(run_image(
         identifier, ["validate-plan", "--plan", "/inputs/plan.json"], inputs=inputs,
     ))
-    expected_plan = {**plan, "steps": list(reversed(plan["steps"]))}
+    expected_plan = copy.deepcopy(plan)
+    expected_plan["steps"].reverse()
+    # Consumers now declare their inferred marker type in the canonical plan.
+    # Keep this expectation explicit rather than using the validator as oracle.
+    expected_plan["steps"][1]["parameters"] = {"marker_type": "DNP"}
     if report.get("execution_order") != ["dnp", "contamination"] or report.get("plan") != expected_plan:
         raise ValueError("The bundled validator returned an unexpected plan or execution order.")
     if plan_file.read_bytes() != before:

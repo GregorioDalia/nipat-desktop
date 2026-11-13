@@ -74,14 +74,22 @@ def standard_expected(labels: dict[str | None, dict]) -> dict:
             for label, values in labels.items() for pair in (INFORMATIVE_PAIR, NO_SITES_PAIR)}
 
 
-def normalized_panel(positions: tuple[int, ...]) -> str:
+def normalized_panel(positions: tuple[int, ...], *, include_alleles: bool) -> str:
+    # This oracle describes the fixture independently of the production writer.
+    if include_alleles:
+        alleles = {100: ("AA", "CC"), 200: ("GG", "TT"), 300: ("AC", "GT"), 400: ("CC", "AA")}
+        return "chr\tpos1\tpos2\tREF\tALT\n" + "".join(
+            f"chr1\t{position}\t{position + 1}\t{alleles[position][0]}\t{alleles[position][1]}\n"
+            for position in positions
+        )
     return "n°DNP\tchr\tpos1\tpos2\n" + "".join(
         f"DNP{number:03d}\tchr1\t{position}\t{position + 1}\n"
         for number, position in enumerate(positions, 1)
     )
 
 
-def check_staging(run: Path, samples: dict[str, Path], panels: dict[str, tuple[int, ...]]) -> None:
+def check_staging(run: Path, samples: dict[str, Path],
+                  panels: dict[str, tuple[tuple[int, ...], bool]]) -> None:
     staged = run / "work/inputs"
     if {path.name for path in staged.iterdir()} != set(samples):
         raise ValueError(f"CPI staged unselected or duplicate input names in {run}.")
@@ -92,18 +100,10 @@ def check_staging(run: Path, samples: dict[str, Path], panels: dict[str, tuple[i
                      if path.name == "DNPpanel.txt" or path.name.startswith("cutoff_")}
     if actual_panels != set(panels):
         raise ValueError(f"Unexpected CPI prepared panels in {run}: {actual_panels}.")
-    alleles = {100: ("AA", "CC"), 200: ("GG", "TT"), 300: ("AC", "GT"), 400: ("CC", "AA")}
-    for name, positions in panels.items():
-        with (run / "work" / name).open(encoding="utf-8") as handle:
-            rows = list(csv.DictReader(handle, delimiter="\t"))
-        if (len(rows) != len(positions) or any(
-                row["chr"] != "chr1" or row["pos1"] != str(position) or row["pos2"] != str(position + 1)
-                or row["n°DNP"] != f"DNP{number:03d}"
-                for number, (row, position) in enumerate(zip(rows, positions), 1))):
-            raise ValueError(f"CPI panel preparation differs from expected coordinates: {name}.")
-        for row, position in zip(rows, positions):
-            if ("REF" in row or "ALT" in row) and (row.get("REF"), row.get("ALT")) != alleles[position]:
-                raise ValueError(f"CPI panel preparation changed alleles: {name}.")
+    for name, (positions, include_alleles) in panels.items():
+        expected = normalized_panel(positions, include_alleles=include_alleles)
+        if (run / "work" / name).read_text(encoding="utf-8") != expected:
+            raise ValueError(f"CPI panel preparation differs from expected coordinates or alleles: {name}.")
 
 
 def assert_originals(originals: dict[Path, bytes]) -> None:
@@ -134,11 +134,11 @@ def check_cpi_workflow(identifier: str, root: Path, *, run_image, write_request)
         ("all", [], {None: EXPECTED_INFORMATIVE}, {}),
         ("panel", [{"label": "", "path": "/inputs/full.txt"}],
          {"/results/work/DNPpanel.txt": EXPECTED_INFORMATIVE},
-         {"DNPpanel.txt": (100, 200, 300, 400)}),
+         {"DNPpanel.txt": ((100, 200, 300, 400), True)}),
         ("named", [{"label": "Full", "path": "/inputs/full.txt"},
                    {"label": "FirstTwo", "path": "/inputs/first-two.tsv"}],
          {"Full": EXPECTED_INFORMATIVE, "FirstTwo": EXPECTED_FIRST_TWO},
-         {"cutoff_001.tsv": (100, 200, 300, 400), "cutoff_002.tsv": (100, 200)}),
+         {"cutoff_001.tsv": ((100, 200, 300, 400), True), "cutoff_002.tsv": ((100, 200), False)}),
     ):
         run = root / f"complete CPI {mode}"
         write_request(run, {**base, "cutoff_mode": mode, "cutoffs": cutoffs})
@@ -228,11 +228,11 @@ def check_cpi_client_without_host_scripts(identifier: str, root: Path, inputs: P
     for run, expected, samples, panels in (
         (all_sites, {None: EXPECTED_INFORMATIVE}, standard_samples, {}),
         (single, {str(layout.container_path(single / "work/DNPpanel.txt")): EXPECTED_INFORMATIVE},
-         standard_samples, {"DNPpanel.txt": (100, 200, 300, 400)}),
+         standard_samples, {"DNPpanel.txt": ((100, 200, 300, 400), True)}),
         (named, {"Full": EXPECTED_INFORMATIVE, "FirstTwo": EXPECTED_FIRST_TWO}, custom_samples,
-         {"cutoff_001.tsv": (100, 200, 300, 400), "cutoff_002.tsv": (100, 200)}),
+         {"cutoff_001.tsv": ((100, 200, 300, 400), True), "cutoff_002.tsv": ((100, 200), False)}),
         (native_map, {"FirstTwo": EXPECTED_FIRST_TWO, str(native_panels / "full.txt"): EXPECTED_INFORMATIVE},
-         standard_samples, {"cutoff_001.tsv": (100, 200), "cutoff_002.tsv": (100, 200, 300, 400)}),
+         standard_samples, {"cutoff_001.tsv": ((100, 200), False), "cutoff_002.tsv": ((100, 200, 300, 400), True)}),
     ):
         check_summary(run, standard_expected(expected))
         check_staging(run, samples, panels)

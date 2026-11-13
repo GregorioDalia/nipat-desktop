@@ -1,5 +1,6 @@
 """Keep scientific equivalence mandatory without authorizing publication."""
 
+import ast
 from pathlib import Path
 import re
 import unittest
@@ -40,6 +41,26 @@ class REquivalenceCI(unittest.TestCase):
         self.assertIn("result.skipped", gate)
         self.assertIn("test_native_r_*.py", gate)
         self.assertIn("test_scientific_settings.py", gate)
+
+    def test_native_gate_uses_shared_required_and_installed_r_packages(self):
+        helper = ast.parse((ROOT / "tests/native_r_helpers.py").read_text())
+        packages = next(ast.literal_eval(node.value) for node in ast.walk(helper)
+                        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name)
+                        and target.id == "packages" for target in node.targets))
+        installed = {line.split("\t")[0] for line in
+                     (ROOT / "docker/scientific-runtime/r-packages.tsv").read_text().splitlines()[1:]}
+        self.assertLessEqual(set(packages), installed)
+        required = {"jsonlite"}
+        for relative in ("CPI_postnatal/Postnatal_CPI.R", "CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+                         "contamination/detect_contamination.R"):
+            source = (ROOT / "scientific/vendor/NEWPAT" / relative).read_text()
+            required.update(re.findall(r"library\(([A-Za-z][A-Za-z0-9.]*)\)", source))
+        required.discard("tools")  # Included with base R, not a CRAN dependency.
+        self.assertEqual(set(packages), required)
+        gate = (ROOT / ".github/scripts/check_native_r.py").read_text()
+        self.assertIn("from native_r_helpers import NATIVE_R_AVAILABLE, NATIVE_R_REASON", gate)
+        self.assertIn("if not NATIVE_R_AVAILABLE:", gate)
+        self.assertNotIn("data.table", gate)
 
     def test_python_collection_includes_pytest_functions_and_unittest_classes(self):
         for name in ("ci.yml", "windows-installer.yml"):

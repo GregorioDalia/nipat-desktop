@@ -223,6 +223,11 @@ def verify_multibam_variants(case):
 
 
 def reviewable_path(path, *, reliability=False, multiplatform=False, revised_r=False, version=None):
+    # This known development report is distributed as readable provenance. It
+    # does not qualify the image; schema 7 still requires fresh installed-image
+    # evidence. Keep every other non-Markdown document outside the exception.
+    if revised_r and five_module_contract(version) and path == "docs/validation/0.8.50-development.json":
+        return True
     if revised_r and five_module_contract(version) and path == CPIN_SOURCE:
         return True
     if revised_r and path in set(R_WORKFLOWS) | {"scientific/SHA256SUMS"}:

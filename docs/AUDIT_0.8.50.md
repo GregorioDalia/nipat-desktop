@@ -21,6 +21,7 @@ alla candidata.
 | Canale aggiornamenti | Un profilo nuovo proponeva `testing` anche per una versione ufficiale. | Default `stable`; la scelta esplicita `testing` rimane rispettata e modificabile dal menu. |
 | Raccolta dei test | La scoperta tramite solo `unittest` non eseguiva i test in stile `pytest`; nei runner puliti mancava anche la dipendenza. | Dipendenze di qualità fissate e raccolta di entrambi gli stili tramite `pytest`. |
 | Test specifici dell'ambiente | Alcuni test assumevano R con dipendenze complete o percorsi host Linux anche sui runner Windows. | Prerequisiti dichiarati sui test host e verifica R obbligatoria nel runtime scientifico esatto, senza test saltati in quel controllo. |
+| Contratti del collaudo distribuito | Alcune attese conservavano il piano senza tipo di marcatore e il precedente formato dei pannelli CPI; un controllo R richiedeva inoltre un pacchetto non usato. | Attese esplicite per il piano normalizzato e i pannelli con alleli; prerequisiti coincidenti con le dipendenze effettive. Le verifiche restano distinte dall'esecuzione nell'immagine finale. |
 
 ## Prestazioni e manutenzione
 
