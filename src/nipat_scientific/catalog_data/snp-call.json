@@ -915,7 +915,7 @@
               194,
               202
             ],
-            "sha256": "96745008f6988ef5f3b706c03c42ef7c87f29b516ed7662d544d9c6f83fef289"
+            "sha256": "b10793c827f0892556ea075ff2bc49f11d96cf46ddbb23b040e78c055cc09830"
           },
           {
             "path": "src/nipat_scientific/parallel.py",
