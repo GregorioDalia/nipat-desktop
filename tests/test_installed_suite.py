@@ -3,8 +3,11 @@ import copy
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -72,9 +75,69 @@ class InstalledSuiteTests(unittest.TestCase):
         self.assertEqual(command[command.index("--data-dir") + 1], str(self.driver.inputs))
         self.assertEqual(command[command.index("--runs-dir") + 1], str(self.driver.runs))
         self.assertEqual(command[command.index("--max-workers") + 1], "2")
+        self.assertEqual(command[command.index("--input-hashes") + 1], "full")
         self.assertLess(command.index("--scientific-config"), command.index("cpi"))
         self.assertEqual(Path(command[command.index("-File") + 1]),
                          self.app.resolve() / "scripts/windows/run.ps1")
+
+    def cli_arguments(self, arguments, mode=None):
+        command = list(map(str, self.driver.command(arguments, mode)))
+        return command[command.index("-File") + 2:]
+
+    def test_every_probe_passes_the_real_cli_option_checks_before_runtime_access(self):
+        from nipat import cli
+
+        probes = (["doctor", "--runtime"], ["settings", "--json"],
+                  ["resources", "inspect", "--json"],
+                  ["runs", "stop", "--run", self.driver.runs / "owned", "--yes", "--json"])
+        for arguments in probes:
+            with self.subTest(command=arguments[0]):
+                argv = self.cli_arguments(arguments)
+                parsed = cli.build_parser().parse_args(argv)
+                self.assertIsNone(parsed.input_hashes)
+                self.assertIsNone(parsed.execution_mode)
+                self.assertIsNone(parsed.max_workers)
+                # main() performs semantic option validation before loading the
+                # scientific configuration. Stop there, before any host/runtime
+                # operations; the parser and its validation are real.
+                with patch.object(cli, "load_scientific_config",
+                                  side_effect=RuntimeError("option-validation-completed")):
+                    with self.assertRaisesRegex(RuntimeError, "option-validation-completed"):
+                        cli.main(argv)
+
+    def test_settings_probe_runs_the_real_cli_without_analysis_only_flags(self):
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.upper().startswith("NIPAT_")
+                       and key.upper() not in {"PYTHONHOME", "PYTHONPATH"}}
+        environment.update(PYTHONPATH=str(ROOT / "src"), PYTHONIOENCODING="utf-8")
+        result = subprocess.run(
+            [sys.executable, "-X", "utf8", "-m", "nipat", *self.cli_arguments(["settings", "--json"])],
+            cwd=ROOT, env=environment, capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        document = json.loads(result.stdout)
+        expected = {"dnp-call", "snp-call", "contamination", "cpi", "cpin"}
+        self.assertEqual(set(document["modules"]), expected)
+        self.assertEqual(set(document["effective"]), expected)
+
+    def test_probe_failure_surfaces_the_actual_diagnostic_in_the_report_error(self):
+        for stdout, stderr, expected in (("", "Specific CLI rejection", "Specific CLI rejection"),
+                                         ("PowerShell launcher error", "", "PowerShell launcher error"),
+                                         ("", "", "nessun messaggio restituito")):
+            with self.subTest(expected=expected):
+                result = self.process_result(stdout=stdout, stderr=stderr, code=2)
+                with patch.object(self.driver, "process", return_value=result):
+                    with self.assertRaises(ValueError) as failure:
+                        self.driver.probe("doctor", ["doctor", "--runtime"])
+                self.assertIn(expected, str(failure.exception))
+                self.assertIn("codice 2", str(failure.exception))
+                self.assertIn(result["stderr"], str(failure.exception))
+        result = self.process_result(stderr="DISCARDED_PREFIX" + "x" * 2500 + "FINAL_DIAGNOSTIC")
+        with patch.object(self.driver, "process", return_value=result):
+            with self.assertRaises(ValueError) as failure:
+                self.driver.probe("doctor", ["doctor", "--runtime"])
+        self.assertNotIn("DISCARDED_PREFIX", str(failure.exception))
+        self.assertIn("FINAL_DIAGNOSTIC", str(failure.exception))
 
     def test_fixtures_verify_bytes_and_refuse_path_escape(self):
         content = "chr\tpos\nchr1\t2\n"

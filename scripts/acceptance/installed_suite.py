@@ -229,10 +229,11 @@ class Suite:
         return result
 
     def command(self, arguments, mode=None):
-        flags = ["--data-dir", self.inputs, "--runs-dir", self.runs, "--input-hashes", "full",
+        flags = ["--data-dir", self.inputs, "--runs-dir", self.runs,
                  "--scientific-config", self.defaults]
         if mode:
-            flags += ["--execution-mode", "serial" if mode == "serial" else "auto"]
+            flags += ["--input-hashes", "full",
+                      "--execution-mode", "serial" if mode == "serial" else "auto"]
             if mode == "cap2":
                 flags += ["--max-workers", "2"]
         return [self.powershell, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
@@ -241,7 +242,9 @@ class Suite:
     def probe(self, name, arguments):
         result = self.process(name, self.command(arguments), timeout=240)
         if result["returncode"]:
-            raise ValueError(f"Controllo {name} fallito; vedere {result['stderr']}")
+            diagnostic = (log_text(result["stderr"]).strip() or log_text(result["stdout"]).strip())[-2000:]
+            raise ValueError(f"Controllo {name} fallito (codice {result['returncode']}): "
+                             f"{diagnostic or 'nessun messaggio restituito'}. Log: {result['stderr']}")
         return result
 
     def preflight(self):
