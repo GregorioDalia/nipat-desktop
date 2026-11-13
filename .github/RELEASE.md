@@ -204,6 +204,27 @@ Richiede la build completa riuscita, il commit presente nella storia di
 `stable` accetta una versione numerica `MAJOR.MINOR.PATCH` e diventa `Latest`.
 Non esiste pubblicazione automatica al push di un branch o tag.
 
+### Preparare e pubblicare in un'unica esecuzione
+
+Quando la pubblicazione della candidata è già stata autorizzata, scegliere
+esplicitamente `operation: prepare-and-publish`, indicando `run_id`,
+`source_commit` completo e `channel`. Lasciare `preparation_commit` vuoto.
+Il valore predefinito resta `prepare`, che produce soltanto una bozza.
+
+La modalità combinata scarica e verifica una sola volta i pacchetti e le
+evidenze. Prepara la bozza e subito dopo applica la normale fase di
+pubblicazione all'ID esatto appena verificato, mantenendo gli stessi file,
+note e commit di preparazione. Prima di pubblicare rilegge la bozza e
+ricontrolla tag, metadati, completezza, dimensioni e digest degli asset.
+Se la preparazione fallisce o un contenuto cambia, la pubblicazione si ferma.
+Restano obbligatori la build riuscita, l'accettazione approvata e l'esecuzione
+manuale da `main`. Con `channel: stable` la release diventa ufficiale `Latest`.
+
+Le due fasi separate descritte di seguito restano disponibili quando occorre
+esaminare la bozza prima di pubblicarla. Una modalità combinata interrotta può
+essere ripresa con la stessa procedura e l'ID della bozza; i contenuti
+esistenti devono coincidere e una release già pubblicata non viene modificata.
+
 ### 1. Preparare la bozza
 
 Avviare il workflow con `operation: prepare`, `run_id`, `source_commit`

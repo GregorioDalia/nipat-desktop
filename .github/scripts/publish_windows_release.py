@@ -1,4 +1,4 @@
-"""Prepare a verified draft, or explicitly publish it without rebuilding assets."""
+"""Prepare a verified draft, or explicitly prepare and publish without rebuilding."""
 
 import argparse
 import hashlib
@@ -658,7 +658,7 @@ def process_release(operation, files, commit, tag, version, notes, root, channel
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--operation", choices=("prepare", "publish"), default="prepare")
+    parser.add_argument("--operation", choices=("prepare", "publish", "prepare-and-publish"), default="prepare")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--draft-release-id", default="")
@@ -679,7 +679,7 @@ def main():
     commit = args.source_commit
     procedure_commit = command("git", "rev-parse", "HEAD")
     require(re.fullmatch(r"[0-9a-f]{40}", procedure_commit), "Invalid publication procedure commit")
-    require(args.operation != "prepare" or not args.preparation_commit,
+    require(args.operation == "publish" or not args.preparation_commit,
             "Preparation uses the current main commit; leave preparation_commit empty")
     # Keep the generated provenance byte-for-byte stable across the two phases.
     # Current main still supplies the procedure and must retain the same acceptance.
@@ -774,8 +774,15 @@ def main():
                       "nel record di accettazione.\n")
         notes = notes.strip()
         files = {path.name: path for path in output.iterdir()}
-        release = process_release(args.operation, files, commit, tag, manifest["version"], notes, root,
+        operation = "prepare" if args.operation == "prepare-and-publish" else args.operation
+        release = process_release(operation, files, commit, tag, manifest["version"], notes, root,
                                   channel=args.channel, draft_id=args.draft_release_id)
+        if args.operation == "prepare-and-publish":
+            # The explicit one-run mode retains the verified local bytes and
+            # preparation commit. Publishing independently rereads that exact
+            # draft and checks all remote digests, metadata and tag before PATCH.
+            release = process_release("publish", files, commit, tag, manifest["version"], notes, root,
+                                      channel=args.channel, draft_id=str(release["id"]))
         action = "Prepared private draft" if args.operation == "prepare" else "Published"
         report = (f"{action} [{tag}]({release['html_url']}) from `{commit}`.\n\n"
                   f"Build run: `{args.run_id}`; channel: `{args.channel}`; draft ID: `{release['id']}`; "

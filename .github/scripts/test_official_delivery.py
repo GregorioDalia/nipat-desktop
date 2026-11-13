@@ -1,9 +1,13 @@
 """Official four-platform candidates preserve explicit source and byte ownership."""
 
 import importlib.util
+import json
+import os
 from pathlib import Path
 import re
+import textwrap
 import unittest
+from unittest import mock
 
 
 def load(name):
@@ -65,6 +69,37 @@ class OfficialDeliveryTests(unittest.TestCase):
         self.assertNotIn("verify_experimental_installers.py", workflow)
         self.assertNotIn("contents: write", workflow)
         self.assertIn("${{ runner.temp }}/nipat-performance-check/", workflow)
+
+    def test_parallel_runtime_keeps_windows_success_required_for_final_evidence(self):
+        workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()
+        jobs = dict(re.findall(r"^  ([a-z][a-z-]+):\n(.*?)(?=^  [a-z][a-z-]+:\n|\Z)",
+                               workflow, flags=re.MULTILINE | re.DOTALL))
+        for name in ("windows-checks", "linux-runtime"):
+            with self.subTest(job=name):
+                header = jobs[name].split("    steps:", 1)[0]
+                self.assertRegex(header, r"(?m)^    needs: release-source$")
+                self.assertNotRegex(header, r"(?m)^    if:")
+        self.assertNotIn("download-artifact", jobs["linux-runtime"])
+        self.assertNotIn("needs.", jobs["linux-runtime"])
+        windows_header = jobs["windows-installer"].split("    steps:", 1)[0]
+        self.assertIn("needs: [linux-runtime, windows-checks]", windows_header)
+        self.assertNotRegex(windows_header, r"(?m)^    if:")
+        required = jobs["installer-required"]
+        self.assertIn("needs: [windows-installer, linux-installer, macos-installer]", required)
+        self.assertRegex(required, r"(?m)^    if: always\(\)$")
+        script = re.search(r"python - <<'PY'\n(.*?)^          PY$", required,
+                           flags=re.MULTILINE | re.DOTALL)[1]
+        code = compile(textwrap.dedent(script), "installer-required gate", "exec")
+        results = {name: {"result": "success"}
+                   for name in ("windows-installer", "linux-installer", "macos-installer")}
+        with mock.patch.dict(os.environ, {"CHECK_RESULTS": json.dumps(results)}):
+            exec(code, {})
+        for result in ("skipped", "failure", "cancelled"):
+            with self.subTest(windows_result=result):
+                results["windows-installer"]["result"] = result
+                with mock.patch.dict(os.environ, {"CHECK_RESULTS": json.dumps(results)}), \
+                        self.assertRaises(SystemExit):
+                    exec(code, {})
 
     def test_publisher_required_jobs_match_actual_workflow_display_names(self):
         workflow = (Path(__file__).resolve().parents[1] / "workflows/windows-installer.yml").read_text()

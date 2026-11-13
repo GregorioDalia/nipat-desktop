@@ -62,39 +62,58 @@ def sanitize(data, replacements):
     return text.encode("utf-8")
 
 
+def evidence_entries(sources, replacements=None):
+    """Read and bound CI-created synthetic evidence, without asserting release identity."""
+    seen = set()
+    total = 0
+    for label, root in sources.items():
+        require(re.fullmatch(r"[a-z0-9-]+", label) is not None, "Invalid evidence source label")
+        require(root.is_dir() and not root.is_symlink(), f"Missing synthetic evidence directory: {label}")
+        for path in sorted(root.rglob("*")):
+            require(not path.is_symlink(), "Symlinks are not qualification evidence")
+            if not path.is_file() or path.suffix.lower() not in ALLOWED:
+                continue
+            # Installed/package directories can contain large archives;
+            # only explicitly allowed textual evidence is collected.
+            require(path.stat().st_size <= MAX_FILE, f"Qualification text exceeds its bound: {path.name}")
+            data = sanitize(path.read_bytes(), replacements or {})
+            require(len(data) <= MAX_FILE, f"Qualification text exceeds its bound: {path.name}")
+            name = label + "/" + path.relative_to(root).as_posix()
+            require(safe_name(name), "Unsafe evidence path")
+            require(name.casefold() not in seen, "Invalid or duplicate qualification entry")
+            total += len(data)
+            require(total <= MAX_TOTAL,
+                    f"Qualification expanded bytes {total} exceed limit {MAX_TOTAL} at {name}")
+            require(len(seen) < MAX_ENTRIES,
+                    f"Qualification entry count {len(seen) + 1} exceeds limit {MAX_ENTRIES} at {name}")
+            seen.add(name.casefold())
+            yield name, data
+    require(seen, "No qualification evidence was collected")
+
+
+def preflight(sources, replacements=None):
+    """Check available evidence before packaging; final installer binding is still required."""
+    count = total = 0
+    for _, data in evidence_entries(sources, replacements):
+        count += 1
+        total += len(data)
+    return {"entries": count, "expanded_bytes": total}
+
+
 def build(output, installer_set, sources, replacements=None):
     """Sources must be CI-created synthetic-check/report directories, never user runs."""
     output.mkdir(parents=True, exist_ok=True)
     archive = output / ARCHIVE
     require(not archive.exists() and not (output / DESCRIPTOR).exists(), "Qualification evidence already exists")
     entries = []
-    total = 0
     try:
         with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as handle:
-            for label, root in sources.items():
-                require(re.fullmatch(r"[a-z0-9-]+", label) is not None, "Invalid evidence source label")
-                require(root.is_dir() and not root.is_symlink(), f"Missing synthetic evidence directory: {label}")
-                for path in sorted(root.rglob("*")):
-                    require(not path.is_symlink(), "Symlinks are not qualification evidence")
-                    if not path.is_file() or path.suffix.lower() not in ALLOWED:
-                        continue
-                    # Installed/package directories can contain large archives;
-                    # only explicitly allowed textual evidence is collected.
-                    require(path.stat().st_size <= MAX_FILE, f"Qualification text exceeds its bound: {path.name}")
-                    data = sanitize(path.read_bytes(), replacements or {})
-                    name = label + "/" + path.relative_to(root).as_posix()
-                    require(safe_name(name), "Unsafe evidence path")
-                    total += len(data)
-                    require(total <= MAX_TOTAL,
-                            f"Qualification expanded bytes {total} exceed limit {MAX_TOTAL} at {name}")
-                    require(len(entries) < MAX_ENTRIES,
-                            f"Qualification entry count {len(entries) + 1} exceeds limit {MAX_ENTRIES} at {name}")
-                    info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
-                    info.compress_type = zipfile.ZIP_DEFLATED
-                    info.external_attr = (stat.S_IFREG | 0o644) << 16
-                    handle.writestr(info, data)
-                    entries.append({"path": name, "size": len(data), "sha256": digest(data)})
-        require(entries, "No qualification evidence was collected")
+            for name, data in evidence_entries(sources, replacements):
+                info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_DEFLATED
+                info.external_attr = (stat.S_IFREG | 0o644) << 16
+                handle.writestr(info, data)
+                entries.append({"path": name, "size": len(data), "sha256": digest(data)})
         descriptor = {**identity(installer_set), "archive": {
             "file": ARCHIVE, "size": archive.stat().st_size, "sha256": digest(archive.read_bytes()),
         }, "entries": entries}
@@ -153,15 +172,26 @@ def verify(directory, installer_set):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--installer-set", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--installer-set", type=Path)
+    mode.add_argument("--preflight", action="store_true",
+                      help="check available evidence without creating a release bundle")
+    parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--source", action="append", nargs=2, metavar=("LABEL", "CI_DIRECTORY"), default=[])
     parser.add_argument("--redact-root", action="append", default=[])
     args = parser.parse_args()
+    if (args.preflight and args.output_dir is not None) or (not args.preflight and args.output_dir is None):
+        parser.error("--output-dir is required only with --installer-set")
     require(len({label for label, _ in args.source}) == len(args.source), "Duplicate evidence source label")
+    sources = {label: Path(path) for label, path in args.source}
+    replacements = {path: "${CI_WORKSPACE}" for path in args.redact_root}
+    if args.preflight:
+        result = preflight(sources, replacements)
+        print(f"PASS: available synthetic evidence fits bounds: {result['entries']} entries, "
+              f"{result['expanded_bytes']} expanded bytes. Final installer-bound verification remains required.")
+        return
     value = json.loads(args.installer_set.read_text(encoding="utf-8"))
-    build(args.output_dir, value, {label: Path(path) for label, path in args.source},
-          {path: "${CI_WORKSPACE}" for path in args.redact_root})
+    build(args.output_dir, value, sources, replacements)
     print("PASS: bounded synthetic qualification evidence archived and independently verified.")
 
 

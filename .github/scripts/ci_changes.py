@@ -40,7 +40,11 @@ def layers_for_path(path):
             or path.startswith("scripts/verify_linux_")
             or path in {"scripts/verify_windows_payload.py", ".github/scripts/verify_installer_set.py"}):
         layers.add("packaging")
-    if path.startswith(".github/workflows/") or path in {
+    if path == ".github/workflows/publish-windows-release.yml":
+        # Publication revalidates existing installers and evidence; it does not
+        # build or execute the scientific runtime. Required quick checks remain.
+        layers.add("packaging")
+    elif path.startswith(".github/workflows/") or path in {
         ".github/scripts/ci_changes.py", ".github/scripts/test_ci_changes.py",
         ".github/scripts/ci_control.py", ".github/scripts/test_ci_control.py",
     }:

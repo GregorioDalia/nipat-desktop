@@ -21,6 +21,24 @@ def job_text(workflow, identifier):
 
 
 class REquivalenceCI(unittest.TestCase):
+    def test_evidence_preflight_is_required_before_runtime_export_and_installers(self):
+        workflow = (ROOT / ".github/workflows/windows-installer.yml").read_text()
+        runtime = job_text(workflow, "linux-runtime")
+        name = "Preflight scientific evidence before building installers"
+        self.assertLess(runtime.index(CHECK_NAME), runtime.index(name))
+        self.assertLess(runtime.index(name), runtime.index("Build dedicated WSL filesystem"))
+        step = re.search(rf"^      - name: {name}\n(.*?)(?=^      - name:|\Z)",
+                         runtime, re.MULTILINE | re.DOTALL)[1]
+        self.assertNotIn("continue-on-error:", step)
+        self.assertNotRegex(step, r"(?m)^        if:")
+        self.assertIn("qualification_evidence.py --preflight", step)
+        for directory in ("engine", "presentation", "performance", "native-r", "five-modules", "r-equivalence"):
+            self.assertIn(f'"$RUNNER_TEMP/nipat-{directory}-check"', step)
+        final = job_text(workflow, "installer-required")
+        self.assertIn("qualification_evidence.py", final)
+        self.assertIn("--installer-set build/verified-installers/installer-set-check.json", final)
+        self.assertNotIn("--preflight", final)
+
     def test_new_analysis_models_are_required_in_the_packaged_image(self):
         for name, identifier in (("ci.yml", "scientific"),
                                  ("windows-installer.yml", "linux-runtime")):
