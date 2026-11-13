@@ -119,6 +119,8 @@ class FiveModuleQualificationTests(unittest.TestCase):
 
         self.enterContext(mock.patch.object(qualification.shutil, "which", return_value="/usr/bin/docker"))
         self.enterContext(mock.patch.object(qualification.subprocess, "run", side_effect=run))
+        self.enterContext(mock.patch.object(qualification.os, "getuid", return_value=1001, create=True))
+        self.enterContext(mock.patch.object(qualification.os, "getgid", return_value=121, create=True))
         qualification.qualify_image("mutable-tag", tmp_path, True)
         command = commands[1]
         assert "mutable-tag" not in command and image_id in command
@@ -128,7 +130,13 @@ class FiveModuleQualificationTests(unittest.TestCase):
         assert len(mounts) == 2
         assert all("/opt/nipat" not in mount for mount in mounts)
         assert any("target=/qualification" in mount and "readonly" in mount for mount in mounts)
-        assert "--env" not in command and "-e" not in command
+        # Private (0600) settings must belong to the runner that uploads the
+        # evidence, while only fixed scratch locations enter the environment.
+        self.assertEqual(command[command.index("--user") + 1], "1001:121")
+        self.assertLess(command.index("--user"), command.index(image_id))
+        environment = [command[index + 1] for index, value in enumerate(command) if value == "--env"]
+        self.assertEqual(environment, ["HOME=/tmp", "TMPDIR=/tmp"])
+        self.assertNotIn("-e", command)
 
 
     def test_worker_gate_checks_observed_concurrency_and_task_completion(self):

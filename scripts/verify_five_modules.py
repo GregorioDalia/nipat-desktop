@@ -117,6 +117,13 @@ def qualify_image(image, destination, full):
     image_id = inspected.stdout.strip()
     require(re.fullmatch(r"sha256:[0-9a-f]{64}", image_id), "Invalid immutable Docker image ID")
     command = ["docker", "run", "--rm", "--network=none", "--cpus=4", "--memory=8g",
+               "--env", "HOME=/tmp", "--env", "TMPDIR=/tmp"]
+    if hasattr(os, "getuid"):
+        # Atomic settings files intentionally retain mode 0600. Create the
+        # synthetic evidence as the runner, so upload/archiving can read it
+        # without relaxing either scientific file permissions or ownership.
+        command += ["--user", f"{os.getuid()}:{os.getgid()}"]
+    command += [
                "--mount", mount(PROJECT, "/qualification", readonly=True),
                "--mount", mount(destination, "/evidence"), "--workdir", "/evidence",
                "--entrypoint", "python3", image_id, "/qualification/scripts/verify_five_modules.py",
