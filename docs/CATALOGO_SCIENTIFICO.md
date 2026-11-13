@@ -47,12 +47,12 @@ distinti da quelli dichiarati da R. Per un pileup importato, le impostazioni
 samtools applicate a monte possono non essere ricostruibili: il catalogo
 non attribuisce a quel file le impostazioni della preparazione BAM di NIPAT.
 
-Dalla 0.8.50 le soglie e le costanti d'errore elencate nel registro scientifico
-sono configurabili. `nipat settings` mostra default, limiti, costanti e vincoli;
-`--scientific-config` e `--set` applicano modifiche validate. Gli invarianti del
-modello sono leggibili e restano distinti dai parametri modificabili. Ogni run
-conserva `effective-scientific-settings.json`; la [guida di sviluppo](DEVELOPMENT_0.8.50.md)
-mostra esempi completi.
+Il registro scientifico indica quali soglie e costanti d'errore sono
+configurabili. `nipat settings` mostra valori predefiniti, intervalli,
+costanti e vincoli. Le opzioni `--scientific-config` e `--set` applicano
+i valori dopo la convalida. Il file `effective-scientific-settings.json`
+registra quelli effettivi. La [guida per l'utilizzo](GUIDA_UTILIZZO.md)
+mostra come impostarli.
 I pannelli CPI chiamati *cutoff* selezionano coordinate; i loro nomi non
 applicano soglie numeriche ai campioni.
 
@@ -68,8 +68,9 @@ la modalità automatica e non prevale sulla scelta `serial`.
 Per DNP, `--dnp-block-mib` e `--dnp-block-loci` hanno default rispettivamente
 32 MiB e 64 loci. Sono obiettivi di dimensionamento dei blocchi: finestre
 complete e gruppi indivisibili possono superarli, e i byte del pileup non
-sono un limite alla RAM residente di R. Un singolo BAM può usare il pool dei
-blocchi; quando sono attivi più worker campione, i loro blocchi restano seriali.
+sono un limite alla RAM residente di R. I campioni e i blocchi DNP
+usano una coda comune di lavoro. Il numero di processi dipende dal budget e
+dalle attività disponibili.
 Le opzioni effettive sono registrate in `run.json`, mentre `work/dnp-blocks.json`
 documenta blocchi e worker DNP. La policy cambia l'organizzazione del calcolo,
 non le formule, i filtri o le soglie scientifiche descritti nel catalogo.

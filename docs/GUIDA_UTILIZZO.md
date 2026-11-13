@@ -1,1068 +1,422 @@
 # Guida per l'utilizzo di NIPAT
 
-Questa guida descrive il codice **NIPAT Desktop 0.8.50 in sviluppo**, con
-menu testuale guidato e CLI diretta su Windows, macOS e Ubuntu. Questa
-revisione non è stata pubblicata: i pacchetti nella pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases) appartengono
-alle versioni già distribuite. Le procedure di installazione qui descritte
-restano il riferimento generale; la [nota di sviluppo](DEVELOPMENT_0.8.50.md)
-distingue le nuove funzioni e le verifiche ancora necessarie sui pacchetti.
+NIPAT Desktop esegue sul computer dell'utente cinque analisi di dati genetici.
+Il menu guidato permette di compilare un'analisi passo per passo. La CLI
+accetta gli stessi tipi di input e permette di ripetere un comando da uno script.
 
-**W → 5 — Workflow completo** collega DNPcall e/o SNPcall a qualsiasi
-combinazione di Contamination, CPI prenatale e CPIN postnatale. Può usare BAM,
-pileup SNP oppure tabelle già disponibili; i due tipi di marcatori rimangono
-separati e possono eseguire analisi diverse. Un'unica configurazione e conferma
-avvia i passaggi selezionati; i cinque moduli singoli restano disponibili.
-
-**Guida e informazioni → Catalogo scientifico** e `nipat parameters`
-descrivono le interfacce distribuite. `nipat settings` e **Configura → S**
-mostrano i parametri scientifici, i default, i vincoli e le costanti consultabili.
-Il [riferimento del catalogo](CATALOGO_SCIENTIFICO.md) e il
-[contratto dei piani](WORKFLOW_CONTRACT.md) documentano queste interfacce.
-
-NIPAT esegue DNPcall, SNPcall, Contamination, CPI e CPIN sul computer dell'utente.
-Il motore scientifico contiene gli script R e gli strumenti necessari.
-Gli autotest verificano casi noti; la correttezza scientifica sui propri
-campioni richiede una valutazione appropriata al contesto di utilizzo.
+- [Installazione e avvio](#requisiti-e-avvio-su-windows)
+- [Menu guidato](#menu-guidato)
+- [File richiesti dai cinque moduli](#input-dei-cinque-moduli)
+- [Comandi diretti](#comandi-diretti) e [parametri scientifici](#parametri-scientifici-valori-effettivi-e-costanti)
+- [Workflow automatici](#risultati-e-analisi-in-sequenza)
+- [Risultati e risoluzione dei problemi](#problemi-e-segnalazioni)
 
 ## Requisiti e avvio su Windows
 
-Il pacchetto richiede **Windows 10 22H2 x64 (build 19045) o Windows 11 x64**,
-virtualizzazione disponibile e WSL2. Windows Server, ARM e 32 bit non sono
-supportati. Il setup rileva la disponibilità di WSL e prepara i componenti mancanti.
-L'attivazione di WSL può richiedere Internet, autorizzazione amministrativa
-e riavvio, secondo la configurazione del computer. Le policy dell'istituzione
-possono richiedere l'intervento del servizio informatico. Non sono necessarie
-installazioni separate di Python, R, samtools o Docker Desktop.
+Scaricare **NIPAT-Setup.exe** dalla [pagina delle release](https://github.com/GregorioDalia/nipat-desktop/releases/latest).
+Il pacchetto è per Windows 10 22H2 x64 (build 19045) o Windows 11 x64 con
+virtualizzazione e WSL2. Il setup prepara un ambiente dedicato con gli strumenti
+scientifici. L'attivazione iniziale di WSL può richiedere Internet, autorizzazione
+amministrativa e riavvio.
 
-Dalla pagina Releases, scaricare
-**NIPAT-Setup.exe**.
-Si utilizza un solo file eseguibile, senza archivi da estrarre. I file
-**Source code** sono destinati allo sviluppo e non sono installatori.
+1. Aprire il file scaricato da Esplora file, dal proprio account.
+2. Scegliere le cartelle dell'applicazione, dell'ambiente WSL, della cache,
+   dei dati e dei risultati. Si possono mantenere i valori proposti.
+3. Attendere **`NIPAT: ready`**, poi aprire **NIPAT Desktop** dal menu Start.
+   Se è richiesto un riavvio, completarlo e seguire le indicazioni del setup.
 
-Installare e avviare NIPAT:
-
-1. Eseguire l'EXE con doppio clic dal proprio account Windows, senza usare
-   «Esegui come amministratore».
-2. Scegliere la cartella dell'applicazione e le quattro cartelle per ambiente
-   WSL, cache, dati e risultati, oppure mantenere i valori proposti. Il setup
-   indica **Installazione** oppure **Aggiornamento e riparazione** quando
-   riconosce un’installazione NIPAT Desktop esistente. Se richiesta, autorizzare l'attivazione
-   di WSL e completare il riavvio.
-3. Attendere il completamento della preparazione e degli autotest, indicato
-   da **`NIPAT: ready`**.
-4. Selezionare **Avvia NIPAT Desktop** nella schermata finale del setup,
-   oppure aprire il collegamento dal menu Start o dal desktop. L'opzione
-   di avvio immediato è disponibile quando la preparazione è completata
-   e non è richiesto un riavvio.
-
-Il collegamento apre il menu guidato. Per gli utilizzi successivi è sufficiente
-aprire la stessa icona: non occorre rieseguire il setup, organizzare archivi,
-spostare componenti o aprire PowerShell. L'ambiente WSL dedicato
-viene avviato automaticamente quando serve.
-
-Se la preparazione si interrompe, conservare il messaggio e il log, risolvere
-la causa indicata e aprire **NIPAT Desktop - completa preparazione** dal
-menu Start. L'applicazione non avvia analisi finché il setup non è completato.
-I dettagli dell'installazione e dei suoi limiti sono in
-[DISTRIBUZIONE.md](DISTRIBUZIONE.md).
-
-Il pacchetto Windows non è firmato da NIPAT. Se Windows o il browser ne impediscono
-l'uso, conservare il messaggio completo e il nome del file bloccato e comunicarli
-al responsabile tecnico insieme alla versione del pacchetto. Le indicazioni
-per la diagnosi sono nella [guida Windows](INSTALLATORE_WINDOWS.md#controlli-di-sicurezza-di-windows-e-del-browser).
+Per riprendere una preparazione incompleta, risolvere l'errore segnalato e aprire
+**NIPAT Desktop - completa preparazione** dal menu Start. Se Windows o il
+browser blocca il setup, annotare il messaggio e il componente indicato. La
+[guida Windows](INSTALLATORE_WINDOWS.md) descrive requisiti, diagnostica,
+riparazione e disinstallazione.
 
 ## Requisiti e avvio su macOS
 
-Usare macOS 14 o successivo e il pacchetto della propria architettura:
-`NIPAT-VERSIONE-macos-arm64.pkg` per Apple Silicon,
-`NIPAT-VERSIONE-macos-x86_64.pkg` per Intel.
-Aprire il `.pkg`, completare l'installazione e avviare **NIPAT Desktop**
-da Applicazioni. Il menu si apre nel Terminale. Il primo avvio prepara Lima
-e richiede Internet; Python e Lima sono inclusi, senza installazione manuale
-di Homebrew o Docker Desktop.
-
-Il calcolo usa un container Linux AMD64. Su Apple Silicon l'esecuzione avviene
-tramite Rosetta nella VM Lima ARM64. Cartelle e runtime appartengono al profilo
-desktop. Installatore e applicazione non sono notarizzati: le protezioni
-del sistema possono impedirne l'avvio. Requisiti, percorsi e diagnostica sono
-nella [guida macOS](INSTALLATORE_MACOS.md).
+Su macOS 14 o successivo scaricare il `.pkg` **arm64** per Apple Silicon
+oppure **x86_64** per Intel. Installare il pacchetto e aprire **NIPAT Desktop**
+da Applicazioni. Il primo avvio nel Terminale prepara la VM Lima e richiede
+Internet. Su Apple Silicon, l'immagine scientifica Linux AMD64 usa Rosetta
+nella VM. Per i requisiti, i percorsi e le protezioni del sistema consultare
+la [guida macOS](INSTALLATORE_MACOS.md).
 
 ## Utilizzo su Ubuntu
 
-Installare `nipat-desktop_VERSIONE_amd64.deb` su Ubuntu 24.04 x86_64 secondo la
-[guida Ubuntu](INSTALLATORE_LINUX.md). Il pacchetto include l'immagine scientifica;
-APT risolve le dipendenze mancanti. Il motore Docker locale deve essere accessibile
-all'utente. La [procedura da sorgenti](DISTRIBUZIONE.md#ubuntu-installazione-da-sorgenti)
-è destinata allo sviluppo.
+Su Ubuntu 24.04 x86_64 installare il pacchetto `.deb` con APT.
+L'ambiente scientifico usa Docker Engine locale, che deve essere accessibile
+all'utente. Avviare il menu con `nipat`. La
+[guida Ubuntu](INSTALLATORE_LINUX.md) descrive installazione e diagnosi.
 
 ## Menu guidato
 
-Il banner riporta la versione. Il menu separa le analisi singole, i workflow
-automatici e gli strumenti di configurazione e consultazione.
-Nei terminali interattivi supportati si usano frecce e Invio oppure il tasto
-indicato accanto alla voce. Negli altri terminali si digita la scelta in testo
-semplice: un numero, `N` per CPIN oppure `W` per i workflow automatici.
-
-Quando si ridimensiona la finestra, NIPAT adatta il menu allo spazio disponibile.
-Se lo spazio non basta o la lettura dei tasti non è disponibile, il messaggio
-indica il motivo e consente la selezione testuale. Allargare la finestra può
-rendere di nuovo utilizzabili le frecce nel menu successivo.
-
-| Scelta | Funzione |
+| Tasto | Funzione |
 | --- | --- |
-| 1 | DNPcall: dinucleotidi da uno o più BAM. |
-| 2 | SNPcall: SNP da BAM o pileup esistente. |
-| 3 | Contamination: stime da tabelle compatibili. |
-| 4 | CPI prenatale: frazione fetale e indice di paternità. |
-| N | CPIN / CPI postnatale: madre, padre e figlio, da tabelle SNP o DNP. |
-| 5 | Configura: cartelle e impostazioni predefinite del menu, conservate fra gli avvii. |
-| 6 | Risultati e log dell'ultima esecuzione della sessione. |
-| 7 | Guida e informazioni: istruzioni, versione e riferimenti. |
-| 8 | Verifica ambiente: controllo del runtime e degli strumenti di analisi. |
-| 9 | Verifica aggiornamenti: consulta le release compatibili e verifica il download del pacchetto. |
-| W | Workflow automatici: composizione completa dei cinque moduli e preset rapidi. |
-| 0 | Uscita dal programma. |
+| `1` | DNPcall da uno o più BAM. |
+| `2` | SNPcall da un BAM o un pileup. |
+| `3` | Contamination da tabelle di conteggi. |
+| `4` | CPI prenatale da coppie di campioni. |
+| `N` | CPIN postnatale da terne di campioni. |
+| `W` | Workflow automatici con più passaggi. |
+| `5` | Configurazione delle analisi guidate. |
+| `6` | Ultima esecuzione della sessione, anche fallita o interrotta. |
+| `7` | Guida, catalogo, esecuzioni incomplete e manutenzione. |
+| `8` | Verifica dell'ambiente scientifico. |
+| `9` | Verifica degli aggiornamenti. |
+| `0` | Esci. |
 
-Ogni campo presenta indicazioni sul formato richiesto e sul significato di
-Invio. Nei terminali con colori, le indicazioni contestuali sono grigie;
-restano leggibili in testo semplice negli altri terminali.
+Usare frecce e Invio o il tasto indicato. Se il terminale non supporta le
+frecce o la finestra è troppo piccola, la stessa scelta è disponibile in testo.
+Invio mantiene il valore proposto o chiude un elenco di file già compilato.
+Nei campi usare `:indietro` per tornare al campo precedente, `:vuoto` per
+svuotare un valore facoltativo, `:annulla` per tornare al menu principale.
 
-| Comando durante l'inserimento | Effetto |
+Prima di confermare, verificare file, parametri scientifici, modalità di
+esecuzione e destinazione nel riepilogo. La voce **Avvia analisi** avvia
+il calcolo ordinario. **Avvia analisi con diagnostica prestazioni** aggiunge
+le misure per quel run. Il solo Invio sul riepilogo annulla l'avvio.
+Durante il calcolo, Ctrl+C richiede l'arresto e conserva log e output già
+prodotti. Attendere il ritorno del controllo e verificare eventuali avvisi
+sull'arresto prima di iniziare un altro run. La
+[guida alle esecuzioni](ESECUZIONI.md#esecuzioni-incomplete) spiega come
+consultare una sessione incompleta.
+
+### Configurazione del menu
+
+Con **5 — Configura** si salvano cartelle, pannelli, riferimenti, impostazioni
+scientifiche, limiti di calcolo e canale di aggiornamento. **9 — Salva
+modifiche** salva la categoria corrente. **0 — Annulla modifiche** la chiude
+scartando le modifiche ancora da salvare. Campioni, coppie, terne e nome
+del run vengono indicati a ogni analisi.
+
+I comandi diretti usano le opzioni CLI e i propri valori predefiniti.
+Per vedere le impostazioni scientifiche usare **Configura → S** nel menu
+oppure [`settings` nella CLI](#parametri-scientifici-valori-effettivi-e-costanti).
+Un file delle preferenze illeggibile viene segnalato e blocca le analisi
+guidate. **Ripristina impostazioni** azzera le preferenze dopo conferma.
+
+### Percorsi e cartelle
+
+Gli input possono rimanere nella posizione originale. I percorsi relativi
+si risolvono dalla cartella corrente mostrata nel menu. Nei file elenco
+BAM, invece, partono dalla posizione dell'elenco. Su Windows usare dischi
+locali fissi per dati e risultati. Su macOS i percorsi devono essere
+accessibili alla VM Lima. Su Ubuntu devono essere accessibili al motore
+Docker locale.
+
+| Sistema | Cartella risultati predefinita |
 | --- | --- |
-| Invio in un campo con valore predefinito | Mantiene il valore mostrato. |
-| Invio in una lista con almeno un file | Termina l'elenco. |
-| Invio in una lista vuota | Ripropone le istruzioni; serve almeno un file. |
-| `:indietro` | Torna al campo precedente conservando i valori inseriti. |
-| `:annulla` | Nei campi e nei menu a inserimento testuale, annulla l'operazione corrente e torna direttamente al menu principale. |
-| Ctrl+C | Annulla l'operazione corrente e torna al menu principale, anche nei menu a frecce e durante il calcolo. |
-| `:vuoto` | Cancella un valore facoltativo, come nome del run o prefisso CPI. |
+| Windows | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
+| macOS | `~/Library/Application Support/NIPAT-Desktop/runs` |
+| Ubuntu | `~/.local/share/nipat-desktop/runs`, salvo `XDG_DATA_HOME`. |
+| Checkout da sorgenti | `runs` accanto alla cartella del progetto. |
 
-Nei campi di testo e nei percorsi, `0` è un valore: per annullare usare
-`:annulla` oppure Ctrl+C. Nei menu che lo prevedono, Esc torna al passaggio
-precedente; Ctrl+C torna direttamente al menu principale. La voce `0` segue
-l'azione indicata nel menu: soltanto **0 — Esci** nel menu principale chiude
-NIPAT. Il completamento dei percorsi con Tab non è disponibile.
+La cartella risultati deve essere scrivibile e separata da applicazione e
+cartella dati. **Configura → Cartelle dati e risultati** cambia la destinazione
+proposta per il menu. Nella CLI usare `--runs-dir` prima del comando.
+I risultati già prodotti restano nella propria cartella. Per un nome automatico
+lasciare vuoto il campo del run nel menu o omettere `--run-name`.
 
-Durante il calcolo usare Ctrl+C e attendere il completamento dell'arresto.
-NIPAT conserva la cartella del run, i log e gli output già prodotti. Nei
-workflow automatici i passaggi successivi non vengono avviati; i risultati
-parziali non attestano il completamento dell'analisi. Per ripetere il lavoro
-occorre avviare un nuovo run: non è prevista la ripresa automatica.
+### Aggiornamenti e spazio
 
-Al termine della compilazione, controllare input, parametri e destinazione
-nel riepilogo. È possibile correggere i campi prima di scegliere
-**1 — Avvia analisi**. La scelta predefinita è **0 — Annulla**: il solo Invio
-non avvia il calcolo. La conferma esplicita esegue il motore scientifico,
-inclusi gli script R e samtools quando il workflow lo richiede.
-**4 — Parallelismo e blocchi** modifica le risorse per il run;
-**5 — Parametri scientifici e costanti** mostra tutti i valori e consente
-modifiche valide solo per quella esecuzione.
+**9 — Verifica aggiornamenti** consulta le release compatibili con sistema,
+architettura e canale. Mostra le note e verifica il pacchetto scaricato.
+Chiudere NIPAT prima di sostituire l'applicazione. Su Mac aprire il `.pkg`
+verificato al termine del download.
 
-**Avvia analisi con diagnostica prestazioni** aggiunge la raccolta facoltativa
-di tempi, CPU, memoria e I/O per quella sola esecuzione. **Avvia analisi**
-mantiene la modalità ordinaria senza monitoraggio. La scelta diagnostica non
-viene salvata nelle preferenze. Le misure sono consultabili in `run-report.html`;
-la [guida alle prestazioni](PERFORMANCE.md) descrive attivazione, confronto
-fra prove e limiti dei contatori.
-
-La schermata finale consente di aprire risultati, cartella del run e log,
-o di visualizzare il riepilogo dell'esecuzione. Il riepilogo descrive file
-e metadati; non interpreta il significato scientifico dei risultati.
-Gli avvisi registrati sugli input o sui risultati sono mostrati anche nella
-schermata finale, con il riferimento al rapporto completo. Il completamento
-tecnico non risolve questi avvisi: esaminarli prima di utilizzare le stime.
-Il richiamo dell'ultima esecuzione vale per la sessione corrente. I run
-precedenti restano sul disco; non è presente una cronologia tra sessioni.
-La voce **6 — Ultima esecuzione** include anche il run più recente fallito
-o interrotto, quando la sua cartella è stata creata. In questo caso mostra
-lo stato e consente di consultare log e risultati parziali; non presenta
-come ultimo risultato un run riuscito precedente.
-Ogni workflow automatico conserva i risultati separati dei passaggi selezionati
-all'interno di un solo run.
-
-**7 — Guida e informazioni** contiene istruzioni, catalogo scientifico,
-diagnostica delle esecuzioni incomplete e manutenzione dell'installazione.
-Aprire la guida non avvia analisi o manutenzioni. **8 — Verifica ambiente**
-nel menu principale controlla invece il motore e gli strumenti senza
-elaborare campioni.
-
-## Configurazione del menu
-
-**5 — Configura** conserva le impostazioni utilizzate come valori proposti
-nelle analisi guidate. Scegliere una categoria e poi il campo da modificare;
-le indicazioni spiegano il valore richiesto. **9 — Salva modifiche** registra
-la categoria, mentre **0 — Annulla modifiche** la chiude senza salvare.
-Invio mantiene il valore mostrato durante la modifica di un campo; nel menu
-della categoria equivale ad annullare senza salvare.
-`:annulla` oppure Ctrl+C abbandonano la configurazione e tornano direttamente
-al menu principale, scartando le modifiche della schermata non ancora salvate.
-Le categorie già salvate rimangono attive; annullare non ripristina i valori
-precedenti a un salvataggio.
-
-| Categoria | Impostazioni |
-| --- | --- |
-| Cartelle dati e risultati | Cartella proposta per organizzare i dati e destinazione predefinita dei run. |
-| DNPcall | Modalità di selezione dei BAM, FASTA, pannello e modalità seriale/parallela. |
-| SNPcall | Modalità BAM o pileup, FASTA e pannello SNP. |
-| Contamination | Modalità singoli file o cartella e pannello. |
-| CPI | Prefissi materno/paterno, frequenze di popolazione, modalità di selezione dei siti e relativi pannelli o mappe, costante d'errore. |
-| Riepilogo impostazioni | Consultazione dei valori salvati. |
-| Ripristina impostazioni | Ritorno ai valori iniziali del menu dopo conferma esplicita; non elimina campioni o risultati. |
-| Aggiornamenti | Canale e verifica della disponibilità di release compatibili. |
-| Risorse e provenienza | Checksum, modalità seriale, processi e blocchi; configurazione RAM/CPU dell’ambiente con anteprima, backup e conferma. |
-| S — Parametri scientifici e costanti | Parametri dei cinque moduli, limiti, vincoli e costanti; salvataggio delle modifiche per i successivi avvii guidati. |
-
-I valori salvati vengono riproposti anche dopo aver chiuso NIPAT. Si possono
-modificare durante la compilazione di una singola analisi senza cambiare le
-preferenze salvate. Campioni, coppie CPI, terne CPIN e nome del run devono essere indicati
-ogni volta: non vengono memorizzati come valori predefiniti. Verificare sempre
-riferimenti, pannelli, parametri e destinazione nel riepilogo prima dell'avvio.
-
-Le preferenze del menu sono conservate in:
-
-| Sistema | File |
-| --- | --- |
-| Windows | `%LOCALAPPDATA%\NIPAT-Desktop\preferences.json` |
-| macOS | `~/Library/Application Support/NIPAT-Desktop/preferences.json` |
-| Ubuntu | `~/.config/nipat-desktop/preferences.json`, oppure sotto `XDG_CONFIG_HOME`. |
-
-Questa configurazione riguarda esclusivamente il menu guidato. I comandi CLI
-diretti usano le proprie opzioni esplicite e i normali valori predefiniti,
-indipendentemente da `preferences.json`. Se il menu viene avviato con
-`--data-dir` o `--runs-dir`, quei percorsi prevalgono nella sessione; le
-cartelle salvate saranno utilizzate alla riapertura senza le opzioni esplicite.
-
-Se il file delle preferenze non è leggibile o valido, NIPAT lo segnala, non
-lo sovrascrive e blocca le analisi guidate fino alla correzione o al ripristino.
-Usare **Configura → Ripristina impostazioni** solo dopo aver verificato il
-messaggio: il ripristino elimina le preferenze, non i dati o i risultati. Un riferimento salvato che non esiste più può essere corretto nei
-campi dell'analisi; la presenza nelle preferenze non ne attesta la validità.
-
-Per cambiare la posizione dell'applicazione, dell'ambiente WSL o della cache,
-usare l'installatore. **Configura** non trasferisce questi componenti e non
-sposta i dati già presenti. La gestione delle cartelle è descritta di seguito.
-
-**Risorse e provenienza** propone `auto` per i checksum: i file fino a
-16 MiB vengono verificati con SHA-256, quelli maggiori sono identificati dai
-metadati. La scelta `full` calcola e verifica anche gli hash dei file grandi,
-con letture aggiuntive prima e dopo il calcolo. I limiti CPU, memoria e processi
-sono facoltativi; un campo non impostato conserva i limiti del runtime.
-Il budget comune considera quota CPU, memoria disponibile, lavoro da svolgere
-e massimo di processi richiesto. La modalità seriale limita il calcolo a un
-processo; i pool interni non moltiplicano il budget fra campioni e fasi.
-Le modalità sono descritte in [Esecuzioni e risultati](ESECUZIONI.md).
-
-## Aggiornamenti
-
-**9 — Verifica aggiornamenti** consulta le release compatibili, mostra
-versione e note e verifica il pacchetto scaricato. Su Windows e Ubuntu il
-passaggio all'installatore segue la procedura guidata. Su Mac, al termine del
-download, chiudere NIPAT e aprire il `.pkg` verificato. L'installazione non
-può sostituire il programma mentre è in uso.
-
-Gli aggiornamenti installabili sono esclusivamente quelli pubblicati nella
-pagina Releases. Lo sviluppo 0.8.50 qui descritto non è ancora distribuito.
-L'aggiornatore confronta i numeri di versione, non i
-commit; non propone una build diversa con lo stesso numero. Le release
-pubblicate sono immutabili. I candidati di sviluppo identificati da commit e
-build non diventano aggiornamenti ufficiali automaticamente.
-
-I run già prodotti conservano versione e identità del motore utilizzato.
-Non vengono ricalcolati dall'installazione di un nuovo pacchetto. Su Windows
-seguire la [procedura di riparazione](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione);
-su macOS consultare la [guida dell'installatore](INSTALLATORE_MACOS.md).
-
-## Installazione e spazio
-
-Da **7 — Guida e informazioni → 8 — Installazione e spazio** si consultano
-gli ambienti WSL e gli archivi di cache posseduti dall'installazione Windows,
-con dimensione e motivo dell'eventuale protezione. L'ambiente attivo e il
-precedente più recente sono conservati. Solo gli elementi indicati come
-rimovibili possono essere selezionati per la pulizia; dati, risultati,
-file estranei e distribuzioni WSL di altre applicazioni non vengono eliminati.
-
-**Ripara/riprendi preparazione** verifica i componenti dell'installazione
-corrente e ripete la preparazione del runtime e gli autotest. Non reinstalla
-una versione precedente e non ripristina automaticamente un backup completo.
-Se NIPAT non può essere avviato, usare il collegamento **NIPAT Desktop - completa
-preparazione** dopo aver risolto la causa segnalata dal setup.
-
-Pulizia e riparazione richiedono conferma. NIPAT si chiude solo dopo che il
-componente di manutenzione ha confermato la ricezione della richiesta; la
-finestra separata attende la chiusura delle sessioni e ripete i controlli
-prima di procedere. Il passaggio alla finestra non attesta il completamento:
-consultare l'esito finale indicato, conservato in
-`.runtime/maintenance/<id>/result.json` nella cartella applicativa.
-Su Ubuntu questa schermata è informativa: l'applicazione è gestita da APT
-e non viene proposta una pulizia generale delle immagini Docker.
-
-## Percorsi e cartelle
-
-Gli input possono restare nelle cartelle originali. Non occorre copiare BAM
-e FASTA dentro NIPAT. La cartella dati configurata non modifica la base dei
-percorsi relativi: questi restano riferiti alla cartella corrente mostrata
-dal programma. Su Windows sono supportati dischi locali fissi;
-condivisioni UNC, unità di rete e unità rimovibili non sono supportate dal
-backend WSL. Su Linux i file devono essere accessibili al motore Docker locale.
-
-Si possono incollare percorsi completi, anche tra virgolette, oppure percorsi
-relativi alla cartella corrente mostrata prima del campo. Ad esempio,
-`DNP_list.txt` indica un file nella cartella corrente: NIPAT non lo cerca
-nelle sottocartelle di **Dati**. Usare il percorso completo se il file si trova
-altrove. In Windows, **Copia come percorso** di Esplora file produce un valore
-utilizzabile. Le voci relative in un file BAM list partono invece dalla
-cartella della lista.
-
-Il setup Windows permette di scegliere separatamente queste destinazioni:
-
-| Contenuto | Percorso predefinito Windows |
-| --- | --- |
-| Applicazione e documentazione | `%LOCALAPPDATA%\Programs\NIPAT-Desktop` |
-| Ambiente WSL e strumenti scientifici | `%LOCALAPPDATA%\NIPAT-Desktop\wsl` |
-| Cache degli archivi di installazione | `%LOCALAPPDATA%\NIPAT-Desktop\cache` |
-| Cartella dati di riferimento | `%LOCALAPPDATA%\NIPAT-Desktop\data` |
-| Risultati | `%LOCALAPPDATA%\NIPAT-Desktop\runs` |
-
-Si possono usare dischi locali fissi diversi. Le cinque cartelle devono essere
-scrivibili, distinte e non contenersi tra loro; il setup controlla le
-destinazioni prima di installare. Non sono accettate cartelle di sistema,
-cartelle delle altre installazioni NIPAT o percorsi che attraversano collegamenti.
-Per l'applicazione scegliere una cartella vuota o della stessa installazione NIPAT Desktop.
-Se una cartella non vuota non viene riconosciuta, il setup può proporre una
-sottocartella vuota: accettarla cambia la destinazione senza spostare o
-cancellare il contenuto della cartella iniziale. In alternativa, scegliere
-un'altra cartella vuota. Le cartelle dati e risultati possono già contenere
-file, che vengono conservati.
-Il collegamento **Cartella NIPAT Desktop** nel menu Start apre la cartella applicativa.
-
-Le scelte vengono riproposte alla reinstallazione. Per aggiornare o riparare
-un’installazione NIPAT Desktop riconosciuta, usare la stessa cartella applicativa, anche se
-contiene residui di una disinstallazione. Il setup sostituisce i propri
-componenti e conserva i file estranei; prima di sovrascrivere file differenti,
-ne salva una copia. Il backup è selettivo e non ripristina automaticamente
-l'intera installazione in caso di errore. I dettagli sono nella
-[guida dell'installatore Windows](INSTALLATORE_WINDOWS.md#aggiornamento-e-riparazione).
-
-Cambiare dati o risultati nel setup non sposta i file già presenti: i run
-precedenti rimangono nella vecchia destinazione e si consultano con Esplora file. Cambiare la cartella
-dell'ambiente WSL prepara un ambiente dedicato nella nuova posizione e
-conserva quello precedente.
-
-Su macOS l’applicazione è `/Applications/NIPAT Desktop.app`; dati e
-risultati predefiniti sono nelle sottocartelle `data` e `runs` di
-`~/Library/Application Support/NIPAT-Desktop`. La VM Lima vive in
-`~/.nipat/lima`. I mount e le autorizzazioni macOS limitano i percorsi
-accessibili, come descritto nella [guida macOS](INSTALLATORE_MACOS.md).
-
-Per il checkout da sorgenti, `data` e `runs` si trovano accanto alla cartella
-del progetto. `data` è una cartella di comodità e non limita la selezione
-degli input. La cartella dei risultati deve essere scrivibile e separata
-dalla cartella applicativa e da `data`, senza annidamenti tra queste tre radici.
-
-**5 — Configura → Cartelle dati e risultati** salva le destinazioni proposte
-per il menu. Cambiare percorso non trasferisce i file esistenti. Ogni analisi
-genera una propria sottocartella dei risultati; un nome di run già esistente
-viene rifiutato. È possibile lasciare vuoto il nome per ottenere quello automatico.
-
-Nella CLI, `--data-dir` e `--runs-dir` impostano esplicitamente i percorsi.
-Il checkout da sorgenti accetta anche `NIPAT_DATA_DIR` e `NIPAT_RUNS_DIR`.
-I launcher dei pacchetti installati utilizzano la propria configurazione e
-ignorano eventuali variabili NIPAT ereditate per questi percorsi. Le preferenze
-del menu si applicano soltanto all'uso guidato; per cambiare una destinazione
-in un comando diretto usare le opzioni CLI.
-
-## Disinstallazione su Windows
-
-Da **Impostazioni → App → App installate**, disinstallare **NIPAT Desktop**.
-Dati e risultati vengono sempre conservati. La rimozione dell'ambiente WSL e
-della cache NIPAT è facoltativa e non è selezionata per impostazione predefinita.
-Se richiesta, riguarda soltanto le risorse verificate di NIPAT Desktop nelle
-cartelle registrate; non elimina Docker Desktop, altre distribuzioni WSL o
-altre installazioni NIPAT.
-
-Le preferenze dei percorsi restano disponibili per una reinstallazione.
-Conservando ambiente e cache si possono riutilizzare i componenti compatibili;
-eliminandoli, il setup deve prepararli nuovamente. Un errore nella rimozione
-va conservato insieme al log: non implica che tutte le risorse siano state
-eliminate. La procedura e i registri sono descritti nella
-[guida dell'installatore Windows](INSTALLATORE_WINDOWS.md).
+Su Windows, **Guida e informazioni → Installazione e spazio** mostra
+ambiente e cache di proprietà dell'installazione. La pulizia riguarda soltanto
+i componenti indicati come rimovibili, dopo conferma. **Ripara/riprendi
+preparazione** verifica la configurazione corrente, il runtime e gli
+autotest. Consultare l'esito finale della finestra di manutenzione e il
+[registro dell'installatore](INSTALLATORE_WINDOWS.md).
 
 ## Input dei cinque moduli
 
-NIPAT verifica i file nel livello Python condiviso prima dell'avvio R.
-Gli errori indicano l'input da correggere; le trasformazioni richieste dagli
-script vengono applicate a copie di lavoro, conservando intatti gli originali.
-I controlli e il significato delle segnalazioni sono descritti in
-[Controlli degli input e dei risultati](INPUT_VALIDATION.md).
+| Modulo | Input essenziali | Risultato principale |
+| --- | --- | --- |
+| DNPcall | BAM, FASTA indicizzato e pannello DNP. | Conteggi e genotipi DNP per campione. |
+| SNPcall | Pannello SNP e un BAM con FASTA indicizzato, oppure un pileup con QNAME. | Conteggi, likelihood e genotipi SNP per campione. |
+| Contamination | Tabelle di conteggi e pannello dello stesso tipo SNP o DNP. | Stime per sito e riepilogo per campione. |
+| CPI | Tabelle cfDNA materne e paterne, coppie, frequenze di popolazione e cutoff facoltativi. | Frazione fetale, CPI, curve e grafici. |
+| CPIN | Tabelle di madre, padre e figlio, terne, frequenze e pannello facoltativo. | CPI postnatale, dettaglio siti, curve e grafici. |
+
+I pannelli, le tabelle e i riferimenti devono avere coordinate e tipo di
+marcatori coerenti. Gli input originali rimangono disponibili. NIPAT prepara
+le copie di lavoro necessarie e controlla [formati e segnalazioni](INPUT_VALIDATION.md).
 
 ### DNPcall
 
-Selezionare uno o più BAM oppure un file lista con un percorso BAM per riga,
-senza intestazione. In CLI, ripetere `--bam` o usare `--bamlist`; le modalità
-sono alternative. Sono richiesti un FASTA e il pannello DNP.
+Fornire i BAM con `--bam` ripetuto oppure un elenco senza intestazione,
+un BAM per riga, con `--bamlist`. Indicare il **file FASTA** con
+`--reference`. Il FASTA richiede il proprio indice `.fai` e, se compresso
+in BGZF, anche `.gzi`. Con un indice BAM valido il motore può scegliere
+un percorso di acquisizione indicizzato. L'indice BAM è facoltativo
+per l'acquisizione a scansione.
 
-Nel campo **File FASTA di riferimento** scegliere il file delle sequenze,
-ad esempio `genome.fa` oppure un FASTA compresso in BGZF. Non selezionare
-`genome.fa.fai` o un file `.gzi`: sono indici, non il riferimento. Se viene
-selezionato un indice, il messaggio indica quale FASTA controllare; la scelta
-va corretta esplicitamente.
-
-Il FASTA deve avere il proprio indice `.fai`; se compresso in BGZF richiede
-anche `.gzi`. Gli indici BAM sono facoltativi per il percorso mpileup usato
-da NIPAT. Riferimento, BAM e pannello devono essere coerenti per assemblaggio
-genomico e nomi dei cromosomi.
-
-Il pannello contiene cinque colonne senza intestazione, separate da tabulazioni
-o spazi: `chr`, `pos1`, `pos2`, `REF`, `ALT`. Le coordinate sono positive e
-adiacenti (`pos2 = pos1 + 1`); gli alleli sono dinucleotidi composti da A, C,
-G e T. Non sono ammesse coordinate duplicate. NIPAT prepara una copia con
-alleli maiuscoli senza modificare l'originale. Il pannello stabilisce quali
-posizioni e quali alleli analizzare. `DNP_list.txt` è un nome di esempio:
-è possibile scegliere un file con un altro nome, purché rispetti il formato.
-
-Il valore iniziale dell'esecuzione è automatico entro il budget comune;
-`--execution-mode serial` seleziona l'esecuzione seriale e `--max-workers`
-limita il pool automatico. L'opzione DNP `--parallel` non scavalca questi
-controlli. Il menu propone le scelte salvate in **Configura**, se presenti.
-I BAM ricevono alias `sample_0001`, ecc.; la
-corrispondenza con i nomi originali è registrata nel run. Con un solo campione
-non viene prodotto il grafico UpSet.
+Il pannello usa cinque colonne senza intestazione, separate da spazi o
+tabulazioni: `chr pos1 pos2 REF ALT`. Le coordinate sono positive e
+adiacenti (`pos2 = pos1 + 1`), ciascun locus è unico e gli alleli sono
+dinucleotidi A/C/G/T. Concordare l'assemblaggio e i nomi dei cromosomi
+fra riferimento, BAM e pannello.
 
 ### SNPcall
 
-Dalla 0.8.30 il motore usa il modello scientifico di **SNPcall 2.0**.
+Per un BAM usare `--bam` e `--reference` con FASTA indicizzato. Per un
+pileup già prodotto usare `--pileup`. Serve un pannello con intestazioni
+tabulate `chr`, `pos`, `ref`, `alt`. È ammesso anche `pos`, `ref`,
+`alt` con `pos` in forma `chr1:1770788`. Le posizioni ammesse sono
+da 2 a 2147483646, per la finestra di tre basi, con coordinate uniche
+e basi REF/ALT distinte. Il cromosoma non contiene spazi o `:`.
 
-Selezionare BAM e FASTA indicizzato per generare il pileup oppure indicare
-un pileup esistente. In CLI usare `--bam` con `--reference` oppure `--pileup`.
-Il pannello SNP è richiesto in entrambe le modalità.
+Il pileup importato deve essere tabulato, senza intestazione, con i nomi
+delle letture (QNAME) nella settima colonna. Per un BAM NIPAT prepara
+questa informazione automaticamente con samtools. I filtri di acquisizione
+di un pileup importato dipendono dal comando con cui è stato prodotto.
 
-Il pileup deve essere tabulato, senza intestazione, con almeno sette colonne
-samtools e i nomi delle letture (QNAME) nella settima, come prodotti da
-`--output-QNAME`. Le colonne successive sono ignorate dallo script R.
-Un pileup a sei colonne non contiene le informazioni richieste.
-
-La lista SNP è tabulata, con intestazioni `chr`, `pos`, `ref`, `alt`, per esempio
-`chr1`, `1770788`, `C`, `T`. Rimane accettato il formato precedente a tre
-colonne `pos`, `ref`, `alt`, con posizione nella forma `chr1:1770788`.
-NIPAT prepara in entrambi i casi un pannello a quattro colonne. La posizione
-deve essere compresa tra 2 e 2147483646 anche con un pileup importato, per
-consentire la finestra di tre basi. Il cromosoma non deve contenere spazi o `:`.
-Gli alleli `ref` e `alt` sono basi singole A, C, G o T. NIPAT accetta
-maiuscole e minuscole e prepara una copia del pannello con gli alleli
-maiuscoli prima dell'avvio R, senza modificare il file selezionato.
-Le due basi devono essere distinte e le coordinate non possono essere duplicate.
-Per default il pileup generato da BAM usa `samtools mpileup -d 0`: come in SNPcall 2.0,
-non applica il precedente limite predefinito di 8000 letture per posizione
-e file. Le qualità e i nomi delle letture sono necessari al nuovo calcolo;
-per un pileup importato valgono i filtri applicati da chi lo ha prodotto.
-
-L'output `SNPcall_output.txt` contiene 17 colonne:
+La tabella `SNPcall_output.txt` contiene 17 colonne.
 
 | Colonne | Significato |
 | --- | --- |
 | `chr`, `pos`, `REF`, `ALT` | Coordinate e alleli del pannello. |
-| `N_REF`, `N_ALT`, `N_Other`, `total_count` | Conteggi dopo i filtri della finestra; il totale include le altre basi. |
-| `ratio` | `N_REF / (N_REF + N_ALT)`: frazione REF, non frazione ALT. Senza letture REF/ALT il rapporto non è definito. |
-| `GL0`, `GL1`, `GL2` | Log-likelihood naturali dei genotipi `0/0`, `0/1`, `1/1`, calcolate dalle qualità Phred della base centrale delle letture REF/ALT. Non sono probabilità normalizzate. |
-| `GT` | Genotipo con likelihood massima; `NA` senza osservazioni informative o se `N_Other / total_count >= 0.1`. La soglia non cancella conteggi o likelihood. |
-| `reads_discarded_for_indels`, `ratio_reads_discarded_for_indels` | Numero e frazione di osservazioni complete con indel sulla base centrale, prima del filtro. Non misurano tutte le letture escluse per indel sui fianchi. |
-| `combined_bases`, `combined_counts` | Basi osservate e conteggi corrispondenti, nello stesso ordine e separati da `-`. |
+| `N_REF`, `N_ALT`, `N_Other`, `total_count` | Conteggi dopo i filtri; il totale comprende le altre basi. |
+| `ratio` | Frazione REF su REF + ALT, quando definita. |
+| `GL0`, `GL1`, `GL2` | Log-likelihood naturali per `0/0`, `0/1`, `1/1`. |
+| `GT` | Genotipo assegnato. Può essere `NA` se mancano osservazioni informative o il controllo delle altre basi non è superato. |
+| `reads_discarded_for_indels`, `ratio_reads_discarded_for_indels` | Numero e frazione di osservazioni complete con indel sulla base centrale. |
+| `combined_bases`, `combined_counts` | Basi e conteggi corrispondenti separati da trattini, nello stesso ordine. |
 
-Le letture sono raggruppate per **SNP e QNAME**: una lettura che attraversa
-più finestre contribuisce separatamente a ciascuno SNP. Questo e il modello
-di qualità possono produrre risultati diversi dal vecchio SNP di NIPAT;
-il riferimento di confronto è SNPcall 2.0. Un conteggio zero e un valore
-mancante `NA` hanno significati distinti e rimangono distinguibili nei grafici.
+Il [catalogo scientifico](CATALOGO_SCIENTIFICO.md) descrive i filtri e gli
+indicatori. La preparazione da BAM usa `samtools mpileup -d 0` per
+impostazione predefinita.
 
 ### Contamination
 
-Selezionare singole tabelle oppure una cartella. La modalità cartella cerca
-ricorsivamente file `.txt` e `.tsv`, senza distinguere maiuscole e minuscole,
-ed esclude il pannello selezionato. Una cartella contenente riepiloghi o altri
-TXT/TSV incompatibili va sostituita con una selezione esplicita dei file.
+Selezionare tabelle individuali con `--input` ripetuto. La modalità
+`--input-dir` cerca ricorsivamente i file TXT e TSV, escluso il pannello
+selezionato. Se la cartella contiene riepiloghi o file eterogenei,
+selezionare direttamente le tabelle compatibili.
 
-Sono richiesti i conteggi tabulati `N_REF`, `N_ALT`, `N_Other` e le coordinate
-`chr`, `pos` per SNP oppure `chr`, `pos1`, `pos2` per DNP. Sono compatibili le
-tabelle individuali di entrambi i caller. Ogni analisi deve usare un solo tipo
-di marcatori. Se presente,
-`ratio_REF_ALT` viene utilizzato; altrimenti lo script lo calcola dai conteggi.
-I nomi che collidono dopo l'adattamento vengono rifiutati.
-I conteggi devono essere interi non negativi e i loci univoci. Un rapporto
-fornito incoerente con i conteggi viene segnalato, conservando il valore
-originale; i dettagli sono nel [contratto degli input](INPUT_VALIDATION.md).
+Servono `N_REF`, `N_ALT`, `N_Other` interi non negativi e coordinate
+univoche `chr,pos` per SNP oppure `chr,pos1,pos2` per DNP.
+Se le tabelle includono `ratio_REF_ALT`, NIPAT lo conserva e segnala
+un'eventuale incoerenza con i conteggi. Il pannello richiede le coordinate
+del medesimo tipo e può includere gli alleli. Il filtro sulle altre basi
+usa `N_Other / (N_REF + N_ALT + N_Other)`.
+La stima per sito usa i conteggi inattesi su `N_REF + N_ALT`.
+I siti con stima zero sono inclusi per impostazione predefinita, con
+possibilità di regolare soglie e `include_zero`.
 
-Il pannello deve avere coordinate dello stesso tipo delle tabelle:
-`chr`, `pos` per SNP oppure `chr`, `pos1`, `pos2` per DNP. Sono accettati anche
-i pannelli di calling con alleli REF/ALT. Il filtro di qualità usa
-`Other/(REF+ALT+Other)`; la stima per sito usa `unexpected/(REF+ALT)`.
-Gli zeri sono inclusi per default e la media è aritmetica sui siti informativi;
-`include_zero` e le soglie sono configurabili. `informative_sites` riporta
-il numero di siti utilizzati.
-Le stime sono frazioni: `0.025` corrisponde al 2,5%. L'assenza di siti
-informativi può produrre conteggio zero e stime `NA`.
+Il riepilogo riporta la media e la deviazione standard sui siti informativi.
+Una frazione `0.025` equivale al 2,5%. Il conteggio dei siti informativi
+e gli eventuali valori `NA` aiutano a interpretare il risultato.
 
 ### CPI
 
-Selezionare la cartella delle tabelle cfDNA materne e del presunto padre,
-le coppie e il file delle frequenze di popolazione. Le tabelle devono contenere
-`REF`, `ALT`, `N_REF`, `N_ALT`, `N_Other`, `total_count` e coordinate `chr`/`pos`
-per SNP oppure `chr`/`pos1`/`pos2` per DNP. Le frequenze richiedono le stesse
-coordinate e le colonne `Ref_f.pop`, `Alt_f.pop`. Un'analisi usa un solo tipo.
-I conteggi devono essere interi non negativi; le frequenze devono essere
-finite, maggiori di zero e non superiori a uno, senza loci duplicati. Una
-somma REF/ALT diversa da uno viene segnalata senza modificare il dato.
-Il file delle frequenze accetta il punto o la virgola come separatore decimale.
+Fornire una cartella con le tabelle di cfDNA materno e del presunto padre
+e il file delle frequenze di popolazione. Le tabelle contengono coordinate,
+`REF`, `ALT`, `N_REF`, `N_ALT`, `N_Other` e `total_count`. Le
+frequenze contengono le coordinate dello stesso tipo e `Ref_f.pop`,
+`Alt_f.pop`. Le frequenze devono essere finite, in `(0, 1]`, con loci
+univoci. NIPAT segnala una somma REF/ALT diversa da uno.
 
-Con i prefissi predefiniti, la coppia `A1:A1` seleziona `MotherA1.txt` e
-`FatherA1.txt`. Più coppie si separano con virgole, per esempio
-`A1:A1,A2:A2`. I prefissi sono configurabili e possono essere vuoti;
-il suffisso dei file rimane `.txt`. La scelta dei campioni e delle frequenze
-deve essere scientificamente appropriata: il nome di un file non verifica
-il ruolo biologico del campione.
+Nell'analisi singola `--pairs A1:A1` seleziona `MotherA1.txt` e
+`FatherA1.txt` con i prefissi predefiniti. Più coppie si separano con
+virgole. Nei workflow i ruoli vengono assegnati esplicitamente a ogni
+coppia. La corrispondenza dei file riguarda la forma dei dati e il ruolo
+dichiarato. La scelta dei campioni e delle frequenze compete a chi esegue
+l'analisi.
 
-| Selezione dei siti | Opzione CLI |
+| Selezione dei siti | Opzione CLI del comando `cpi` |
 | --- | --- |
-| Tutti i siti disponibili | Nessuna opzione di filtro. |
+| Tutti i siti disponibili | Omettere l'opzione di filtro. |
 | Un pannello | `--panel PATH` |
-| Più pannelli etichettati | `--cutoff LABEL PATH`, ripetibile. |
-| Mappa nativa CPI | `--cutoff-map "LABEL=PATH,LABEL2=PATH2"` |
+| Più pannelli con etichette univoche | `--cutoff LABEL PATH`, ripetibile. |
+| Mappa di pannelli | `--cutoff-map "LABEL=PATH,LABEL2=PATH2"` |
 
-Le tre opzioni di filtro sono alternative. Sono ammessi pannelli SNP o DNP
-dello stesso tipo delle tabelle, con gli schemi descritti per Contamination.
-Le etichette devono essere uniche, senza virgole o `=`. `--cutoff` evita le
-ambiguità della mappa quando i percorsi contengono tali delimitatori.
-
-La costante d'errore è selezionata dal tipo di marcatori: i default sono
-`err_const_snp = 0.001` e `err_const_dnp = 0.0000892303778101497`, configurabili
-nei parametri scientifici. `--err-const`, oppure il campo corrispondente del
-menu, sovrascrive il valore del tipo selezionato per quel run: è richiesto un
-numero finito in `(0, 1]`. Lasciare il campo vuoto usa il valore scientifico
-SNP/DNP; zero non è valido. Sono configurabili anche letture fetali minime,
-filtri e soglie genotipiche.
+Le opzioni sono alternative. La forma ripetuta `--cutoff` permette di
+gestire percorsi che contengono virgola o `=`. Per impostare una costante
+d'errore specifica del run usare `--err-const` con valore finito in
+`(0, 1]`. Omettendola si usa il parametro del tipo SNP o DNP selezionato.
 
 ### CPIN / CPI postnatale
 
-Scegliere **N** dal menu, oppure il comando `cpin`, e indicare una cartella
-con tabelle di madre, padre e figlio, le terne e le frequenze di popolazione.
-Gli schemi SNP/DNP sono gli stessi descritti per CPI. Il ruolo materno CPIN
-riguarda il campione della madre e non viene dedotto dal cfDNA materno prenatale.
+Fornire una cartella con le tabelle di madre, padre e figlio, le terne e
+le frequenze. I ruoli devono riguardare tre campioni distinti. Le tabelle
+e le frequenze usano lo stesso schema SNP o DNP del CPI. Con
+`--trios A:A:A` e prefissi predefiniti i file sono `MotherA.txt`,
+`FatherA.txt` e `ChildA.txt`. Più terne si separano con virgole.
 
-Con i prefissi predefiniti, `--trios A:A:A` seleziona `MotherA.txt`, `FatherA.txt`
-e `ChildA.txt`; più terne si separano con virgole. I tre file devono
-rappresentare campioni distinti. Prefissi e ID locali sono configurabili;
-lo stesso campione può essere condiviso da più terne nello stesso ruolo.
-
-`--panel` è facoltativo e richiede coordinate **e alleli REF/ALT**. Senza
-pannello si usano i siti disponibili. `cpin.site_selection` seleziona
-`other_allele`, `all` o `both`; letture minime del figlio, costanti d'errore,
-filtri di qualità e soglie genotipiche sono configurabili.
-
-Gli output sono `Summary_Postnatal_CPI.txt`, tabelle dei siti con motivi di
-esclusione in `sites`, curve per intervalli in `curves`, PDF in `plots` e
-`All_CPIplots.pdf`. Le terne possono essere elaborate in parallelo entro il
-budget comune, conservando l'ordine e le identità dei risultati.
+Un pannello CPIN facoltativo richiede coordinate **e alleli REF/ALT**.
+Senza pannello si usano i siti disponibili. `cpin.site_selection` accetta
+`other_allele`, `all` o `both`; vedere i [parametri effettivi](#parametri-scientifici-valori-effettivi-e-costanti)
+per letture minime, costanti e filtri.
 
 ## Parametri scientifici, valori effettivi e costanti
 
+In **Configura → S** si consultano e salvano i parametri dei moduli; la
+voce **5 — Parametri scientifici e costanti** del riepilogo modifica solo
+l'analisi in corso. Per consultare regole
+e formati, scegliere **Guida e informazioni → Catalogo scientifico**
+o utilizzare `parameters`.
+
 ```powershell
-.\nipat.cmd settings
-.\nipat.cmd settings cpin
-.\nipat.cmd settings --export ".\parametri.json"
-.\nipat.cmd --scientific-config ".\parametri.json" --set cpin.min_child_reads=4 settings cpin
+& $nipat settings cpin
+& $nipat parameters snp-call --section preparation
+& $nipat settings --export ".\parametri.json"
+& $nipat --scientific-config ".\parametri.json" --set cpin.min_child_reads=4 settings cpin
 ```
 
-Il JSON è organizzato per modulo, per esempio
+Il file di configurazione è un JSON per modulo, ad esempio
 `{"snp-call":{"min_base_quality":20},"cpin":{"site_selection":"both"}}`.
-Può contenere solo le modifiche richieste oppure tutti i default esportati.
-Le opzioni globali precedono il comando; `--set` è ripetibile e prevale sul file.
-Chiavi sconosciute, tipi errati, valori non finiti e soglie incoerenti vengono
-rifiutati prima dell'analisi. Il comando `settings` mostra anche inclusione o
-esclusione degli estremi e vincoli fra parametri.
-
-Nel menu, **Configura → S** salva i parametri dei cinque moduli per i prossimi
-avvii; la voce **5** del riepilogo li modifica solo per il run corrente.
-Le impostazioni CLI esplicite prevalgono sui valori salvati nella sessione
-guidata. Le formule del modello, la diploidia e le convenzioni strutturali
-sono consultabili, senza diventare opzioni scientificamente arbitrarie.
-
-Ogni esecuzione conserva `work/effective-scientific-settings.json`; nei
-workflow il file si trova dentro il singolo passaggio. `run.json` registra
-la configurazione richiesta e i valori effettivi, oltre agli input e alle
-opzioni di esecuzione. I parametri samtools non modificano un pileup importato:
-per cambiare l'acquisizione occorre partire dai BAM.
+Può contenere le sole modifiche da applicare oppure tutti i parametri.
+`--set modulo.chiave=valore`
+è ripetibile e prevale sul file. `settings` mostra i valori effettivi,
+gli intervalli ammessi e le costanti. I risultati conservano le impostazioni
+applicate per rendere il confronto ripetibile.
 
 ## Comandi diretti
 
-Su Windows, aprire PowerShell nella cartella applicativa:
+Negli esempi PowerShell, `$nipat` indica il launcher della cartella
+effettivamente installata, anche se scelta durante il setup.
 
 ```powershell
-# Esempio per la cartella predefinita; usare quella scelta nel setup.
-Set-Location (Join-Path $env:LOCALAPPDATA "Programs\NIPAT-Desktop")
-.\nipat.cmd --help
-.\nipat.cmd dnp-call --help
-.\nipat.cmd wizard
+$app = (Get-ItemProperty -LiteralPath 'HKCU:\Software\NIPAT\desktop' -Name app_dir).app_dir
+$nipat = Join-Path $app 'nipat.cmd'
+& $nipat --version
+& $nipat --help
+& $nipat wizard
 ```
 
-`nipat.cmd wizard` apre il menu; `nipat.cmd` senza argomenti mostra la guida
-dei comandi. Per l'uso ordinario è sufficiente l'icona NIPAT.
-Su macOS il launcher del pacchetto accetta gli stessi argomenti:
+Su Ubuntu usare `nipat`. Su macOS usare
+`/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command`
+tra virgolette dalla shell. Nei comandi POSIX, sostituire i percorsi con
+quelli del proprio sistema e usare il carattere di continuazione
+della shell.
 
-```bash
-"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" --help
-"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" doctor --runtime
-"/Applications/NIPAT Desktop.app/Contents/Resources/NIPAT.command" self-test
-```
-
-Il launcher Mac prepara il runtime prima di avviare il client. La preparazione
-verifica archivio e contratti del motore; gli autotest numerici si avviano
-esplicitamente con `self-test`. Per i comandi di manutenzione vedere la
-[guida macOS](INSTALLATORE_MACOS.md#cli-e-diagnostica).
-
-Nel checkout Linux da sorgenti il comando è `nipat`, con percorsi POSIX.
-Per esempio:
-
-```bash
-nipat --help
-nipat dnp-call --help
-nipat --runs-dir "$HOME/risultati-nipat" contamination \
-  --input "$HOME/campioni/sample.txt" --panel "$HOME/pannelli/DNPpanel.txt"
-```
-
-Le opzioni globali precedono il sottocomando. Esempio di simulazione:
+Opzioni globali come `--runs-dir`, `--execution-mode`, `--max-workers`,
+`--scientific-config` e `--dry-run` precedono il comando. `--dry-run`
+controlla gli input e registra una richiesta `planned` senza eseguire
+il motore. Usare un nome diverso per una successiva esecuzione reale.
 
 ```powershell
-.\nipat.cmd --runs-dir "..\risultati-prova" --dry-run contamination `
-  --input "..\campioni\sample.txt" --panel "..\pannelli\DNPpanel.txt"
+& $nipat dnp-call --bam ".\campione.bam" --reference ".\genome.fa" --panel ".\dnp.txt"
+& $nipat snp-call --pileup ".\campione.pileup" --panel ".\snp.tsv"
+& $nipat contamination --input ".\conteggi.txt" --panel ".\dnp.txt"
+& $nipat cpi --input-dir ".\coppie" --pairs "A1:A1" --popfreq ".\frequenze.tsv"
+& $nipat cpin --input-dir ".\terne" --trios "A:A:A" --popfreq ".\frequenze.tsv"
 ```
 
-`--dry-run` controlla gli input e prepara la richiesta senza eseguire il
-motore scientifico. Registra uno stato `planned`, non produce risultati
-scientifici e non sostituisce una verifica del runtime. La prova reale richiede
-un nuovo nome di run. Per simulare il menu usare `nipat.cmd --dry-run wizard`;
-per effettuare analisi reali aprire normalmente NIPAT. La simulazione non
-attesta la riuscita di un calcolo. Il launcher Mac verifica comunque la
-preparazione dell'ambiente prima di aprire il client, anche per una simulazione.
-
-Le opzioni `--input-hashes auto|full`, `--cpus`, `--memory-mb` e `--pids-limit`
-precedono il sottocomando dell'analisi, `workflow` o `wizard`. Per esempio:
-
-```powershell
-.\nipat.cmd --input-hashes full --cpus 4 --memory-mb 8192 wizard
-```
-
-`full` verifica SHA-256 degli input prima e dopo il calcolo. I limiti delle
-risorse sono facoltativi e riguardano il container, non il numero di worker R.
-La CLI diretta non legge le preferenze scientifiche del menu. Diagnostica e
-autotest rifiutano queste opzioni quando non applicabili.
-
-Per consultare le esecuzioni incomplete e, dopo conferma, arrestare un
-container di cui NIPAT riconosce l'identità:
-
-```powershell
-.\nipat.cmd runs inspect
-.\nipat.cmd --runs-dir "..\risultati" runs inspect --run "..\risultati\prova" --json
-.\nipat.cmd --runs-dir "..\risultati" runs stop --run "..\risultati\prova"
-```
-
-`runs inspect` non modifica i record. `runs stop` conserva risultati e log;
-non riprende il calcolo. Per questi comandi `--lang it|en` seleziona la lingua
-della diagnostica, lasciando invariata la lingua del menu generale.
-Su Windows i comandi dell'installazione sono:
-
-```powershell
-.\nipat.cmd installation inspect --json
-.\nipat.cmd installation recover --target current-installation
-```
-
-`installation cleanup --target ID` richiede un identificativo indicato come
-rimovibile dall'inventario. Le operazioni che modificano componenti richiedono
-conferma; `--yes` la fornisce esplicitamente nell'uso automatizzato. Il codice
-di uscita `85` indica il passaggio al componente separato, non la riuscita
-finale della manutenzione.
-
-Per verificare strumenti e casi di prova:
-
-```powershell
-.\nipat.cmd doctor --runtime
-.\nipat.cmd self-test
-```
-
-`doctor --runtime` verifica il motore incorporato e le sue interfacce, R,
-samtools e le dipendenze richieste. `self-test` esegue l'esempio SNPcall,
-i casi sintetici CPI, CPIN e Contamination e le verifiche delle modalità di input
-esterno. Queste ultime comprendono SNPcall da pileup, Contamination da cartella
-e CPI con più cutoff oppure tutti i siti. Non includono una prova numerica
-DNPcall da BAM. Il risultato dell'autotest è il suo esito finale, successivo
-al completamento dei singoli run.
+Sostituire i percorsi con quelli dei file effettivi. Ogni comando accetta
+`--help`, ad esempio `& $nipat workflow analyze --help`. Per controllare
+l'installazione usare `& $nipat doctor --runtime`; per gli esempi numerici
+distribuiti usare `& $nipat self-test`. Su Windows è disponibile anche il
+[collaudo installato dei cinque moduli](COLLAUDO_INSTALLAZIONE.md).
 
 ## Risultati e analisi in sequenza
 
-| Contenuto del run | Utilizzo |
-| --- | --- |
-| `output` | Tabelle e grafici prodotti dall'analisi. |
-| `work` | Richiesta al motore e intermedi conservati. |
-| `run.json` | Input, parametri, identità del motore e stato dell'esecuzione. |
-| `execution.log` | Comandi, messaggi e dettagli degli errori. |
-
-Consultare questi file dalla schermata finale o dal file system.
-**6 — Ultima esecuzione** richiama il run più recente della sessione;
-le esecuzioni precedenti rimangono nelle rispettive cartelle.
-La [guida alle esecuzioni](ESECUZIONI.md) descrive gli intermedi effettivamente
-conservati e il significato degli stati.
-
-I cinque moduli possono essere composti secondo il tipo di conteggi e i ruoli:
-
-| Origine dei conteggi | Analisi successive disponibili |
-| --- | --- |
-| BAM → DNPcall | Contamination, CPI prenatale e CPIN postnatale, in qualsiasi combinazione. |
-| BAM o pileup → SNPcall | Contamination, CPI prenatale e CPIN postnatale, in qualsiasi combinazione. |
-| Tabelle SNP o DNP esistenti | Gli stessi tre consumatori, senza ripetere il calling. |
-| Entrambi i caller | Due rami distinti, anche con consumatori diversi. |
-
-Ogni consumatore usa tabelle di un solo tipo e pannelli/frequenze coerenti.
-Contamination non modifica i conteggi sorgente e non produce tabelle
-«decontaminate» per CPI o CPIN. Il calcolo parte dopo la disponibilità dei
-conteggi necessari. I passaggi SNP indipendenti possono essere eseguiti in
-parallelo anche nei piani misti, rispettando il budget comune.
+In **W — Workflow automatici** si può partire dai BAM, da pileup SNP o
+da tabelle disponibili. DNPcall e SNPcall producono conteggi per
+Contamination, CPI e CPIN. Se si usano entrambi i caller, ogni ramo
+ha i propri pannelli e frequenze. Contamination e gli indici di
+paternità leggono le tabelle del caller scelto. La stima di contaminazione
+non è un input ai modelli CPI o CPIN.
 
 ### Scelta del workflow automatico
 
-Aprire **W — Workflow automatici** e selezionare:
-
-| Scelta | Workflow | Passaggi |
+| Tasto | Menu | Comando dopo `workflow` |
 | --- | --- | --- |
-| 1 | DNPcall → Contamination | Conteggi DNP e stima della contaminazione. |
-| 2 | DNPcall → CPI | Conteggi DNP, frazione fetale e indice di paternità per le coppie dichiarate. |
-| 3 | DNPcall → Contamination e CPI | Conteggi DNP una sola volta, poi Contamination e CPI sugli stessi conteggi. |
-| 4 | SNPcall su più campioni | Un passaggio SNPcall per ogni BAM o pileup, con risultati separati. |
-| 5 | Workflow completo | DNP/SNP/entrambi, tutte le combinazioni dei consumatori e importazione di tabelle. |
-| 0 | Indietro | Ritorno al menu principale senza avviare analisi. |
+| `1` | DNPcall → Contamination | `dnp-contamination` |
+| `2` | DNPcall → CPI | `dnp-cpi` |
+| `3` | DNPcall → Contamination e CPI | `dnp-contamination-cpi` |
+| `4` | SNPcall su più campioni | `snp-batch` |
+| `5` | Workflow completo | `analyze` |
 
-Le prime tre scelte permettono di aggiungere SNPcall sugli stessi BAM con
-un pannello SNP selezionato esplicitamente. Il FASTA è quello del passaggio
-DNPcall; ogni BAM distinto viene analizzato una volta da SNPcall, anche
-quando compare in più coppie CPI. La scelta iniziale è di non aggiungerlo.
+I primi tre preset possono aggiungere SNPcall sugli stessi BAM tramite
+`--snp-panel`; le analisi successive dei preset continuano a usare
+i conteggi DNP. Per inviare i conteggi SNP alle analisi successive
+usare il workflow completo. In un piano automatico un passaggio fallito
+impedisce l'avvio di quelli rimanenti.
 
-Nel workflow combinato Contamination viene eseguito prima di CPI, ma i suoi
-risultati non diventano input CPI. Se Contamination fallisce, il piano si
-arresta e CPI non parte. Il completamento tecnico di Contamination, qualunque
-sia la stima prodotta, non aggiunge un filtro sui campioni destinati a CPI.
+### Workflow completo
 
-### Workflow completo: tutti i cinque moduli
+In **W → 5** scegliere i dati, assegnare un ID a ciascun campione e
+indicare le analisi successive. `--pair ID CFDNA_MATERNO PADRE` definisce
+una coppia CPI. `--trio ID MADRE PADRE FIGLIO` definisce una terna CPIN.
+I ruoli fanno riferimento agli ID dei campioni dichiarati nel comando.
 
-In **W → 5**, scegliere origine dei dati, tipo SNP/DNP e analisi successive.
-Assegnare un ID a ciascun file. Per CPI dichiarare coppie `ID, cfDNA materno,
-padre`; per CPIN dichiarare terne `ID, madre, padre, figlio`, riferendosi agli
-ID campione. Un BAM condiviso viene elaborato una volta per caller.
-
-Le sette combinazioni dei consumatori sono disponibili direttamente.
-**Analisi successive → 8** permette scelte diverse per ramo, per esempio
-DNP → CPI e SNP → Contamination. Il menu chiede frequenze, pannelli e ruoli
-solo dove necessari. Le tabelle dei due tipi non vengono mescolate.
-
-Dalla CLI:
+Questo esempio usa due rami: DNPcall alimenta CPI e SNPcall alimenta
+Contamination. Gli input e le frequenze sono percorsi di esempio.
 
 ```powershell
-.\nipat.cmd workflow analyze --caller both `
-  --sample Plasma "..\campioni\plasma.bam" --sample Padre "..\campioni\padre.bam" `
-  --reference "..\riferimenti\genome.fa" `
-  --dnp-panel "..\pannelli\dnp.tsv" --snp-panel "..\pannelli\snp.tsv" `
+& $nipat workflow analyze --caller both `
+  --sample Plasma ".\plasma.bam" --sample Padre ".\padre.bam" `
+  --reference ".\genome.fa" --dnp-panel ".\dnp.txt" --snp-panel ".\snp.tsv" `
   --dnp-analyses cpi --snp-analyses contamination `
-  --pair Famiglia1 Plasma Padre --dnp-popfreq "..\pannelli\frequenze-dnp.tsv"
+  --pair Famiglia1 Plasma Padre --dnp-popfreq ".\frequenze-dnp.tsv"
 ```
 
-`--analyses contamination,cpi,cpin` applica la stessa scelta a ogni ramo;
-`--dnp-analyses` / `--snp-analyses` la sovrascrivono per il tipo indicato.
-Una stringa vuota lascia quel ramo senza analisi successive. Il pannello di
-calling viene riusato per Contamination se non si fornisce un pannello dedicato.
-Per CPIN usare `--trio ID MADRE_ID PADRE_ID FIGLIO_ID`; frequenze e pannelli
-rimangono specifici del ramo.
+`--analyses contamination,cpi,cpin` imposta le stesse analisi per i rami
+selezionati. `--snp-analyses` e `--dnp-analyses` impostano invece il
+singolo ramo. Una stringa vuota lascia solo il calling per quel ramo.
+NIPAT può riutilizzare il pannello di calling per Contamination. Per
+calcolare CPI o CPIN occorrono le frequenze del ramo e le coppie o
+terne esplicite.
 
-`--caller tables` usa `--dnp-table ID PATH` e/o `--snp-table ID PATH`, ripetibili:
-non servono BAM o FASTA. `--caller snp --pileup ID PATH` usa pileup esistenti
-con QNAME e richiede il pannello SNP. `workflow analyze --help` elenca anche
-cutoff CPI etichettati e pannelli CPIN specifici per ramo.
-
-### DNPcall → Contamination
-
-1. Scegliere **DNPcall → Contamination** dal menu dei workflow automatici.
-2. Indicare uno o più BAM, oppure una lista di BAM, il FASTA indicizzato e
-   il pannello DNP. Scegliere l'esecuzione DNPcall seriale o parallela.
-3. Per Contamination, mantenere il pannello DNP oppure selezionare un diverso
-   pannello di coordinate coerente con i conteggi da analizzare.
-4. Scegliere se includere SNPcall sugli stessi BAM e, in caso affermativo,
-   indicare il pannello SNP. Controllare passaggi, file e destinazione nel riepilogo, quindi
-   scegliere **Avvia analisi**. È richiesta una sola conferma.
-5. Attendere il completamento. Il motore verifica le tabelle prodotte da DNPcall
-   e le prepara automaticamente come input di Contamination.
-
-Il menu ripropone le impostazioni DNPcall salvate in **Configura**. La scelta
-di un pannello diverso per Contamination vale per quella esecuzione e non
-modifica le preferenze salvate.
-
-Non occorre copiare file o indicare percorsi di risultati che ancora non esistono.
-I nomi interni identificano i campioni senza dipendere dai nomi originali dei BAM;
-`run.json` conserva l'associazione con gli input selezionati.
-
-La stessa esecuzione può essere avviata dalla CLI:
+### Preset DNPcall e batch SNPcall
 
 ```powershell
-.\nipat.cmd --runs-dir "..\risultati" workflow dnp-contamination `
-  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
-  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
-  --run-name "dnp-contamination-01"
+& $nipat workflow dnp-contamination `
+  --bam ".\a.bam" --bam ".\b.bam" --reference ".\genome.fa" --panel ".\dnp.txt"
+
+& $nipat workflow dnp-cpi `
+  --pair Coppia1 ".\plasma.bam" ".\padre.bam" --reference ".\genome.fa" `
+  --panel ".\dnp.txt" --popfreq ".\frequenze-dnp.tsv"
+
+& $nipat workflow snp-batch `
+  --bam ".\a.bam" --bam ".\b.bam" --reference ".\genome.fa" --panel ".\snp.tsv"
 ```
 
-In alternativa a `--bam`, utilizzare `--bamlist "..\campioni\bamlist.txt"`.
-`--contamination-panel` seleziona un pannello diverso per il secondo passaggio;
-se omesso, viene utilizzato quello di `--panel`. Usare le opzioni globali
-`--execution-mode` e `--max-workers` per controllare il parallelismo.
-Su Ubuntu usare `nipat` e percorsi Linux.
-`nipat workflow dnp-contamination --help` elenca tutte le opzioni.
+`dnp-contamination` può usare un pannello distinto con
+`--contamination-panel`. Nei preset con CPI ripetere `--pair` per altre
+coppie. L'ID della coppia è un'etichetta distinta, lunga fino a 64
+caratteri ASCII, che parte con una lettera e accetta lettere, cifre,
+`-` e `_`. Un BAM può essere condiviso tra coppie nello stesso ruolo.
+`--cpi-panel`, `--cutoff` e `--cutoff-map` selezionano i siti a partire
+dai conteggi DNP; in loro assenza si usano i siti disponibili.
 
-### DNPcall → CPI e DNPcall → Contamination e CPI
-
-1. Scegliere il workflow desiderato dal menu **W**.
-2. Inserire per ogni coppia un ID univoco, il BAM **cfDNA materno** e il BAM
-   **paterno**. Il ruolo materno richiede il campione cfDNA previsto dal metodo,
-   non viene dedotto dal nome del file o dai genotipi.
-3. Indicare il FASTA indicizzato, il pannello DNPcall e la modalità seriale
-   o parallela. Nel workflow combinato, scegliere anche il pannello
-   Contamination oppure mantenere quello DNPcall.
-4. Selezionare le frequenze di popolazione, la costante d'errore CPI e i siti
-   da analizzare: tutti quelli disponibili, un pannello o pannelli etichettati.
-5. Scegliere se includere SNPcall sugli stessi BAM e indicare il suo pannello.
-   Controllare coppie, ruoli, passaggi e parametri nel riepilogo, poi confermare
-   **Avvia analisi**. Il motore elabora i campioni e prepara automaticamente
-   le tabelle per CPI, senza copie o rinomine manuali.
-
-Il menu propone le impostazioni DNPcall e CPI salvate in **Configura**,
-comprese frequenze, modalità di cutoff e costante d'errore. I prefissi CPI
-salvati per l'analisi singola non si applicano ai workflow automatici:
-la selezione dei campioni usa i ruoli espliciti. Coppie e nome del run vengono
-inseriti per ogni esecuzione e non sono salvati come preferenze.
-
-L'**ID coppia** è un'etichetta scelta dall'utente per riconoscere nei risultati
-l'associazione fra il BAM cfDNA materno e il BAM paterno, per esempio
-`Coppia01`. Non è un parametro scientifico, non deve coincidere con un barcode
-o con il nome dei file. Occorrono due campioni distinti con ruoli noti; un
-solo BAM non permette di completare questi workflow.
-
-Gli ID delle coppie iniziano con una lettera e contengono fino a 64 caratteri
-ASCII: lettere, cifre, trattino e underscore. Non sono ammessi duplicati o ID
-che differiscono soltanto per maiuscole. Una stessa coppia di campioni non può
-essere ripetuta con un altro ID. Un campione può appartenere a più coppie nello
-stesso ruolo; viene elaborato da DNPcall una sola volta. L'uso dello stesso BAM
-in entrambi i ruoli viene rifiutato. Questi controlli verificano la coerenza
-formale, non l'identità biologica dei campioni.
-
-Esempio dalla CLI, con un campione paterno condiviso:
-
-```powershell
-.\nipat.cmd --runs-dir "..\risultati" workflow dnp-cpi `
-  --pair coppia_a "..\campioni\cfdna-a.bam" "..\campioni\padre.bam" `
-  --pair coppia_b "..\campioni\cfdna-b.bam" "..\campioni\padre.bam" `
-  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
-  --popfreq "..\pannelli\pop_allFreq.txt" --run-name "dnp-cpi-01"
-```
-
-Per includere Contamination, sostituire `dnp-cpi` con
-`dnp-contamination-cpi`. Il workflow combinato applica Contamination a tutti
-i campioni distinti presenti nelle coppie; `--contamination-panel` può
-selezionare un pannello diverso da quello DNPcall.
-
-| Opzione dei workflow con CPI | Significato |
-| --- | --- |
-| `--pair ID MATERNAL_BAM PATERNAL_BAM` | Coppia e assegnazione esplicita dei due BAM; opzione ripetibile. |
-| `--panel PATH` | Pannello usato da DNPcall per produrre i conteggi. |
-| `--popfreq PATH` | Frequenze di popolazione richieste da CPI. |
-| Nessuna opzione di cutoff | CPI usa tutti i siti disponibili nelle tabelle DNPcall, modalità ALL. |
-| `--cpi-panel PATH` | Un pannello di coordinate per CPI, distinto dalla selezione DNPcall. |
-| `--cutoff LABEL PATH` | Pannello CPI etichettato; opzione ripetibile. |
-| `--cutoff-map "LABEL=PATH,LABEL2=PATH2"` | Mappa di pannelli CPI; alternativa alle due opzioni precedenti. |
-| `--err-const NUMERO` | Sovrascrive la costante d'errore DNP; omesso usa il valore del registro scientifico. |
-| `--parallel` | Opzione DNP; la policy comune `--execution-mode` / `--max-workers` determina il parallelismo effettivo. |
-| `--snp-panel PATH` | Aggiunge SNPcall per ogni BAM distinto usando questo pannello SNP e il FASTA del workflow. |
-
-Le tre forme di cutoff sono alternative. Un pannello CPI seleziona i loci
-fra quelli presenti nelle tabelle: non aggiunge conteggi per loci esclusi
-dal pannello DNPcall. Il pannello DNPcall non viene applicato implicitamente
-come cutoff CPI. I prefissi materno/paterno dei file sono gestiti dal motore;
-i ruoli sono quelli dichiarati con `--pair`, non nomi da interpretare.
-
-### SNPcall nei workflow DNPcall
-
-Per aggiungere SNPcall a uno dei tre workflow DNPcall, rispondere alla relativa
-scelta nel menu e selezionare un pannello SNP. Dalla CLI aggiungere
-`--snp-panel PATH`, per esempio:
-
-```powershell
-.\nipat.cmd workflow dnp-contamination `
-  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
-  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\DNP_list.txt" `
-  --snp-panel "..\pannelli\SNPlist.txt"
-```
-
-Il pannello DNP non viene riutilizzato implicitamente come pannello SNP.
-SNPcall legge gli stessi BAM originali e lo stesso FASTA, preparando un proprio
-pileup per ciascun campione. In questi tre preset, Contamination e CPI usano
-i conteggi DNP. Per collegare i risultati SNP ai consumatori usare **W → 5**
-o `workflow analyze`. I passaggi SNP indipendenti possono essere raggruppati
-entro il budget comune; se un passaggio fallisce, quelli non ancora avviati
-vengono bloccati anche quando non ne dipendono scientificamente.
-
-### SNPcall su più campioni
-
-Scegliere **W → 4 — SNPcall su più campioni** e indicare la modalità:
-
-- **BAM:** selezionare più BAM, oppure un file elenco, un FASTA indicizzato
-  e un pannello SNP comune. Il motore prepara un pileup distinto per ogni BAM.
-- **Pileup:** selezionare più pileup con QNAME e un pannello SNP comune.
-  Non viene richiesto un FASTA e samtools non viene eseguito.
-
-Controllare file, modalità, pannello e destinazione nel riepilogo, quindi
-confermare una sola volta. Ogni file riceve un passaggio e una tabella di
-risultati propri, anche quando gli originali in cartelle diverse hanno lo
-stesso nome. Lo stesso file non può essere elencato più volte. Le modalità
-BAM e pileup non possono essere mescolate nello stesso run del preset
-`snp-batch`; la CLI `workflow analyze` accetta invece entrambe le selezioni
-con ID distinti.
-Per il significato delle colonne e i requisiti degli input consultare
-[SNPcall](#snpcall).
-
-SNPcall può elaborare campioni indipendenti, anche nei workflow misti,
-in parallelo entro il budget comune; `--execution-mode serial` mantiene
-un solo processo di calcolo. I riepiloghi riuniscono campioni distinti con
-lo stesso pannello, riferimento e modalità, senza mescolare analisi con
-contratti diversi. La tabella dei genotipi e i grafici non sostituiscono
-gli output individuali.
-
-```powershell
-.\nipat.cmd --runs-dir "..\risultati" workflow snp-batch `
-  --bam "..\campioni\campione-a.bam" --bam "..\campioni\campione-b.bam" `
-  --reference "..\riferimenti\genome.fa" --panel "..\pannelli\SNPlist.txt" `
-  --run-name "snp-batch-01"
-
-.\nipat.cmd workflow snp-batch `
-  --pileup "..\campioni\campione-a.pileup" --pileup "..\campioni\campione-b.pileup" `
-  --panel "..\pannelli\SNPlist.txt" --run-name "snp-pileup-01"
-```
-
-`--bamlist PATH` è un'alternativa a `--bam` ripetuto; i percorsi relativi
-nell'elenco si risolvono rispetto alla cartella del file elenco. `--reference`
-è obbligatorio per BAM e non è ammesso per pileup.
-`nipat workflow snp-batch --help` elenca le opzioni; su Ubuntu usare `nipat`
-e percorsi Linux.
-
-### Risultati dei workflow automatici
-
-| Percorso nel run automatico | Contenuto |
-| --- | --- |
-| `work/engine-plan.json` | Piano inviato al motore, con campioni e collegamento fra i passaggi. |
-| `output/workflow/workflow-state.json` | Stato complessivo e stato di ciascun passaggio. |
-| `output/workflow/steps/dnp/output` | Tabelle, riepiloghi e grafici DNPcall. |
-| `output/workflow/steps/contamination/output` | Stime per sito e riepilogo Contamination, quando selezionato. |
-| `output/workflow/steps/cpi/output` | Riepilogo, curve e grafici CPI nei preset DNP. |
-| `output/workflow/steps/dnp_cpi/output`, `snp_cpi/output` | Risultati CPI dei rispettivi rami nel workflow completo. |
-| `output/workflow/steps/dnp_cpin/output`, `snp_cpin/output` | Risultati CPIN dei rispettivi rami. |
-| `output/workflow/steps/dnp_contamination/output`, `snp_contamination/output` | Risultati Contamination dei rispettivi rami. |
-| `output/workflow/steps/<id>/work/effective-scientific-settings.json` | Parametri effettivi e costanti del passaggio. |
-| `output/workflow/steps/snp_0001/output/SNPcall_output.txt` | Risultato del primo campione SNPcall; i successivi usano `snp_0002`, ecc. |
-| `output/workflow/steps/snp_0001/output/plots/sample_0001` | Quattro PDF SNP del campione: genotipi, conteggi REF, ALT e altre basi. |
-| `output/workflow/steps/snp_0001/output/summary` | Genotipi, grafico dei valori non assegnati e `resources.tsv` del singolo campione. |
-| `output/workflow/snp_summary/group_0001` | Riepilogo di almeno due campioni compatibili: `merged_genotypes.tsv`, `sample_labels.tsv`, `resources.tsv`, PDF dei genotipi non assegnati e UpSet; gruppi successivi hanno numerazione distinta. |
-| `output/workflow/steps/<id>/request.json` | Richiesta concreta del passaggio. |
-| `output/workflow/steps/<id>/command.log` | Messaggi R del passaggio; per DNPcall comprende anche i messaggi interni allo script. |
-| `output/workflow/steps/snp_0001/preparation.log` | Messaggi samtools del primo campione SNPcall da BAM; il comando è registrato nello stato. |
-| `output/workflow/steps/<id>/work` | Pannelli, liste e tabelle preparati per il passaggio. |
-
-Un errore o un'interruzione impediscono l'avvio dei passaggi successivi; risultati
-parziali e log rimangono disponibili. Controllare lo stato complessivo e quello
-dei singoli passaggi, senza dedurre il successo dalla sola presenza di file.
-Non è prevista la ripresa automatica: correggere la causa e avviare un nuovo run.
-La simulazione `--dry-run` prepara il piano e i mount, ma non esegue nessun
-passaggio e non produce risultati scientifici.
-
-Ogni passaggio SNPcall da BAM conserva `work/snp_regions.bed` e
-`work/pileup.txt`; in modalità pileup questi file non vengono rigenerati.
-La mappa dei campioni in `run.json` collega i nomi interni agli input originali;
-`artifacts.snp-tables` nello stato del passaggio collega la tabella al campione.
-Non attribuire le tabelle ai campioni usando soltanto il nome fisso
-`SNPcall_output.txt`: considerare il passaggio e la mappa registrata.
-L'UpSet conta i loci con **genotipo assegnato**, non tutti i loci con almeno
-una lettura. `resources.tsv` riporta secondi della fase R e memoria residente
-all'inizio e alla fine: questi valori non sono il tempo totale da BAM o il
-picco di RAM. Usare la diagnostica del run per le misure complessive.
-
-Per usare **tabelle DNPcall già disponibili**, avviare invece **3 — Contamination**
-e selezionare i file richiesti in `output/individual_outputs` del run DNPcall,
-oppure quella sottocartella come input. Nel workflow automatico le tabelle
-si trovano in `output/workflow/steps/dnp/output/individual_outputs`.
-La radice del run contiene anche file non compatibili con Contamination.
-
-CPI produce `Summary_FetalFraction_CPI.csv` e, nella sottocartella `plots`,
-un PDF per coppia e `All_CPIplots.pdf`. In `curves` esporta le curve per
-coppia/pannello rappresentate per intervalli di soglie equivalenti; non
-produce una tabella CPI per ogni sito.
-La colonna `Pair` e i nomi dei PDF usano identificatori nativi assegnati dal
-motore, per esempio `Mothers0001-Fathers0002_DNPs`. Per risalire all'ID
-inserito dall'utente, consultare `cpi-pairs` nel record del passaggio CPI
-in `workflow-state.json`; `run.json` collega le coppie ai BAM originali.
-La mappa indica anche le righe del riepilogo associate a ciascuna coppia e cutoff.
-I CSV e i PDF originali non vengono riscritti.
+Per un batch SNP, `--bamlist` sostituisce i BAM elencati in CLI.
+Per partire da pileup, ripetere `--pileup` senza BAM o FASTA. I batch
+richiedono una modalità uniforme, un pannello condiviso e campioni
+distinti. `workflow analyze` permette di combinare BAM e pileup con
+ID espliciti quando si sceglie il ramo SNP.
 
 ### Utilizzo di tabelle già disponibili
 
-Per usare tabelle DNPcall o SNPcall già disponibili senza rinominarle,
-scegliere **W → 5 → Tabelle esistenti**, assegnare gli ID campione e dichiarare
-le coppie/terne dei consumatori scelti. In alternativa, per avviare
-**CPI da un run DNPcall già completato**, scegliere l'analisi singola
-**4 — CPI**. Verificare prima la corrispondenza fra
-alias DNPcall e campioni originali in `run.json`. Preparare una cartella con
-copie delle tabelle selezionate, nominando per esempio `MotherA1.txt` la tabella
-cfDNA materna e `FatherA1.txt` quella del presunto padre; indicare poi `A1:A1`
-in CPI e fornire le frequenze di popolazione. La scelta dei ruoli non è dedotta
-dai genotipi o dagli alias. Conservare la corrispondenza fra copie e run sorgente.
+In **W → 5 → Tabelle esistenti** selezionare le tabelle individuali,
+assegnare gli ID e dichiarare le coppie o terne richieste. In CLI
+usare `workflow analyze --caller tables` con
+`--dnp-table ID PATH` e/o `--snp-table ID PATH`.
 
-Conservare entrambi i run. Per preparare input modificati utilizzare copie
-separate. Un run `succeeded` attesta il completamento tecnico, non la validità
-scientifica del risultato; `NA` può essere previsto in assenza di siti informativi.
-Una cartella di output parziale non dimostra il completamento del workflow.
+Per Contamination singola si possono scegliere le tabelle DNP in
+`output/individual_outputs` del run sorgente. Per CPI o CPIN singoli
+preparare copie con i prefissi richiesti e conservare la mappa verso
+i campioni originali. La [guida ai risultati](ESECUZIONI.md) indica dove
+trovare gli output e come verificare a quale campione appartengono.
 
 ## Problemi e segnalazioni
 
-| Problema | Verifica da effettuare |
+| Situazione | Cosa controllare |
 | --- | --- |
-| Setup Windows incompleto | Aprire **Cartella NIPAT Desktop** dal menu Start e conservare `setup.log` e `state.json` nella sottocartella `.runtime\installer`; risolvere l'errore e usare il collegamento di completamento della preparazione. |
-| Preparazione Ubuntu incompleta | Conservare `setup.log` e `state.json` nella cartella di stato XDG; verificare servizio e accesso a Docker, quindi ripetere `nipat --setup`. Consultare [Installatore Linux](INSTALLATORE_LINUX.md). |
-| File non accessibile | Controllare percorso, permessi e disponibilità del disco; su Windows usare un disco locale fisso. |
-| Indice FASTA assente | Fornire il `.fai` del riferimento selezionato e, per BGZF, il `.gzi`. |
-| Nome di run già presente | Scegliere un nome nuovo o lasciare il nome automatico. |
-| Analisi interrotta o fallita | Conservare l'intera cartella del run e consultare `execution.log`. |
-| Risultato inatteso | Confrontare input e parametri con il caso di riferimento e compilare la [scheda di validazione](VALIDAZIONE.md). |
+| Setup Windows incompleto | In **Cartella NIPAT Desktop**, consultare `.runtime\installer\setup.log` e `state.json`, poi usare il collegamento per completare la preparazione. |
+| File non accessibile | Controllare percorso, permessi e accesso del backend. Su Windows usare un disco locale fisso. |
+| Riferimento FASTA rifiutato | Scegliere il file delle sequenze e verificare la presenza del `.fai` e dell'eventuale `.gzi`. |
+| Nome di run già presente | Cambiare il nome o usare un nome automatico. |
+| Analisi fallita o interrotta | Aprire `run-report.html` e `execution.log`; nei workflow verificare lo stato e il log del passaggio. |
+| Tempi o memoria inattesi | Consultare la [guida alle prestazioni](PERFORMANCE.md) e i [limiti delle risorse](RISORSE.md). |
+| Valori inattesi | Verificare associazioni dei campioni, input, modello e parametri effettivi. Registrare atteso e osservato nella [scheda di validazione](VALIDAZIONE.md). |
 
-Nel menu guidato, Ctrl+C interrompe l'operazione e torna al menu principale
-dopo la procedura di arresto del container corrente. Se l'arresto non può
-essere confermato, NIPAT mostra un avviso: conservare il log e verificare lo
-stato del runtime prima di avviare un'altra analisi. Una chiusura forzata
-o uno spegnimento possono lasciare lo stato `preparing` o `running`: non sono
-esiti positivi. Una nuova prova deve usare una nuova cartella.
-
-Nomi e percorsi dei campioni sono presenti nei metadati e non vengono
-anonimizzati automaticamente. Prima di allegare log o file a una segnalazione,
-verificarne il contenuto e scegliere un canale adatto ai dati condivisi.
-
-## Nomi dei campioni e risorse
-
-I risultati per la consultazione mostrano il nome originale del campione.
-Gli identificativi come `sample_0001` collegano input e passaggi internamente:
-non indicano che il file originale sia stato rinominato. La mappa dei campioni
-permette di risalire al percorso completo e distingue file omonimi.
-Le esportazioni leggibili affiancano gli artefatti scientifici verificati;
-non cambiano i valori calcolati da R.
-
-La gestione delle [risorse](RISORSE.md) mostra separatamente RAM fisica,
-RAM della VM e limite dell'analisi. Aumentare il limite dell'analisi non
-modifica automaticamente Lima o WSL. Per un run fallito conservare il
-resoconto, `run.json` ed `execution.log` prima di riprovare con nuovi valori.
+La cartella di ogni run contiene il riepilogo del calcolo, le tabelle, i
+grafici e le evidenze tecniche. Per aprirla usare la schermata finale
+o **6 — Ultima esecuzione** nella sessione corrente. Nomi e percorsi dei
+campioni possono comparire nei metadati: verificare i file che si
+intendono condividere.

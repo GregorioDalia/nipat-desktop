@@ -39,11 +39,11 @@ decimale, secondo il formato dello script.
 | Input | Controlli applicati |
 | --- | --- |
 | Pannello DNPcall | Cinque colonne; coordinate adiacenti con prima posizione almeno 2, per consentire la finestra precedente al sito; loci univoci; alleli di due basi A/C/G/T, normalizzati in maiuscolo nella copia di lavoro. |
-| Pannello SNPcall 2.0 | Colonne `chr`, `pos`, `ref`, `alt`; resta accettato il formato precedente `pos`, `ref`, `alt` con `pos=chr:posizione`. Coordinate univoche, posizione da 2 a 2147483646 in entrambe le modalità e cromosoma senza spazi o `:`; alleli distinti di una base A/C/G/T, normalizzati in maiuscolo. La copia di lavoro usa sempre quattro colonne. |
+| Pannello SNPcall 2.0 | Colonne `chr`, `pos`, `ref`, `alt`; è accettato anche il formato `pos`, `ref`, `alt` con `pos=chr:posizione`. Coordinate univoche, posizione da 2 a 2147483646 in entrambe le modalità e cromosoma senza spazi o `:`; alleli distinti di una base A/C/G/T, normalizzati in maiuscolo. La copia di lavoro usa sempre quattro colonne. |
 | Pileup SNPcall | Almeno sette colonne samtools: riferimento nella terza, profondità nella quarta, basi nella quinta, qualità nella sesta e QNAME nella settima; cromosoma presente, posizione positiva e profondità non negativa su tutte le righe non vuote. Il file importato non può essere vuoto. |
 | Tabelle Contamination | Colonne richieste; coordinate positive e ordinate; loci univoci; `N_REF`, `N_ALT` e `N_Other` finiti, interi e non negativi. |
 | Tabelle CPI/CPIN | Requisiti dei conteggi; `REF` e `ALT` di una base per SNP o due per DNP; `total_count` intero non negativo, con i valori mancanti previsti nei siti senza copertura. |
-| Frequenze CPI/CPIN | Tipo di marcatore coerente con le tabelle; loci univoci; `Ref_f.pop` e `Alt_f.pop` finite comprese tra 0 e 1. La tabella deve contenere almeno un locus. |
+| Frequenze CPI/CPIN | Tipo di marcatore coerente con le tabelle; loci univoci; `Ref_f.pop` e `Alt_f.pop` finite, strettamente maggiori di 0 e al massimo 1. La tabella deve contenere almeno un locus. |
 
 BAM e FASTA sono verificati per presenza, accessibilità e file di indice
 richiesti; la decodifica effettiva dei dati binari e del riferimento compete
@@ -67,11 +67,11 @@ della colonna resta una modalità supportata da Contamination, che calcola
 il rapporto dai conteggi.
 
 Alcune incoerenze richiedono interpretazione di dominio e vengono registrate
-come **avvisi**, senza riscrivere i valori: frequenza zero, somma delle frequenze
-REF/ALT diversa da uno, `total_count` diverso dalla somma dei tre conteggi e
-rapporto fornito diverso da quello ricavabile dai conteggi. Questi avvisi non
-impediscono automaticamente il calcolo; devono essere valutati prima di usare
-il risultato. Una frequenza zero può causare una divisione per zero nel CPI.
+come **avvisi**, senza riscrivere i valori: somma delle frequenze REF/ALT
+diversa da uno, `total_count` diverso dalla somma dei tre conteggi e rapporto
+fornito diverso da quello ricavabile dai conteggi. Valutarne il significato
+prima di usare il risultato. CPI e CPIN rifiutano frequenze zero. CPIN
+rifiuta anche un `total_count` diverso da `N_REF + N_ALT + N_Other`.
 
 `work/input-validation.json` conserva avvisi e normalizzazioni, con il
 checksum del pannello originale e della copia preparata. Nei workflow

@@ -1,8 +1,8 @@
 # Collaudo automatico dell'installazione Windows
 
-Dalla 0.8.60 il pacchetto include il collaudo dei cinque moduli e dei workflow.
-Non servono Python, R o Docker Desktop installati separatamente. Completare
-prima il setup NIPAT; il collaudo usa il suo Python e il runtime WSL verificato.
+Il pacchetto Windows include un collaudo dei cinque moduli e dei workflow
+su dati sintetici. Completare il setup prima di avviare il collaudo, che usa
+il Python incluso e il runtime WSL verificato.
 
 Aprire **Windows PowerShell come utente normale** e incollare:
 
@@ -38,7 +38,7 @@ non aggiorna l'applicazione e non modifica le preferenze. Crea soltanto i propri
 input, run e report. Uno ZIP può contenere percorsi locali e informazioni sul
 PC: controllarlo prima di condividerlo pubblicamente.
 
-Il tempo dipende dalle risorse del PC. La precedente esecuzione completa sulla
-0.8.50 riparata ha richiesto circa 11 minuti; non è una misura di velocità sui
-BAM reali. Un esito positivo verifica questa matrice sintetica, non ogni input
-possibile o una validazione clinica.
+La durata dipende dalle risorse del PC. L'esito riguarda i casi sintetici
+elencati nel report. Per misurare i tempi su input rappresentativi, seguire
+la [guida alle prestazioni](PERFORMANCE.md). Per valutare i risultati
+scientifici su dati di dominio, applicare la [scheda di validazione](VALIDAZIONE.md).

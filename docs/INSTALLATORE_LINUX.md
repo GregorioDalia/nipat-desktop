@@ -1,21 +1,10 @@
 # Installazione di NIPAT su Ubuntu
 
-Il pacchetto Linux di **NIPAT Desktop** è un unico file `.deb`, con versione
-nel nome: `nipat-desktop_0.8.9_amd64.deb` per la versione 0.8.9.
-Contiene applicazione, documentazione
-e immagine scientifica con R, samtools, dipendenze e preparazione dei workflow.
-Il motore è lo stesso archivio verificato incluso nel pacchetto Windows.
-Non è necessario scaricare o spostare separatamente l'immagine.
-
-La versione appartiene al canale desktop. Le versioni pubblicate e i
-relativi pacchetti sono elencati nella pagina
-[Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-I pacchetti degli artefatti GitHub Actions servono alla revisione tecnica.
-Le istruzioni si riferiscono a una build identificata; un archivio
-**Source code** di GitHub non è un installatore.
-Le [note della versione 0.8.9](RELEASE_0.8.9.md) descrivono funzionalità
-e ambito delle verifiche. L'installazione aggiorna
-lo stesso pacchetto `nipat-desktop`, senza creare una seconda applicazione.
+Il pacchetto `nipat-desktop_VERSIONE_amd64.deb` contiene l'applicazione, la
+documentazione e l'immagine scientifica con R, samtools e dipendenze.
+Scaricarlo dagli asset dell'[ultima release stabile](https://github.com/GregorioDalia/nipat-desktop/releases/latest).
+Per aggiornare un'installazione esistente, APT sostituisce i file applicativi
+dello stesso pacchetto `nipat-desktop`.
 
 ## Requisiti
 
@@ -55,10 +44,11 @@ analisi con percorsi o proprietari dei risultati differenti da quelli attesi.
 
 Scaricare il pacchetto `.deb` della versione scelta dagli asset della pagina
 [Releases](https://github.com/GregorioDalia/nipat-desktop/releases).
-Dalla cartella che contiene il pacchetto:
+Aprire il terminale nella cartella che contiene il pacchetto e sostituire
+il nome del file nell'esempio con quello scaricato:
 
 ```bash
-sudo apt install ./nipat-desktop_0.8.9_amd64.deb
+sudo apt install ./nipat-desktop_0.8.60_amd64.deb
 ```
 
 APT mostra anche le dipendenze da scaricare e installare. Esaminare il
@@ -215,8 +205,8 @@ Docker Engine e Compose v2 e controlla i comandi informativi del pacchetto.
 Questa prova non avvia un daemon Docker nel container e non verifica
 l’autorizzazione di un account desktop.
 
-Una prova dedicata installa il pacchetto ufficiale 0.7.1 e lo aggiorna alla
-candidata con APT. Verifica run, dati e preferenze conservati e ripete gli
+Una prova dedicata installa il pacchetto di riferimento indicato nel rapporto
+di build e lo aggiorna alla candidata con APT. Verifica run, dati e preferenze conservati e ripete gli
 autotest scientifici sul pacchetto aggiornato. Le identità dei due pacchetti
 e gli esiti sono registrati in `linux-upgrade-check.json`.
 I test del launcher verificano inoltre Ctrl+C attraverso il processo che

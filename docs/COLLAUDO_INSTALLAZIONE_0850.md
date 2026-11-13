@@ -56,6 +56,24 @@ richiedere dati personali o installazioni aggiuntive. Il terminale mostra
 l'avanzamento dei casi; il rapporto viene aggiornato e conservato anche quando
 una verifica fallisce.
 
+## Correzione locale dell'autotest CPIN
+
+Questa procedura riguarda il setup ufficiale 0.8.50. Il Python incorporato
+può terminare l'autotest CPIN con
+`ModuleNotFoundError: No module named 'verify_contamination_update'`.
+
+Lo script [repair-0850-self-test.ps1](../scripts/windows/repair-0850-self-test.ps1)
+verifica versione e hash, conserva backup e ricevuta separata, applica la
+correzione al verificatore previsto e ripete la preparazione. Eseguirlo in
+PowerShell come utente normale con `-HotfixSourceCommit`, indicando il commit
+Git completo da cui è stato scaricato. La preparazione scrive lo stato
+`ready` al completamento dei controlli.
+
+La ricevuta identifica l'installazione come **0.8.50 con correzione locale**.
+Una reinstallazione dall'EXE 0.8.50 originale ripristina i file distribuiti,
+incluso il verificatore difettoso. Il [collaudo dell'installazione corrente](COLLAUDO_INSTALLAZIONE.md)
+usa la procedura inclusa nell'installatore.
+
 ## Risultati da leggere e condividere
 
 - `report.html`: riepilogo leggibile, esito e dettaglio delle prove.

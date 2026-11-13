@@ -23,6 +23,7 @@ python3 /opt/nipat/engine/main.py execute dnp-call --request /run/work/request.j
 python3 /opt/nipat/engine/main.py execute snp-call --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute contamination --request /run/work/request.json
 python3 /opt/nipat/engine/main.py execute cpi --request /run/work/request.json
+python3 /opt/nipat/engine/main.py execute cpin --request /run/work/request.json
 ```
 
 `execute` convalida la richiesta, prepara i file e avvia il programma R.
@@ -225,10 +226,11 @@ e `bedfile_for_mpileup.bed` nella radice del run impedisce la preparazione.
 Lo script R genera e rimuove questi ultimi due file al termine. Richiesta,
 pannello normalizzato e lista BAM rimangono disponibili.
 
-DNPcall richiama samtools internamente, ne sopprime lo stderr e non controlla
-esplicitamente il codice di uscita. Il motore conserva lo stato restituito da R,
-ma non garantisce che ogni errore interno di samtools venga segnalato.
-Un processo riuscito non attesta la correttezza scientifica dell'output.
+DNPcall avvia l'helper di acquisizione del pileup con il budget effettivo.
+Se l'helper fallisce, R interrompe l'analisi. `work/dnp-pileup.json` registra
+strategia e processi, e il motore convalida le tabelle attese prima di registrare
+il successo. Il [riferimento DNPcall](../scientific/README.md#dnpcall) descrive
+i percorsi di acquisizione.
 
 ## CPI
 
@@ -286,7 +288,25 @@ dai prefissi degli input. Nomi ambigui dei campioni e collisioni degli output
 delle coppie, anche limitate alle maiuscole, sono rifiutati prima dello staging.
 Richiesta, tabelle preparate e pannelli rimangono in `work`. In `output`
 viene scritto `Summary_FetalFraction_CPI.csv`; la sottocartella `output/plots`
-contiene un PDF per coppia e `All_CPIplots.pdf`; lo script non salva tabelle di dettaglio per sito o iterazione.
+contiene un PDF per coppia e `All_CPIplots.pdf`. In `output/curves` lo script
+salva le tabelle delle iterazioni per coppia e cutoff.
+
+## CPIN
+
+La richiesta `execute cpin` usa `schema_version: 1`, `workflow: "cpin"`,
+le tabelle `samples` con `path` e `name`, la selezione `trios`, i tre
+prefissi di ruolo, `popfreq`, `work_dir` e `out_dir`. Il campo opzionale
+`markers` seleziona un pannello con coordinate e alleli REF/ALT.
+`trios` è una lista separata da virgole di triple `madre:padre:figlio`.
+Ciascun ruolo individua una tabella distinta per prefisso e identificatore.
+Il tipo SNP o DNP delle tabelle e del pannello deve corrispondere alle
+frequenze. `scientific_settings` applica gli override validati, fra cui
+`min_child_reads`, `site_selection` e le costanti di mismatch.
+
+L'output comprende `Summary_Postnatal_CPI.txt`, curve per terna e selezione,
+dettaglio dei siti, PDF separati e `All_CPIplots.pdf`. Il
+[contratto dei piani](../docs/WORKFLOW_CONTRACT.md#preparazione-cpin-e-identità-delle-terne)
+descrive la stessa analisi come passaggio di un workflow.
 
 ## Etichette leggibili
 
@@ -308,6 +328,6 @@ sono adattati ai vincoli dei filesystem e possono essere abbreviati; la mappa
 conserva il nome completo. Le etichette CSV/TSV che potrebbero essere interpretate
 come formule sono protette come testo, senza modificare i valori scientifici.
 
-La [guida 0.8.50](../docs/DEVELOPMENT_0.8.50.md) descrive la configurazione
-scientifica e le nuove composizioni. Il motore verifica gli override prima
+La [guida per l'utilizzo](../docs/GUIDA_UTILIZZO.md) descrive la configurazione
+scientifica e i workflow del client. Il motore verifica gli override prima
 dello staging e conserva i parametri effettivi in ogni passaggio.
