@@ -150,8 +150,12 @@ class SuiteStopped(RuntimeError):
 
 
 class Suite:
-    def __init__(self, app, session, commit):
+    def __init__(self, app, session, commit, *, installation_version="0.8.50", installation_commit=BASE_COMMIT):
         self.app, self.session, self.commit = app.resolve(), session.resolve(), commit
+        if (not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", installation_version)
+                or not re.fullmatch(r"[a-f0-9]{40}", installation_commit)):
+            raise ValueError("Identita attesa dell'installazione non valida.")
+        self.installation_version, self.installation_commit = installation_version, installation_commit
         if self.session.is_relative_to(self.app) or self.app.is_relative_to(self.session):
             raise ValueError("La sessione deve trovarsi fuori dalla cartella dell'applicazione.")
         self.inputs, self.runs, self.logs = (self.session / part for part in ("inputs", "runs", "logs"))
@@ -160,7 +164,8 @@ class Suite:
                               "System32/WindowsPowerShell/v1.0/powershell.exe")
         self.environment = {key: value for key, value in os.environ.items()
                             if not key.upper().startswith("NIPAT_") and key.upper() not in {"PYTHONPATH", "PYTHONHOME"}}
-        self.report = {"schema_version": 1, "suite": "NIPAT installed synthetic acceptance 0.8.50",
+        self.report = {"schema_version": 1, "suite": f"NIPAT installed synthetic acceptance {installation_version}",
+                       "expected_installation": {"version": installation_version, "source_commit": installation_commit},
                        "started_utc": utc(), "harness_source_commit": commit,
                        "status": "RUNNING", "app_dir": str(self.app), "session": str(self.session),
                        "scope": "Cinque moduli, oracoli analitici indipendenti e workflow sintetici sul client installato.",
@@ -255,15 +260,19 @@ class Suite:
         state = read_json(self.app / ".runtime/installer/state.json")
         manifest = read_json(self.app / ".distribution/installer-manifest.json")
         backend = read_json(self.app / ".runtime/backend.json")
-        if (manifest.get("version") != "0.8.50" or manifest.get("source_commit") != BASE_COMMIT
-                or state.get("source_commit") != BASE_COMMIT or state.get("phase") != "ready"
+        if (manifest.get("version") != self.installation_version
+                or manifest.get("source_commit") != self.installation_commit
+                or state.get("source_commit") != self.installation_commit or state.get("phase") != "ready"
+                or state.get("version") != self.installation_version
+                or state.get("runtime_image") != manifest.get("runtime_image")
                 or state.get("installation_channel") != "desktop" or backend.get("backend") != "wsl"
-                or backend.get("source_commit") != BASE_COMMIT
+                or backend.get("source_commit") != self.installation_commit
                 or backend.get("runtime_image") != state.get("resolved_runtime_image")
                 or not IMAGE_ID.fullmatch(backend.get("runtime_image", ""))):
-            raise ValueError("Attesa installazione ufficiale 0.8.50 pronta, con runtime WSL coerente.")
+            raise ValueError(f"Attesa installazione {self.installation_version} pronta, al commit "
+                             f"{self.installation_commit}, con runtime WSL coerente.")
         self.image = backend["runtime_image"]
-        self.report["installation"] = {"version": manifest["version"], "source_commit": BASE_COMMIT,
+        self.report["installation"] = {"version": manifest["version"], "source_commit": self.installation_commit,
                                        "build_image": manifest["runtime_image"], "resolved_image": self.image,
                                        "wsl_distro": backend["wsl_distro"], "rootfs_sha256": state.get("rootfs_sha256")}
         self.identity_paths = [self.app / relative for relative in (
@@ -402,9 +411,10 @@ class Suite:
                 rows.append("<tr><td>" + escape(kind) + "</td><td>" + escape(entry["id"]) +
                             "</td><td class='" + escape(entry["status"]) + "'>" + escape(entry["status"]) +
                             "</td><td>" + escape(entry.get("error", entry.get("mode", ""))) + "</td></tr>")
-        document = """<!doctype html><html lang="it"><meta charset="utf-8"><title>Collaudo NIPAT 0.8.50</title>
-<style>body{font:16px system-ui,sans-serif;max-width:1200px;margin:40px auto;padding:0 24px;color:#24313b;background:#f7f8fa}h1{font-size:28px}table{border-collapse:collapse;width:100%;background:white}td,th{padding:10px;text-align:left;border-bottom:1px solid #ddd;vertical-align:top;overflow-wrap:anywhere}.PASS{color:#187448}.FAIL,.INTERRUPTED{color:#b42318}.BLOCKED{color:#875700}code{overflow-wrap:anywhere}p{line-height:1.55}</style>
-<h1>Collaudo NIPAT 0.8.50</h1>"""
+        title = "Collaudo NIPAT " + escape(self.installation_version)
+        document = '<!doctype html><html lang="it"><meta charset="utf-8"><title>' + title + "</title>"
+        document += """<style>body{font:16px system-ui,sans-serif;max-width:1200px;margin:40px auto;padding:0 24px;color:#24313b;background:#f7f8fa}h1{font-size:28px}table{border-collapse:collapse;width:100%;background:white}td,th{padding:10px;text-align:left;border-bottom:1px solid #ddd;vertical-align:top;overflow-wrap:anywhere}td:first-child,th:first-child{min-width:8em}td:nth-child(3),th:nth-child(3){white-space:nowrap;min-width:6em}.PASS{color:#187448}.FAIL,.INTERRUPTED{color:#b42318}.BLOCKED{color:#875700}code{overflow-wrap:anywhere}p{line-height:1.55}</style>"""
+        document += "<h1>" + title + "</h1>"
         document += f"<p><strong>Esito: {escape(self.report['status'])}</strong> — {escape(self.report.get('summary', {}))}</p>"
         document += "<p>" + escape(self.report["scope"]) + "</p>"
         document += "<p>" + " ".join(escape(item) for item in self.report["limits"]) + "</p>"
@@ -504,8 +514,12 @@ def main(argv=None):
     parser.add_argument("--app-dir", type=Path, required=True)
     parser.add_argument("--session", type=Path, required=True)
     parser.add_argument("--harness-source-commit", required=True)
+    parser.add_argument("--installation-version", default="0.8.50")
+    parser.add_argument("--installation-source-commit", default=BASE_COMMIT)
     args = parser.parse_args(argv)
-    return Suite(args.app_dir, args.session, args.harness_source_commit).run()
+    return Suite(args.app_dir, args.session, args.harness_source_commit,
+                 installation_version=args.installation_version,
+                 installation_commit=args.installation_source_commit).run()
 
 
 if __name__ == "__main__":

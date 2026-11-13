@@ -30,10 +30,11 @@ class InstalledSuiteTests(unittest.TestCase):
                                                 "installed_workflows.py", "fixtures.json"})
         for name, expected in document["files"].items():
             self.assertEqual(suite.digest(directory / name), expected, name)
-        wrapper = (ROOT / "scripts/windows/test-installed-0850.ps1").read_text(encoding="utf-8")
-        expected = re.search(r"\$ExpectedManifestSha256 = '([a-f0-9]{64})'", wrapper)
-        self.assertIsNotNone(expected)
-        self.assertEqual(expected.group(1), suite.digest(manifest))
+        for filename in ("test-installed-0850.ps1", "test-installed.ps1"):
+            wrapper = (ROOT / "scripts/windows" / filename).read_text(encoding="utf-8")
+            expected = re.search(r"\$ExpectedManifestSha256 = '([a-f0-9]{64})'", wrapper)
+            self.assertIsNotNone(expected)
+            self.assertEqual(expected.group(1), suite.digest(manifest))
 
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -79,6 +80,48 @@ class InstalledSuiteTests(unittest.TestCase):
         self.assertLess(command.index("--scientific-config"), command.index("cpi"))
         self.assertEqual(Path(command[command.index("-File") + 1]),
                          self.app.resolve() / "scripts/windows/run.ps1")
+
+    def test_installed_release_identity_is_explicit_and_mismatches_fail_before_science(self):
+        version, commit = "0.8.60", "c" * 40
+        driver = suite.Suite(self.app, self.root / "new-release", commit,
+                             installation_version=version, installation_commit=commit)
+        paths = [self.app / name for name in (".distribution/installer-manifest.json",
+                 ".runtime/installer/state.json", ".runtime/backend.json")]
+        documents = [
+            {"version": version, "source_commit": commit, "runtime_image": IMAGE},
+            {"version": version, "source_commit": commit, "phase": "ready",
+             "installation_channel": "desktop", "runtime_image": IMAGE, "resolved_runtime_image": IMAGE},
+            {"source_commit": commit, "backend": "wsl", "runtime_image": IMAGE, "wsl_distro": "fixture"},
+        ]
+        for path, document in zip(paths, documents, strict=True):
+            self.write(path, document)
+        with patch.object(suite.sys, "platform", "win32"), patch.dict(os.environ, LOCALAPPDATA=str(self.root)):
+            observed = driver.preflight()
+            self.assertEqual(observed["source_commit"], commit)
+            self.assertEqual(observed["version"], version)
+            self.assertEqual(suite.BASE_COMMIT, json.loads((suite.HARNESS / "fixtures.json").read_text())["source_commit"])
+            for index, changes in ((0, {"version": "0.8.50"}), (0, {"source_commit": suite.BASE_COMMIT}),
+                                   (1, {"version": "0.8.50"}), (1, {"source_commit": suite.BASE_COMMIT}),
+                                   (1, {"phase": "failed"}), (1, {"runtime_image": "sha256:" + "d" * 64}),
+                                   (2, {"source_commit": suite.BASE_COMMIT}), (2, {"runtime_image": "sha256:" + "d" * 64})):
+                with self.subTest(index=index, changes=changes):
+                    self.write(paths[index], {**documents[index], **changes})
+                    with self.assertRaisesRegex(ValueError, "Attesa installazione"):
+                        driver.preflight()
+                    self.write(paths[index], documents[index])
+        driver.report.update(status="FAIL", summary={})
+        driver.write_html()
+        markup = (driver.session / "report.html").read_text()
+        self.assertIn("<h1>Collaudo NIPAT 0.8.60</h1>", markup)
+        self.assertNotIn("Collaudo NIPAT 0.8.50", markup)
+
+    def test_invalid_expected_installation_identity_creates_no_session(self):
+        destination = self.root / "invalid-identity"
+        for version, commit in (("0.8.60<script>", "a" * 40), ("0.8.60", "main")):
+            with self.assertRaisesRegex(ValueError, "Identita attesa"):
+                suite.Suite(self.app, destination, "a" * 40,
+                             installation_version=version, installation_commit=commit)
+            self.assertFalse(destination.exists())
 
     def cli_arguments(self, arguments, mode=None):
         command = list(map(str, self.driver.command(arguments, mode)))

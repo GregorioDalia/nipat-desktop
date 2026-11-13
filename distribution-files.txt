@@ -441,3 +441,14 @@ tests/fixtures/cpin/SNP/markers.tsv
 tests/fixtures/cpin/SNP/population.txt
 src/nipat/analysis_forms.py
 docs/validation/0.8.50-development.json
+
+# Installed synthetic acceptance suite and 0.8.60 release audit.
+scripts/acceptance/installed_suite.py
+scripts/acceptance/installed_models.py
+scripts/acceptance/installed_workflows.py
+scripts/acceptance/fixtures.json
+scripts/acceptance/bundle-manifest.json
+scripts/windows/test-installed.ps1
+docs/RELEASE_0.8.60.md
+docs/AUDIT_0.8.60.md
+docs/COLLAUDO_INSTALLAZIONE.md

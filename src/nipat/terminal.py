@@ -69,6 +69,22 @@ def _clip(text: str, width: int) -> str:
     return text
 
 
+def _posix_line_input(prompt: str) -> str:
+    """Read a canonical terminal line without PyOS_Readline's SIGINT race.
+
+    A SIGINT just after input() prints its prompt can remain pending until
+    Enter is pressed (CPython issue 112585). TextIO propagates the interrupt
+    immediately; the terminal still provides its normal echo and line editing.
+    Windows keeps input(), which owns its platform-specific console handling.
+    """
+    sys.stdout.write(prompt)
+    sys.stdout.flush()
+    line = sys.stdin.readline()
+    if line == "":
+        raise EOFError
+    return line.removesuffix("\n").removesuffix("\r")
+
+
 class _Unavailable(Exception):
     pass
 
@@ -243,7 +259,10 @@ class Terminal:
             prompt = prompt.encode(encoding, errors="replace").decode(encoding)
         if self.cancel_to_menu:
             self.message("Ctrl+C oppure :annulla e Invio: torna al menu principale.", "muted")
-        answer = self.read(prompt)
+        if self.read is input and os.name == "posix" and sys.stdin.isatty() and sys.stdout.isatty():
+            answer = _posix_line_input(prompt)
+        else:
+            answer = self.read(prompt)
         if self.cancel_to_menu and answer.strip().casefold() == ":annulla":
             from nipat.errors import Cancelled
             raise Cancelled

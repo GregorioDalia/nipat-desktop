@@ -198,7 +198,7 @@ def exercise_client(app: Path, work: Path, manifest: dict) -> None:
     # Use the real embedded interpreter's ._pth, exactly as self-test does.
     # --help verifies every packaged entrypoint/import without starting WSL or R.
     for filename in ("verify_snp_example.py", "verify_cpi_update.py", "verify_contamination_update.py",
-                     "verify_cpin_update.py", "verify_input_modes.py"):
+                     "verify_cpin_update.py", "verify_input_modes.py", "acceptance/installed_suite.py"):
         script = app / "scripts" / filename
         require(script.is_file(), f"Packaged self-test verifier is missing: {filename}")
         help_text = invoke(f"self-test-{script.stem}", ["--help"], script=script)

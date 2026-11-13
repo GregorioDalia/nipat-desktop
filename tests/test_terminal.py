@@ -5,7 +5,7 @@ import unittest
 from contextlib import contextmanager
 from unittest.mock import Mock, patch
 
-from nipat.terminal import Terminal, _clean, _clip, _decode_key, _posix_reader
+from nipat.terminal import Terminal, _clean, _clip, _decode_key, _posix_reader, _posix_line_input
 from nipat.errors import Cancelled
 
 
@@ -13,6 +13,20 @@ CHOICES = [("1", "DNPcall", "BAM"), ("2", "SNPcall", "BAM o pileup"), ("0", "Esc
 
 
 class TerminalTests(unittest.TestCase):
+    def test_posix_line_reader_preserves_text_and_propagates_eof_and_interrupt(self):
+        output = io.StringIO()
+        with patch("sys.stdout", output), patch("sys.stdin", io.StringIO("  a b  \nnext\r\n")):
+            self.assertEqual(_posix_line_input("First: "), "  a b  ")
+            self.assertEqual(_posix_line_input("Next: "), "next")
+            with self.assertRaises(EOFError):
+                _posix_line_input("End: ")
+        self.assertEqual(output.getvalue(), "First: Next: End: ")
+        stream = Mock()
+        stream.readline.side_effect = KeyboardInterrupt
+        with patch("sys.stdout", io.StringIO()), patch("sys.stdin", stream):
+            with self.assertRaises(KeyboardInterrupt):
+                _posix_line_input("Cancel: ")
+
     def test_custom_io_stays_plain_and_preserves_invalid_answer(self):
         output = []
         read = Mock(return_value="invalid")

@@ -11,8 +11,10 @@ un'interfaccia testuale guidata o comandi riproducibili. Il client Python
 raccoglie gli input e registra le esecuzioni; un'immagine scientifica autonoma
 contiene gli script R, samtools, le dipendenze e la preparazione degli input.
 
-**Versione stabile: 0.8.50.** Integra cinque moduli: aggiunge CPIN, aggiorna
-CPI e Contamination da NEWPAT e mantiene SNPcall 2.0. I conteggi SNP e DNP
+**Versione stabile: 0.8.60.** Include la correzione del setup Windows, il collaudo
+sintetico installato e il riuso verificato delle prove scientifiche tra CI e build.
+Mantiene i cinque moduli della 0.8.50: DNPcall, SNPcall 2.0, Contamination,
+CPI prenatale e CPIN postnatale. I conteggi SNP e DNP
 alimentano separatamente qualsiasi combinazione di Contamination, CPI e CPIN,
 anche con analisi diverse nei due rami. I ruoli familiari sono espliciti;
 parametri scientifici e costanti del modello sono consultabili nell'applicazione.
@@ -37,14 +39,14 @@ Scaricare **un solo pacchetto**, scegliendo sistema e architettura.
 I collegamenti seguenti avviano il download dell'installer; gli archivi
 **Source code** sono destinati allo sviluppo.
 
-| Sistema | Versione stabile 0.8.50 |
+| Sistema | Versione stabile 0.8.60 |
 | --- | --- |
-| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/NIPAT-Setup.exe) |
-| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/NIPAT-0.8.50-macos-arm64.pkg) |
-| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/NIPAT-0.8.50-macos-x86_64.pkg) |
-| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.50/nipat-desktop_0.8.50_amd64.deb) |
+| Windows 10 22H2 x64 (build 19045) / Windows 11 x64 | [Scarica setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/NIPAT-Setup.exe) |
+| macOS 14 o successivo — Apple Silicon | [Scarica pacchetto Mac ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/NIPAT-0.8.60-macos-arm64.pkg) |
+| macOS 14 o successivo — Intel | [Scarica pacchetto Mac Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/NIPAT-0.8.60-macos-x86_64.pkg) |
+| Ubuntu 24.04 LTS x86_64 | [Scarica pacchetto Ubuntu](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/nipat-desktop_0.8.60_amd64.deb) |
 
-La pagina della [release 0.8.50](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.50)
+La pagina della [release 0.8.60](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.60)
 riporta note, checksum e verifiche dei pacchetti. Le
 [release precedenti](https://github.com/GregorioDalia/nipat-desktop/releases)
 restano disponibili. La
@@ -353,7 +355,9 @@ indipendenti e problemi riproducibili.
 - [Risorse e memoria](docs/RISORSE.md)
 - [Diagnostica delle prestazioni e benchmark](docs/PERFORMANCE.md)
 - [Pileup parallelo e collaudo del candidato 0.8.13](docs/PILEUP_0.8.13.md)
-- [Note della versione stabile 0.8.50](docs/RELEASE_0.8.50.md)
+- [Note della versione stabile 0.8.60](docs/RELEASE_0.8.60.md)
+- [Audit del codice 0.8.60](docs/AUDIT_0.8.60.md)
+- [Collaudo automatico sul PC Windows](docs/COLLAUDO_INSTALLAZIONE.md)
 - [Guida ai cinque moduli](docs/DEVELOPMENT_0.8.50.md)
 - [Note della versione 0.8.35](docs/RELEASE_0.8.35.md)
 - [Integrazione SNPcall 2.0 nella versione 0.8.30](docs/RELEASE_0.8.30.md)
