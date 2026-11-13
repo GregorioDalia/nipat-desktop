@@ -25,6 +25,12 @@ function New-Fixture([string] $Name) {
     foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json', 'install-layout.ps1', 'activity-lock.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $windows $name)
     }
+    # This recovery helper targets only the historical 0.8.50 installation.
+    # Keep its fixture's version gate at 0.8.50 when the current release advances.
+    $bootstrapPath = Join-Path $windows 'bootstrap-common.ps1'
+    $bootstrapSource = Get-Content -LiteralPath $bootstrapPath -Raw -Encoding UTF8
+    $bootstrapSource = [regex]::Replace($bootstrapSource, "(?<=\`$manifest.version -ne ')[^']+(?=')", '0.8.50')
+    Write-TestFile $bootstrapPath $bootstrapSource
     Add-Content -LiteralPath (Join-Path $windows 'bootstrap-common.ps1') -Encoding UTF8 -Value @'
 function Assert-NipatWindowsUser { }
 function Assert-NipatInstallationLocation([string] $Project) { }

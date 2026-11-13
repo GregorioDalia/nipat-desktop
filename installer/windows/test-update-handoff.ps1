@@ -42,23 +42,21 @@ function Wait-TestRelaunch([string] $Root) {
     $recordFile = Join-Path $Root 'reopened-process.json'
     Wait-TestFile $recordFile
     $record = Get-Content -LiteralPath $recordFile -Raw -Encoding UTF8 | ConvertFrom-Json
-    $process = $null
-    try {
-        $process = [Diagnostics.Process]::GetProcessById([int]$record.pid)
-        # A process that already exited needs no further wait. Never attach
-        # cleanup to an unrelated process that has reused its PID.
-        # The fixture can exit between PID lookup and StartTime retrieval;
-        # PowerShell can expose that missing property value as $null.
-        $started = $process.StartTime
-        if ($null -eq $started -or $started.ToUniversalTime().Ticks -ne [long]$record.started_ticks) {
-            $process.Dispose()
-            return
-        }
-    } catch [ArgumentException] { return }
-      catch [InvalidOperationException] { if ($null -ne $process) { $process.Dispose() }; return }
+    $process = [Diagnostics.Process]::GetProcessById([int]$record.pid)
+    # The fixture waits for acknowledgement. Pin its handle while it is alive:
+    # GetProcessById alone does not retain ExitCode after a fast process exits.
+    # Never attach cleanup to an unrelated process that has reused its PID.
+    $null = $process.Handle
+    $started = $process.StartTime
+    if ($null -eq $started -or $started.ToUniversalTime().Ticks -ne [long]$record.started_ticks) {
+        $process.Dispose()
+        throw 'Reopened fixture process identity does not match.'
+    }
     $script:Children += $process
+    [IO.File]::WriteAllText((Join-Path $Root 'reopened-observed'), 'handle retained')
     Assert-Test ($process.WaitForExit(20000)) 'reopened fixture entry point finishes before directory cleanup'
-    Assert-Test ($process.ExitCode -eq 0) 'reopened fixture entry point exits successfully'
+    $exitCode = $process.ExitCode
+    Assert-Test ($null -ne $exitCode -and $exitCode -eq 0) "reopened fixture entry point exits successfully (exit $exitCode)"
 }
 
 try {
@@ -122,6 +120,11 @@ $fixtureTemporary = Join-Path $fixtureRoot 'reopened-process.tmp'
 [IO.File]::WriteAllText($fixtureTemporary,$fixtureRecord,(New-Object Text.UTF8Encoding($false)))
 [IO.File]::Move($fixtureTemporary,(Join-Path $fixtureRoot 'reopened-process.json'))
 $fixtureProcess.Dispose()
+$fixtureDeadline = [DateTime]::UtcNow.AddSeconds(20)
+while (-not (Test-Path -LiteralPath (Join-Path $fixtureRoot 'reopened-observed'))) {
+    if ([DateTime]::UtcNow -gt $fixtureDeadline) { throw 'Relaunch observer did not acknowledge the process.' }
+    Start-Sleep -Milliseconds 20
+}
 function Get-NipatProject { return (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) }
 function Set-NipatEnvironment([string]$Project) {}
 function Get-NipatPython([string]$Project) { return (Join-Path $Project 'python-fixture.exe') }
@@ -170,8 +173,8 @@ function Assert-NipatRuntimeBinding($Manifest,$State,$Configuration) {
             Assert-Test ($worker.WaitForExit(30000)) "$case worker completes"
         } finally {if($null -ne $shared){$shared.Dispose()}}
         if($case -eq 'success') {
-            Wait-TestFile (Join-Path $root 'reopened.txt')
             Wait-TestRelaunch $root
+            Wait-TestFile (Join-Path $root 'reopened.txt')
         }
         if($case -in @('busy','tampered','canceled','unconfirmed')) {
             Assert-Test (-not(Test-Path -LiteralPath (Join-Path $root 'invoked.txt'))) "$case never starts an installer"
