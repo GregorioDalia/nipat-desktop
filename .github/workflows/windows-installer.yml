@@ -729,48 +729,7 @@ jobs:
           path: build/verified-installers/
           retention-days: 14
           if-no-files-found: error
-      - name: Provide Windows as one downloadable installer
-        id: windows-download
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          path: build/windows-output/NIPAT-Setup.exe
-          archive: false
-          retention-days: 14
-          if-no-files-found: error
-      - name: Provide the verified Ubuntu package as one downloadable file
-        id: linux-download
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          path: build/linux-output/*.deb
-          archive: false
-          retention-days: 14
-          if-no-files-found: error
-      - name: Provide Apple Silicon as one downloadable package
-        id: arm64-download
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          path: build/macos-arm64/*.pkg
-          archive: false
-          retention-days: 14
-          if-no-files-found: error
-      - name: Provide Intel Mac as one downloadable package
-        id: intel-download
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          path: build/macos-x86_64/*.pkg
-          archive: false
-          retention-days: 14
-          if-no-files-found: error
-      - name: Summarize verified candidate downloads
-        env:
-          WINDOWS_URL: ${{ steps.windows-download.outputs.artifact-url }}
-          WINDOWS_SHA256: ${{ steps.windows-download.outputs.artifact-digest }}
-          LINUX_URL: ${{ steps.linux-download.outputs.artifact-url }}
-          LINUX_SHA256: ${{ steps.linux-download.outputs.artifact-digest }}
-          ARM64_URL: ${{ steps.arm64-download.outputs.artifact-url }}
-          ARM64_SHA256: ${{ steps.arm64-download.outputs.artifact-digest }}
-          INTEL_URL: ${{ steps.intel-download.outputs.artifact-url }}
-          INTEL_SHA256: ${{ steps.intel-download.outputs.artifact-digest }}
+      - name: Summarize verified candidate
         run: |
           python .github/scripts/installer_downloads.py --evidence build/verified-installers/installer-set-check.json
 

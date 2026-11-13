@@ -43,6 +43,29 @@ class ScientificSelection(unittest.TestCase):
         self.write("docs/usage.md", "usage\n")
         self.assertFalse(self.selected())
 
+    def test_acceptance_classification_requires_only_versioned_records(self):
+        path = ".github/release-acceptance/v0.8.60.json"
+        self.assertTrue(changes.acceptance_only([path]))
+        for paths in (None, [], [path, "src/nipat/cli.py"], [path, ".github/scripts/ci_control.py"],
+                      [".github/release-acceptance/notes.json"], [path + "/other"]):
+            self.assertFalse(changes.acceptance_only(paths))
+
+    def test_acceptance_cli_outputs_and_manual_full_verification(self):
+        path = ".github/release-acceptance/v0.8.60.json"
+        self.write(path, "{}")
+        head = self.commit()
+        import json
+        import sys
+        for event in ("pull_request", "workflow_dispatch"):
+            output = self.root / (event + ".out")
+            subprocess.run([sys.executable, str(Path(changes.__file__).resolve()),
+                            "--base", self.base, "--head", head, "--event", event,
+                            "--output", str(output)], cwd=self.root, check=True, capture_output=True)
+            values = dict(line.split("=", 1) for line in output.read_text().splitlines())
+            self.assertEqual(values["acceptance_only"], "true" if event == "pull_request" else "false")
+            self.assertEqual(json.loads(values["acceptance_paths"]), [path] if event == "pull_request" else [])
+            self.assertEqual(values["scientific"], "false" if event == "pull_request" else "true")
+
     def test_publisher_workflow_requires_packaging_without_scientific_or_runtime_checks(self):
         self.write(".github/workflows/publish-windows-release.yml", "updated publication policy\n")
         decision, _ = changes.layer_decision(self.base, self.commit(), repository=self.root)

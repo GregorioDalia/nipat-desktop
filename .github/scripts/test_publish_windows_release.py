@@ -581,7 +581,7 @@ class ReleaseGuards(unittest.TestCase):
         create.assert_not_called()
         tag.assert_not_called()
 
-    def test_publication_requires_manual_main_workflow_before_any_api_or_command(self):
+    def test_publication_requires_authorized_main_workflow_before_any_api_or_command(self):
         for operation in ("prepare", "prepare-and-publish"):
             for settings in ({}, {"GITHUB_REPOSITORY": publisher.REPO, "GITHUB_REF": "refs/heads/feature/test",
                                   "GITHUB_EVENT_NAME": "workflow_dispatch"},
@@ -590,7 +590,7 @@ class ReleaseGuards(unittest.TestCase):
                 with self.subTest(operation=operation, settings=settings), patch.dict(os.environ, settings, clear=True), \
                         patch("sys.argv", ["publisher", "--operation", operation, "--run-id", "123", "--source-commit", COMMIT]), \
                         patch.object(publisher, "command") as command, patch.object(publisher, "api") as api:
-                    with self.assertRaisesRegex(ValueError, "manual workflow"):
+                    with self.assertRaisesRegex(ValueError, "authorized workflow"):
                         publisher.main()
                     command.assert_not_called()
                     api.assert_not_called()

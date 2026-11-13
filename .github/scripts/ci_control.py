@@ -82,6 +82,9 @@ def gate_errors(results, *, event_name, ref):
     if changes.get("result") != "success":
         errors.append("change selection did not succeed")
     selected = outputs.get("run_checks")
+    metadata = outputs.get("acceptance_only", "false")
+    if metadata not in {"true", "false"}:
+        errors.append("unknown acceptance-only selection")
     if selected == "false":
         duplicate = outputs.get("duplicate_pr", "")
         if (event_name != "push" or ref == "refs/heads/main"
@@ -89,10 +92,17 @@ def gate_errors(results, *, event_name, ref):
                 or int(duplicate) < 1):
             errors.append("only a matching development-branch push may delegate checks to a PR")
         expected = dict.fromkeys(("linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging"), "skipped")
+        expected["acceptance"] = "skipped"
     else:
         if selected != "true":
             errors.append("unknown check-ownership decision")
         expected = {"linux-checks": "success", "windows-checks": "success", "macos-checks": "success"}
+        expected["acceptance"] = "skipped"
+        if metadata == "true":
+            expected = dict.fromkeys(expected, "skipped")
+            expected["acceptance"] = "success"
+            if any(outputs.get(layer) != "false" for layer in ("client", "scientific", "runtime", "packaging")):
+                errors.append("acceptance-only selection conflicts with changed application layers")
         for layer in ("scientific", "runtime", "packaging"):
             selected_layer = outputs.get(layer)
             if selected_layer not in {"true", "false"}:

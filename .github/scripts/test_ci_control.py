@@ -99,7 +99,7 @@ class RequiredGate(unittest.TestCase):
         return {
             "changes": {"result": "success", "outputs": {"run_checks": "true", "scientific": scientific, "runtime": scientific, "packaging": scientific}},
             "linux-checks": {"result": "success"}, "windows-checks": {"result": "success"},
-            "macos-checks": {"result": "success"},
+            "macos-checks": {"result": "success"}, "acceptance": {"result": "skipped"},
             "scientific": {"result": "success" if scientific == "true" else "skipped"},
             "runtime": {"result": "success" if scientific == "true" else "skipped"},
             "packaging": {"result": "success" if scientific == "true" else "skipped"},
@@ -111,6 +111,28 @@ class RequiredGate(unittest.TestCase):
     def test_full_and_documentation_only_success(self):
         self.assertEqual(self.errors(self.results()), [])
         self.assertEqual(self.errors(self.results("false")), [])
+
+    def test_acceptance_only_requires_its_validator_and_skips_clients(self):
+        results = self.results("false")
+        results["changes"]["outputs"].update(acceptance_only="true", client="false")
+        for job in ("linux-checks", "windows-checks", "macos-checks"):
+            results[job]["result"] = "skipped"
+        results["acceptance"]["result"] = "success"
+        self.assertEqual(self.errors(results), [])
+        for state in ("failure", "cancelled", "skipped", None):
+            results["acceptance"]["result"] = state
+            self.assertTrue(self.errors(results))
+        results["acceptance"]["result"] = "success"
+        results["changes"]["outputs"]["scientific"] = "true"
+        self.assertTrue(self.errors(results))
+
+    def test_invalid_metadata_flag_or_missing_acceptance_job_cannot_pass(self):
+        results = self.results()
+        results["changes"]["outputs"]["acceptance_only"] = "unknown"
+        self.assertTrue(self.errors(results))
+        results = self.results()
+        del results["acceptance"]
+        self.assertTrue(self.errors(results))
 
     def test_failed_cancelled_skipped_or_missing_required_jobs_fail_closed(self):
         for name in ("changes", "linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging"):
@@ -138,7 +160,7 @@ class RequiredGate(unittest.TestCase):
     def test_only_branch_context_may_report_delegation(self):
         results = self.results()
         results["changes"]["outputs"].update(run_checks="false", duplicate_pr="42")
-        for name in ("linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging"):
+        for name in ("linux-checks", "windows-checks", "macos-checks", "scientific", "runtime", "packaging", "acceptance"):
             results[name]["result"] = "skipped"
         self.assertEqual(self.errors(results, "push", "refs/heads/feature/new"), [])
         self.assertTrue(self.errors(results))
