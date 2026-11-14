@@ -251,6 +251,9 @@ class FixturePython {
     foreach ($name in @('bootstrap-common.ps1', 'install-profile.ps1', 'install-profile.json', 'install-layout.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $app "installer\windows\$name")
     }
+    $versionFile = Join-Path $app 'src\nipat\__init__.py'
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $versionFile)) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $project 'src\nipat\__init__.py') -Destination $versionFile
     $profile = Get-Content -LiteralPath (Join-Path $app 'installer\windows\install-profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $profileChannel = [string]$profile.channel
     $candidateBase = Join-Path $localAppData $profile.data_dir_name

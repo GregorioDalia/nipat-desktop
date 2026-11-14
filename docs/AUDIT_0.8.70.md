@@ -173,3 +173,26 @@ d'ingresso nel repository.
   nativo, aggiornamento con riavvio e app macOS su dispositivi fisici restano
   da riqualificare. Per ogni correzione scientifica occorrono i casi di
   regressione specifici e un riferimento numerico indipendente.
+
+
+## Interventi integrati nella 0.8.70
+
+| Rilievi | Modifica | Verifica pertinente |
+| --- | --- | --- |
+| S1, S2 | Identificatori testuali in lettura e nei join. Coerenza del REF alle posizioni acquisite e delle finestre con l'indice FASTA. | Oracoli sintetici per alias numerici, REF discordante e coordinate fuori riferimento. Confronti DNP e SNP con riferimenti congelati sui casi ordinari. |
+| S3, S4 | CPI prenatale in spazio logaritmico. CPI e CPIN richiedono totale coerente. Contamination ricava il rapporto dai conteggi. | Prodotti oltre la precisione disponibile, assenza di informazione, conteggi discordanti e risultati attesi dai conteggi. |
+| S5, S6, S7 | SNP rifiuta QNAME ripetuti nei siti della finestra. DNP produce righe a zero per campioni scoperti. Verifica di alleli DNP e file delle curve CPI. | Regressioni native e controlli sul contratto degli output. Il trattamento dei mate resta limitato alla diagnosi di ambiguità. |
+| D1–D3 | Versione Windows derivata dai sorgenti inclusi. Handoff con codice esplicito di riavvio. Hook dpkg del pacchetto ripristinato rimuovono il blocco. | Manifest coerente e incompatibile, fixture Inno con riavvio, transizioni Linux di configurazione e rollback. Gli hook dei vecchi DEB restano nelle copie già installate. |
+| R1–R5 | Classificazione esplicita del probe senza conferma OOM, canale nel record, coda riservata alle pubblicazioni, controllo di tag e hash sul rilancio, livelli CI per script Windows e collaudo. | Controlli locali dei guard e successiva qualificazione su GitHub. |
+| Prestazioni | Tipi di pileup dichiarati prima dell'indice DNP, controllo lineare dei BAM duplicati, scrittura dello stato SNP quando cambia. | Misure isolate dell'indice e confronto dei risultati. Durata end-to-end della candidata sui BAM reali da rilevare sul PC. |
+
+Restano da affrontare i rilievi D4–D10, l'ottimizzazione del calcolo dei blocchi
+DNP e il controllo di coerenza del riepilogo DNP complessivo. Le misure di
+0.8.60 sui dati reali restano il riferimento per la prova con la 0.8.70.
+
+
+Nella microprova locale dell'indice DNP, un pileup sintetico da 69.588.000 byte
+(18.000 righe, due campioni, profondità 160) ha richiesto una mediana di
+2,864 s nella 0.8.60 e 1,159 s nella 0.8.70, su cinque ripetizioni a ordine
+alternato nella stessa sessione R. Coordinate, offset, tipi e conteggio delle
+righe coincidono. Il confronto riguarda la sola indicizzazione.

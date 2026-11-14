@@ -3,8 +3,8 @@
   "workflow": "cpi",
   "source": {
     "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
-    "sha256": "d5a7518e5d4b41a2c1b2a780c186595edc617a0963ff7cdb63843f202f1c4f10",
-    "line_count": 773
+    "sha256": "719ecf368c6375fda8ad0d17021a1ac9e195c6fc70e8ca57b878e84c8273b17b",
+    "line_count": 774
   },
   "public_parameters": [
     {
@@ -403,11 +403,11 @@
       },
       "source_lines": [
         202,
-        260
+        263
       ],
       "description": {
-        "it": "Si controllano alleli, conteggi, coordinate e concordanza dei genitori.",
-        "en": "Alleles, counts, coordinates and parent agreement are checked."
+        "it": "Si controllano alleli, conteggi, coordinate e concordanza dei genitori. Il totale deve essere coerente con la somma dei tre conteggi.",
+        "en": "Alleles, counts, coordinates and parent agreement are checked. The total must agree with the sum of the three counts."
       }
     },
     {
@@ -415,8 +415,8 @@
       "kind": "formula",
       "value": "N_REF / (N_REF + N_ALT)",
       "source_lines": [
-        590,
-        627
+        591,
+        628
       ],
       "description": {
         "it": "Rapporto REF usato per classificare l’omozigosi materna e paterna.",
@@ -428,8 +428,8 @@
       "kind": "filter",
       "value": "N_Other / total_count <= other_fraction_max",
       "source_lines": [
-        590,
-        627
+        591,
+        628
       ],
       "description": {
         "it": "Il filtro mantiene il totale fornito; la soglia è configurabile.",
@@ -441,8 +441,8 @@
       "kind": "filter",
       "value": "homozygous REF/ALT and minor reads >= min_fetal_reads",
       "source_lines": [
-        311,
-        323
+        315,
+        327
       ],
       "description": {
         "it": "Soglie genotipiche e minimo supporto sono letti dalla configurazione.",
@@ -459,8 +459,8 @@
         "optimization": "evaluate identical selections once; expand every original threshold"
       },
       "source_lines": [
-        326,
-        455
+        330,
+        456
       ],
       "description": {
         "it": "Le selezioni invarianti sono riusate, mantenendo ogni soglia e l’ordine dei prodotti.",
@@ -483,8 +483,8 @@
         }
       },
       "source_lines": [
-        360,
-        372
+        364,
+        376
       ],
       "description": {
         "it": "Le sei formule originarie usano classi genotipiche configurabili e la costante del tipo SNP/DNP.",
@@ -495,16 +495,16 @@
       "id": "combined_paternity_index",
       "kind": "formula",
       "value": {
-        "CPI": "ordered prod(PI, na.rm=TRUE)",
-        "log_CPI": "log10(CPI) if positive; otherwise NA"
+        "CPI": "10^log_CPI",
+        "log_CPI": "sum(log10(PI)) across informative loci; NA with no paternal loci"
       },
       "source_lines": [
-        402,
-        417
+        414,
+        415
       ],
       "description": {
-        "it": "Il prodotto conserva l’ordine originale e il comportamento numerico per underflow e overflow.",
-        "en": "The product preserves original order and numeric underflow/overflow behavior."
+        "it": "Il log10 CPI somma i log10 dei PI. Il CPI grezzo viene ricostruito e può risultare 0 o Inf quando il prodotto esce dall’intervallo rappresentabile. Senza loci informativi paterni entrambi i valori sono NA.",
+        "en": "Log10 CPI sums the log10 PI terms. Reconstructed raw CPI can be 0 or Inf outside the representable range. With no informative paternal loci both values are NA."
       }
     },
     {
@@ -512,8 +512,8 @@
       "kind": "formula",
       "value": "nearest threshold to round(median(fetal_reads))",
       "source_lines": [
-        457,
-        462
+        458,
+        463
       ],
       "description": {
         "it": "Il valore riepilogativo usa la soglia più vicina alla mediana arrotondata.",
@@ -529,8 +529,8 @@
         "percent_multiplier": 100
       },
       "source_lines": [
-        643,
-        684
+        644,
+        685
       ],
       "description": {
         "it": "Il fattore diploide 2 è una costante del modello consultabile.",
@@ -546,8 +546,8 @@
         "logCPI_digits": 3
       },
       "source_lines": [
-        693,
-        721
+        694,
+        722
       ],
       "description": {
         "it": "Arrotondamento del riepilogo; le curve TSV mantengono i valori calcolati.",
@@ -567,8 +567,8 @@
         "curves": "curves/<Pair>_panel_<index>.tsv"
       },
       "source_lines": [
-        689,
-        773
+        690,
+        774
       ],
       "description": {
         "it": "Riepilogo per coppia e pannello, metadati effettivi e curva completa anche senza siti.",
@@ -593,8 +593,8 @@
         ]
       },
       "source_lines": [
-        464,
-        568
+        465,
+        569
       ],
       "description": {
         "it": "Grafici con unità separate, guide configurabili, indicatore della soglia mediana e paginazione.",
@@ -615,8 +615,8 @@
         "nested_pools": false
       },
       "source_lines": [
-        298,
-        455
+        302,
+        456
       ],
       "description": {
         "it": "Cache dei genitori e parallelismo ordinato senza pool annidati; grafici creati dal coordinatore.",
@@ -820,18 +820,18 @@
         "dependencies": [
           {
             "path": "src/nipat_scientific/files.py",
-            "sha256": "cb6d5e52658233b8f20f8f86739710a3a7af84d7901d02821f33e1fd182447d0",
+            "sha256": "da59fd1cbc700d1aaf6cabe59a8849907bbf5d469dcaf52e01c033ed497b97a6",
             "source_lines": [
               1,
-              300
+              301
             ]
           },
           {
             "path": "src/nipat_scientific/panels.py",
-            "sha256": "c05735970f78fa4527a195f599dc58d198872b557a64105f191e939e26699c65",
+            "sha256": "4c0b44a4425324906be5988a8684b9e586a0fa393f101988c516f32c2f2303c9",
             "source_lines": [
               1,
-              226
+              240
             ]
           }
         ]
@@ -889,10 +889,10 @@
       },
       "evidence": {
         "path": "src/nipat_scientific/outputs.py",
-        "sha256": "2778f6a453de036bbd1eb73161db6b2d8924cc42d524c757f714b29788cd6651",
+        "sha256": "ead121a303ab7640a59c0ad9fed627236fa7e65934653df2c5c9908b831593c0",
         "source_lines": [
           1,
-          461
+          474
         ]
       }
     },
@@ -947,47 +947,47 @@
     },
     {
       "start": 202,
-      "end": 261,
+      "end": 264,
       "summary": {
         "it": "Lettura e controlli dei conteggi parentali.",
         "en": "Parent count reading and validation."
       }
     },
     {
-      "start": 262,
-      "end": 310,
+      "start": 265,
+      "end": 314,
       "summary": {
         "it": "Multipannelli e cache degli input.",
         "en": "Multiple panels and input cache."
       }
     },
     {
-      "start": 311,
-      "end": 456,
+      "start": 315,
+      "end": 457,
       "summary": {
         "it": "Selezione materna, formule PI e intervalli paralleli.",
         "en": "Maternal selection, PI formulas and parallel intervals."
       }
     },
     {
-      "start": 457,
-      "end": 569,
+      "start": 458,
+      "end": 570,
       "summary": {
         "it": "Selezione della mediana e grafici con unità separate.",
         "en": "Median selection and plots with separate units."
       }
     },
     {
-      "start": 570,
-      "end": 727,
+      "start": 571,
+      "end": 728,
       "summary": {
         "it": "Preparazione parentale e riepiloghi per coppia e pannello.",
         "en": "Parent preparation and per-pair/panel summaries."
       }
     },
     {
-      "start": 728,
-      "end": 773,
+      "start": 729,
+      "end": 774,
       "summary": {
         "it": "Curve complete, PDF paginati e riepilogo finale.",
         "en": "Complete curves, paginated PDFs and final summary."

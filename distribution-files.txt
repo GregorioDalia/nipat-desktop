@@ -452,3 +452,6 @@ scripts/windows/test-installed.ps1
 docs/RELEASE_0.8.60.md
 docs/AUDIT_0.8.60.md
 docs/COLLAUDO_INSTALLAZIONE.md
+
+# Release-specific notes.
+docs/RELEASE_0.8.70.md

@@ -300,7 +300,8 @@ class WindowsClientEvidenceTests(unittest.TestCase):
 
 class WindowsInstallerFixtureTests(unittest.TestCase):
     def test_fixture_is_bound_to_source_and_cannot_claim_production_installation(self):
-        manifest = {"source_commit": "a" * 40, "source_sha256": {"installer/windows/NIPAT.iss": "b" * 64}}
+        manifest = {"version": "0.8.60", "source_commit": "a" * 40,
+                    "source_sha256": {"installer/windows/NIPAT.iss": "b" * 64}}
         evidence = {
             "schema_version": 1, "scenario": "compiled-installer-fixture-on-server-2022",
             "source_commit": "a" * 40, "source_definition_sha256": "b" * 64,
@@ -313,6 +314,12 @@ class WindowsInstallerFixtureTests(unittest.TestCase):
                                     "silent_removal_preserves_data"), True),
         }
         VERIFY.verify_windows_installer_fixture(evidence, manifest)
+        candidate = dict(manifest, version="0.8.70")
+        with self.assertRaisesRegex(ValueError, "fixture is incomplete"):
+            VERIFY.verify_windows_installer_fixture(evidence, candidate)
+        VERIFY.verify_windows_installer_fixture(
+            dict(evidence, checks=dict(evidence["checks"], reboot_exit_code=True)), candidate,
+        )
         for field, replacement in (("source_commit", "e" * 40), ("source_definition_sha256", "f" * 64),
                                    ("production_setup_executed", True), ("wsl_execution", True),
                                    ("smart_app_control", "passed"), ("status", "failed"),

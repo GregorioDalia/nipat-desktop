@@ -137,6 +137,8 @@ def _counts(path: Path, *, cpi: bool, marker_type: str | None = None) -> list[di
             missing_zero_total = row["total_count"].strip() == "NA" and not any(counts)
             total = None if missing_zero_total else nonnegative_integer(row["total_count"], path, number, "total_count")
             if total is not None and total != sum(counts):
+                if cpi:
+                    raise ValidationError(f"{path.name}: riga {number}, total_count diverso da N_REF + N_ALT + N_Other.")
                 warnings.append(_warning(path, number, "input.total_count_mismatch",
                     "total_count differs from N_REF + N_ALT + N_Other; supplied values are preserved."))
         if cpi:
@@ -151,7 +153,7 @@ def _counts(path: Path, *, cpi: bool, marker_type: str | None = None) -> list[di
             if raw in {"NA", "NaN", ""}:
                 if counts[0] + counts[1] > 0:
                     warnings.append(_warning(path, number, "input.missing_ratio",
-                        "Supplied ratio_REF_ALT is missing despite REF/ALT reads; R may omit this locus."))
+                        "Supplied ratio_REF_ALT is missing despite REF/ALT reads; analyses use the observed counts."))
                 continue
             try:
                 ratio = float(raw)
@@ -162,7 +164,7 @@ def _counts(path: Path, *, cpi: bool, marker_type: str | None = None) -> list[di
             if counts[0] + counts[1] and not math.isclose(
                     ratio, counts[0] / (counts[0] + counts[1]), rel_tol=0, abs_tol=1e-6):
                 warnings.append(_warning(path, number, "input.ratio_mismatch",
-                    "Supplied ratio_REF_ALT differs from counts; it is preserved, not recomputed."))
+                    "Supplied ratio_REF_ALT differs from counts; analyses use the observed counts."))
     return warnings
 
 
@@ -269,7 +271,6 @@ def require_columns(
 
 
 def require_contamination_input(path: Path) -> list[dict]:
-    # Upstream computes ratio_REF_ALT from counts when the column is absent.
     return _counts(path, cpi=False)
 
 

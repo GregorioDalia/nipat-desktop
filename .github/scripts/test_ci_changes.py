@@ -150,6 +150,11 @@ class ScientificSelection(unittest.TestCase):
         self.assertTrue(decision["runtime"])
         self.assertTrue(decision["packaging"])
 
+    def test_windows_launcher_harness_and_defaults_request_client_and_package_checks(self):
+        for path in ("scripts/windows/run.ps1", "scripts/acceptance/installed_suite.py", "config/defaults.json"):
+            with self.subTest(path=path):
+                self.assertTrue({"client", "packaging"} <= changes.layers_for_path(path))
+
     def test_manual_request_runs_scientific_checks_without_changes(self):
         self.assertTrue(changes.scientific_decision(self.base, self.base, force=True, repository=self.root)[0])
 

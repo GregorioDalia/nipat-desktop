@@ -170,12 +170,37 @@ class AutomaticPublicationTests(unittest.TestCase):
         record = record_fixture()
         existing = {"tag_name": "v" + record["version"], "target_commitish": record["source_commit"],
                     "draft": False, "prerelease": False, "id": 42}
-        self.assertIsNone(automatic.publication_arguments(record, existing))
+        version = record["version"]
+        names = {
+            "NIPAT-Setup.exe": "windows_installer_sha256",
+            f"nipat-desktop_{version}_amd64.deb": "linux_installer_sha256",
+            f"NIPAT-{version}-macos-arm64.pkg": "macos_arm64_installer_sha256",
+            f"NIPAT-{version}-macos-x86_64.pkg": "macos_x86_64_installer_sha256",
+            "installer-manifest.json": "installer_manifest_sha256",
+            f"nipat-scientific-runtime-{version}-amd64.tar.gz": "scientific_archive_sha256",
+            "qualification-evidence.zip": "qualification_evidence_sha256",
+        }
+        existing["assets"] = [{"name": name, "state": "uploaded", "digest": "sha256:" + record[field]}
+                              for name, field in names.items()]
+        with patch.object(publisher, "check_tag") as check:
+            self.assertIsNone(automatic.publication_arguments(record, existing))
+            check.assert_called_once_with("v" + version, record["source_commit"], required=True)
+            with self.assertRaisesRegex(ValueError, "differs from the accepted asset"):
+                automatic.publication_arguments(record, dict(existing, assets=existing["assets"][1:]))
         args = automatic.publication_arguments(record, dict(existing, draft=True))
         self.assertEqual(args[-2:], ["--draft-release-id", "42"])
         with self.assertRaises(ValueError):
             automatic.publication_arguments(record, dict(existing, target_commitish="f" * 40))
         self.assertEqual(automatic.release_channel("0.9.0a1"), "testing")
+
+    def test_numeric_candidate_obeys_explicit_channel(self):
+        record = dict(record_fixture(), version="0.8.70", publication_channel="testing")
+        self.assertEqual(automatic.publication_arguments(record, None)[-1], "testing")
+        record["publication_channel"] = "stable"
+        self.assertEqual(automatic.publication_arguments(record, None)[-1], "stable")
+        record.pop("publication_channel")
+        with self.assertRaisesRegex(ValueError, "authorized publication channel"):
+            automatic.publication_arguments(record, None)
 
     def test_workflows_only_push_main_and_retain_protected_gate(self):
         ci = (ROOT / ".github/workflows/ci.yml").read_text()

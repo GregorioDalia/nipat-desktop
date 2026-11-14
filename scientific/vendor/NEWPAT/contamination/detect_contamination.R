@@ -49,13 +49,17 @@ marker_type <- function(x, label) {
 
 first_line <- readLines(panel_file, n=1, warn=FALSE)
 if (!length(first_line)) stop("marker panel is empty")
-first_fields <- clean(strsplit(first_line, "\t", fixed=TRUE)[[1]])
+raw_fields <- strsplit(first_line, "\t", fixed=TRUE)[[1]]
+first_fields <- clean(raw_fields)
 has_header <- "chr" %in% first_fields &&
   ("pos" %in% first_fields || all(c("pos1", "pos2") %in% first_fields))
 
 dnplist <- read.table(panel_file, header=has_header, sep="\t",
                       stringsAsFactors=FALSE, check.names=FALSE,
-                      quote="", comment.char="")
+                      quote="", comment.char="",
+                      colClasses=if (has_header) {
+                        setNames("character", raw_fields[match("chr", first_fields)])
+                      } else c("character", rep(NA_character_, length(first_fields) - 1L)))
 if (has_header) {
   cleaned <- clean(names(dnplist))
   for (column in c("chr", "pos", "pos1", "pos2", "REF", "ALT")) {
@@ -131,7 +135,8 @@ process_df <- function(file_path) {
     comment.char = "",
     fill = TRUE,
     stringsAsFactors = FALSE,
-    check.names = FALSE
+    check.names = FALSE,
+    colClasses = c(chr="character")
   )
 
   if (marker_type(df, basename(file_path)) != marker) {
@@ -165,22 +170,12 @@ process_df <- function(file_path) {
     stop("Calling-output counts must be finite nonnegative integers")
   }
 
-  # calculate ratio_REF_ALT if it is not present
-  if ("ratio_REF_ALT" %in% colnames(df)) {
-
-    df$ratio_REF_ALT <- as.numeric(df$ratio_REF_ALT)
-
-  } else {
-
-    df <- df %>%
-      mutate(
-        ratio_REF_ALT = ifelse(
-          (N_REF + N_ALT) > 0,
-          N_REF / (N_REF + N_ALT),
-          NA_real_
-        )
-      )
-  }
+  # Derive the reference fraction from the same observed counts used in
+  # all subsequent calculations, even for tables with a supplied ratio.
+  df <- df %>%
+    mutate(ratio_REF_ALT = ifelse(
+      (N_REF + N_ALT) > 0, N_REF / (N_REF + N_ALT), NA_real_
+    ))
 
   informative_rows <- function(df) {
   # remove positions without REF or ALT reads

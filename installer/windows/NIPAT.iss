@@ -865,7 +865,10 @@ end;
 function GetCustomSetupExitCode(): Integer;
 begin
   Result := 0;
-  if (BootstrapResult <> 0) and not WslRebootRequired then Result := 1;
+  { An older updater may pass /NORESTART without an explicit reboot code. }
+  if WslRebootRequired and (ExpandConstant('{param:NIPATUPDATE|}') = '1') then
+    Result := 3010
+  else if (BootstrapResult <> 0) and not WslRebootRequired then Result := 1;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);

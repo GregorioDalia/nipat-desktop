@@ -177,12 +177,23 @@ def verify(root: Path, identifier: str) -> dict:
         else:
             raise ValueError("The controlled container memory limit did not produce an OOM")
         record = check_cleanup(failed, status="failed")
-        observation = record["commands"][-1]["container_diagnostics"]
-        if (observation.get("state", {}).get("oom_killed") is not True
-                or observation.get("diagnosis", {}).get("kind") != "oom_confirmed"):
-            raise ValueError("The deliberate failure lacks Docker-confirmed OOM evidence")
+        stage = record["commands"][-1]
+        observation = stage["container_diagnostics"]
+        state = observation.get("state") or {}
+        diagnosis = (observation.get("diagnosis") or {}).get("kind")
+        if stage.get("returncode") != 137 or state.get("exit_code") != 137:
+            raise ValueError("The memory probe did not return an owned Docker exit 137")
         oom = check_external_evidence(failed, require_samples=True)
-        print("PASS: Docker-confirmed OOM retains external resource samples and removes only its container.", flush=True)
+        if state.get("oom_killed") is True and diagnosis == "oom_confirmed":
+            oom["confirmation"] = "docker-confirmed"
+        elif state.get("oom_killed") is False and diagnosis == "sigkill_unconfirmed":
+            # Exit 137 is preserved with the observer and Docker status. It
+            # does not establish OOM when the runner omits Docker's OOM event.
+            oom["confirmation"] = "unconfirmed"
+        else:
+            raise ValueError(f"Inconsistent diagnosis of the controlled memory probe: {diagnosis!r}")
+        print(f"Memory probe: {oom['confirmation']}; external samples retained and owned container removed.",
+              flush=True)
     if any(hashlib.sha256(path.read_bytes()).hexdigest() != wanted for path, wanted in original.items()):
         raise ValueError("Performance diagnostics modified original scientific inputs")
     if {path.name for path in project.iterdir()} != {"compose.yaml"}:

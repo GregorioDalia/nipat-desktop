@@ -342,12 +342,17 @@ class PackageCoordinationTests(unittest.TestCase):
         self.assertNotEqual(self.hook("preinst", "install").returncode, 0)
         self.assertEqual(list(victim.iterdir()), [])
 
-    def test_interrupted_update_remains_blocked_until_configure(self):
-        self.assertEqual(self.hook("preinst", "install").returncode, 0)
+    def test_update_remains_blocked_until_configure_or_completed_rollback(self):
+        marker = self.state / "update-in-progress"
+        self.assertEqual(self.hook("preinst", "upgrade").returncode, 0)
+        self.assertEqual(self.hook("postrm", "abort-upgrade").returncode, 0)
+        self.assertTrue(marker.exists())
         self.assertEqual(self.hook("postinst", "abort-upgrade").returncode, 0)
-        self.assertTrue((self.state / "update-in-progress").exists())
+        self.assertFalse(marker.exists())
+        self.assertEqual(self.hook("preinst", "upgrade").returncode, 0)
+        self.assertTrue(marker.exists())
         self.assertEqual(self.hook("postinst", "configure").returncode, 0)
-        self.assertFalse((self.state / "update-in-progress").exists())
+        self.assertFalse(marker.exists())
 
 
 if __name__ == "__main__":

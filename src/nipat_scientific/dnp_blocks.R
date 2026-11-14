@@ -10,27 +10,20 @@ nipat_dnp_number <- function(name, default) {
   value
 }
 
-nipat_dnp_type <- function(current, token) {
-  # read.csv/type.convert treats NA and whitespace-only fields as missing.
-  # NaN is different: it establishes double storage even though is.na is TRUE.
-  if (identical(current, "character") || is.na(token) ||
-      token == "NA" || !nzchar(trimws(token))) return(current)
-  observed <- typeof(type.convert(token, as.is = TRUE))
-  if (is.null(current)) return(observed)
-  witnesses <- c(logical = "TRUE", integer = "1", double = "1.5",
-                 complex = "1+1i", character = "nipat-character-witness")
-  typeof(type.convert(unname(witnesses[c(current, observed)]), as.is = TRUE))
-}
-
-nipat_dnp_index <- function(path) {
+nipat_dnp_index <- function(path, empty_samples = NULL) {
   started <- proc.time()[["elapsed"]]
   con <- file(path, open = "rb")
   on.exit(close(con))
   capacity <- 4096L
   offsets <- lengths <- positions <- numeric(capacity)
   chromosome <- integer(capacity)
+  reference <- character(capacity)
   dictionary <- character()
-  schema <- NULL
+  classes <- NULL
+  if (!is.null(empty_samples)) {
+    classes <- c("character", "integer", "character",
+                 rep(c("integer", "character", "character", "character"), empty_samples))
+  }
   count <- 0L
   repeated_qname_rows <- 0L
   repeat {
@@ -38,23 +31,23 @@ nipat_dnp_index <- function(path) {
     line <- readLines(con, n = 1L, warn = FALSE)
     if (!length(line)) break
     fields <- strsplit(line, "\t", fixed = TRUE)[[1L]]
-    if (is.null(schema)) schema <- vector("list", length(fields))
-    if (length(fields) != length(schema) || length(fields) < 7L ||
-        (length(fields) - 3L) %% 4L != 0L) stop("Invalid DNP pileup columns")
+    if (length(fields) < 7L || (length(fields) - 3L) %% 4L != 0L ||
+        (!is.null(classes) && length(fields) != length(classes))) stop("Invalid DNP pileup columns")
+    if (is.null(classes)) {
+      classes <- c("character", "integer", "character",
+                   rep(c("integer", "character", "character", "character"), (length(fields) - 3L) / 4L))
+    }
     # Duplicate QNAMEs at one position can make legacy grouping infer a
     # middle pair belonging to another window. Preserve its global behavior;
     # ordinary reuse across different loci does not trigger this condition.
     if (any(vapply(seq.int(7L, length(fields), by = 4L), function(column) {
       anyDuplicated(strsplit(fields[[column]], ",", fixed = TRUE)[[1L]]) > 0L
     }, logical(1)))) repeated_qname_rows <- repeated_qname_rows + 1L
-    for (column in seq_along(fields)) {
-      schema[column] <- list(nipat_dnp_type(schema[[column]], fields[[column]]))
-    }
     count <- count + 1L
     if (count > capacity) {
       capacity <- capacity * 2L
       length(offsets) <- length(lengths) <- length(positions) <- capacity
-      length(chromosome) <- capacity
+      length(chromosome) <- length(reference) <- capacity
     }
     offsets[[count]] <- offset
     lengths[[count]] <- seek(con) - offset
@@ -65,23 +58,17 @@ nipat_dnp_index <- function(path) {
     }
     chromosome[[count]] <- code
     positions[[count]] <- as.numeric(fields[[2L]])
+    reference[[count]] <- fields[[3L]]
   }
-  if (!count) stop("DNP pileup contains no rows")
+  if (!count && is.null(classes)) stop("DNP pileup contains no rows")
   rows <- seq_len(count)
-  classes <- vapply(schema, function(value) {
-    value <- if (is.null(value)) "logical" else value
-    if (value == "double") "numeric" else value
-  }, character(1))
-  # The dictionary contains every chromosome lexeme; its conversion therefore
-  # agrees with the original whole-column read.csv, including 01/1 and NA.
-  dictionary <- type.convert(dictionary, as.is = TRUE)
-  # paste() formats doubles such as 100000 as 1e+05, whereas the legacy
-  # integer V2 column uses 100000. Retain its globally inferred storage type.
   positions <- positions[rows]
-  if (identical(classes[[2L]], "integer")) positions <- as.integer(positions)
+  if (any(!is.finite(positions) | positions < 1 | positions > .Machine$integer.max |
+          positions != floor(positions))) stop("Invalid DNP pileup position")
   list(path = normalizePath(path, mustWork = TRUE), offsets = offsets[rows],
        lengths = lengths[rows], chromosome = chromosome[rows],
-       chromosomes = dictionary, positions = positions, classes = classes,
+       chromosomes = dictionary, positions = as.integer(positions),
+       reference = reference[rows], classes = classes,
        rows = count, bytes = sum(lengths[rows]), repeated_qname_rows = repeated_qname_rows,
        elapsed_seconds = unname(proc.time()[["elapsed"]] - started))
 }
@@ -103,8 +90,7 @@ nipat_dnp_plan <- function(index, labels, ref_alt,
       max_loci = max_loci, max_bytes = max_bytes,
       compatibility_reasons = reasons, unmatched_rows = unmatched))
   }
-  # Different original chromosome lexemes may collapse under read.table's
-  # inference. Equal effective POS must stay together to preserve all merges.
+  # Equal effective POS must stay together to preserve all merges.
   effective <- unique(ref_alt$POS)
   group_ids <- match(ref_alt$POS, effective)
   groups <- split(seq_len(nrow(ref_alt)), factor(group_ids, levels = seq_along(effective)))
@@ -233,7 +219,7 @@ nipat_dnp_read <- function(index, rows, connection, columns = NULL) {
   }
   read.csv(text = paste0(lines, collapse = ""), quote = "", row.names = NULL,
            stringsAsFactors = FALSE, header = FALSE, sep = "\t",
-           colClasses = classes)
+           colClasses = classes, na.strings = NULL)
 }
 
 # Scheduling estimate, not an allocation limit: expanded observations, joins

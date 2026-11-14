@@ -60,18 +60,15 @@ dei campioni. Nei comandi singoli gli identificativi sono locali al ruolo:
 per esempio `A:A:A` è valido per CPIN soltanto quando i prefissi individuano
 tre file distinti.
 
-Quando `ratio_REF_ALT` è presente, un valore numerico deve essere finito e
-compreso tra 0 e 1. Un rapporto mancante con letture REF/ALT disponibili
-produce una segnalazione: lo script può escludere quel locus. L'assenza
-della colonna resta una modalità supportata da Contamination, che calcola
-il rapporto dai conteggi.
+Contamination calcola la frazione REF dai conteggi `N_REF` e `N_ALT`.
+La colonna facoltativa `ratio_REF_ALT` viene controllata e le discrepanze
+sono registrate come avvisi. Se presente, un rapporto numerico deve essere
+finito e compreso fra 0 e 1. I siti senza letture REF o ALT sono esclusi.
 
-Alcune incoerenze richiedono interpretazione di dominio e vengono registrate
-come **avvisi**, senza riscrivere i valori: somma delle frequenze REF/ALT
-diversa da uno, `total_count` diverso dalla somma dei tre conteggi e rapporto
-fornito diverso da quello ricavabile dai conteggi. Valutarne il significato
-prima di usare il risultato. CPI e CPIN rifiutano frequenze zero. CPIN
-rifiuta anche un `total_count` diverso da `N_REF + N_ALT + N_Other`.
+CPI e CPIN richiedono frequenze positive e `total_count` uguale a
+`N_REF + N_ALT + N_Other`. Un totale `NA` è ammesso al locus con tutti i
+conteggi a zero. Un totale discordante in Contamination o una somma
+delle frequenze REF e ALT diversa da uno sono registrati come avvisi.
 
 `work/input-validation.json` conserva avvisi e normalizzazioni, con il
 checksum del pannello originale e della copia preparata. Nei workflow

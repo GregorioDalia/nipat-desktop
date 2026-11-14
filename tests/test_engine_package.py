@@ -705,8 +705,8 @@ class EnginePackageTests(unittest.TestCase):
             bam.write_bytes(f"BAM fixture {number}".encode())
             samples.append({"path": str(bam), "sample_id": sample_id})
         reference = inputs / "genome.fa"
-        reference.write_text(">chr1\nACGT\n", encoding="utf-8")
-        Path(str(reference) + ".fai").write_text("chr1\t4\t6\t4\t5\n", encoding="utf-8")
+        reference.write_text(">chr1\n" + "ACGT" * 50 + "\n", encoding="utf-8")
+        Path(str(reference) + ".fai").write_text("chr1\t200\t6\t200\t201\n", encoding="utf-8")
         run = self.root / "run with spaces = à"
         request = {
             "schema_version": 1, "workflow": "dnp-call", "panel": str(panel),

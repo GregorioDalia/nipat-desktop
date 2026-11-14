@@ -14,15 +14,15 @@ dell'ambiente, i calcoli si possono eseguire offline.
 ## Download
 
 Scarica il pacchetto per il tuo sistema. La
-[release stabile 0.8.60](https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.60)
+[release stabile](https://github.com/GregorioDalia/nipat-desktop/releases/latest)
 riporta anche checksum e verifiche dei pacchetti.
 
 | Sistema | Pacchetto | Guida |
 | --- | --- | --- |
-| Windows 10 22H2 x64 (build 19045) o Windows 11 x64 | [Setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/NIPAT-Setup.exe) | [Windows](docs/INSTALLATORE_WINDOWS.md) |
-| macOS 14 o successivo, Apple Silicon | [Pacchetto ARM64](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/NIPAT-0.8.60-macos-arm64.pkg) | [macOS](docs/INSTALLATORE_MACOS.md) |
-| macOS 14 o successivo, Intel | [Pacchetto Intel](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/NIPAT-0.8.60-macos-x86_64.pkg) | [macOS](docs/INSTALLATORE_MACOS.md) |
-| Ubuntu 24.04 LTS x86_64 | [Pacchetto DEB](https://github.com/GregorioDalia/nipat-desktop/releases/download/v0.8.60/nipat-desktop_0.8.60_amd64.deb) | [Ubuntu](docs/INSTALLATORE_LINUX.md) |
+| Windows 10 22H2 x64 (build 19045) o Windows 11 x64 | [Setup Windows](https://github.com/GregorioDalia/nipat-desktop/releases/latest/download/NIPAT-Setup.exe) | [Windows](docs/INSTALLATORE_WINDOWS.md) |
+| macOS 14 o successivo, Apple Silicon | [PKG Apple Silicon](https://github.com/GregorioDalia/nipat-desktop/releases/latest) | [macOS](docs/INSTALLATORE_MACOS.md) |
+| macOS 14 o successivo, Intel | [PKG Intel](https://github.com/GregorioDalia/nipat-desktop/releases/latest) | [macOS](docs/INSTALLATORE_MACOS.md) |
+| Ubuntu 24.04 LTS x86_64 | [Pacchetto DEB](https://github.com/GregorioDalia/nipat-desktop/releases/latest) | [Ubuntu](docs/INSTALLATORE_LINUX.md) |
 
 Windows usa WSL2, macOS usa Lima e Ubuntu usa il Docker Engine locale.
 La [guida alla distribuzione](docs/DISTRIBUZIONE.md) spiega i prerequisiti,

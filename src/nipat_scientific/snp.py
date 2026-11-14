@@ -9,7 +9,7 @@ import unicodedata
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, require_snp_pileup, write_input_report
-from nipat_scientific.panels import read_snp_list, write_snp_bed, write_snp_list
+from nipat_scientific.panels import read_snp_list, require_reference_windows, write_snp_bed, write_snp_list
 from nipat_scientific.settings import defaults, normalize_settings, samtools_options, settings_from_environment
 
 
@@ -71,9 +71,13 @@ def prepare_snp(request: object) -> SnpPreparation:
     if mode == "bam":
         bam = require_file(_absolute_path(request["bam"], "BAM"), "BAM")
         reference = require_file(_absolute_path(request["reference"], "FASTA"), "FASTA")
-        sources.extend([bam, reference, require_sidecar(reference, ".fai", "Indice FASTA").resolve()])
+        fasta_index = require_sidecar(reference, ".fai", "Indice FASTA").resolve()
+        sources.extend([bam, reference, fasta_index])
         if reference.suffix.lower() in {".gz", ".bgz", ".bgzf"}:
             sources.append(require_sidecar(reference, ".gzi", "Indice FASTA BGZF").resolve())
+        require_reference_windows(fasta_index, (
+            (chromosome, position - 1, position + 1) for chromosome, position in positions
+        ))
         for suffix in (".bai", ".csi"):
             for candidate in (Path(str(bam) + suffix), bam.with_suffix(suffix)):
                 if candidate.is_file():

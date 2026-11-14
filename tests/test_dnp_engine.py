@@ -20,8 +20,8 @@ class DnpEngineTests(unittest.TestCase):
         self.panel = self.inputs / "panel with spaces à.txt"
         self.panel.write_bytes(b"chr1 100 101 ac gt\r\nchr2 200 201 TA CG\r\n")
         self.reference = self.inputs / "genome.fa"
-        self.reference.write_bytes(b">chr1\nACGT\n")
-        Path(str(self.reference) + ".fai").write_bytes(b"chr1\t4\t6\t4\t5\n")
+        self.reference.write_bytes(b">chr1\n" + b"A" * 300 + b"\n>chr2\n" + b"T" * 300 + b"\n")
+        Path(str(self.reference) + ".fai").write_bytes(b"chr1\t300\t6\t300\t301\nchr2\t300\t313\t300\t301\n")
         self.bam = self.inputs / "sample_0001.bam"
         self.bam.write_bytes(b"BAM fixture\x00")
         self.run = self.root / "run with spaces = à"
@@ -118,7 +118,7 @@ class DnpEngineTests(unittest.TestCase):
             reference = self.inputs / suffix / "genome.fa"
             reference.parent.mkdir()
             reference.write_bytes(self.reference.read_bytes())
-            Path(str(reference) + ".fai").write_bytes(b"index")
+            Path(str(reference) + ".fai").write_bytes(Path(str(self.reference) + ".fai").read_bytes())
             request = {**self.request, "reference": str(reference),
                        "work_dir": str(self.root / suffix / "work"),
                        "out_dir": str(self.root / suffix / "output")}
@@ -207,7 +207,7 @@ class DnpEngineTests(unittest.TestCase):
             bam.write_bytes(b"sample")
             reference = unsafe / "genome.fa"
             reference.write_bytes(self.reference.read_bytes())
-            Path(str(reference) + ".fai").write_bytes(b"index")
+            Path(str(reference) + ".fai").write_bytes(Path(str(self.reference) + ".fai").read_bytes())
             with self.subTest(component=component, field="bam"):
                 case = deepcopy(self.request)
                 case["samples"][0]["path"] = str(bam)
@@ -292,11 +292,16 @@ class DnpEngineTests(unittest.TestCase):
             with self.subTest(contents=contents):
                 self.assert_rejected_without_writes(self.request)
 
+    def test_dnp_rejects_panel_window_outside_reference_before_writes(self):
+        for line in ("chr1 299 300 AA GG", "01 100 101 AA GG"):
+            self.panel.write_text(line + "\n", encoding="utf-8")
+            self.assert_rejected_without_writes(self.request)
+
     def test_compressed_reference_requires_both_indexes(self):
         for extension in (".gz", ".bgz", ".bgzf"):
             reference = self.inputs / ("genome.fa" + extension)
             reference.write_bytes(b"compressed FASTA fixture")
-            Path(str(reference) + ".fai").write_bytes(b"index")
+            Path(str(reference) + ".fai").write_bytes(Path(str(self.reference) + ".fai").read_bytes())
             request = {**self.request, "reference": str(reference),
                        "work_dir": str(self.root / extension[1:] / "work"),
                        "out_dir": str(self.root / extension[1:] / "output")}

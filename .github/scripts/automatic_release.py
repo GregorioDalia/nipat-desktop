@@ -8,6 +8,7 @@ import urllib.error
 
 from acceptance_ci import read_record
 from ci_changes import acceptance_only, changed_paths
+from release_acceptance import explicit_publication_contract
 import publish_windows_release as publisher
 from scientific_reuse import fetch_json
 
@@ -36,13 +37,17 @@ def accepted_paths(event, revision, *, fetch=fetch_json):
     return paths
 
 
-def release_channel(version):
+def release_channel(version, record=None):
+    if explicit_publication_contract(version):
+        channel = (record or {}).get("publication_channel")
+        publisher.require(channel in {"stable", "testing"}, "Missing authorized publication channel")
+        return publisher.publication_channel(version, channel)
     return "stable" if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) else "testing"
 
 
 def validate_publication(record, run_id, source, channel):
     publisher.require(str(record["build_run_id"]) == run_id and record["source_commit"] == source
-                      and release_channel(record["version"]) == channel,
+                      and release_channel(record["version"], record) == channel,
                       "Automatic publication arguments differ from the accepted record")
 
 
@@ -56,12 +61,29 @@ def existing_release(version, *, fetch=fetch_json):
 
 
 def publication_arguments(record, existing):
-    channel = release_channel(record["version"])
+    channel = release_channel(record["version"], record)
     if existing is not None and existing.get("draft") is False:
         publisher.require(existing.get("tag_name") == "v" + record["version"]
                           and existing.get("target_commitish") == record["source_commit"]
                           and existing.get("prerelease") == (channel == "testing"),
                           "An existing public release conflicts with this acceptance")
+        publisher.check_tag("v" + record["version"], record["source_commit"], required=True)
+        version = record["version"]
+        expected = {
+            "NIPAT-Setup.exe": "windows_installer_sha256",
+            f"nipat-desktop_{version}_amd64.deb": "linux_installer_sha256",
+            f"NIPAT-{version}-macos-arm64.pkg": "macos_arm64_installer_sha256",
+            f"NIPAT-{version}-macos-x86_64.pkg": "macos_x86_64_installer_sha256",
+            "installer-manifest.json": "installer_manifest_sha256",
+            f"nipat-scientific-runtime-{version}-amd64.tar.gz": "scientific_archive_sha256",
+            "qualification-evidence.zip": "qualification_evidence_sha256",
+        }
+        assets = existing.get("assets") or []
+        digests = {asset["name"]: asset.get("digest") for asset in assets if asset.get("state") == "uploaded"}
+        publisher.require(len(digests) == len(assets)
+                          and all(digests.get(name) == "sha256:" + record[field]
+                                  for name, field in expected.items() if field in record),
+                          "An existing public release differs from the accepted asset bytes")
         return None
     args = ["--operation", "prepare-and-publish", "--run-id", str(record["build_run_id"]),
             "--source-commit", record["source_commit"], "--channel", channel]
@@ -81,8 +103,22 @@ def main():
     paths = accepted_paths(event, revision)
     if not paths:
         print("No acceptance-only main change; no automatic publication requested.")
+    if os.environ.get("NIPAT_ACCEPTANCE_SELECT") == "1":
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"publish={str(bool(paths)).lower()}\n")
+        return
+    if not paths:
+        return
+    # The shared publication queue can delay this run. Bind it to the record
+    # still authorized on main before writing GitHub release assets.
+    current = fetch_json("git/ref/heads/main")["object"]["sha"]
+    publisher.require(re.fullmatch(r"[0-9a-f]{40}", current), "Missing current main revision")
+    if current != revision:
+        publisher.command("git", "fetch", "--no-tags", "origin", current)
     for path in sorted(paths):
         record = read_record(path, revision)
+        publisher.require(publisher.source_bytes(current, path) == publisher.source_bytes(revision, path),
+                          "The accepted publication record changed while queued")
         args = publication_arguments(record, existing_release(record["version"]))
         if args is None:
             print(f"Release {record['version']} is already public from the accepted source.")

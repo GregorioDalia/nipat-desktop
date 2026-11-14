@@ -13,7 +13,7 @@ old_read <- function(index, rows, connection) {
   }, character(1), USE.NAMES = FALSE)
   read.csv(text = paste0(lines, collapse = ""), quote = "", row.names = NULL,
            stringsAsFactors = FALSE, header = FALSE, sep = "\t",
-           colClasses = index$classes)
+           colClasses = index$classes, na.strings = NULL)
 }
 
 checks <- 0L

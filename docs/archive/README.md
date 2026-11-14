@@ -6,7 +6,7 @@ Questi documenti descrivono release, revisioni e prove identificabili. I relativ
 
 | Serie | Note |
 | --- | --- |
-| 0.8 | [0.8.60](../RELEASE_0.8.60.md) · [0.8.50](../RELEASE_0.8.50.md) · [0.8.35](../RELEASE_0.8.35.md) · [0.8.30](../RELEASE_0.8.30.md) · [0.8.20](../RELEASE_0.8.20.md) · [0.8.14](../RELEASE_0.8.14.md) · [0.8.9](../RELEASE_0.8.9.md) · [0.8.5](../RELEASE_0.8.5.md) · [0.8.2](../RELEASE_0.8.2.md) · [0.8.0a1](../RELEASE_0.8.0a1.md) |
+| 0.8 | [0.8.70](../RELEASE_0.8.70.md) · [0.8.60](../RELEASE_0.8.60.md) · [0.8.50](../RELEASE_0.8.50.md) · [0.8.35](../RELEASE_0.8.35.md) · [0.8.30](../RELEASE_0.8.30.md) · [0.8.20](../RELEASE_0.8.20.md) · [0.8.14](../RELEASE_0.8.14.md) · [0.8.9](../RELEASE_0.8.9.md) · [0.8.5](../RELEASE_0.8.5.md) · [0.8.2](../RELEASE_0.8.2.md) · [0.8.0a1](../RELEASE_0.8.0a1.md) |
 | 0.7 e 0.6 | [0.7.2](../RELEASE_0.7.2.md) · [0.7.1](../RELEASE_0.7.1.md) · [0.7.0a1](../RELEASE_0.7.0a1.md) · [0.6.0](../RELEASE_0.6.0.md) |
 | 0.5, 0.4 e 0.3 | [0.5.0a1](../RELEASE_0.5.0a1.md) · [0.4.1](../RELEASE_0.4.1.md) · [0.4.0](../RELEASE_0.4.0.md) · [0.3.0a2](../RELEASE_0.3.0a2.md) · [0.3.0a1](../RELEASE_0.3.0a1.md) |
 

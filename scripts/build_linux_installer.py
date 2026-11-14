@@ -162,7 +162,8 @@ def maintainer_scripts() -> dict[str, bytes]:
     The root-owned marker bridges preinst/prerm and postinst: flock alone would
     be released before dpkg unpacks files. The inode is intentionally retained
     after removal so existing readers can never lock an obsolete replacement.
-    A failed transaction remains blocked until package configuration succeeds.
+    A partial transaction remains blocked. On rollback, dpkg calls the old
+    postinst after the old payload has been restored.
     """
     common = """#!/bin/sh
 set -eu
@@ -192,8 +193,8 @@ fi
     return {
         "preinst": (common + "case \"$1\" in install|upgrade) : > \"$marker\";; esac\n").encode(),
         "prerm": (common + "case \"$1\" in remove|upgrade|deconfigure) : > \"$marker\";; esac\n").encode(),
-        "postinst": (common + "case \"$1\" in configure) rm -f -- \"$marker\";; esac\n").encode(),
-        "postrm": (common + "case \"$1\" in remove|purge) rm -f -- \"$marker\";; esac\n").encode(),
+        "postinst": (common + "case \"$1\" in configure|abort-upgrade|abort-remove|abort-deconfigure) rm -f -- \"$marker\";; esac\n").encode(),
+        "postrm": (common + "case \"$1\" in remove|purge|abort-install) rm -f -- \"$marker\";; esac\n").encode(),
     }
 
 

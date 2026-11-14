@@ -128,17 +128,32 @@ if (anyDuplicated(fake_DNP$pos)) {
 cat(">> reading pileup...\n")
 if (file.info(pileup_file)$size == 0) return(nipat_snp_empty(snp_input))
 pileup_arguments <- list(file = pileup_file, quote = "", row.names = NULL,
-                        stringsAsFactors = FALSE, header = FALSE, sep = "\t")
+                        stringsAsFactors = FALSE, header = FALSE, sep = "\t", na.strings = NULL)
 probe <- do.call(read.csv, c(pileup_arguments, list(nrows = 5L)))
 if (ncol(probe) < 7L) stop("SNP pileup requires seven columns including qualities and QNAME")
 # Optional trailing mpileup fields need not be materialized in memory.
-classes <- c(rep(NA_character_, 7L), rep("NULL", ncol(probe) - 7L))
+classes <- c("character", "integer", "character", "integer", "character", "character",
+             "character", rep("NULL", ncol(probe) - 7L))
 df <- do.call(read.csv, c(pileup_arguments, list(colClasses = classes)))
 rm(probe)
 depth <- suppressWarnings(as.numeric(df$V4))
 if (any(!is.finite(depth) | depth < 0 | depth != floor(depth))) stop("Invalid pileup depth")
 df <- df[depth > 0, , drop = FALSE]
 if (!nrow(df)) return(nipat_snp_empty(snp_input))
+panel_index <- match(paste(df$V1, df$V2, sep=":"), fake_DNP$pos)
+mismatch <- which(!is.na(panel_index) & toupper(df$V3) != fake_DNP$ref[panel_index])
+if (length(mismatch)) {
+  i <- mismatch[[1L]]
+  stop("SNP panel REF differs from pileup at ", df$V1[i], ":", df$V2[i])
+}
+# A QNAME alone cannot distinguish overlapping mates in a pileup. Detect the
+# ambiguity before combining neighbouring observations by name.
+window_keys <- c(paste(snp_input$chr, as.integer(positions_numeric) - 1L, sep=":"),
+                 fake_DNP$pos, paste(snp_input$chr, as.integer(positions_numeric) + 1L, sep=":"))
+qnames <- strsplit(df$V7[paste(df$V1, df$V2, sep=":") %in% window_keys], ",", fixed=TRUE)
+if (any(vapply(qnames, anyDuplicated, integer(1)) > 0L))
+  stop("SNP pileup repeats a QNAME at one coordinate. Generate it with overlap removal enabled.")
+rm(qnames)
 cat(">> input loaded correctly\n")
 # STEP2: normalize reference bases
 df$V5 <- mapply(

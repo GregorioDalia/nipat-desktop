@@ -407,9 +407,8 @@ class REquivalenceTests(unittest.TestCase):
         self.assertLess(len(set(duplicate_keys)), len(duplicate_keys))
         self.assertTrue(all(any(operation in row[5] for row in records) for operation in "IDNS"))
         numeric = (self.root / "dnp-numeric/panel.txt").read_text()
-        self.assertIn("01\t", numeric)
-        self.assertIn("1\t", numeric)
-        self.assertIn("100000\t100000\t100001\t", numeric)
+        self.assertEqual({row.split("\t")[0] for row in numeric.splitlines()}, {"1", "2"})
+        self.assertIn("2\t100000\t100001\t", numeric)
 
     def test_generated_inputs_exercise_quality_range_and_optional_pileup_columns(self):
         with patch.object(verification, "run", return_value=""):
