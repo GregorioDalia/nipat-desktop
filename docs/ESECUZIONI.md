@@ -162,6 +162,13 @@ esplicita per l'uso automatizzato. `recovery.json` conserva l'esito
 dell'arresto; la sola consultazione non lo crea. Per ripetere il calcolo
 correggere la causa e avviare un nuovo run.
 
+Dopo la conferma, `stop` restituisce `0` quando tutti i container registrati
+risultano rimossi o assenti. Restituisce `2` se un container è fermato ma
+non rimosso, se la pulizia non è confermata oppure se il runtime o l'identità
+non sono verificabili. Il rapporto e `recovery.json`, quando prodotto,
+conservano l'esito dettagliato. Annullare la conferma restituisce `0` senza
+richiedere operazioni al runtime.
+
 ## Intermedi e output per workflow
 
 I percorsi seguenti partono dal run di un modulo singolo o dalla cartella

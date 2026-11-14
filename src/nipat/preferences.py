@@ -5,15 +5,18 @@ Direct CLI commands deliberately do not consume these defaults.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field, replace
+import errno
 import json
 import math
 import os
 from pathlib import Path
 import sys
 import tempfile
-from typing import Any, Mapping
+import time
+from typing import Any, Callable, Mapping
 
 from nipat.errors import ValidationError
 from nipat.scientific_options import normalize_config
@@ -278,11 +281,78 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def _merge_preferences(baseline: Any, requested: Any, current: Any, path: str = "") -> Any:
+    """Merge independent edits; lists and scalar values are indivisible fields."""
+    if requested == baseline:
+        return current
+    if current == baseline or requested == current:
+        return requested
+    if isinstance(requested, dict) and isinstance(current, dict) and (
+        isinstance(baseline, dict) or baseline is _UNSET
+    ):
+        baseline = {} if baseline is _UNSET else baseline
+        result = {}
+        for key in sorted(baseline.keys() | requested.keys() | current.keys()):
+            value = _merge_preferences(baseline.get(key, _UNSET), requested.get(key, _UNSET),
+                                       current.get(key, _UNSET), f"{path}.{key}" if path else key)
+            if value is not _UNSET:
+                result[key] = value
+        return result
+    raise ValidationError(
+        f"L'impostazione {path} e' stata modificata da un'altra sessione. "
+        "Le modifiche non sono state salvate. Riaprire NIPAT e ripetere la scelta sui valori aggiornati."
+    )
+
+
 class PreferencesStore:
-    """Read and atomically replace one settings file; reset never touches analysis data."""
+    """Serialize updates and merge edits against the snapshot reviewed by the user."""
 
     def __init__(self, path: Path | None = None):
         self.path = Path(path).expanduser().absolute() if path is not None else preferences_path()
+
+    @contextmanager
+    def _lock(self):
+        # Keep this sidecar after release: unlinking a live lock would allow another
+        # process to lock a different inode while an existing waiter uses the old one.
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        path = self.path.with_name(self.path.name + ".lock")
+        if path.is_symlink():
+            raise ValidationError("Il file di coordinamento delle impostazioni non puo' essere un collegamento.")
+        with path.open("a+b") as stream:
+            if os.name == "nt":
+                import msvcrt
+                if stream.seek(0, os.SEEK_END) == 0:
+                    stream.write(b"\0")
+                    stream.flush()
+                def acquire():
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                def release():
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                def acquire():
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                def release():
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+            deadline = time.monotonic() + 5
+            while True:
+                try:
+                    acquire()
+                    break
+                except OSError as exc:
+                    if exc.errno not in {errno.EACCES, errno.EAGAIN, errno.EDEADLK}:
+                        raise
+                    if time.monotonic() >= deadline:
+                        raise ValidationError(
+                            "Un'altra sessione sta salvando le impostazioni. Riprovare fra poco."
+                        ) from exc
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                release()
 
     def load(self) -> Preferences:
         try:
@@ -299,24 +369,35 @@ class PreferencesStore:
         except (OSError, ValueError, UnicodeError, RecursionError, ValidationError) as exc:
             raise ValidationError(f"Impossibile leggere le impostazioni {self.path}: {exc}") from exc
 
-    def save(self, preferences: Preferences) -> None:
-        """An unreadable existing file requires explicit reset before replacement."""
-        document = preferences.to_dict()
-        Preferences.from_dict(document)
-        content = (json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2) + "\n").encode("utf-8")
-        if len(content) > MAX_SETTINGS_BYTES:
-            raise ValidationError("Impostazioni troppo grandi per essere salvate.")
-        self.load()  # Never silently replace malformed or inaccessible preferences.
+    def save(self, preferences: Preferences, *, baseline: Preferences | None = None,
+             validate: Callable[[Preferences], None] | None = None) -> Preferences:
+        """Persist a validated merge, retaining concurrent edits outside this change.
+
+        Without a baseline this is an explicit complete replacement. Existing
+        malformed preferences always require a deliberate reset before saving.
+        """
+        requested = preferences.to_dict()
+        Preferences.from_dict(requested)
         temporary = None
         try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(mode="wb", prefix=".preferences-", suffix=".tmp",
-                                             dir=self.path.parent, delete=False) as stream:
-                temporary = Path(stream.name)
-                stream.write(content)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, self.path)
+            with self._lock():
+                current = self.load()  # Never replace malformed or inaccessible preferences.
+                document = requested if baseline is None else _merge_preferences(
+                    baseline.to_dict(), requested, current.to_dict())
+                merged = Preferences.from_dict(document)
+                if validate is not None:
+                    validate(merged)
+                content = (json.dumps(document, ensure_ascii=False, allow_nan=False, indent=2) + "\n").encode("utf-8")
+                if len(content) > MAX_SETTINGS_BYTES:
+                    raise ValidationError("Impostazioni troppo grandi per essere salvate.")
+                with tempfile.NamedTemporaryFile(mode="wb", prefix=".preferences-", suffix=".tmp",
+                                                 dir=self.path.parent, delete=False) as stream:
+                    temporary = Path(stream.name)
+                    stream.write(content)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, self.path)
+                return merged
         except OSError as exc:
             raise ValidationError(f"Impossibile salvare le impostazioni {self.path}: {exc}") from exc
         finally:
@@ -330,6 +411,7 @@ class PreferencesStore:
     def reset(self) -> None:
         """Remove only this settings file, even when its content is malformed."""
         try:
-            self.path.unlink(missing_ok=True)
+            with self._lock():
+                self.path.unlink(missing_ok=True)
         except OSError as exc:
             raise ValidationError(f"Impossibile ripristinare le impostazioni {self.path}: {exc}") from exc

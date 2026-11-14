@@ -1,5 +1,6 @@
 import io
 import json
+import multiprocessing
 import os
 from pathlib import Path
 import tempfile
@@ -14,6 +15,14 @@ from nipat.paths import ProjectLayout
 from nipat.preferences import (
     Preferences, PreferencesStore, _path, _validate_windows_storage_path, preferences_path,
 )
+
+
+def _save_preferences_process(path, entered, finished):
+    store = PreferencesStore(Path(path))
+    baseline = store.load()
+    entered.set()
+    store.save(replace(baseline, update_channel="testing"), baseline=baseline)
+    finished.set()
 
 
 class PreferencesTests(unittest.TestCase):
@@ -262,7 +271,60 @@ class PreferencesTests(unittest.TestCase):
                 self.store.save(Preferences(runs_dir=self.root / "second"))
         self.assertEqual(self.store.path.read_bytes(), original)
         self.assertEqual(self.store.load(), before)
-        self.assertEqual(list(self.store.path.parent.iterdir()), [self.store.path])
+        self.assertEqual(set(self.store.path.parent.iterdir()),
+                         {self.store.path, self.store.path.with_name("preferences.json.lock")})
+
+    def test_concurrent_edits_merge_nested_fields_and_preserve_removal(self):
+        original = Preferences(workflows={"1": {"parallel": "1", "mode": "1"}})
+        self.store.save(original)
+        first = self.store.load()
+        second = PreferencesStore(self.store.path).load()
+        self.store.save(first.with_workflow("1", {"mode": "1"}), baseline=first)
+        merged = self.store.save(second.with_workflow("1", {"parallel": "1", "mode": "2"}),
+                                 baseline=second)
+        self.assertEqual(merged.workflows, {"1": {"mode": "2"}})
+        self.assertEqual(self.store.load(), merged)
+
+    def test_conflicting_concurrent_field_change_preserves_first_save(self):
+        first = self.store.load()
+        second = self.store.load()
+        self.store.save(replace(first, execution={"cpus": 2}), baseline=first)
+        original = self.store.path.read_bytes()
+        with self.assertRaisesRegex(ValidationError, "execution.cpus.*altra sessione"):
+            self.store.save(replace(second, execution={"cpus": 4}), baseline=second)
+        self.assertEqual(self.store.path.read_bytes(), original)
+        # The same explicit choice is compatible with an already saved value.
+        self.store.save(replace(second, execution={"cpus": 2}), baseline=second)
+        self.assertEqual(self.store.load().execution, {"cpus": 2})
+
+    def test_concurrent_save_after_reset_does_not_restore_untouched_old_values(self):
+        before = Preferences(execution={"execution_mode": "serial"})
+        self.store.save(before)
+        baseline = self.store.load()
+        self.store.reset()
+        merged = self.store.save(replace(baseline, update_channel="testing"), baseline=baseline)
+        self.assertEqual(merged, Preferences(update_channel="testing"))
+
+    def test_settings_lock_serializes_an_independent_process_and_releases(self):
+        context = multiprocessing.get_context("spawn")
+        entered, finished = context.Event(), context.Event()
+        process = context.Process(target=_save_preferences_process,
+                                  args=(str(self.store.path), entered, finished))
+        try:
+            with self.store._lock():
+                process.start()
+                self.assertTrue(entered.wait(15), "Child did not reach the save")
+                self.assertFalse(finished.wait(0.2), "Child wrote through another process's lock")
+                self.assertFalse(self.store.path.exists())
+            self.assertTrue(finished.wait(15), "Save did not resume after lock release")
+            process.join(15)
+            self.assertEqual(process.exitcode, 0)
+            self.assertEqual(self.store.load().update_channel, "testing")
+            self.store.reset()
+        finally:
+            if process.is_alive():
+                process.terminate()
+                process.join(15)
 
     def test_reset_removes_settings_only_and_keeps_research_files(self):
         self.layout.runs_dir.mkdir()

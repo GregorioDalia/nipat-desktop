@@ -144,6 +144,79 @@ class LinuxUpdateTests(unittest.TestCase):
         with patch.object(update.time, "monotonic", side_effect=[0, 16]):
             self.assertFalse(update._wait_for_acknowledgement(self.root, [], Mock()))
 
+    def test_slow_verification_acknowledges_start_and_rejects_package_changed_after_launch(self):
+        # Block the real worker at its checksum read. The parent's launch
+        # handshake must finish without waiting for that read to complete.
+        (self.root / "state.json").write_text(json.dumps({"phase": "waiting_for_application"}))
+        script = (
+            "import pathlib, subprocess, sys, time; "
+            f"sys.path.insert(0,{str(PROJECT / 'src')!r}); "
+            "from nipat import linux_update as m; "
+            f"root=pathlib.Path({str(self.root)!r}); "
+            "m.require_supported_host=lambda:None; m.wait_for_parents=lambda *a,**k:None; "
+            "m._other_sessions_running=lambda:False; original_verify=m.verify_package; "
+            "subprocess.run=lambda *a,**k: (root/'apt-called').touch(); "
+            "\ndef slow_verify(*args):\n"
+            "    (root/'hash-started').touch()\n"
+            "    deadline=time.monotonic()+10\n"
+            "    while not (root/'release-hash').exists():\n"
+            "        if time.monotonic()>deadline: raise RuntimeError('test verification timed out')\n"
+            "        time.sleep(.01)\n"
+            "    original_verify(*args)\n"
+            "m.verify_package=slow_verify\n"
+            "raise SystemExit(m.run_handoff(root/'request.json'))\n"
+        )
+        process = subprocess.Popen([sys.executable, "-c", script],
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        try:
+            self.assertTrue(update._wait_for_acknowledgement(
+                self.root, [{"pid": 9876, "start": "1234"}], process))
+            self.assertIsNone(process.poll())
+            self.assertFalse((self.root / "apt-called").exists())
+            # Even though the parent accepted the launch, APT must see only a
+            # package whose current bytes still match the advertised digest.
+            self.package.write_bytes(b"x" * self.size)
+            (self.root / "release-hash").touch()
+            output, _ = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 1, output)
+            self.assertIn("checksum", output)
+            self.assertFalse((self.root / "apt-called").exists())
+            self.assertEqual(json.loads((self.root / "state.json").read_text())["phase"], "failed")
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=10)
+
+    def test_cancel_during_package_verification_prevents_apt(self):
+        original_verify = update.verify_package
+
+        def cancel_during_read(*args):
+            self.assertTrue((self.root / "ready.json").exists())
+            self.assertEqual(json.loads((self.root / "state.json").read_text())["phase"],
+                             "verifying_package")
+            original_verify(*args)
+            (self.root / "cancel").touch()
+
+        with patch.object(update, "require_supported_host"), patch.object(update, "wait_for_parents"), \
+                patch.object(update, "_other_sessions_running", return_value=False), \
+                patch.object(update, "verify_package", side_effect=cancel_during_read) as verify, \
+                patch.object(update.subprocess, "run") as run:
+            self.assertEqual(update.run_handoff(self.request), 1)
+        verify.assert_called_once()
+        run.assert_not_called()
+
+    def test_malformed_package_metadata_is_rejected_before_acknowledgement(self):
+        original = json.loads(self.request.read_text())
+        for mutation in ({"sha256": None}, {"sha256": "bad"}, {"size": True},
+                         {"package": 12}, {"package": "relative.deb"}):
+            with self.subTest(mutation=mutation):
+                self.request.write_text(json.dumps(dict(original, **mutation)))
+                with patch.object(update, "require_supported_host"), \
+                        patch.object(update.subprocess, "run") as run:
+                    self.assertEqual(update.run_handoff(self.request), 1)
+                self.assertFalse((self.root / "ready.json").exists())
+                run.assert_not_called()
+
     def test_cache_parent_symlink_is_rejected_without_changing_target_permissions(self):
         actual = self.root / "actual"
         actual.mkdir(mode=0o755)

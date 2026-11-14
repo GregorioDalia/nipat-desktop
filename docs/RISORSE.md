@@ -111,6 +111,13 @@ Il comando `configure` mostra soltanto l'anteprima. `--apply --yes` conferma
 il salvataggio; `--restart` autorizza separatamente il riavvio necessario.
 Le opzioni sono esplicite anche negli script automatizzati.
 
+Il codice di uscita `0` conferma l'operazione richiesta. Con `--apply --yes`
+senza `--restart`, lo stato `saved-restart-required` conferma il salvataggio
+per un riavvio successivo. Aggiungendo `--restart`, il codice è `0` soltanto
+con stato `applied`, dopo la verifica delle risorse effettive. Un riavvio
+non completato o valori da verificare restituiscono `2`; il rapporto,
+anche con `--json`, conserva stato, avvisi e percorso del backup.
+
 Il backup indicato dall'applicazione è un file JSON che conserva percorso,
 hash e contenuto precedente codificato in base64, compresa l'eventuale assenza
 del file. Conservare il backup per diagnosi e recupero manuale della

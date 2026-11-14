@@ -11,6 +11,7 @@ from typing import Callable
 
 from nipat import __version__
 from nipat.catalog_ui import show_catalog
+from nipat.distribution import is_experimental_version
 from nipat.errors import NipatError
 from nipat.i18n import translate
 from nipat.installation import show_installation
@@ -50,7 +51,7 @@ MAIN_MENU_GROUPS = {
 
 def _select_workflow(ui: Terminal) -> str | None:
     ui.message(
-        "Scegliere la sequenza da eseguire. I risultati DNPcall sono forniti automaticamente "
+        "Scegliere la sequenza da eseguire. I risultati dei caller sono forniti automaticamente "
         "alle analisi successive, senza selezionare o copiare file intermedi.", kind="muted",
     )
     ui.message(
@@ -73,7 +74,20 @@ def _select_workflow(ui: Terminal) -> str | None:
         ui.message("Scegliere un workflow da 1 a 5 oppure 0 per tornare al menu.", kind="muted")
 
 
-def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = False) -> bool:
+def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = False,
+          update_channel: str = "stable") -> bool:
+    if is_experimental_version(__version__):
+        update_help = (
+            "Questa versione sperimentale usa installer separati disponibili su GitHub. "
+            "Verifica aggiornamenti indica dove trovarli; gli aggiornamenti automatici sono disabilitati."
+        )
+    else:
+        channel = "Testing" if update_channel == "testing" else "Stabile"
+        update_help = (
+            f"Canale aggiornamenti selezionato: {channel}. Verifica aggiornamenti consulta le release "
+            "su GitHub e propone download e installazione con conferma. Configura -> Aggiornamenti "
+            "permette di cambiare canale e attivare la verifica all'avvio."
+        )
     pages = {
         "1": ("Come usare NIPAT", (
             "Selezionare un'analisi dal menu e seguire le indicazioni mostrate prima di ogni campo.",
@@ -96,8 +110,8 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "Contamination: tabelle SNP o DNP e coordinate dello stesso tipo; produce stime per sito e un riepilogo per campione.",
             "CPIN / CPI postnatale: trii madre, padre e figlio, conteggi SNP o DNP e frequenze di popolazione; produce indici di paternita' e risultati per sito.",
             "CPI: tabelle cfDNA materno e presunto padre, coppie e frequenze di popolazione; produce stime di frazione fetale, CPI e grafici.",
-            "Workflow automatici: la voce W propone DNPcall seguito da Contamination, CPI oppure entrambe le analisi. Una sola conferma avvia la sequenza selezionata.",
-            "Dal menu W si puo' anche eseguire SNPcall su piu' BAM o pileup, oppure aggiungerlo ai workflow DNP con una lista SNP specifica. Ogni campione mantiene risultati separati.",
+            "Workflow automatici: W -> 5 collega DNPcall e/o SNPcall a Contamination, CPI prenatale e CPIN postnatale, anche partendo da tabelle esistenti. Una sola conferma avvia il piano selezionato.",
+            "Le altre voci del menu W offrono sequenze DNP predefinite e SNPcall su piu' BAM o pileup. Ogni campione mantiene risultati separati.",
             "I pannelli e i riferimenti devono essere coerenti con i campioni. La verifica degli input non sostituisce la valutazione scientifica dei risultati.",
         )),
         "3": ("Cartelle e parametri", (
@@ -113,9 +127,9 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "Ogni esecuzione ha una cartella distinta: output contiene i risultati, work i file intermedi.",
             "run.json registra gli input, i parametri e lo stato; execution.log conserva i dettagli del processo.",
             "Ultima esecuzione riapre i risultati e i log della sessione. Le esecuzioni precedenti rimangono nelle rispettive cartelle.",
-            "La voce W, Workflow automatici, esegue DNPcall e poi Contamination, CPI oppure entrambe le analisi: scegliere gli input, controllare il riepilogo e confermare una sola volta.",
-            "Le tabelle passano automaticamente alla seconda fase. Se DNPcall fallisce o non produce le tabelle attese, le analisi successive non vengono avviate; ogni errore arresta la sequenza.",
-            "Per i workflow CPI, indicare un ID per ogni coppia e assegnare esplicitamente i BAM del cfDNA materno e del campione paterno. Uno stesso campione puo' essere riutilizzato in piu' coppie nello stesso ruolo.",
+            "La voce W, Workflow automatici, permette di scegliere calling SNP e/o DNP e analisi successive: Contamination, CPI prenatale e CPIN postnatale. Controllare input e riepilogo e confermare una sola volta.",
+            "Le tabelle passano automaticamente alla seconda fase. Se un caller fallisce o non produce le tabelle attese, le analisi successive non vengono avviate; ogni errore arresta il piano.",
+            "Per i workflow CPI, indicare un ID per ogni coppia e assegnare esplicitamente i campioni del cfDNA materno e del presunto padre. Uno stesso campione puo' essere riutilizzato in piu' coppie nello stesso ruolo.",
             "NIPAT prepara automaticamente i nomi e i prefissi dei file CPI. I ruoli derivano dalle coppie dichiarate, senza deduzioni dal nome dei BAM; il riepilogo mostra ID, file e ruoli.",
             "Contamination, CPI e CPIN possono usare conteggi DNPcall o SNPcall, in rami distinti. La stima di contaminazione non filtra gli input delle analisi di paternita'.",
             "Il workflow completo (W -> 5) offre tutte le combinazioni di calling e analisi successive, incluse tabelle importate. Dichiarare separatamente i ruoli delle coppie CPI e dei trii CPIN.",
@@ -130,7 +144,7 @@ def _help(ui: Terminal, layout: ProjectLayout, runner=None, *, dry_run: bool = F
             "I dati sono elaborati localmente. La distribuzione include gli script scientifici R e le loro dipendenze nell'immagine di analisi.",
             "Windows utilizza il runtime WSL dedicato; macOS utilizza Lima incluso; Linux utilizza Docker Engine locale.",
             "Verifica ambiente controlla gli strumenti senza analizzare campioni. E' separata dalla guida e non attesta la validita' scientifica di un risultato.",
-            "La versione sperimentale 0.8 non usa gli aggiornamenti automatici della stabile. La voce Aggiornamenti indica dove trovare nuovi pacchetti sperimentali.",
+            update_help,
             "Per i comandi diretti: NIPAT.exe --help su Windows; il launcher NIPAT.command incluso nell'app su macOS; nipat --help su Linux.",
             f"Guida completa: {layout.project_dir / 'docs' / 'GUIDA_UTILIZZO.md'}",
         )),
@@ -266,7 +280,8 @@ def run_wizard(
                         show_results(ui, last_run, dry_run=dry_run)
                     continue
                 if choice == "7":
-                    if _help(ui, layout, workflows.runner, dry_run=dry_run):
+                    if _help(ui, layout, workflows.runner, dry_run=dry_run,
+                             update_channel=settings.preferences.update_channel):
                         return HANDOFF_EXIT_CODE
                     continue
                 if choice == "8":

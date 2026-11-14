@@ -54,11 +54,16 @@ def manual_install_command(package: Path) -> str:
     return "sudo apt install -- " + shlex.quote(str(package.absolute()))
 
 
-def verify_package(package: Path, expected_sha256: str, expected_size: int) -> None:
-    if (not SHA256.fullmatch(expected_sha256) or type(expected_size) is not int
+def _validate_package_metadata(package: Path, expected_sha256: str, expected_size: int) -> None:
+    if (not isinstance(expected_sha256, str) or not SHA256.fullmatch(expected_sha256)
+            or type(expected_size) is not int
             or not 0 < expected_size < MAX_PACKAGE_SIZE or not PACKAGE.fullmatch(package.name)
             or not package.is_absolute()):
         raise LinuxUpdateError("Metadati del pacchetto di aggiornamento non validi.")
+
+
+def verify_package(package: Path, expected_sha256: str, expected_size: int) -> None:
+    _validate_package_metadata(package, expected_sha256, expected_size)
     try:
         descriptor = os.open(package, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         with os.fdopen(descriptor, "rb") as stream:
@@ -221,7 +226,13 @@ def _read_request(path: Path) -> dict:
                     or type(parent["pid"]) is not int or parent["pid"] <= 1
                     or not isinstance(parent["start"], str) or not parent["start"].isdecimal()):
                 raise ValueError("processo")
-        verify_package(Path(request["package"]), request["sha256"], request["size"])
+        if not isinstance(request["package"], str):
+            raise ValueError("pacchetto")
+        # Acknowledgement confirms that the worker started. Hashing a large DEB
+        # belongs to the installation phase, outside the 15-second launch wait.
+        # The parent already checked the bytes; the worker checks them again
+        # after the application has closed, immediately before invoking APT.
+        _validate_package_metadata(Path(request["package"]), request["sha256"], request["size"])
         return request
     except (ValueError, KeyError, TypeError, OSError) as exc:
         raise LinuxUpdateError("Richiesta di aggiornamento incompleta o non valida.") from exc
@@ -267,7 +278,11 @@ def run_handoff(request_path: Path) -> int:
             raise LinuxUpdateError("Altre sessioni NIPAT sono aperte. Attendere la fine delle analisi, "
                                    "chiudere tutte le finestre e riprovare.")
         package = Path(request["package"])
+        _write_json(state, {"phase": "verifying_package", "package": str(package)})
+        print("NIPAT: verifica del pacchetto scaricato...", flush=True)
         verify_package(package, request["sha256"], request["size"])
+        if cancel.exists():
+            raise LinuxUpdateError("Avvio dell'aggiornamento annullato dalla sessione NIPAT.")
         _write_json(state, {"phase": "installing", "package": str(package)})
         print("NIPAT: autorizzare l'installazione del pacchetto quando richiesto dal sistema.", flush=True)
         completed = subprocess.run([str(PKEXEC), str(APT), "install", "--", str(package)], check=False)

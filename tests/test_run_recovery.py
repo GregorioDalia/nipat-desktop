@@ -1,3 +1,5 @@
+from contextlib import nullcontext, redirect_stdout
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -5,6 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from nipat.cli import main
 from nipat.errors import ValidationError
 from nipat.execution.recovery import ownership_labels
 from nipat.execution.runner import DockerComposeRunner
@@ -76,6 +79,29 @@ class RunRecoveryTests(unittest.TestCase):
         self.assertEqual(output.read_text(), "retain")
         self.assertEqual(len(json.loads((self.run / "recovery.json").read_text())["observations"]), 1)
         self.assertIsNone(self.runner._bundled_workflow)
+
+    def test_cli_reports_partial_cleanup_when_stop_succeeds_but_removal_fails(self):
+        output = io.StringIO()
+        before = (self.run / "run.json").read_bytes()
+        with patch("nipat.cli.ProjectLayout.discover", return_value=self.layout), \
+             patch("nipat.cli.activity_session", return_value=nullcontext()), \
+             patch("nipat.cli.DockerComposeRunner", return_value=self.runner), \
+             patch("nipat.execution.runner.subprocess.run", side_effect=[
+                 self.answer(),
+                 subprocess.CompletedProcess("stop", 0, stdout="", stderr=""),
+                 subprocess.CompletedProcess("rm", 1, stdout="", stderr="removal failed"),
+             ]) as commands, redirect_stdout(output):
+            result = main(["runs", "stop", "--run", str(self.run), "--yes", "--json"])
+        self.assertEqual(result, 2)
+        [report] = json.loads(output.getvalue())
+        cleanup = report["containers"][0]["cleanup"]
+        self.assertEqual(cleanup["status"], "stopped")
+        self.assertEqual(cleanup["message"], "removal failed")
+        self.assertEqual(cleanup["graceful_stop"]["returncode"], 0)
+        self.assertEqual(commands.call_args_list[-1].args[0],
+                         ["docker", "rm", "--force", "--volumes", self.container_id])
+        self.assertEqual(json.loads((self.run / "recovery.json").read_text())["observations"], [report])
+        self.assertEqual((self.run / "run.json").read_bytes(), before)
 
     def test_owned_stopped_container_can_release_scratch_after_client_interruption(self):
         for state in ("created", "exited", "dead"):

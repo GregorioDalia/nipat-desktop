@@ -6,6 +6,7 @@ No administrative commands, daemon configuration changes or image deletion occur
 from __future__ import annotations
 
 from contextlib import contextmanager
+import codecs
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -13,10 +14,12 @@ import os
 from pathlib import Path, PurePosixPath
 import platform
 import re
+import selectors
 import signal
 import subprocess
 import sys
 import tempfile
+import time
 from typing import Mapping
 
 
@@ -26,6 +29,7 @@ SOCKET = "unix:///var/run/docker.sock"
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 GUIDE = "docs/INSTALLATORE_LINUX.md"
+SETUP_CHECK_TIMEOUTS = {"doctor": 300, "self-test": 1800}
 CLI_CODE = (
     "import sys; sys.path.insert(0, sys.argv.pop(1)); "
     "from nipat.cli import main; raise SystemExit(main())"
@@ -227,7 +231,71 @@ def cli_command(app: Path, arguments: list[str]) -> list[str]:
     return [sys.executable, "-I", "-B", "-c", CLI_CODE, str(app / "src"), *arguments]
 
 
-def run_cli(app: Path, arguments: list[str], environment: dict[str, str], log=None) -> int:
+def _stop_setup_group(process: subprocess.Popen) -> None:
+    # Only the check's new session is targeted. Give its CLI a chance to clean up
+    # its own runtime work before forcing any remaining children to stop.
+    try:
+        os.killpg(process.pid, signal.SIGINT)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    finally:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    process.wait(timeout=5)
+
+
+def run_setup_check(app: Path, arguments: list[str], environment: dict[str, str],
+                    log, timeout: float) -> int:
+    if timeout <= 0 or log is None:
+        raise ValueError("A setup check requires a log and a positive timeout")
+    command = cli_command(app, arguments)
+    command.insert(1, "-u")
+    process = subprocess.Popen(command, env=environment, stdout=subprocess.PIPE,
+                               stderr=subprocess.STDOUT, bufsize=0, start_new_session=True)
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+
+    def output(chunk: bytes, *, final: bool = False) -> None:
+        text = decoder.decode(chunk, final=final)
+        if text:
+            print(text, end="", flush=True)
+            log.write(text)
+            log.flush()
+
+    try:
+        deadline = time.monotonic() + timeout
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while selector.get_map() or process.poll() is None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise SetupError("Controllo " + " ".join(arguments)
+                                     + f" scaduto dopo {timeout:g} secondi. "
+                                     "La preparazione puo essere ripresa; consultare setup.log.")
+                for key, _ in selector.select(min(remaining, .1)):
+                    chunk = os.read(key.fd, 65536)
+                    if chunk:
+                        output(chunk)
+                    else:
+                        selector.unregister(key.fileobj)
+                        output(b"", final=True)
+        return process.wait(timeout=1)
+    except BaseException:
+        _stop_setup_group(process)
+        raise
+    finally:
+        process.stdout.close()
+
+
+def run_cli(app: Path, arguments: list[str], environment: dict[str, str], log=None,
+            *, timeout: float | None = None) -> int:
+    if timeout is not None:
+        return run_setup_check(app, arguments, environment, log, timeout)
     # The foreground terminal sends SIGINT to both supervisor and client. The
     # client owns cancellation and may deliberately remain in its menu. Keep the
     # supervisor waiting (and its activity lease alive) instead of letting
@@ -309,7 +377,8 @@ def ensure_ready(app: Path, data: Path, state: Path, environment: dict[str, str]
                 runtime_environment = dict(environment, NIPAT_RUNTIME_IMAGE=identifier)
                 for arguments in (["doctor", "--runtime"], ["self-test"]):
                     message("NIPAT: " + " ".join(arguments))
-                    code = run_cli(app, arguments, runtime_environment, log)
+                    code = run_cli(app, arguments, runtime_environment, log,
+                                   timeout=SETUP_CHECK_TIMEOUTS[arguments[0]])
                     if code != 0:
                         raise SetupError("Verifica NIPAT non superata: " + " ".join(arguments)
                                          + f" (codice {code}). Consultare {state / 'setup.log'}.")

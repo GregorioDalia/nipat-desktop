@@ -72,6 +72,7 @@ class LinuxLauncherTests(unittest.TestCase):
     def test_same_archive_may_resolve_to_different_local_immutable_id(self):
         image, load, cli = self.preparation()
         self.assertEqual(image, LOADED_ID)
+        self.assertEqual([call.kwargs["timeout"] for call in cli.call_args_list], [300, 1800])
         self.assertNotEqual(image, SOURCE_ID)
         self.assertEqual(load.call_args.args[0], ["image", "load", "--input", str(self.archive)])
         self.assertEqual([call.args[1] for call in cli.call_args_list],
@@ -385,6 +386,71 @@ class LinuxLauncherTests(unittest.TestCase):
                 patch.object(launcher.os, "geteuid", return_value=0):
             with self.assertRaisesRegex(launcher.SetupError, "senza sudo"):
                 launcher.require_host()
+
+
+@unittest.skipUnless(sys.platform == "linux", "Linux setup process groups")
+class LinuxSetupCheckTests(unittest.TestCase):
+    def check(self, script, log, *, timeout=2):
+        with patch.object(launcher, "cli_command", return_value=[sys.executable, "-c", script]), \
+                patch("sys.stdout", new_callable=io.StringIO):
+            return launcher.run_cli(PROJECT, ["self-test"], dict(os.environ), log, timeout=timeout)
+
+    def test_diagnostics_are_flushed_before_process_finishes_even_without_newline(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "setup.log"
+            # The child cannot finish successfully until the parent's log is visible.
+            # This also checks a multibyte character and a partial output line.
+            script = (
+                "import pathlib,sys,time; "
+                "sys.stdout.write('diagnostica é'); sys.stdout.flush(); "
+                "sys.stderr.write(' stderr'); sys.stderr.flush(); "
+                f"p=pathlib.Path({str(path)!r}); "
+                "deadline=time.monotonic()+1; "
+                "exec(\"while time.monotonic()<deadline and 'stderr' not in p.read_text():\\n time.sleep(.01)\"); "
+                "raise SystemExit(0 if 'diagnostica é stderr' in p.read_text() else 7)"
+            )
+            with path.open("w", encoding="utf-8") as log:
+                self.assertEqual(self.check(script, log), 0)
+            self.assertEqual(path.read_text(), "diagnostica é stderr")
+
+    def test_deadline_terminates_owned_descendants_preserves_logs_and_other_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            late = Path(directory) / "late-result"
+            child = f"import time,pathlib,signal; signal.signal(signal.SIGINT,signal.default_int_handler); time.sleep(1); pathlib.Path({str(late)!r}).write_text('late')"
+            script = ("import subprocess,sys,time,signal; "
+                      "signal.signal(signal.SIGINT,signal.SIG_IGN); "
+                      f"subprocess.Popen([sys.executable,'-c',{child!r}]); "
+                      "print('before deadline',flush=True); time.sleep(30)")
+            other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"],
+                                     start_new_session=True)
+            try:
+                log = io.StringIO()
+                started = time.monotonic()
+                with self.assertRaisesRegex(launcher.SetupError, "scaduto"):
+                    self.check(script, log, timeout=.2)
+                self.assertLess(time.monotonic() - started, 12)
+                self.assertIn("before deadline", log.getvalue())
+                self.assertIsNone(other.poll())
+                self.assertFalse(late.exists())
+            finally:
+                other.kill()
+                other.wait(timeout=5)
+
+    def test_normal_late_completion_keeps_exit_code_and_diagnostics(self):
+        log = io.StringIO()
+        self.assertEqual(self.check("import time; print('start'); time.sleep(.1); print('done'); exit(7)", log), 7)
+        self.assertEqual(log.getvalue(), "start\ndone\n")
+
+    def test_pipe_inherited_after_parent_exit_is_also_bounded(self):
+        script = ("import subprocess,sys; "
+                  "subprocess.Popen([sys.executable,'-c','import time; time.sleep(30)']); "
+                  "print('parent done',flush=True)")
+        log = io.StringIO()
+        started = time.monotonic()
+        with self.assertRaisesRegex(launcher.SetupError, "scaduto"):
+            self.check(script, log, timeout=.2)
+        self.assertLess(time.monotonic() - started, 6)
+        self.assertIn("parent done", log.getvalue())
 
 
 @unittest.skipUnless(sys.platform == "linux", "Linux foreground process-group signals")

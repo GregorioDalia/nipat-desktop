@@ -154,15 +154,36 @@ function ConvertTo-NipatNativeArgument([string] $Value) {
     return '"' + $escaped + '"'
 }
 
+function New-NipatSetupJob {
+    . (Join-Path $PSScriptRoot 'activity-lock.ps1')
+    Initialize-NipatActivityNative
+    return New-Object Nipat.SetupCheckJob
+}
+
+function Stop-NipatSetupCheck([Diagnostics.Process] $Process) {
+    # Only used by the PowerShell 7 non-Windows test host. Production Windows
+    # checks use the precompiled job helper, including after the leader exits.
+    if (-not $Process.HasExited) {
+        $Process.Kill($true)
+        if (-not $Process.WaitForExit(5000)) {
+            throw 'Arresto del controllo di preparazione non confermato.'
+        }
+    }
+}
+
 function Invoke-NipatSetupCheck([string] $Executable, [string[]] $Arguments,
-    [string] $LogDirectory, [string] $Name) {
+    [string] $LogDirectory, [string] $Name, [int] $TimeoutSeconds = 0) {
     if ($Name -cnotmatch '^[a-z][a-z0-9-]*$') { throw 'Nome del controllo di preparazione non valido.' }
+    if ($TimeoutSeconds -eq 0) {
+        $TimeoutSeconds = $(if ($Name -ceq 'doctor') { 300 } else { 1800 })
+    }
+    if ($TimeoutSeconds -lt 1 -or $TimeoutSeconds -gt 86400) { throw 'Limite del controllo non valido.' }
     [IO.Directory]::CreateDirectory($LogDirectory) | Out-Null
     $stdoutPath = Join-Path $LogDirectory ($Name + '.stdout.log')
     $stderrPath = Join-Path $LogDirectory ($Name + '.stderr.log')
     $exitPath = Join-Path $LogDirectory ($Name + '.exit-code.txt')
     if (Test-Path -LiteralPath $exitPath) { Remove-Item -LiteralPath $exitPath -Force }
-    Write-Host ("NIPAT: controllo $Name in corso. Diagnostica: $stdoutPath ; $stderrPath")
+    Write-Host ("NIPAT: controllo $Name in corso (limite $TimeoutSeconds secondi). Diagnostica: $stdoutPath ; $stderrPath")
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $Executable
     $start.Arguments = (($Arguments | ForEach-Object { ConvertTo-NipatNativeArgument $_ }) -join ' ')
@@ -170,26 +191,73 @@ function Invoke-NipatSetupCheck([string] $Executable, [string[]] $Arguments,
     $start.CreateNoWindow = $true
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
-    $start.StandardOutputEncoding = [Text.Encoding]::UTF8
-    $start.StandardErrorEncoding = [Text.Encoding]::UTF8
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $start
     $encoding = New-Object Text.UTF8Encoding($false)
+    $stdoutFile = $null
+    $stderrFile = $null
+    $started = $false
+    $job = $null
+    $jobAttached = $false
+    $copyCancellation = New-Object Threading.CancellationTokenSource
     try {
-        [IO.File]::WriteAllText($stdoutPath, '', $encoding)
-        [IO.File]::WriteAllText($stderrPath, '', $encoding)
-        if (-not $process.Start()) { throw "Impossibile avviare il controllo $Name." }
-        # Drain both pipes concurrently. Native stderr must not
-        # become a terminating PowerShell 5.1 error before the exit code is read.
-        $stdout = $process.StandardOutput.ReadToEndAsync()
-        $stderr = $process.StandardError.ReadToEndAsync()
-        $process.WaitForExit()
-        [IO.File]::WriteAllText($stdoutPath, $stdout.GetAwaiter().GetResult(), $encoding)
-        [IO.File]::WriteAllText($stderrPath, $stderr.GetAwaiter().GetResult(), $encoding)
+        # A one-byte FileStream buffer prevents small diagnostics from waiting
+        # for process exit. The streams are readable while both pipes drain.
+        $stdoutFile = [IO.FileStream]::new($stdoutPath, [IO.FileMode]::Create,
+            [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite, 1, [IO.FileOptions]::Asynchronous)
+        $stderrFile = [IO.FileStream]::new($stderrPath, [IO.FileMode]::Create,
+            [IO.FileAccess]::Write, [IO.FileShare]::ReadWrite, 1, [IO.FileOptions]::Asynchronous)
+        if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+            $job = New-NipatSetupJob
+        }
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        if ($null -ne $job) {
+            $process.Dispose()
+            $process = $job.Start($Executable, ((ConvertTo-NipatNativeArgument $Executable) + ' ' + $start.Arguments))
+            $jobAttached = $true
+            $outputPipe = $job.Output
+            $errorPipe = $job.Error
+        } else {
+            if (-not $process.Start()) { throw "Impossibile avviare il controllo $Name." }
+            $outputPipe = $process.StandardOutput.BaseStream
+            $errorPipe = $process.StandardError.BaseStream
+        }
+        $started = $true
+        $stdout = $outputPipe.CopyToAsync($stdoutFile, 4096, $copyCancellation.Token)
+        $stderr = $errorPipe.CopyToAsync($stderrFile, 4096, $copyCancellation.Token)
+        $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+        $remaining = [Math]::Max(0, $TimeoutSeconds * 1000 - [int]$watch.ElapsedMilliseconds)
+        if ($completed) {
+            # Descendants may inherit pipe handles. Draining must have the same
+            # deadline as execution, even if the immediate child already exited.
+            $completed = [Threading.Tasks.Task]::WaitAll([Threading.Tasks.Task[]]@($stdout, $stderr), $remaining)
+        }
+        if (-not $completed) {
+            [IO.File]::WriteAllText($exitPath, "124`n", $encoding)
+            throw "Controllo $Name scaduto dopo $TimeoutSeconds secondi (codice 124). La preparazione puo essere ripresa. Dettagli: $stdoutPath ; $stderrPath"
+        }
         $code = $process.ExitCode
         [IO.File]::WriteAllText($exitPath, ([string]$code + "`n"), $encoding)
     } finally {
-        $process.Dispose()
+        try {
+            if ($jobAttached) {
+                $job.Stop()
+                if (-not $process.WaitForExit(5000)) { throw 'Arresto del controllo non confermato.' }
+            } elseif ($started -and -not $process.HasExited) {
+                Stop-NipatSetupCheck $process
+            }
+        } finally {
+            $copyCancellation.Cancel()
+            if ($started) {
+                $outputPipe.Close()
+                $errorPipe.Close()
+            }
+            if ($null -ne $stdoutFile) { $stdoutFile.Dispose() }
+            if ($null -ne $stderrFile) { $stderrFile.Dispose() }
+            $copyCancellation.Dispose()
+            $process.Dispose()
+            if ($null -ne $job) { $job.Dispose() }
+        }
     }
     foreach ($path in @($stdoutPath, $stderrPath)) {
         $text = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)

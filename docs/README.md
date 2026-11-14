@@ -32,7 +32,7 @@ NIPAT permette di eseguire analisi scientifiche sul proprio computer dal menu gu
 | Consultare schema dei piani e interfaccia del motore | [Contratto dei piani](WORKFLOW_CONTRACT.md) · [Interfaccia del motore](../engine/README.md) |
 | Individuare sorgenti R, riferimenti di test e attribuzioni | [Componenti scientifici](../scientific/README.md) · [Attribuzioni e licenze](../THIRD_PARTY_NOTICES.md) |
 | Preparare build, accettazione e pubblicazione | [CI/CD](CI_CD.md) · [Accettazione installatori](ACCETTAZIONE_INSTALLATORI.md) · [Procedura di pubblicazione](../.github/RELEASE.md) |
-| Orientarsi fra le priorità di sviluppo | [Sviluppo e validazione](ROADMAP.md) · [Audit per la 0.8.70](AUDIT_0.8.70.md) |
+| Orientarsi fra le priorità di sviluppo | [Sviluppo e validazione](ROADMAP.md) · [Consolidamento 0.8.80](AUDIT_0.8.80.md) |
 
 ## Evidenze storiche
 

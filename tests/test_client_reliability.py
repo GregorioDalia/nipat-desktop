@@ -330,6 +330,24 @@ class ClientRoutingTests(unittest.TestCase):
         self.assertEqual(json.loads(self.output.getvalue()), [report])
         self.runner.reconcile_run.assert_called_once_with(Path(report["run_dir"]), stop=True)
 
+    def test_stop_requires_removal_or_confirmed_absence_of_every_container(self):
+        for cleanup, state, expected in (("removed", "running", 0), ("absent", "running", 0),
+                                         ("stopped", "running", 2), (None, "absent", 0),
+                                         (None, "unavailable", 2), (None, "identity_mismatch", 2)):
+            with self.subTest(cleanup=cleanup, state=state):
+                report = RecoveryPresentationTests().report()
+                report["containers"][0]["cleanup"] = {"status": "removed"}
+                item = {"container_name": "nipat-run-second", "state": state}
+                if cleanup is not None:
+                    item["cleanup"] = {"status": cleanup}
+                report["containers"].append(item)
+                self.runner.reconcile_run.return_value = report
+                self.output.seek(0)
+                self.output.truncate()
+                result = main(["runs", "stop", "--run", report["run_dir"], "--yes", "--json"])
+                self.assertEqual(result, expected)
+                self.assertEqual(json.loads(self.output.getvalue()), [report])
+
     def test_cli_maintenance_handoff_requires_explicit_confirmation(self):
         with patch("nipat.installation.installation_inventory", return_value=maintenance_cases.inventory()), \
                 patch("nipat.installation.start_maintenance", return_value=Path("result.json")) as start, \
