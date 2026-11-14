@@ -343,6 +343,9 @@ In **W → 5** scegliere i dati, assegnare un ID a ciascun campione e
 indicare le analisi successive. `--pair ID CFDNA_MATERNO PADRE` definisce
 una coppia CPI. `--trio ID MADRE PADRE FIGLIO` definisce una terna CPIN.
 I ruoli fanno riferimento agli ID dei campioni dichiarati nel comando.
+Se lo stesso tipo di analisi usa conteggi SNP e DNP, gli ID di quella coppia
+o di quel trio devono essere presenti in entrambi i rami. Con tabelle esistenti
+si forniscono i file dei soli rami con almeno un'analisi selezionata.
 
 Questo esempio usa due rami: DNPcall alimenta CPI e SNPcall alimenta
 Contamination. Gli input e le frequenze sono percorsi di esempio.

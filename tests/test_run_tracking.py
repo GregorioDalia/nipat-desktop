@@ -89,6 +89,31 @@ class RunTrackingTests(unittest.TestCase):
         self.assertIsNotNone(record["finished_at"])
         self.assertFalse((run / "run.json.tmp").exists())
 
+    def test_final_callback_reports_input_change_after_successful_command(self):
+        run = self.layout.new_run_dir("test", "changed-after-command")
+        callbacks = []
+
+        def finished(outcome):
+            callbacks.append((outcome, self.record(run.name), self.runner._record))
+
+        self.runner._run_finished_callback = finished
+        with redirect_stdout(None), patch(
+            "nipat.execution.runner.subprocess.Popen", side_effect=self.popen_factory(["print('out')"]),
+        ), self.assertRaisesRegex(ValidationError, "Input modificato"):
+            with self.runner.record_run(run, workflow="test", inputs=[self.input], parameters={}):
+                self.runner.run(["Rscript", "example.R"])
+                self.assertEqual(self.record(run.name)["commands"][0]["status"], "succeeded")
+                self.assertEqual(callbacks, [])
+                self.input.write_text("changed after the command", encoding="utf-8")
+        [(outcome, persisted, active_record)] = callbacks
+        self.assertEqual(outcome.status, "failed")
+        self.assertEqual(outcome.run_dir, run)
+        self.assertEqual(outcome.run_id, persisted["run_id"])
+        self.assertEqual(persisted["status"], "failed")
+        self.assertIsNotNone(persisted["finished_at"])
+        self.assertIsNone(active_record)
+        self.assertIn("out\n", (run / "execution.log").read_text(encoding="utf-8"))
+
     def bam_inputs(self):
         bam = self.layout.data_dir / "sample.bam"
         reference = self.layout.data_dir / "reference.fa"

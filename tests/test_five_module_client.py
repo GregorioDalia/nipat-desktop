@@ -114,9 +114,22 @@ class FiveModuleClientTests(unittest.TestCase):
 
     def test_asymmetric_imports_do_not_require_unused_population_or_roles(self):
         args = self.arguments("tables", ["contamination"])
-        args.update(dnp_analyses=[], snp_analyses=["contamination"], dnp_popfreq=None, snp_popfreq=None)
+        unused = self.root / "unused-dnp.txt"
+        args.update(dnp_analyses=[], snp_analyses=["contamination"], dnp_tables=[("Unused", unused)],
+                    dnp_popfreq=None, snp_popfreq=None)
         plan = self.plan(self.workflows.analyze(**args))
         self.assertEqual([step["id"] for step in plan["steps"]], ["snp_contamination"])
+        self.assertEqual({sample["kind"] for sample in plan["samples"]}, {"snp-table"})
+        record = self.runner.records[-1][1]
+        self.assertEqual(record["parameters"]["analyses_by_marker"], {"SNP": ["contamination"]})
+        self.assertNotIn(unused, record["inputs"])
+
+    def test_both_callers_run_when_only_snp_has_downstream_analyses(self):
+        args = self.arguments("both", ["contamination"])
+        args.update(dnp_analyses=[], snp_analyses=["contamination"])
+        plan = self.plan(self.workflows.analyze(**args))
+        self.assertEqual([step["workflow"] for step in plan["steps"]],
+                         ["dnp-call", *["snp-call"] * len(self.bams), "contamination"])
 
     def test_guided_asymmetric_branches_expose_only_the_needed_files_and_roles(self):
         form = AnalysisForm("1", Mock(), self.layout, 0.001)
@@ -124,6 +137,48 @@ class FiveModuleClientTests(unittest.TestCase):
         keys = {field.key for field in form.fields()}
         self.assertTrue({"pairs", "trios", "dnp_popfreq", "snp_popfreq", "dnp_cpin_panel", "snp_cpi_cutoffs"} <= keys)
         self.assertTrue({"dnp_cpi_cutoffs", "snp_cpin_panel", "dnp_contamination_panel"}.isdisjoint(keys))
+
+    def test_guided_table_workflow_only_passes_active_fields_and_samples(self):
+        ui = Mock()
+        form = AnalysisForm("1", ui, self.layout, 0.001)
+        form.values.update(source="tables", marker="both", analyses="8", dnp_analyses="0", snp_analyses="1",
+                           samples=[("Stale", self.bams[0][1])], dnp_tables=self.dnp_tables,
+                           snp_tables=self.snp_tables, snp_contamination_panel=self.snp_panel, run_name="tables")
+        args = form.arguments()
+        self.assertNotIn("dnp_tables", args)
+        self.assertNotIn("samples", args)
+        self.assertEqual([step["id"] for step in self.plan(self.workflows.analyze(**args))["steps"]],
+                         ["snp_contamination"])
+        form._show_sample_names()
+        listed_files = [call.args[0] for call in ui.message.call_args_list if call.args[0].startswith("  ")]
+        self.assertEqual(listed_files, [f"  {identifier}: {path.name}" for identifier, path in self.snp_tables])
+
+    def test_guided_review_rechecks_family_ids_after_a_branch_change(self):
+        ui = Mock()
+        form = AnalysisForm("1", ui, self.layout, 0.001)
+        form.values.update(source="tables", marker="both", analyses="8", dnp_analyses="2", snp_analyses="2",
+                           dnp_tables=self.dnp_tables[1:], snp_tables=self.snp_tables, dnp_popfreq=self.dnp_freq,
+                           snp_popfreq=self.snp_freq, dnp_cpi_cutoffs=[], snp_cpi_cutoffs=[],
+                           pairs=[("Prenatal", "Plasma", "Father")], run_name="tables")
+        ui.menu.side_effect = ["1", "0"]
+        self.assertFalse(form.review())
+        ui.message.assert_any_call("Prenatal: campione Plasma non disponibile nel ramo DNP.", kind="error")
+        # An inactive DNP branch does not constrain a prenatal SNP analysis.
+        form.values["dnp_analyses"] = "0"
+        ui.menu.side_effect = ["1"]
+        self.assertTrue(form.review())
+
+    def test_family_picker_offers_shared_ids_and_rechecks_the_retained_selection(self):
+        ui = Mock()
+        form = AnalysisForm("1", ui, self.layout, 0.001)
+        form.values.update(source="tables", marker="both", analyses="2", dnp_tables=self.dnp_tables[1:],
+                           snp_tables=self.snp_tables, pairs=[("Old", "Plasma", "Father")])
+        field = next(field for field in form.fields() if field.key == "pairs")
+        ui.menu.side_effect = ["1", "2"]
+        ui.prompt.side_effect = ["New", "Mother", "Father", ""]
+        self.assertEqual(form._read(field), [("New", "Mother", "Father")])
+        ui.message.assert_any_call("ID validi nei rami selezionati: Child, Father, Mother")
+        ui.message.assert_any_call("Old: campione Plasma non disponibile nel ramo DNP.", kind="error")
 
     def test_both_callers_share_bams_and_keep_family_roles_separate(self):
         run = self.workflows.analyze(**self.arguments())

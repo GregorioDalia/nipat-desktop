@@ -70,7 +70,10 @@ class DnpPileupTests(unittest.TestCase):
         self.bed = self.root / 'same.bed'
         self.bed.write_text('chr1\t0\t10\n')
         self.reference = self.root / 'ref.fa'
-        self.reference.write_text('>chr1\nAAAA\n')
+        self.reference.write_text('>chr1\n' + 'A' * 1000 + '\n')
+        self.reference.with_suffix('.fa.fai').write_text(
+            ''.join(f'{name}\t1000\t0\t1000\t1001\n'
+                    for name in ('chr2', 'chr1', 'chr10', 'chr3', 'chr1:2', '.')))
         self.bamlist = self.root / 'bamlist.txt'
         self.output = self.scratch / 'pileup.txt'
         self.metadata = self.root / 'dnp-pileup.json'
@@ -115,7 +118,7 @@ class DnpPileupTests(unittest.TestCase):
         self.assertEqual(commands['view'], ['view', '--no-PG', '-u', '-M', '-L', str(self.bed), str(bams[0])])
         self.assertEqual(commands['mpileup'], ['mpileup', '-l', str(self.bed), '-f', str(self.reference),
                                              *dnp_pileup.MPILEUP_OPTIONS, '-'])
-        self.assertEqual([x['returncode'] for x in result['processes']], [0, 0])
+        self.assertEqual([x['returncode'] for x in result['processes']], [0, 0, 0])
         self.assertIsNone(result['samples'][0]['selected_bytes'])
         self.assertEqual(result['staged_bytes'], 0)
         self.assertEqual(list(self.scratch.iterdir()), [self.output])
@@ -148,14 +151,14 @@ class DnpPileupTests(unittest.TestCase):
         self.assertEqual(result['staged_bytes'], 14)
         self.assertEqual([x['strategy'] for x in result['samples']],
                          ['indexed-disk', 'sequential-no-index', 'indexed-disk'])
-        self.assertEqual([x['stage'] for x in self.commands()], ['view', 'view', 'mpileup'])
+        self.assertEqual([x['stage'] for x in self.commands()], ['view'] * 5 + ['mpileup'])
         self.assertEqual(list(self.scratch.iterdir()), [self.output])
 
-    def test_missing_index_scans_originals_without_view(self):
+    def test_missing_index_checks_header_then_scans_originals(self):
         self.samples([False])
         result = self.generate()
         self.assertEqual(result['strategy'], 'sequential')
-        self.assertEqual([x['stage'] for x in self.commands()], ['mpileup'])
+        self.assertEqual([x['stage'] for x in self.commands()], ['view', 'mpileup'])
         self.assertEqual(self.output.read_bytes(), b'pileup\nreads-0')
 
     def test_failed_indexed_producer_cannot_report_success_or_retain_output(self):
@@ -188,7 +191,7 @@ class DnpPileupTests(unittest.TestCase):
         try:
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
-                if self.log.exists() and len(self.commands()) == 2:
+                if self.log.exists() and len(self.commands()) == 3:
                     break
                 time.sleep(0.02)
             else:
@@ -266,17 +269,31 @@ class DnpPileupTests(unittest.TestCase):
         self.assertEqual(result['parallel']['reason'], 'missing-index')
         self.assertEqual(result['parallel']['workers'], 1)
         self.assertEqual(result['parallel']['observed_max_processes'], 1)
-        self.assertEqual([item['stage'] for item in self.commands()], ['view', 'mpileup'])
+        self.assertEqual([item['stage'] for item in self.commands()], ['view'] * 3 + ['mpileup'])
         self.assertEqual(result['staged_bytes'], 7)
         self.assertEqual(self.output.read_bytes(), b'pileup\nreads-0|reads-1')
 
-    def test_incompatible_dictionaries_fall_back_without_reordering_samples(self):
-        bams = self.samples([True, True])
-        Path(str(bams[1]) + '.header').write_text('@HD\tSO:coordinate\n@SQ\tSN:chr1\tLN:1001\n')
-        result = self.generate({'mode': 'auto', 'workers': 4})
-        self.assertEqual(result['parallel']['reason'], 'incompatible-dictionaries')
-        self.assertEqual(result['strategy'], 'sequential-budgeted')
-        self.assertEqual(self.output.read_bytes(), b'pileup\nreads-0|reads-1')
+    def test_reordered_dictionaries_fail_before_joint_pileup_with_or_without_index(self):
+        bams = self.samples([True, False])
+        Path(str(bams[1]) + '.header').write_text(
+            '@HD\tSO:coordinate\n@SQ\tSN:chr1\tLN:1000\n@SQ\tSN:chr2\tLN:1000\n'
+            '@SQ\tSN:chr10\tLN:1000\n@SQ\tSN:chr3\tLN:1000\n')
+        for label, index, budget in (
+            ('unbudgeted', False, None),
+            ('mixed indices', False, {'mode': 'serial', 'workers': 1}),
+            ('indexed', True, {'mode': 'auto', 'workers': 4}),
+        ):
+            with self.subTest(label=label):
+                if index:
+                    Path(str(bams[1]) + '.bai').write_bytes(b'index')
+                with self.assertRaisesRegex(dnp_pileup.PileupError, 'Dizionari BAM incompatibili'):
+                    self.generate(budget)
+                self.assertEqual(json.loads(self.metadata.read_text())['status'], 'failed')
+                self.assertEqual([item['args'][0:3] for item in self.commands()],
+                                 [['view', '--no-PG', '-H']] * 2)
+                self.assert_no_intermediates()
+                self.metadata.unlink()
+                self.log.unlink()
 
     def test_region_ambiguous_contig_uses_original_stream(self):
         bams = self.samples([True])
@@ -323,7 +340,7 @@ class DnpPileupTests(unittest.TestCase):
             self.generate({'mode': 'auto', 'workers': 4})
         result = json.loads(self.metadata.read_text())
         self.assertEqual(result['status'], 'failed')
-        self.assertEqual(result['parallel']['reason'], 'missing-index')
+        self.assertEqual(result['processes'][0]['stage'], 'header')
         self.assertEqual([item['stage'] for item in self.commands()], ['view'])
         self.assert_no_intermediates()
 

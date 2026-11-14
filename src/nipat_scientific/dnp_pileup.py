@@ -30,6 +30,9 @@ import time
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from nipat_scientific import progress
+from nipat_scientific.errors import ValidationError
+from nipat_scientific.files import input_text, require_sidecar
+from nipat_scientific.panels import read_bam_dictionary, require_bam_targets, require_reference_windows
 from nipat_scientific.settings import samtools_options, settings_from_environment
 
 MPILEUP_OPTIONS = ["--output-QNAME", "--no-output-ins", "--no-output-del", "--no-output-ends"]
@@ -213,8 +216,9 @@ def _tracked_execute(command, output, cancellation, document, record):
         cancellation.check()
         process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=output)
         record["pid"] = process.pid
-        document["parallel"]["observed_max_processes"] = max(
-            1, document["parallel"]["observed_max_processes"])
+        if "parallel" in document:
+            document["parallel"]["observed_max_processes"] = max(
+                1, document["parallel"]["observed_max_processes"])
         _wait([(process, started)], cancellation)
     finally:
         if process is not None:
@@ -225,49 +229,10 @@ def _tracked_execute(command, output, cancellation, document, record):
                           finished_at_unix=time.time(), elapsed_seconds=time.monotonic() - started)
 
 
-def _chromosomes(bams, samples, bed, staging, samtools, cancellation, document):
-    """Prove an unambiguous partition; unsupported shapes use the original stream.
-
-    Header/command failures propagate. They are never interpreted as permission
-    to silently ignore an existing but broken BAM/index.
-    """
-    if not all(sample["indexed"] for sample in samples):
-        return [], "missing-index"
-    dictionary = None
-    for number, bam in enumerate(bams, 1):
-        header = staging / f"header-{number:04d}.sam"
-        with header.open("xb") as handle:
-            _tracked_execute([samtools, "view", "--no-PG", "-H", str(bam)], handle,
-                             cancellation, document, {"stage": "header", "sample_id": samples[number - 1]["sample_id"]})
-        # Huge/non-text headers remain supported by serial samtools without
-        # requiring an unbounded Python allocation merely to choose a strategy.
-        if header.stat().st_size > 16 * 1024 * 1024:
-            return [], "unsupported-header"
-        try:
-            lines = header.read_text(encoding="utf-8").splitlines()
-        except UnicodeError:
-            return [], "unsupported-header"
-        order, coordinate = [], False
-        for line in lines:
-            fields = line.split("\t")
-            if fields[0] == "@HD":
-                coordinate = "SO:coordinate" in fields[1:]
-            if fields[0] != "@SQ":
-                continue
-            tags = dict(field.split(":", 1) for field in fields[1:] if ":" in field)
-            name, length = tags.get("SN"), tags.get("LN")
-            if not name or not length or not length.isdecimal() or int(length) <= 0:
-                return [], "unsupported-header"
-            order.append((name, int(length)))
-        if not coordinate:
-            return [], "non-coordinate-header"
-        if not order or len(order) != len({name for name, _ in order}):
-            return [], "unsupported-header"
-        if dictionary is not None and order != dictionary:
-            return [], "incompatible-dictionaries"
-        dictionary = order
-    targets = set()
-    with bed.open("r", encoding="utf-8") as handle:
+def _chromosomes(bams, samples, bed, reference, staging, samtools, cancellation, document):
+    """Validate the joint target IDs before choosing an acquisition strategy."""
+    windows = []
+    with input_text(bed) as handle:
         for line in handle:
             cancellation.check()
             if not line.strip() or line.startswith("#"):
@@ -275,11 +240,34 @@ def _chromosomes(bams, samples, bed, staging, samtools, cancellation, document):
             fields = line.split()
             if (len(fields) < 3 or not fields[1].isdecimal() or not fields[2].isdecimal()
                     or int(fields[2]) <= int(fields[1])):
-                return [], "unsupported-bed"
-            targets.add(fields[0])
+                raise PileupError(f"{bed.name}: invalid target interval")
+            windows.append((fields[0], int(fields[1]) + 1, int(fields[2])))
+    targets = require_reference_windows(require_sidecar(reference, ".fai", "Indice FASTA"), windows)
+    if not targets:
+        raise PileupError(f"{bed.name}: no target intervals")
+    dictionary = None
+    all_coordinate_sorted = True
+    for number, bam in enumerate(bams, 1):
+        header = staging / f"header-{number:04d}.sam"
+        with header.open("xb") as handle:
+            _tracked_execute([samtools, "view", "--no-PG", "-H", str(bam)], handle,
+                             cancellation, document, {"stage": "header", "sample_id": samples[number - 1]["sample_id"]})
+        sequences, coordinate_sorted = read_bam_dictionary(header, bam)
+        require_bam_targets(bam, sequences, targets)
+        order = list(sequences.items())
+        # Joint mpileup matches BAM target IDs by position, even in serial mode.
+        if dictionary is not None and order != dictionary:
+            raise PileupError(
+                f"Dizionari BAM incompatibili: i contig e le lunghezze di {bam.name} "
+                f"devono coincidere nello stesso ordine con {bams[0].name}."
+            )
+        dictionary = order
+        all_coordinate_sorted &= coordinate_sorted
+    if not all(sample["indexed"] for sample in samples):
+        return [], "missing-index"
+    if not all_coordinate_sorted:
+        return [], "non-coordinate-header"
     selected = [name for name, _ in dictionary if name in targets]
-    if not selected:
-        return [], "no-panel-contigs"
     # ':' and region metacharacters can change -r interpretation. Exotic but
     # valid BAM names still work through the unpartitioned fallback.
     if any(name == "." or not re.fullmatch(r"[A-Za-z0-9_.-]+", name) for name in selected):
@@ -363,8 +351,9 @@ def _parallel_chromosomes(contigs, command, staging, output, cancellation, docum
                 record["outcome"] = "aborted"
 
 
-def _budgeted_acquisition(bams, samples, bed, reference, staging, output, cancellation, document, metadata, samtools):
-    contigs, reason = _chromosomes(bams, samples, bed, staging, samtools, cancellation, document)
+def _budgeted_acquisition(bams, samples, bed, reference, staging, output, cancellation,
+                          document, metadata, samtools):
+    contigs, reason = _chromosomes(bams, samples, bed, reference, staging, samtools, cancellation, document)
     selected_list = staging / "original-bamlist.txt"
     parallel = document["parallel"]
     parallel.update(tasks=len(contigs) or 1, workers=min(parallel["workers"], len(contigs)) if contigs else 1,
@@ -477,6 +466,7 @@ def generate_pileup(bamlist, bed, reference, output, scratch_dir, metadata, *, s
                 partial = None
                 document.update(status="succeeded", output_bytes=output.stat().st_size)
                 return document
+            _chromosomes(bams, samples, bed, reference, staging, samtools, cancellation, document)
             selected_list = staging / "bamlist.txt"
             selected = []
             if strategy == "indexed-pipe":
@@ -556,7 +546,7 @@ def main(argv=None):
     except Cancelled as error:
         print(str(error), file=sys.stderr)
         return 128 + error.signum
-    except (OSError, ValueError, PileupError) as error:
+    except (OSError, ValueError, ValidationError, PileupError) as error:
         print(f"DNP pileup acquisition failed: {error}", file=sys.stderr)
         return 2
     return 0

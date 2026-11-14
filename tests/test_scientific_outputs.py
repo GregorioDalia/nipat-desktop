@@ -201,13 +201,32 @@ class ScientificOutputTests(unittest.TestCase):
         directory = self.output / "individual_outputs"
         directory.mkdir()
         path = directory / "full_output_sample_0001.txt"
-        header = "chr\tpos1\tpos2\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\n"
-        covered = "chr1\t10\t11\tAA\tGG\t5\t0\t0\t5\n"
-        uncovered = "chr1\t20\t21\tAA\tGG\t0\t0\t0\tNA\n"
+        header = "chr\tpos1\tpos2\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tGT\n"
+        covered = "chr1\t10\t11\tAA\tGG\t5\t0\t0\t5\t0/0\n"
+        uncovered = "chr1\t20\t21\tAA\tGG\t0\t0\t0\tNA\tNA\n"
         path.write_text(header + covered + uncovered, encoding="utf-8")
+        summary = self.output / "summary" / "output_AllGenotypes.txt"
+        summary.parent.mkdir()
+        summary_text = ("chr\tpos1\tpos2\tREF\tALT\tGT_sample_0001\n"
+                        "chr1\t10\t11\tAA\tGG\t0/0\nchr1\t20\t21\tAA\tGG\tNA\n")
+        summary.write_text(summary_text, encoding="utf-8")
         original = path.read_bytes()
-        self.assertEqual(validate_standalone_outputs(request)["quality_warnings"], [])
+        artifacts = validate_standalone_outputs(request)
+        self.assertEqual(artifacts["quality_warnings"], [])
+        self.assertEqual(artifacts["dnp-summary"]["genotypes"]["path"],
+                         "output/summary/output_AllGenotypes.txt")
         self.assertEqual(path.read_bytes(), original)
+        for invalid in (summary_text.replace("\tNA\n", "\t1/1\n"),
+                        summary_text.replace("\tGG\tNA", "\tTT\tNA"),
+                        summary_text.replace("GT_sample_0001", "GT_sample_0002"),
+                        summary_text + summary_text.splitlines()[1] + "\n"):
+            summary.write_text(invalid, encoding="utf-8")
+            with self.assertRaisesRegex(PlanExecutionError, "DNP genotype summary"):
+                validate_standalone_outputs(request)
+        summary.unlink()
+        with self.assertRaisesRegex(PlanExecutionError, "output_AllGenotypes.txt"):
+            validate_standalone_outputs(request)
+        summary.write_text(summary_text, encoding="utf-8")
         for contents in (header, header + covered):
             path.write_text(contents, encoding="utf-8")
             with self.assertRaisesRegex(PlanExecutionError, "loci"):

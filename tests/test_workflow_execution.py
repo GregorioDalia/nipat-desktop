@@ -85,10 +85,16 @@ class WorkflowExecutionTests(unittest.TestCase):
             directory.mkdir()
             for number in (1, 2):
                 (directory / f"full_output_sample_{number:04d}.txt").write_text(
-                    "chr\tpos1\tpos2\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\n"
-                    f"chr1\t10\t11\tAA\tGG\t{number * 100}\t0\t0\t{number * 100}\n",
+                    "chr\tpos1\tpos2\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\tGT\n"
+                    f"chr1\t10\t11\tAA\tGG\t{number * 100}\t0\t0\t{number * 100}\t0/0\n",
                     encoding="utf-8",
                 )
+            summary = cwd / "output" / "summary"
+            summary.mkdir()
+            (summary / "output_AllGenotypes.txt").write_text(
+                "chr\tpos1\tpos2\tREF\tALT\tGT_sample_0001\tGT_sample_0002\n"
+                "chr1\t10\t11\tAA\tGG\t0/0\t0/0\n", encoding="utf-8",
+            )
         elif Path(command[1]).name == "contamination.R":
             selected, output = Path(command[3]), Path(command[4])
             rows = []

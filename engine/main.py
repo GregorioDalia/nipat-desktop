@@ -427,6 +427,10 @@ def main(argv: list[str] | None = None) -> int:
                             from nipat_scientific.snp import prepare_snp
                             prepared = prepare_snp(request)
                             if prepared.preparation_command is not None:
+                                returncode = prepared.validate_bam(run_preparation, Path(request["work_dir"]))
+                                if returncode:
+                                    preparation_state["outcome"] = "failed"
+                                    return returncode
                                 with phase("pileup", workflow=arguments.workflow) as pileup_state:
                                     returncode = run_preparation(prepared.preparation_command)
                                     if returncode:

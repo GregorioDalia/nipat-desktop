@@ -1,6 +1,7 @@
 """Build typed caller/consumer plans from explicit sample and family identities."""
 from __future__ import annotations
 
+from collections.abc import Collection
 from pathlib import Path
 import re
 
@@ -12,6 +13,52 @@ from nipat_scientific.panels import read_dnp_list, read_position_panel, read_snp
 
 _ID = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,47}\Z")
 _CONSUMERS = ("contamination", "cpi", "cpin")
+_CALLERS = {"dnp": ("DNP",), "snp": ("SNP",), "both": ("DNP", "SNP"), "tables": ()}
+FAMILY_ROLES = {"cpi": ("mother", "father"), "cpin": ("mother", "father", "child")}
+
+
+def active_analysis_branches(
+    caller: str, analyses: list[str], dnp_analyses: list[str] | None = None,
+    snp_analyses: list[str] | None = None, *, table_markers: Collection[str] = (),
+) -> dict[str, list[str]]:
+    """Select callers and imports whose counts go into a downstream analysis."""
+    if caller not in _CALLERS:
+        raise ValidationError("Caller: scegliere dnp, snp, both oppure tables.")
+    overrides = {"DNP": dnp_analyses, "SNP": snp_analyses}
+    for selected in (analyses, *(value for value in overrides.values() if value is not None)):
+        if (not isinstance(selected, list) or any(not isinstance(name, str) for name in selected)
+                or len(selected) != len(set(selected)) or set(selected) - set(_CONSUMERS)):
+            raise ValidationError("Analisi: scegliere una combinazione senza ripetizioni di contamination, cpi e cpin.")
+    branches = {}
+    for marker, override in overrides.items():
+        selected = analyses if override is None else override
+        if marker in _CALLERS[caller] or (marker in table_markers and selected):
+            branches[marker] = selected
+        elif override:
+            raise ValidationError(f"Analisi {marker} richieste senza conteggi {marker} disponibili.")
+    return branches
+
+
+def validate_families(entries, roles: tuple[str, ...], branch_samples: Collection[str], marker: str) -> None:
+    """Check explicit IDs and consistent role assignments within one analysis."""
+    ids = set()
+    assignments = {}
+    for entry in entries:
+        if not isinstance(entry, (tuple, list)) or len(entry) != len(roles) + 1:
+            raise ValidationError("Ruoli familiari incompleti.")
+        identifier, *members = entry
+        if not isinstance(identifier, str) or not _ID.fullmatch(identifier) or identifier.casefold() in ids:
+            raise ValidationError("ID famiglia non valido o duplicato: " + str(identifier))
+        ids.add(identifier.casefold())
+        for member in members:
+            if not isinstance(member, str) or member not in branch_samples:
+                raise ValidationError(f"{identifier}: campione {member} non disponibile nel ramo {marker}.")
+        if len(set(members)) != len(members):
+            raise ValidationError(f"{identifier}: i ruoli della stessa famiglia richiedono campioni distinti.")
+        for role, member in zip(roles, members):
+            if member in assignments and assignments[member] != role:
+                raise ValidationError(f"{member}: ruoli biologici incompatibili fra famiglie della stessa analisi.")
+            assignments[member] = role
 
 
 def build_analysis_plan(*, layout, caller: str, analyses: list[str],
@@ -24,16 +71,9 @@ def build_analysis_plan(*, layout, caller: str, analyses: list[str],
                         dnp_cpin_panel=None, snp_cpin_panel=None):
     from nipat.execution.workflows import _bind_bam, _bind_reference, _select_cpi_cutoffs
 
-    if caller not in {"dnp", "snp", "both", "tables"}:
-        raise ValidationError("Caller: scegliere dnp, snp, both oppure tables.")
-    branch_analyses = {"DNP": dnp_analyses if dnp_analyses is not None else analyses,
-                       "SNP": snp_analyses if snp_analyses is not None else analyses}
-    for selected in [analyses, *branch_analyses.values()]:
-        if (not isinstance(selected, list) or any(not isinstance(name, str) for name in selected)
-                or len(selected) != len(set(selected)) or set(selected) - set(_CONSUMERS)):
-            raise ValidationError("Analisi: scegliere una combinazione senza ripetizioni di contamination, cpi e cpin.")
-    # Role requirements are checked for active branches only, after imports and
-    # producer references have established which marker types are available.
+    table_markers = [marker for marker, tables in (("DNP", dnp_tables), ("SNP", snp_tables)) if tables]
+    branch_analyses = active_analysis_branches(caller, analyses, dnp_analyses, snp_analyses,
+                                               table_markers=table_markers)
     samples, pileups = list(samples or []), list(pileups or [])
     if caller == "tables" and (samples or pileups or reference):
         raise ValidationError("La modalita' tables usa tabelle esistenti, senza BAM, pileup o FASTA.")
@@ -47,12 +87,9 @@ def build_analysis_plan(*, layout, caller: str, analyses: list[str],
         raise ValidationError("I BAM richiedono un FASTA indicizzato (--reference).")
     if not samples and reference is not None:
         raise ValidationError("Il FASTA si usa soltanto con campioni BAM.")
-    active_markers = set()
-    if caller in {"dnp", "both"} or dnp_tables:
-        active_markers.add("DNP")
-    if caller in {"snp", "both"} or snp_tables:
-        active_markers.add("SNP")
-    planned_analyses = set().union(*(branch_analyses[marker] for marker in active_markers))
+    if caller == "tables" and not branch_analyses:
+        raise ValidationError("Per tabelle esistenti selezionare almeno un ramo con tabelle e una analisi.")
+    planned_analyses = set().union(*branch_analyses.values())
     if pairs and "cpi" not in planned_analyses:
         raise ValidationError("Le coppie richiedono l'analisi CPI prenatale.")
     if trios and "cpin" not in planned_analyses:
@@ -151,45 +188,18 @@ def build_analysis_plan(*, layout, caller: str, analyses: list[str],
                 "sample": sid, "reference": str(reference_target) if is_bam else None,
                 "panel": panels["SNP"]}, "parameters": {"mode": "bam" if is_bam else "pileup"}})
             references["SNP"][sid] = {"step": step_id, "output": "snp-tables", "sample": sid}
-    identified(dnp_tables or [], "dnp-table", "DNP")
-    identified(snp_tables or [], "snp-table", "SNP")
-    if not any(references.values()):
-        raise ValidationError("Nessuna tabella selezionata o prodotta dal workflow.")
-    if caller == "tables" and not any(branch_analyses[marker] for marker in references if references[marker]):
-        raise ValidationError("Per tabelle esistenti selezionare almeno un'analisi.")
+    for marker, tables in (("DNP", dnp_tables), ("SNP", snp_tables)):
+        if branch_analyses.get(marker) and tables:
+            identified(tables, f"{marker.lower()}-table", marker)
 
     def family(entries, roles, marker):
-        selected = []
-        ids = set()
-        assignments = {}
-        for entry in entries:
-            if not isinstance(entry, (tuple, list)) or len(entry) != len(roles) + 1:
-                raise ValidationError("Ruoli familiari incompleti.")
-            identifier, *members = entry
-            if not isinstance(identifier, str) or not _ID.fullmatch(identifier) or identifier.casefold() in ids:
-                raise ValidationError("ID famiglia non valido o duplicato: " + str(identifier))
-            ids.add(identifier.casefold())
-            if len(set(members)) != len(members):
-                raise ValidationError(f"{identifier}: i ruoli della stessa famiglia richiedono campioni distinti.")
-            row = {"id": identifier}
-            for role, member in zip(roles, members):
-                if member not in references[marker]:
-                    raise ValidationError(f"{identifier}: campione {member} non disponibile nel ramo {marker}.")
-                if member in assignments and assignments[member] != role:
-                    raise ValidationError(f"{member}: ruoli biologici incompatibili fra famiglie della stessa analisi.")
-                assignments[member] = role
-                row[role] = references[marker][member]
-            selected.append(row)
-        return selected
-
-    for marker in ("DNP", "SNP"):
         refs = references[marker]
-        if not refs:
-            override = dnp_analyses if marker == "DNP" else snp_analyses
-            if override:
-                raise ValidationError(f"Analisi {marker} richieste senza conteggi {marker} disponibili.")
-            continue
-        selected_analyses = branch_analyses[marker]
+        validate_families(entries, roles, refs, marker)
+        return [{"id": identifier, **{role: refs[member] for role, member in zip(roles, members)}}
+                for identifier, *members in entries]
+
+    for marker, selected_analyses in branch_analyses.items():
+        refs = references[marker]
         prefix = marker.lower()
         freq = dnp_popfreq if marker == "DNP" else snp_popfreq
         popfreq_target = None
@@ -216,7 +226,7 @@ def build_analysis_plan(*, layout, caller: str, analyses: list[str],
             mapped_cutoffs = [{"label": label, "path": bind(path, "Cutoff CPI", f"{prefix}-cutoffs/{i}.tsv")}
                               for i, (label, path) in enumerate(cutoffs, 1)]
             steps.append({"id": f"{prefix}_cpi", "workflow": "cpi", "inputs": {
-                "pairs": family(pairs, ("mother", "father"), marker),
+                "pairs": family(pairs, FAMILY_ROLES["cpi"], marker),
                 "popfreq": popfreq_target, "cutoffs": mapped_cutoffs},
                 "parameters": {"cutoff_mode": cutoff_mode, "marker_type": marker}})
         if "cpin" in selected_analyses:
@@ -228,8 +238,8 @@ def build_analysis_plan(*, layout, caller: str, analyses: list[str],
             target = (bind(marker_panel, "Pannello CPIN " + marker, f"{prefix}-cpin-panel.tsv",
                            check_cpin_panel) if marker_panel is not None else None)
             steps.append({"id": f"{prefix}_cpin", "workflow": "cpin", "inputs": {
-                "trios": family(trios, ("mother", "father", "child"), marker),
+                "trios": family(trios, FAMILY_ROLES["cpin"], marker),
                 "popfreq": popfreq_target, "markers": target}, "parameters": {"marker_type": marker}})
     presentation = {"samples": {item["sample_id"]: Path(item["original_path"]).name for item in mapping}, "pairs": {}}
     return ({"schema_version": 1, "samples": plan_samples, "steps": steps,
-             "presentation": presentation}, mounts, list(dict.fromkeys(input_files)), mapping)
+             "presentation": presentation}, mounts, list(dict.fromkeys(input_files)), mapping, branch_analyses)

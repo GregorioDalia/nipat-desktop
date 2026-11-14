@@ -53,6 +53,15 @@ class RunRecoveryTests(unittest.TestCase):
         self.assertFalse((self.run / "recovery.json").exists())
         self.assertEqual(inspect.call_args.args[0][:3], ["docker", "container", "inspect"])
 
+    def test_success_without_workflow_state_is_listed_as_unverifiable(self):
+        self.record.update(workflow="dnp-contamination", status="succeeded", commands=[])
+        self.save_record()
+        with patch("nipat.execution.recovery.subprocess.run") as inspect:
+            [report] = self.runner.incomplete_runs()
+        self.assertEqual(report["recorded_status"], "unreadable")
+        self.assertEqual(report["containers"], [])
+        inspect.assert_not_called()
+
     def test_owned_running_container_stops_by_immutable_id_and_preserves_history(self):
         before = (self.run / "run.json").read_bytes()
         output = self.run / "output" / "partial.txt"

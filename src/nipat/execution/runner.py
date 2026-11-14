@@ -22,7 +22,7 @@ from nipat.execution.performance import ContainerPerformanceObserver
 from nipat.execution.progress import ProgressObserver, ProgressRenderer, ProgressSnapshot
 from nipat.execution.recovery import incomplete_runs, ownership_labels, reconcile_run
 from nipat.execution.tracking import (
-    RunRecord, file_evidence, project_evidence, utc_now, verify_input_evidence,
+    RunOutcome, RunRecord, file_evidence, project_evidence, read_run_status, utc_now, verify_input_evidence,
 )
 from nipat.execution.transport import DockerTransport, cleanup_process_options
 from nipat.paths import ProjectLayout
@@ -70,14 +70,18 @@ def _finish_cleanup() -> Iterator[None]:
 
 
 class DockerComposeRunner:
+    """Deliver command progress and the persisted run outcome to optional callbacks."""
+
     def __init__(
         self, layout: ProjectLayout, dry_run: bool = False, *,
         transport: DockerTransport | None = None,
         options: ExecutionOptions | None = None,
         progress_callback: Callable[[ProgressSnapshot], None] | None = None,
+        run_finished_callback: Callable[[RunOutcome], None] | None = None,
     ) -> None:
         self.layout = layout
         self._progress_callback = progress_callback
+        self._run_finished_callback = run_finished_callback
         self._write_lock = threading.RLock()
         self.dry_run = dry_run
         self.options = options if options is not None else ExecutionOptions()
@@ -437,17 +441,18 @@ class DockerComposeRunner:
             if log and self._log is not None:
                 self._log.write(text)
                 self._log.flush()
-            if not terminal:
+            stdout = sys.stdout
+            if not terminal or stdout is None:
                 return
             try:
-                sys.stdout.write(text)
-                sys.stdout.flush()
+                stdout.write(text)
+                stdout.flush()
             except UnicodeEncodeError:
-                safe = text.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(
-                    sys.stdout.encoding or "utf-8"
+                safe = text.encode(stdout.encoding or "utf-8", errors="replace").decode(
+                    stdout.encoding or "utf-8"
                 )
-                sys.stdout.write(safe)
-                sys.stdout.flush()
+                stdout.write(safe)
+                stdout.flush()
 
     def _capture(self, command: list[str], *, container_name: str | None = None) -> str:
         self._ensure_backend()
@@ -573,6 +578,7 @@ class DockerComposeRunner:
         self._backend_ready = False
         record.data["transport"] = self._transport.metadata
         lifetime = ExitStack()
+        finalized = False
         try:
             with record.log_path.open("x", encoding="utf-8", newline="\n") as log:
                 self._log = log
@@ -645,6 +651,7 @@ class DockerComposeRunner:
                     with _finish_cleanup():
                         record.data["finished_at"] = utc_now()
                         record.save()
+                        finalized = True
                         self._write_run_report(record)
         finally:
             try:
@@ -658,6 +665,13 @@ class DockerComposeRunner:
                 self._engine_compose_file = None
                 self._bundled_workflow = None
                 self._backend_ready = False
+            if finalized and self._run_finished_callback is not None:
+                outcome = RunOutcome(run_dir, record.data["run_id"], read_run_status(run_dir))
+                try:
+                    self._run_finished_callback(outcome)
+                except Exception:
+                    # Presentation failures must not change a recorded outcome.
+                    pass
 
     def run(
         self, command: Iterable[str | PurePosixPath], *, working_dir: PurePosixPath | None = None
