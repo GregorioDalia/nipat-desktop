@@ -18,6 +18,8 @@ READ_CHUNK = 256 * 1024
 
 @dataclass(frozen=True)
 class ProgressSnapshot:
+    """Observed command progress. The runner reports the final run separately."""
+
     status: str
     elapsed_seconds: float
     phase: str | None

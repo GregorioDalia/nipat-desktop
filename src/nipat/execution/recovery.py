@@ -14,7 +14,7 @@ import tempfile
 from typing import Any
 
 from nipat.errors import RuntimeExecutionError, ValidationError
-from nipat.execution.tracking import utc_now
+from nipat.execution.tracking import read_run_metadata, read_run_status, utc_now
 
 
 CONTAINER_NAME = re.compile(r"nipat-run-[0-9a-f]{32}\Z")
@@ -38,16 +38,11 @@ def _load_record(runner, run_dir: Path) -> tuple[Path, dict[str, Any]]:
     runs_root = runner.layout.runs_dir.resolve()
     if run_dir == runs_root or not run_dir.is_relative_to(runs_root):
         raise ValidationError("Scegliere un run all'interno della cartella risultati configurata.")
-    record_path = run_dir / "run.json"
     try:
-        if record_path.is_symlink() or record_path.stat().st_size > 16 * 1024 * 1024:
-            raise ValidationError("Record del run non valido per la verifica delle esecuzioni.")
-        record = json.loads(record_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, RecursionError) as exc:
+        record = read_run_metadata(run_dir)
+    except (OSError, ValueError) as exc:
         raise ValidationError(f"Impossibile leggere il record del run: {run_dir}") from exc
-    if (not isinstance(record, dict) or type(record.get("schema_version")) is not int
-            or record.get("schema_version") != 1
-            or not isinstance(record.get("commands"), list)):
+    if not isinstance(record.get("commands"), list):
         raise ValidationError("Schema del record del run non supportato.")
     return run_dir, record
 
@@ -82,6 +77,10 @@ def _inspect(runner, name: str) -> dict[str, Any]:
 
 def reconcile_run(runner, run_dir: Path, *, stop: bool = False) -> dict[str, Any]:
     run_dir, record = _load_record(runner, run_dir)
+    return _reconcile_record(runner, run_dir, record, read_run_status(run_dir, record), stop=stop)
+
+
+def _reconcile_record(runner, run_dir: Path, record: dict, status: str, *, stop: bool) -> dict[str, Any]:
     transport = record.get("transport", {})
     current = runner._transport.metadata
     backend_matches = isinstance(transport, dict) and all(
@@ -89,7 +88,7 @@ def reconcile_run(runner, run_dir: Path, *, stop: bool = False) -> dict[str, Any
     )
     report = {
         "run_dir": str(run_dir), "run_name": record.get("run_name", run_dir.name),
-        "recorded_status": record.get("status"), "observed_at": utc_now(),
+        "recorded_status": status, "observed_at": utc_now(),
         "backend_matches": backend_matches, "containers": [], "stop_requested": stop,
     }
     run_id = record.get("run_id")
@@ -183,8 +182,9 @@ def incomplete_runs(runner) -> list[dict[str, Any]]:
                 and command["container_cleanup"].get("status") in {"stopped", "not_confirmed"}
                 for command in record["commands"]
             )
-            if record.get("status") in {"preparing", "running", "interrupted", "failed"} or cleanup_pending:
-                reports.append(reconcile_run(runner, run_dir))
+            status = read_run_status(run_dir, record)
+            if status not in {"planned", "succeeded"} or cleanup_pending:
+                reports.append(_reconcile_record(runner, run_dir, record, status, stop=False))
         except ValidationError as exc:
             reports.append({"run_dir": str(path.parent), "run_name": path.parent.name,
                             "recorded_status": "unreadable", "observed_at": utc_now(),

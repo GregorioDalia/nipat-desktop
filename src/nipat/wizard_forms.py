@@ -551,6 +551,11 @@ class WorkflowForm:
             if choice in {"0", ":annulla", ":indietro"}:
                 return False
             if choice in {"1", "3"}:
+                try:
+                    self._validate_review()
+                except ValidationError as exc:
+                    self.ui.message(str(exc), kind="error")
+                    continue
                 self.performance_diagnostics = performance_diagnostics if choice == "1" else not performance_diagnostics
                 return True
             if choice == "5":
@@ -574,6 +579,9 @@ class WorkflowForm:
                 self.ui.message("Campo non valido.", kind="error")
                 continue
             self.collect(field_numbers[selected], single=True)
+
+    def _validate_review(self) -> None:
+        """Validate relationships between the reviewed fields before launch."""
 
     def _show_sample_names(self) -> None:
         """Explain the presentation identity without creating files or running R."""

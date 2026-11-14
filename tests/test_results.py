@@ -259,6 +259,7 @@ class ResultsTests(unittest.TestCase):
         ui = FakeTerminal(["2", "0"])
         show_results(ui, self.run)
         self.assertIn("Esecuzione non riuscita", ui.lines)
+        self.assertIn("Stato registrato: Non riuscita", ui.lines)
         self.assertNotIn("Esecuzione completata", ui.lines)
 
     def test_missing_or_malformed_step_state_keeps_navigation_available(self):
@@ -281,8 +282,10 @@ class ResultsTests(unittest.TestCase):
                 opener.assert_called_once_with(self.run)
 
     def test_step_metadata_read_is_bounded(self):
+        from nipat.execution.tracking import MAX_RUN_METADATA_BYTES
         _, path, _ = self.prepare_workflow()
-        path.write_bytes(b" " * (2 * 1024 * 1024 + 1))
+        with path.open("r+b") as stream:
+            stream.truncate(MAX_RUN_METADATA_BYTES + 1)
         ui = FakeTerminal(["2", "0"])
         show_results(ui, self.run)
         self.assertTrue(any("supera il limite" in line for line in ui.lines))

@@ -12,6 +12,8 @@ import os
 from pathlib import Path, PureWindowsPath
 from urllib.parse import quote
 
+from nipat.execution.tracking import read_run_metadata, read_run_status, workflow_steps
+
 
 _MAX_JSON = 32 * 1024 * 1024
 _MAX_PARALLEL_BYTES = 8 * 1024 * 1024
@@ -20,13 +22,14 @@ _MAX_PARALLEL_STEPS = 128
 _STATUS = {"succeeded": "Completata", "failed": "Non riuscita", "interrupted": "Interrotta",
            "cancelled": "Interrotta", "planned": "Pianificata: analisi non eseguita",
            "running": "In esecuzione", "preparing": "Preparazione", "pending": "In attesa",
-           "blocked": "Non avviata"}
+           "blocked": "Non avviata", "unreadable": "Non verificabile"}
 _PARAMETERS = {"reference": "Genoma di riferimento", "panel": "Pannello", "snp_panel": "Pannello SNP",
                "contamination_panel": "Pannello Contamination", "parallel": "Opzione parallela del codice storico",
                "popfreq": "Frequenze di popolazione", "err_const": "Costante di errore",
                "cutoff_mode": "Selezione dei siti CPI", "cutoffs": "Pannelli CPI",
                "mother_prefix": "Prefisso materno", "father_prefix": "Prefisso paterno", "child_prefix": "Prefisso del figlio",
-               "trios": "Trii CPIN", "caller": "Caller selezionato", "analyses": "Analisi successive",
+               "trios": "Trii CPIN", "caller": "Caller selezionato", "analyses": "Analisi successive richieste",
+               "analyses_by_marker": "Analisi successive per ramo attivo",
                "scientific_settings_requested": "Parametri scientifici richiesti",
                "scientific_settings_effective": "Parametri scientifici del piano",
                "pairs": "Coppie CPI", "mode": "Modalità di input", "preset": "Workflow automatico",
@@ -81,10 +84,9 @@ def _family_section(metadata: dict, samples: list[dict[str, str]]) -> str:
     """
     if metadata.get("workflow") != "analysis":
         return ""
-    from nipat.results import _workflow_steps
 
     try:
-        _workflow_steps(metadata)
+        workflow_steps(metadata)
     except (ValueError, KeyError, TypeError):
         return "<h2>Famiglie e ruoli dichiarati</h2><p>Associazioni familiari non consultabili: il piano o la corrispondenza dei campioni non sono validi.</p>"
     sources = {sample["sample_id"]: sample for sample in samples}
@@ -433,7 +435,7 @@ def write_run_report(run_dir: Path) -> dict:
     still receives a report; no completion or scientific validity is inferred.
     """
     run_dir = Path(run_dir).resolve()
-    metadata = _read_json(run_dir / "run.json")
+    metadata = read_run_metadata(run_dir)
     rows = sample_rows(metadata)
     summary = run_dir / "run-report.html"
     mapping = run_dir / "sample-map.tsv"
@@ -447,8 +449,7 @@ def write_run_report(run_dir: Path) -> dict:
     writer.writerow(keys)
     writer.writerows([_spreadsheet_cell(row[key]) for key in keys] for row in rows)
 
-    status = metadata.get("status")
-    status = _STATUS.get(status, _text(status)) if isinstance(status, str) else "Non registrato"
+    status = _status(read_run_status(run_dir, metadata))
     body = [f"<h1>NIPAT — {html.escape(_text(metadata.get('run_name', run_dir.name)))}</h1>",
             _table(["Voce", "Valore"], [
                 ["Analisi", metadata.get("workflow")], ["Stato", status],

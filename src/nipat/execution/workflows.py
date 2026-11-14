@@ -781,7 +781,7 @@ class Workflows:
                 **inputs) -> Path:
         """Any subset of Contamination, CPI and CPIN, independently for SNP/DNP."""
         from nipat.execution.analysis_plan import build_analysis_plan
-        plan, mounts, input_files, mapping = build_analysis_plan(
+        plan, mounts, input_files, mapping, branch_analyses = build_analysis_plan(
             layout=self.layout, caller=caller, analyses=analyses, **inputs)
         plan = self._validate_plan(plan)["plan"]
         run_dir = self.layout.new_run_dir("analysis", run_name)
@@ -789,8 +789,7 @@ class Workflows:
             run_dir, workflow="analysis", inputs=input_files, mounts=mounts,
             bundled_workflow="workflow-plan-all", parameters={
                 "caller": caller, "analyses": analyses,
-                "analyses_by_marker": {marker: inputs.get(marker.lower() + "_analyses")
-                    if inputs.get(marker.lower() + "_analyses") is not None else analyses for marker in ("DNP", "SNP")},
+                "analyses_by_marker": branch_analyses,
                 "sample_mapping": mapping,
                 "expected_steps": _expected_steps(plan), "plan": plan},
         ):

@@ -912,10 +912,10 @@
           {
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
-              194,
-              202
+              198,
+              206
             ],
-            "sha256": "b10793c827f0892556ea075ff2bc49f11d96cf46ddbb23b040e78c055cc09830"
+            "sha256": "b99f5b6776e4bb6c9338906d8669c2408525ea877240140188344ee91358c1c2"
           },
           {
             "path": "src/nipat_scientific/parallel.py",

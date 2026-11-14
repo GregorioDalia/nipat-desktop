@@ -5,12 +5,19 @@ from pathlib import Path
 import re
 
 from nipat.errors import ValidationError
+from nipat.execution.analysis_plan import FAMILY_ROLES, active_analysis_branches, validate_families
 from nipat.wizard_forms import (Back, Field, WorkflowForm, check_name, check_popfreq,
                                  check_reference, check_count_panel, navigation, unquote)
 from nipat.validation.files import require_file, require_snp_pileup
 from nipat_scientific.cpin import normalize_trios
 from nipat_scientific.files import require_count_input
 from nipat_scientific.panels import read_dnp_list, read_snp_positions
+
+
+_ANALYSES = {"0": [], "1": ["contamination"], "2": ["cpi"], "3": ["cpin"],
+             "4": ["contamination", "cpi"], "5": ["contamination", "cpin"],
+             "6": ["cpi", "cpin"], "7": ["contamination", "cpi", "cpin"]}
+_FAMILY_FIELDS = {"pairs": "cpi", "trios": "cpin"}
 
 
 class CpinForm(WorkflowForm):
@@ -62,9 +69,54 @@ class AnalysisForm(WorkflowForm):
     def title(self):
         return "Workflow / SNP e DNP verso Contamination, CPI e CPIN"
 
-    def _branches(self):
-        selected = self.values.get("marker", "both")
-        return ("dnp", "snp") if selected == "both" else (selected,)
+    def _marker_selection(self):
+        marker = "snp" if self.values.get("source") == "pileup" else self.values.get("marker", "both")
+        return ("DNP", "SNP") if marker == "both" else (marker.upper(),)
+
+    def _caller(self):
+        if self.values.get("source") == "tables":
+            return "tables"
+        markers = self._marker_selection()
+        return "both" if len(markers) == 2 else markers[0].lower()
+
+    def _analysis_options(self):
+        selected = self.values.get("analyses", "7")
+        if selected != "8":
+            return {"analyses": _ANALYSES[selected].copy()}
+        overrides = {}
+        for marker in self._marker_selection():
+            key = marker.lower() + "_analyses"
+            overrides[key] = _ANALYSES[self.values.get(key, "0")].copy()
+        analyses = [name for name in _ANALYSES["7"] if any(name in names for names in overrides.values())]
+        return {"analyses": analyses, **overrides}
+
+    def _active_branches(self):
+        caller = self._caller()
+        return active_analysis_branches(caller, **self._analysis_options(),
+                                        table_markers=self._marker_selection() if caller == "tables" else ())
+
+    def _sample_fields(self):
+        source = self.values.get("source", "bam")
+        if source == "tables":
+            return {marker: marker.lower() + "_tables" for marker in self._active_branches()}
+        return {marker: ("pileups" if source == "pileup" else "samples") for marker in self._active_branches()}
+
+    def _family_samples(self, analysis):
+        inputs = self._sample_fields()
+        return {marker: {identifier for identifier, _ in self.values.get(inputs[marker], [])}
+                for marker, analyses in self._active_branches().items() if analysis in analyses}
+
+    def _check_families(self, key, entries, samples):
+        for marker, ids in samples.items():
+            validate_families(entries, FAMILY_ROLES[_FAMILY_FIELDS[key]], ids, marker)
+
+    def _validate_review(self):
+        if self._caller() == "tables" and not self._active_branches():
+            raise ValidationError("Per tabelle esistenti selezionare almeno un'analisi in un ramo.")
+        for key, analysis in _FAMILY_FIELDS.items():
+            samples = self._family_samples(analysis)
+            if samples:
+                self._check_families(key, self.values.get(key, []), samples)
 
     def fields(self):
         v = self.values
@@ -76,8 +128,10 @@ class AnalysisForm(WorkflowForm):
             fields.append(Field("marker", "Tipo di marcatori", "choice", "both", options=(
                 ("dnp", "DNP", "Solo dinucleotidi"), ("snp", "SNP", "Solo SNP"),
                 ("both", "DNP e SNP", "Due rami separati nello stesso workflow"))))
+        no_analysis = (("0", "Nessuna analisi", "Disattiva le analisi per il ramo") if v.get("source") == "tables"
+                       else ("0", "Solo calling", "Nessuna analisi successiva"))
         fields.append(Field("analyses", "Analisi successive", "choice", "7", options=(
-            ("0", "Solo calling", "Nessuna analisi successiva"),
+            no_analysis,
             ("1", "Contamination", "Tutti i campioni selezionati"),
             ("2", "CPI prenatale", "Coppie cfDNA materno / padre"),
             ("3", "CPIN postnatale", "Trii madre / padre / figlio"),
@@ -86,56 +140,44 @@ class AnalysisForm(WorkflowForm):
             ("6", "CPI e CPIN", "Entrambe, con ruoli espliciti distinti"),
             ("7", "Contamination, CPI e CPIN", "Tutte le analisi"),
             ("8", "Analisi diverse per SNP e DNP", "Personalizza separatamente ogni ramo"))))
-        branches = ("snp",) if v.get("source") == "pileup" else self._branches()
         if v.get("analyses") == "8":
             choices = fields[-1].options[:-1]
-            for marker in branches:
-                fields.append(Field(f"{marker}_analyses", f"Analisi del ramo {marker.upper()}", "choice", "0", options=choices))
+            for marker in self._marker_selection():
+                fields.append(Field(f"{marker.lower()}_analyses", f"Analisi del ramo {marker}", "choice", "0", options=choices))
+        branches = self._active_branches()
         if v.get("source", "bam") == "bam":
             fields += [Field("samples", "Campioni BAM con ID", "identified"),
                        Field("reference", "FASTA indicizzato", "file", check=check_reference)]
         elif v.get("source") == "pileup":
             fields.append(Field("pileups", "Pileup SNP con ID", "identified", check=require_snp_pileup))
         else:
-            for marker in branches:
-                fields.append(Field(f"{marker}_tables", f"Tabelle {marker.upper()} con ID", "identified",
-                                    check=lambda path, marker=marker: require_count_input(path, marker.upper(), cpi=bool(set(self._analyses(marker)) & {"cpi", "cpin"}))))
+            for marker, selected in branches.items():
+                fields.append(Field(f"{marker.lower()}_tables", f"Tabelle {marker} con ID", "identified",
+                                    check=lambda path, marker=marker, selected=selected:
+                                    require_count_input(path, marker, cpi=bool(set(selected) & FAMILY_ROLES.keys()))))
         for marker in branches:
             if v.get("source") != "tables":
-                fields.append(Field(f"{marker}_panel", f"Pannello di calling {marker.upper()}", "file",
-                                    check=read_dnp_list if marker == "dnp" else
+                fields.append(Field(f"{marker.lower()}_panel", f"Pannello di calling {marker}", "file",
+                                    check=read_dnp_list if marker == "DNP" else
                                     lambda path: read_snp_positions(path, for_bed=v.get("source") == "bam")))
-        analyses = self._analyses()
+        analyses = set().union(*branches.values())
         if "cpi" in analyses:
             fields.append(Field("pairs", "Coppie CPI: ID, cfDNA materno, padre", "families"))
         if "cpin" in analyses:
             fields.append(Field("trios", "Trii CPIN: ID, madre, padre, figlio", "families"))
-        for marker in branches:
-            selected_analyses = self._analyses(marker)
+        for marker, selected_analyses in branches.items():
+            prefix = marker.lower()
             if "cpi" in selected_analyses or "cpin" in selected_analyses:
-                fields.append(Field(f"{marker}_popfreq", f"Frequenze {marker.upper()} per CPI/CPIN", "file", check=check_popfreq))
+                fields.append(Field(f"{prefix}_popfreq", f"Frequenze {marker} per CPI/CPIN", "file", check=check_popfreq))
             if "contamination" in selected_analyses:
-                fields.append(Field(f"{marker}_contamination_panel", f"Pannello Contamination {marker.upper()}", "file",
+                fields.append(Field(f"{prefix}_contamination_panel", f"Pannello Contamination {marker}", "file",
                                     required=v.get("source") == "tables", check=check_count_panel))
             if "cpi" in selected_analyses:
-                fields.append(Field(f"{marker}_cpi_cutoffs", f"Cutoff CPI {marker.upper()} (Invio = ALL)", "cutoffs", required=False))
+                fields.append(Field(f"{prefix}_cpi_cutoffs", f"Cutoff CPI {marker} (Invio = ALL)", "cutoffs", required=False))
             if "cpin" in selected_analyses:
-                fields.append(Field(f"{marker}_cpin_panel", f"Pannello CPIN {marker.upper()} con REF/ALT (facoltativo)", "file",
+                fields.append(Field(f"{prefix}_cpin_panel", f"Pannello CPIN {marker} con REF/ALT (facoltativo)", "file",
                                     required=False, check=check_count_panel))
         return fields + [Field("run_name", "Nome nuova esecuzione (vuoto = automatico)", "run", required=False)]
-
-    def _analyses(self, marker=None):
-        combinations = {"0": [], "1": ["contamination"], "2": ["cpi"], "3": ["cpin"],
-                        "4": ["contamination", "cpi"], "5": ["contamination", "cpin"],
-                        "6": ["cpi", "cpin"], "7": ["contamination", "cpi", "cpin"]}
-        selected = self.values.get("analyses", "7")
-        if selected != "8":
-            return combinations[selected]
-        if marker:
-            return combinations[self.values.get(marker + "_analyses", "0")]
-        branches = ("snp",) if self.values.get("source") == "pileup" else self._branches()
-        return [name for name in ("contamination", "cpi", "cpin")
-                if any(name in self._analyses(branch) for branch in branches)]
 
     def _guide(self, field, default=""):
         if field.key in {"reference", "run_name", "cutoff_file"}:
@@ -179,18 +221,27 @@ class AnalysisForm(WorkflowForm):
             return super()._read(field)
         self._guide(field)
         current = list(self.values.get(field.key, []))
-        if current:
+        samples = self._family_samples(_FAMILY_FIELDS[field.key]) if field.kind == "families" else {}
+        available = set.intersection(*samples.values()) if samples else set()
+        if samples:
+            self.ui.message("ID validi nei rami selezionati: " + (", ".join(sorted(available)) or "nessuno"))
+        while current:
             self.ui.message(self.format_value(current))
             answer = navigation(self.ui.menu("Elenco inserito", [("1", "Mantieni", ""),
                                   ("2", "Sostituisci", ""), ("3", "Aggiungi", "")], default="1"))
-            if answer == "1":
-                return current
             if answer == "2":
                 current = []
-            elif answer != "3":
+                break
+            if answer not in {"1", "3"}:
                 raise Back
-        available = {identifier for key in ("samples", "pileups", "dnp_tables", "snp_tables")
-                     for identifier, _ in self.values.get(key, [])}
+            try:
+                self._check_families(field.key, current, samples)
+            except ValidationError as exc:
+                self.ui.message(str(exc), kind="error")
+                continue
+            if answer == "1":
+                return current
+            break
         while True:
             try:
                 identifier = navigation(self.ui.prompt("ID (Invio conclude l'elenco)"))
@@ -210,7 +261,6 @@ class AnalysisForm(WorkflowForm):
                         field.check(path)
                     row = (identifier, path)
                 else:
-                    self.ui.message("ID disponibili: " + ", ".join(sorted(available)))
                     roles = ("cfDNA materno", "padre") if field.key == "pairs" else ("madre", "padre", "figlio")
                     members = []
                     for role in roles:
@@ -236,23 +286,15 @@ class AnalysisForm(WorkflowForm):
         return WorkflowForm.format_value(value)
 
     def _show_sample_names(self):
-        for key in ("samples", "pileups", "dnp_tables", "snp_tables"):
+        for key in dict.fromkeys(self._sample_fields().values()):
             for identifier, path in self.values.get(key, []):
                 self.ui.message(f"  {identifier}: {Path(path).name}")
         self.ui.message("SNP e DNP vengono analizzati separatamente. Contamination non filtra gli input CPI o CPIN.", kind="muted")
 
     def arguments(self):
-        source = self.values["source"]
-        caller = "tables" if source == "tables" else "snp" if source == "pileup" else self.values["marker"]
-        active = {field.key for field in self.fields()}
-        names = ("samples", "pileups", "dnp_tables", "snp_tables", "pairs", "trios", "reference",
-                 "dnp_panel", "snp_panel", "dnp_popfreq", "snp_popfreq", "dnp_contamination_panel",
-                 "snp_contamination_panel", "dnp_cpi_cutoffs", "snp_cpi_cutoffs", "dnp_cpin_panel", "snp_cpin_panel")
-        arguments = {name: self.values.get(name) for name in names if name in active}
+        selection = {"source", "marker", "analyses", "dnp_analyses", "snp_analyses"}
+        arguments = {field.key: self.values.get(field.key) for field in self.fields() if field.key not in selection}
         for name in ("dnp_cpi_cutoffs", "snp_cpi_cutoffs"):
-            if not arguments.get(name):
+            if name in arguments and not arguments[name]:
                 arguments[name] = None
-        if self.values.get("analyses") == "8":
-            for marker in (("snp",) if source == "pileup" else self._branches()):
-                arguments[marker + "_analyses"] = self._analyses(marker)
-        return {"caller": caller, "analyses": self._analyses(), "run_name": self.values["run_name"], **arguments}
+        return {"caller": self._caller(), **self._analysis_options(), **arguments}

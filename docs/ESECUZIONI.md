@@ -62,6 +62,11 @@ tempi ed esito consultare [le misure DNP](PERFORMANCE.md#consultazione-dei-risul
 | `failed` | Errore durante la preparazione o l'esecuzione. |
 | `interrupted` | Interruzione intercettata dal client, per esempio Ctrl+C. |
 
+L'avanzamento del comando descrive il lavoro nel motore. Il client registra
+l'esito del run dopo aver verificato che gli input siano rimasti coerenti.
+Per confermare il successo di un workflow automatico, il riepilogo verifica
+anche lo stato dei passaggi. Se manca un riscontro valido, mostra **Non verificabile**.
+
 Controllare stato e avvisi anche quando tabelle o grafici sono presenti.
 Gli avvisi di qualità possono accompagnare un run riuscito. Nelle analisi
 singole sono registrati in `work/scientific-validation.json`; nei piani

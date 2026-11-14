@@ -262,6 +262,22 @@ class RunReportTests(unittest.TestCase):
         self.assertIn("output/workflow/presentation/index.html", html)
         self.assertIn("Non avviata", html)
 
+    def test_report_uses_the_effective_status_of_the_workflow(self):
+        self.metadata.update(workflow="dnp-contamination", status="succeeded")
+        self.save()
+        workflow = self.root / "output/workflow"
+        workflow.mkdir(parents=True)
+        (workflow / "workflow-state.json").write_text(json.dumps({
+            "schema_version": 1, "interface": "workflow-plan-execution-v2", "status": "failed", "steps": [
+                {"id": "dnp", "workflow": "dnp-call", "status": "failed"},
+                {"id": "contamination", "workflow": "contamination", "status": "blocked"},
+            ],
+        }), encoding="utf-8")
+        write_run_report(self.root)
+        html = (self.root / "run-report.html").read_text(encoding="utf-8")
+        self.assertIn("Stato</pre></td><td><pre>Non riuscita", html)
+        self.assertNotIn("Stato</pre></td><td><pre>Completata", html)
+
     def test_legacy_metadata_remains_readable_and_has_no_invented_sample_identity(self):
         self.metadata["parameters"] = {"bam": "/old/one.bam"}
         self.metadata["status"] = "planned"

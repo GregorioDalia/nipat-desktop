@@ -929,7 +929,7 @@
           219,
           269
         ],
-        "sha256": "2bd16b0ee2e20c38ac6d43828ae4598951e83dcdd9a9535138de11988877a034"
+        "sha256": "577ffc46d05b1be93d2cefd73afa27074145bbf9e3ff390cdf9ce6f770f4b8c5"
       }
     },
     {
@@ -1265,18 +1265,18 @@
           {
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
-              164,
-              207
+              168,
+              211
             ],
-            "sha256": "b10793c827f0892556ea075ff2bc49f11d96cf46ddbb23b040e78c055cc09830"
+            "sha256": "b99f5b6776e4bb6c9338906d8669c2408525ea877240140188344ee91358c1c2"
           },
           {
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
-              822,
-              885
+              836,
+              899
             ],
-            "sha256": "b10793c827f0892556ea075ff2bc49f11d96cf46ddbb23b040e78c055cc09830"
+            "sha256": "b99f5b6776e4bb6c9338906d8669c2408525ea877240140188344ee91358c1c2"
           }
         ]
       }
@@ -1476,10 +1476,10 @@
           {
             "path": "src/nipat/execution/runner.py",
             "source_lines": [
-              194,
-              202
+              198,
+              206
             ],
-            "sha256": "b10793c827f0892556ea075ff2bc49f11d96cf46ddbb23b040e78c055cc09830"
+            "sha256": "b99f5b6776e4bb6c9338906d8669c2408525ea877240140188344ee91358c1c2"
           },
           {
             "path": "scientific/vendor/DNPcall/DNPcall.R",
