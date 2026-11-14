@@ -66,7 +66,7 @@ if (anyDuplicated(tolower(paste0("Mother", coppie$mamma, "-Father", coppie$papa)
 if (!file.exists(args$popfreq)) stop("popfreq file not found")
 population <- read.table(args$popfreq, header=TRUE, sep="\t",
                          stringsAsFactors=FALSE, check.names=FALSE,
-                         quote="", comment.char="")
+                         quote="", comment.char="", colClasses=c(chr="character"))
 
 marker_type <- function(x, label) {
   has_snp <- "pos" %in% names(x)
@@ -200,7 +200,8 @@ if (any(!is.finite(population$Ref_f.pop) | !is.finite(population$Alt_f.pop) |
 PopFreqDNPs <- population[, c(site_columns, "Ref_f.pop", "Alt_f.pop"), drop=FALSE]
 
 read_calls <- function(path) {
-  x <- read.table(path, header=TRUE, check.names=FALSE, stringsAsFactors=FALSE)
+  x <- read.table(path, header=TRUE, check.names=FALSE, stringsAsFactors=FALSE,
+                  colClasses=c(chr="character"))
   if (marker_type(x, path) != marker) stop(path, ": format differs from population frequencies")
   check_sites(x, c(site_columns, "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count"), path)
   x$chr <- as.character(x$chr)
@@ -246,6 +247,8 @@ read_calls <- function(path) {
       any(!is.finite(total[!allowed_missing]) | total[!allowed_missing] < 0 |
           total[!allowed_missing] != floor(total[!allowed_missing])))
     stop(path, ": invalid total_count")
+  if (any(total[!allowed_missing] != rowSums(counts)[!allowed_missing]))
+    stop(path, ": total_count differs from REF + ALT + Other")
   x$total_count <- total
   x
 }
@@ -277,7 +280,8 @@ if (has_markers) {
   cutoff_df <- do.call(rbind, lapply(panels, as.data.frame))
   if (anyDuplicated(cutoff_df$Cutoff)) stop("Duplicate cutoff label")
   cutoff_panels <- lapply(cutoff_df$Path, function(path) {
-    x <- read.table(path, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE)
+    x <- read.table(path, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE,
+                    colClasses=c(chr="character"))
     if (marker_type(x, path) != marker) stop("Marker panel differs from population type")
     check_sites(x, site_columns, path)
     x$chr <- as.character(x$chr)
@@ -360,13 +364,13 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
 
   informative_all <- df_merged %>% dplyr::filter(threshold=="informative")
   PI_all <- informative_all %>%
-    dplyr::mutate(Paternity_Index = dplyr::case_when(
-      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & ratio_Ref_father <= nipat_cfg$homozygous_alt_max ~ 1/Alt_f.pop,
-      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & between(ratio_Ref_father,nipat_cfg$heterozygous_min,nipat_cfg$heterozygous_max) ~ 0.5/Alt_f.pop,
-      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & ratio_Ref_father >= nipat_cfg$homozygous_ref_min ~ err_const/Alt_f.pop,
-      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & ratio_Ref_father <= nipat_cfg$homozygous_alt_max ~ err_const/Ref_f.pop,
-      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & between(ratio_Ref_father,nipat_cfg$heterozygous_min,nipat_cfg$heterozygous_max) ~ 0.5/Ref_f.pop,
-      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & ratio_Ref_father >= nipat_cfg$homozygous_ref_min ~ 1/Ref_f.pop,
+    dplyr::mutate(log10_PI = dplyr::case_when(
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & ratio_Ref_father <= nipat_cfg$homozygous_alt_max ~ log10(1) - log10(Alt_f.pop),
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & between(ratio_Ref_father,nipat_cfg$heterozygous_min,nipat_cfg$heterozygous_max) ~ log10(0.5) - log10(Alt_f.pop),
+      ratio_Ref_mother >= nipat_cfg$homozygous_ref_min & ratio_Ref_father >= nipat_cfg$homozygous_ref_min ~ log10(err_const) - log10(Alt_f.pop),
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & ratio_Ref_father <= nipat_cfg$homozygous_alt_max ~ log10(err_const) - log10(Ref_f.pop),
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & between(ratio_Ref_father,nipat_cfg$heterozygous_min,nipat_cfg$heterozygous_max) ~ log10(0.5) - log10(Ref_f.pop),
+      ratio_Ref_mother <= nipat_cfg$homozygous_alt_max & ratio_Ref_father >= nipat_cfg$homozygous_ref_min ~ log10(1) - log10(Ref_f.pop),
       TRUE ~ NA_real_
     )) %>% tidyr::drop_na()
 
@@ -390,7 +394,7 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
   interval_starts <- interval_starts[interval_starts <= length(iterations)]
   interval_lengths <- diff(c(interval_starts, length(iterations) + 1))
   interval_count <- length(interval_starts)
-  pi_values <- PI_all$Paternity_Index
+  log_pi <- PI_all$log10_PI
 
   mother_counts <- integer(interval_count)
   father_counts <- integer(interval_count)
@@ -405,13 +409,10 @@ run_CPI_iteration <- function(madre_df, padre_df, dnp_list, cutoff_label, err_co
     pi_selected <- pi_fetal_reads >= i
     father_count <- sum(pi_selected)
 
-    ## Retain the original ordered product, including its handling of zero,
-    ## underflow and overflow. Neither cumulative division nor sums of logs
-    ## are equivalent substitutes for prod() on the selected PI values.
-    CPI_val <- ifelse(father_count > 0,
-                      prod(pi_values[pi_selected], na.rm=TRUE), NA_real_)
-    log_CPI_val <- ifelse(
-      !is.na(CPI_val) & CPI_val > 0, log10(CPI_val), NA_real_)
+    # The logarithm remains representable even if the raw CPI overflows
+    # or underflows. Zero informative paternal loci retain an unknown result.
+    log_CPI_val <- if (father_count) sum(log_pi[pi_selected]) else NA_real_
+    CPI_val <- 10^log_CPI_val
 
     informative_selected <- informative_fetal_reads >= i
     n_mismatch <- sum(mismatch[informative_selected])
@@ -652,7 +653,7 @@ process_pair <- function(i) {
 
     ## The core has already selected this panel and the informative maternal
     ## rows. Every row admitted by the summary below is in madre_info; retain
-    ## its original summary formula and positivity filter, including NA/Inf.
+    ## its original summary formula and positivity filter.
     madre_cutoff <- out$madre_info
 
     madre_cutoff <- madre_cutoff %>%

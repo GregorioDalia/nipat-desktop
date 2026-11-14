@@ -31,10 +31,13 @@ def affects_scientific(path):
 def layers_for_path(path):
     """Add integration coverage by changed layer; never reduce the scientific gate."""
     layers = set()
-    if path.startswith("src/nipat/") or path.startswith("tests/test_"):
+    if (path.startswith(("src/nipat/", "tests/test_", "scripts/windows/", "scripts/acceptance/"))
+            or path.startswith("config/")):
         layers.add("client")
     if affects_scientific(path):
         layers.add("scientific")
+    if path.startswith(("scripts/windows/", "scripts/acceptance/", "config/")):
+        layers.add("packaging")
     if path.startswith("installer/runtime/"):
         layers.update(("runtime", "packaging"))
     if (path.startswith("installer/") or path.startswith("scripts/build_")

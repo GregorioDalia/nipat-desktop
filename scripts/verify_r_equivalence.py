@@ -441,10 +441,10 @@ def make_dnp_block_inputs(inputs: Path, image: str) -> None:
         ("dnp-blocks", ("1", "X"),
          (("X", 620), ("1", 60), ("1", 62), ("X", 250), ("1", 250),
           ("1", 440), ("X", 60), ("1", 800), ("X", 440), ("1", 1000), ("1", 100000), ("X", 1000))),
-        # read.table converts the numeric-looking panel chromosome column to
-        # integer, collapsing 01 and 1 into the same effective DNP key.
-        ("dnp-numeric", ("01", "1", "100000"),
-         (("01", 250), ("1", 60), ("01", 62), ("1", 440), ("01", 800), ("100000", 100000), ("1", 1000))),
+        # Plain decimal contigs and large coordinates exercise parity with
+        # the legacy caller. Leading-zero contigs have a separate native oracle.
+        ("dnp-numeric", ("1", "2"),
+         (("1", 250), ("1", 60), ("1", 62), ("1", 440), ("1", 800), ("2", 100000), ("1", 1000))),
     ):
         directory = inputs / fixture_name
         directory.mkdir()
@@ -465,8 +465,7 @@ def make_dnp_block_inputs(inputs: Path, image: str) -> None:
             records.append("\t".join(map(str, (name, flag, chromosome, start, 60,
                 cigar or f"{length}M", mate, mate_position, template_length, bases, quality * len(bases)))))
 
-        effective_contigs = ("1", "100000") if fixture_name == "dnp-numeric" else contigs
-        for chromosome in effective_contigs:
+        for chromosome in contigs:
             # The first covered windows have one numeric QNAME and a digit
             # quality character; later windows force global character types.
             add("0001", chromosome, 30, quality="5")

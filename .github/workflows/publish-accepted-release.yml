@@ -9,17 +9,44 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: publish-nipat-release
-  cancel-in-progress: false
-
 jobs:
-  release:
+  select:
     if: >-
       github.repository == 'GregorioDalia/nipat-desktop' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      publish: ${{ steps.select.outputs.publish }}
+    steps:
+      - name: Checkout the accepted main revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12.10'
+      - name: Select acceptance changes
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NIPAT_ACCEPTANCE_SELECT: '1'
+        run: python .github/scripts/automatic_release.py
+
+  release:
+    needs: select
+    if: needs.select.outputs.publish == 'true'
+    concurrency:
+      group: publish-nipat-release
+      queue: max
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:

@@ -157,6 +157,15 @@ def five_module_contract(version):
     return bool(match and int(match[1]) >= 50)
 
 
+def explicit_publication_contract(version):
+    match = re.fullmatch(r"0\.8\.([0-9]+)(?:(?:a|b|rc)[0-9]+)?", version or "")
+    return bool(match and int(match[1]) >= 70)
+
+
+def publication_fields(version):
+    return {"publication_channel"} if explicit_publication_contract(version) else set()
+
+
 def verify_presentation_variants(case):
     """Bind corrected plots to serial results and retained parallel renderings."""
     variants = case.get("execution_variants")
@@ -310,6 +319,8 @@ def template(installer_set, run_id):
                 "reference_source_commit": ANALYSIS_REFERENCE_COMMIT,
                 "report_path": "", "report_sha256": "", "runtime_image": "",
             }
+        if explicit_publication_contract(fields["version"]):
+            record["publication_channel"] = None
         return record
     return {
         "schema_version": 1, **fields, "build_run_id": run_id, "decision": "pending",
@@ -412,7 +423,7 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                 "Research releases from 0.7.2 require reliability acceptance schema 4")
     expected_fields = (FIVE_MODULE_RESEARCH_FIELDS if five_modules else SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
-    require(isinstance(record, dict) and set(record) == expected_fields
+    require(isinstance(record, dict) and set(record) == expected_fields | publication_fields(version)
             and type(record["schema_version"]) is int and record["schema_version"] == schema,
             "Research acceptance record fields are invalid")
     require(record["version"] == version and record["source_commit"] == commit
@@ -425,6 +436,10 @@ def validate_research(record, version, commit, run_id, installer_set=None):
                 f"Invalid acceptance digest: {field}")
     require(record["decision"] == "accepted-for-research" and record["scope"] == "pre-1.0-research",
             "Research acceptance is pending, rejected or outside its stated scope")
+    if explicit_publication_contract(version):
+        channel = record["publication_channel"]
+        require(channel == "testing" or (channel == "stable" and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version)),
+                "Acceptance must authorize an explicit compatible publication channel")
     review = record["review"]
     require(isinstance(review, dict) and set(review) == {"reviewer", "reviewed_at", "evidence"},
             "Invalid research review fields")
@@ -1023,7 +1038,7 @@ def verify_baseline(record, read_source):
     reviewed_delta = record["schema_version"] in (3, 4, 5, 6, 7)
     expected_fields = (FIVE_MODULE_RESEARCH_FIELDS if five_modules else SCIENTIFIC_RESEARCH_FIELDS if revised_r else MULTIPLATFORM_RESEARCH_FIELDS if multiplatform else RELIABILITY_RESEARCH_FIELDS if reliability else
                        REVIEWED_RESEARCH_FIELDS if reviewed_delta else RESEARCH_FIELDS)
-    require(set(record) == expected_fields,
+    require(set(record) == expected_fields | publication_fields(record["version"]),
             "Research acceptance record fields are invalid")
     validate_research(record, record["version"], record["source_commit"], record["build_run_id"])
     baseline = record["observed_baseline"]["source_commit"]

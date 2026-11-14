@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nipat_scientific.errors import ValidationError
-from nipat_scientific.files import input_text, table_rows
+from nipat_scientific.files import input_text, nonnegative_integer, table_rows
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,20 @@ class SnpRecord:
     position: int
     reference: str
     alternative: str
+
+
+def require_reference_windows(index: Path, windows) -> None:
+    """Check one-based window bounds against the mounted FASTA index."""
+    lengths: dict[str, int] = {}
+    with input_text(index) as handle:
+        for number, line in enumerate(handle, 1):
+            columns = line.rstrip("\r\n").split("\t")
+            if len(columns) < 5 or not columns[0] or columns[0] in lengths:
+                raise ValidationError(f"{index.name}: riga {number}, indice FASTA non valido.")
+            lengths[columns[0]] = nonnegative_integer(columns[1], index, number, "length")
+    for chromosome, first, last in windows:
+        if chromosome not in lengths or first < 1 or last > lengths[chromosome]:
+            raise ValidationError(f"Finestra del pannello fuori dal riferimento FASTA: {chromosome}:{first}-{last}.")
 
 
 def read_dnp_list(path: Path) -> list[DnpRecord]:

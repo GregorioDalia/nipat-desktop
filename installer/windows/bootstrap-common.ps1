@@ -2,9 +2,17 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'install-profile.ps1')
 
+function Get-NipatApplicationVersion {
+    $versionFile = Join-Path $PSScriptRoot '../../src/nipat/__init__.py'
+    $source = Get-Content -LiteralPath $versionFile -Raw -Encoding UTF8
+    $match = [regex]::Match($source, '(?m)^__version__ = "(0\.8\.(?:0|[1-9][0-9]*))"\s*$')
+    if (-not $match.Success) { throw 'Identita della build NIPAT non valida.' }
+    return $match.Groups[1].Value
+}
+
 function Read-NipatInstallerManifest([string] $Path) {
     $manifest = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
-    if ($manifest.schema_version -ne 1 -or $manifest.version -ne '0.8.60' -or
+    if ($manifest.schema_version -ne 1 -or $manifest.version -cne (Get-NipatApplicationVersion) -or
         $manifest.release_tag -cne ('v' + $manifest.version) -or
         $manifest.source_commit -cnotmatch '^[a-f0-9]{40}$' -or
         $manifest.runtime_image -cnotmatch '^sha256:[a-f0-9]{64}$') {

@@ -84,9 +84,7 @@ class InstallerAssetTests(unittest.TestCase):
         version = assets.checked_version(project)
         self.assertEqual(__version__, version)
         bootstrap = (project / "installer/windows/bootstrap-common.ps1").read_text(encoding="utf-8")
-        guard = re.search(r"\$manifest\.version -ne '([^']+)'", bootstrap)
-        self.assertIsNotNone(guard, "Expected an explicit supported installer version")
-        self.assertEqual(guard.group(1), version)
+        self.assertIn("$manifest.version -cne (Get-NipatApplicationVersion)", bootstrap)
         setup = (project / "installer/windows/NIPAT.iss").read_text(encoding="utf-8")
         self.assertIn('#include StageDir + "\\install-profile.iss"', setup)
         definition = assets.installation_profile_include(dict(

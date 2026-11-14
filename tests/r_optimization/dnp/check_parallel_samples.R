@@ -33,9 +33,7 @@ main <- function() {
     check(inherits(value, "error") && grepl(pattern, conditionMessage(value)))
   }
 
-  # Columns deliberately infer different complete-file storage types. Early
-  # numeric-looking QNAMEs in sample 1 must retain leading zeroes because a
-  # later textual QNAME establishes character storage for the complete column.
+  # Numeric-looking names retain their exact spelling in every sample column.
   make_lines <- function(samples, loci) {
     vapply(seq_len(2L * loci), function(row) {
       fields <- c("chr1", row, "A")
@@ -60,7 +58,9 @@ main <- function() {
   writeLines(make_lines(5L, 4L), reader_path)
   reader_index <- environment$nipat_dnp_index(reader_path)
   reference <- read.csv(reader_path, quote = "", row.names = NULL,
-                        stringsAsFactors = FALSE, header = FALSE, sep = "\t")
+                        stringsAsFactors = FALSE, header = FALSE, sep = "\t", na.strings = NULL,
+                        colClasses = c("character", "integer", "character",
+                                       rep(c("integer", "character", "character", "character"), 5L)))
   connection <- file(reader_path, "rb")
   for (rows in list(1:8, 8:1, c(2L, 2L, 7L, 1L), 1L, integer())) {
     for (sample_number in 1:5) {

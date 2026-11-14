@@ -47,6 +47,7 @@ class WorkflowExecutionTests(unittest.TestCase):
         self.inputs.mkdir()
         for name in ("sample_0001.bam", "sample_0002.bam", "reference.fa", "reference.fa.fai"):
             (self.inputs / name).write_text(name, encoding="utf-8")
+        (self.inputs / "reference.fa.fai").write_text("chr1\t200\t6\t200\t201\n", encoding="utf-8")
         (self.inputs / "panel.tsv").write_text("chr1\t10\t11\tAA\tGG\n", encoding="utf-8")
         self.scripts = {}
         for workflow in ("dnp-call", "contamination", "cpi"):
@@ -118,13 +119,19 @@ class WorkflowExecutionTests(unittest.TestCase):
                 columns.insert(1, "Cutoff")
             plots = output / "plots"
             plots.mkdir()
+            curves = output / "curves"
+            curves.mkdir()
             with (output / "Summary_FetalFraction_CPI.csv").open("w", encoding="utf-8", newline="") as handle:
                 writer = csv.DictWriter(handle, fieldnames=columns)
                 writer.writeheader()
                 for pair in pairs.split(","):
                     mother, father = pair.split(":")
                     native_pair = f"Mother{mother}-Father{father}_DNPs"
-                    for cutoff in cutoffs:
+                    for index, cutoff in enumerate(cutoffs, 1):
+                        (curves / f"{native_pair}_panel_{index}.tsv").write_text(
+                            "Iteration\tInfSites_mother\tInfSites_father\tCPI\tlog_CPI\tMismatch\tNotMismatch\tCutoff\n",
+                            encoding="utf-8",
+                        )
                         row = {name: "NA" for name in columns}
                         row.update(Pair=native_pair, N_sites_mother="0", N_sites_father="0",
                                    Error_constant=str(settings["err_const_dnp"]),

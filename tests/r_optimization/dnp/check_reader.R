@@ -8,7 +8,9 @@ compare_reader <- function(lines) {
   on.exit(unlink(path))
   writeLines(lines, path, useBytes = TRUE)
   reference <- read.csv(path, quote = "", row.names = NULL, stringsAsFactors = FALSE,
-                        header = FALSE, sep = "\t")
+                        header = FALSE, sep = "\t", na.strings = NULL,
+                        colClasses = c("character", "integer", "character", "integer",
+                                       "character", "character", "character"))
   index <- nipat_dnp_index(path)
   con <- file(path, "rb")
   on.exit(close(con), add = TRUE)
@@ -21,12 +23,11 @@ compare_reader <- function(lines) {
   }
   invisible(index)
 }
-# Numeric-looking names/qualities in early rows must not establish chunk-local
-# types; the later text determines the complete column's storage semantics.
+# Text fields preserve their bytes regardless of the other rows in the block.
 compare_reader(c("01\t10\tA\t1\tA\t5\t001", "1\t11\tC\t1\tC\tI\tname", "X\t12\tG\t0\t*\t*\t*"))
-# All-numeric columns retain the old conversion (including leading zero loss).
+# Numeric contigs and names retain leading zeros even in an all-numeric column.
 compare_reader(c("01\t10\tA\t1\tA\t5\t001", "1\t11\tC\t1\tC\t6\t002"))
-# Type transitions including numeric NaN, overflow, complex and logical unions.
+# Arbitrary read names, including strings that R would otherwise coerce.
 lexemes <- c("NA", "TRUE", "T", "FALSE", "1", "001", "1.0", "1e3", "2147483648",
              "NaN", "Inf", "1+0i", "1+2i", "name")
 for (a in lexemes) for (b in lexemes) {

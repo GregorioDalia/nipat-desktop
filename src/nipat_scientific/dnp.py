@@ -15,7 +15,7 @@ import unicodedata
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, write_input_report
-from nipat_scientific.panels import read_dnp_list, write_dnp_list
+from nipat_scientific.panels import read_dnp_list, require_reference_windows, write_dnp_list
 from nipat_scientific.settings import normalize_settings
 
 
@@ -74,12 +74,16 @@ def prepare_dnp(request: object) -> DnpPreparation:
     records = read_dnp_list(panel)
     reference = require_file(_absolute_path(request["reference"], "FASTA"), "FASTA")
     native_reference = _native_path(reference, "FASTA")
-    sources = [panel, reference, require_sidecar(reference, ".fai", "Indice FASTA").resolve()]
+    fasta_index = require_sidecar(reference, ".fai", "Indice FASTA").resolve()
+    require_reference_windows(fasta_index, (
+        (row.chromosome, row.pos1 - 1, row.pos2 + 1) for row in records
+    ))
+    sources = [panel, reference, fasta_index]
     if reference.suffix.lower() in {".gz", ".bgz", ".bgzf"}:
         sources.append(require_sidecar(reference, ".gzi", "Indice FASTA BGZF").resolve())
 
     bams: list[str] = []
-    seen: set[Path] = set()
+    seen: set[tuple[int, int]] = set()
     for number, item in enumerate(selected, start=1):
         if not isinstance(item, dict) or set(item) != {"path", "sample_id"}:
             raise ValidationError("Descrizione campione DNPcall non valida.")
@@ -90,9 +94,11 @@ def prepare_dnp(request: object) -> DnpPreparation:
         native_bam = _native_path(bam, "BAM")
         if bam.name != f"{expected_id}.bam":
             raise ValidationError(f"Il BAM deve usare il nome alias {expected_id}.bam.")
-        if any(bam.samefile(previous) for previous in seen):
+        info = bam.stat()
+        identity = (info.st_dev, info.st_ino)
+        if identity in seen:
             raise ValidationError("Lo stesso BAM compare più volte nella richiesta DNPcall.")
-        seen.add(bam)
+        seen.add(identity)
         bams.append(native_bam)
         sources.append(bam)
         # Indexed selection is used when a sidecar exists; absent indexes retain

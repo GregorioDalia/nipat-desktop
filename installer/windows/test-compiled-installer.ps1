@@ -60,6 +60,7 @@ try {
 } catch [IO.IOException] { $blocked = $true }
 if (-not $blocked) { throw 'Inno did not retain its exclusive installation lease during bootstrap.' }
 [IO.File]::WriteAllText((Join-Path $layout.app_dir '.runtime\fixture-bootstrap.txt'), 'lease-held-runtime-not-executed')
+if ($env:NIPAT_FIXTURE_BOOTSTRAP_REBOOT -eq '1') { exit 3010 }
 exit 0
 '@
 [IO.File]::WriteAllText((Join-Path $app 'installer\windows\bootstrap.ps1'), $bootstrap,
@@ -72,7 +73,7 @@ $profile = [regex]::Replace($profile, '(?m)^#define NipatAppId .*$', '#define Ni
 $sentinels = @{}
 $createdRegistry = $false
 
-function Invoke-FixtureProcess([string] $Path, [string[]] $Arguments, [string] $Label) {
+function Invoke-FixtureProcess([string] $Path, [string[]] $Arguments, [string] $Label, [int] $ExpectedCode = 0) {
     $process = Start-Process -FilePath $Path -ArgumentList $Arguments -PassThru
     try {
         $null = $process.Handle
@@ -80,7 +81,7 @@ function Invoke-FixtureProcess([string] $Path, [string[]] $Arguments, [string] $
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
             throw "$Label timed out."
         }
-        if ($null -eq $process.ExitCode -or $process.ExitCode -ne 0) {
+        if ($null -eq $process.ExitCode -or $process.ExitCode -ne $ExpectedCode) {
             throw "$Label failed with exit code $($process.ExitCode)."
         }
     } finally {
@@ -136,8 +137,18 @@ try {
         $setup = Join-Path $output 'NIPAT-Setup.exe'
         $log = Join-Path $reportRoot ('install-' + $version + '.log')
         $arguments = @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/SP-', '/NORESTART', "/DIR=`"$installed`"", "/LOG=`"$log`"")
-        if ($version -eq '0.0.2') { $arguments += '/NIPATUPDATE=1' }
-        Invoke-FixtureProcess $setup $arguments "Installation $version"
+        if ($version -eq '0.0.2') {
+            $arguments += '/NIPATUPDATE=1' # Exercise the update invocation from 0.8.60.
+            $env:NIPAT_FIXTURE_BOOTSTRAP_REBOOT = '1'
+            try {
+                Invoke-FixtureProcess $setup $arguments "Installation $version" 3010
+                $checks.reboot_exit_code = $true
+            } finally {
+                Remove-Item Env:NIPAT_FIXTURE_BOOTSTRAP_REBOOT -ErrorAction SilentlyContinue
+            }
+        } else {
+            Invoke-FixtureProcess $setup $arguments "Installation $version"
+        }
         if ([IO.File]::ReadAllText((Join-Path $installed 'fixture-version.txt')) -cne $version -or
             [IO.File]::ReadAllText((Join-Path $installed '.runtime\fixture-bootstrap.txt')) -cne 'lease-held-runtime-not-executed') {
             throw 'Installed payload or bootstrap lease differs from the fixture.'

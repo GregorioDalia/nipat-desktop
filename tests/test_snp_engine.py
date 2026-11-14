@@ -123,14 +123,23 @@ class SnpEngineTests(unittest.TestCase):
         self.pileup.write_text("chr1\t100\tA\t1\t.\tI\tread1\textra\n", encoding="utf-8")
         self.assertIsNone(prepare_snp(self.request).preparation_command)
 
+    def test_snp_rejects_panel_window_outside_reference_before_writes(self):
+        for coordinate in ("chr1:200", "01:100"):
+            self.panel.write_text(f"pos\tref\talt\n{coordinate}\tA\tC\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValidationError, "fuori dal riferimento"):
+                prepare_snp(self.bam_request())
+            self.assert_no_preparation()
+
     def test_reference_index_is_required_and_bgzf_requires_gzi(self):
-        Path(str(self.reference) + ".fai").unlink()
+        index = Path(str(self.reference) + ".fai")
+        index_bytes = index.read_bytes()
+        index.unlink()
         with self.assertRaisesRegex(ValidationError, "Indice FASTA non trovato"):
             prepare_snp(self.bam_request())
         self.assert_no_preparation()
         compressed = self.inputs / "genome.fa.gz"
         compressed.write_bytes(b"BGZF content is read by samtools")
-        Path(str(compressed) + ".fai").write_text("index", encoding="utf-8")
+        Path(str(compressed) + ".fai").write_bytes(index_bytes)
         request = {**self.bam_request(), "reference": str(compressed)}
         with self.assertRaisesRegex(ValidationError, "Indice FASTA BGZF non trovato"):
             prepare_snp(request)

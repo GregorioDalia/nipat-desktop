@@ -95,7 +95,7 @@ if (anyDuplicated(resolved_sources)) stop("One input file cannot identify distin
 if (!file.exists(args$popfreq)) stop("popfreq file not found")
 population <- read.table(args$popfreq, header=TRUE, sep="\t",
                          stringsAsFactors=FALSE, check.names=FALSE,
-                         quote="", comment.char="")
+                         quote="", comment.char="", colClasses=c(chr="character"))
 
 marker_type <- function(x, label) {
   has_snp <- "pos" %in% names(x)
@@ -221,7 +221,8 @@ calling_cache <- new.env(parent=emptyenv())
 read_calls <- function(path) {
   path <- normalizePath(path, mustWork=TRUE)
   if (exists(path, envir=calling_cache, inherits=FALSE)) return(get(path, envir=calling_cache))
-  x <- read.table(path, header=TRUE, check.names=FALSE, stringsAsFactors=FALSE)
+  x <- read.table(path, header=TRUE, check.names=FALSE, stringsAsFactors=FALSE,
+                  colClasses=c(chr="character"))
   if (marker_type(x, path) != marker) stop(path, ": format differs from population frequencies")
   check_sites(x, c(site_columns, "REF", "ALT", "N_REF", "N_ALT", "N_Other", "total_count"), path)
   x$chr <- as.character(x$chr)

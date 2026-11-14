@@ -703,6 +703,9 @@ def main(argv=None):
     if requires_installation_profile(version):
         validator = load_module("nipat_release_acceptance", PROJECT / ".github/scripts/release_acceptance.py")
         acceptance, acceptance_bytes = validator.load(version, commit, int(args.run_id), publication_commit, source_bytes)
+        if validator.explicit_publication_contract(version):
+            require(acceptance["publication_channel"] == args.channel,
+                    "Publication channel differs from the committed acceptance")
         if args.operation == "publish":
             _, current_acceptance_bytes = validator.load(version, commit, int(args.run_id), procedure_commit, source_bytes)
             require(acceptance_bytes == current_acceptance_bytes,

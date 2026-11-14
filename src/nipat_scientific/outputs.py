@@ -241,14 +241,27 @@ def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path
     expected_plots = {"All_CPIplots.pdf", *(f"{pair['native_pair']}_CPIplot.pdf" for pair in bindings)}
     if {path.name for path in plots.glob("*.pdf")} != expected_plots:
         raise PlanExecutionError("execution.output", "CPI plots do not match the declared pair identities.")
+    curves = output_dir / "curves"
+    curve_columns = {"Iteration", "InfSites_mother", "InfSites_father", "CPI", "log_CPI",
+                     "Mismatch", "NotMismatch", "Cutoff"}
+    expected_curves = set()
     pairs = []
     for pair in bindings:
+        curves_for_pair = []
+        for index, cutoff in enumerate(cutoffs, 1):
+            curve = curves / f"{pair['native_pair']}_panel_{index}.tsv"
+            expected_curves.add(curve.name)
+            _output_columns(curve, curve_columns)
+            curves_for_pair.append({"cutoff": cutoff, **_artifact(curve, root, output_dir)})
         pairs.append({
             "pair": pair["pair"], "mother": pair["mother"], "father": pair["father"],
             "native_pair": pair["native_pair"],
             "summary_rows": [{"row": found[(pair["native_pair"], cutoff)], "cutoff": cutoff} for cutoff in cutoffs],
             "plot": _pdf_artifact(plots / f"{pair['native_pair']}_CPIplot.pdf", root, output_dir),
+            "curves": curves_for_pair,
         })
+    if {path.name for path in curves.glob("*.tsv")} != expected_curves:
+        raise PlanExecutionError("execution.output", "CPI curves do not match the declared pairs and cutoffs.")
     return {"summary": artifact, "cpi-pairs": pairs, "quality_warnings": warnings,
             "combined-plot": _pdf_artifact(plots / "All_CPIplots.pdf", root, output_dir)}
 
@@ -355,7 +368,7 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
             raise PlanExecutionError("execution.output", f"{step['id']}: DNP tables do not match the declared sample identities.")
         tables = []
         all_warnings = []
-        expected_loci = {(row.chromosome, row.pos1, row.pos2)
+        expected_loci = {(row.chromosome, row.pos1, row.pos2): (row.reference, row.alternative)
                          for row in read_dnp_list(Path(request["panel"]))}
         for number, identifier in enumerate(step["inputs"]["samples"], 1):
             name = f"sample_{number:04d}"
@@ -366,10 +379,10 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
                 warnings = require_dnp_input(path)
             except ValidationError as exc:
                 raise PlanExecutionError("execution.output", str(exc)) from exc
-            loci = {locus_key(row, path, line) for line, row in table_rows(
-                path, DNP_OUTPUT_COLUMNS, "DNPcall output", whitespace=True)}
+            loci = {locus_key(row, path, line): (row["REF"], row["ALT"])
+                    for line, row in table_rows(path, DNP_OUTPUT_COLUMNS, "DNPcall output", whitespace=True)}
             if loci != expected_loci:
-                raise PlanExecutionError("execution.output", "DNPcall result loci do not match the selected panel.")
+                raise PlanExecutionError("execution.output", "DNPcall result loci or alleles do not match the selected panel.")
             all_warnings.extend({**warning, "code": warning["code"].replace("input.", "output.", 1)}
                                 for warning in warnings)
             tables.append({"sample": identifier, "native_name": name, **artifact})

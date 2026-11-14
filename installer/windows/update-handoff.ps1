@@ -107,7 +107,7 @@ try {
     $activity.Dispose(); $activity = $null
     $start = New-Object Diagnostics.ProcessStartInfo
     $start.FileName = $package
-    $start.Arguments = '/NIPATUPDATE=1 /NORESTART /DIR=' + (Quote-HandoffArgument $project)
+    $start.Arguments = '/NIPATUPDATE=1 /NORESTART /RESTARTEXITCODE=3010 /DIR=' + (Quote-HandoffArgument $project)
     $start.WorkingDirectory = $directory
     $start.UseShellExecute = $false
     Assert-NotCanceled

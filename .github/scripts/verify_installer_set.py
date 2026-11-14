@@ -82,8 +82,11 @@ def verify_windows_installer_fixture(evidence, manifest):
     require(evidence.get("substitutions") == ["Windows workstation/elevation setup gate",
             "uninstaller elevation gate", "synthetic runtime bootstrap and payload"],
             "Windows fixture substitutions are not explicit")
-    require(evidence.get("checks") == dict.fromkeys(("installed_0.0.1", "installed_0.0.2",
-            "upgrade_backup", "silent_removal_preserves_data"), True)
+    expected = dict.fromkeys(("installed_0.0.1", "installed_0.0.2",
+                              "upgrade_backup", "silent_removal_preserves_data"), True)
+    if tuple(map(int, manifest["version"].split("."))) >= (0, 8, 70):
+        expected["reboot_exit_code"] = True
+    require(evidence.get("checks") == expected
             and all(value is True for value in evidence["checks"].values()),
             "Windows compiled installer fixture is incomplete or failed")
 

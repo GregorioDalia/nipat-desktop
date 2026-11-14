@@ -147,6 +147,7 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
         while next_index < len(steps) or active:
             if cancellation.signum is not None:
                 raise KeyboardInterrupt
+            changed = False
             # Inspect all completed jobs before adding work: a failed sample
             # must not cause a fresh sample to start in the same polling cycle.
             for identifier, (process, record, record_path, log) in list(active.items()):
@@ -160,6 +161,7 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
                 if code:
                     state["exit_code"] = code if code > 0 else 128 - code
                 _merge_record(record, record_path)
+                changed = True
                 log.close()
                 del active[identifier]
                 if code or record.get("status") != "succeeded":
@@ -170,7 +172,6 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
                     state["exit_code"] = record.get("exit_code") or 2
                     atomic_json(root / "workflow-state.json", state)
                     raise PlanExecutionError("execution.process", f"{identifier}: isolated SNP worker failed; see parallel/snp/worker-{identifier}.log.")
-            atomic_json(root / "workflow-state.json", state)
             while next_index < len(steps) and len(active) < budget["workers"]:
                 if cancellation.signum is not None:
                     raise KeyboardInterrupt
@@ -192,7 +193,10 @@ def execute_independent_snp_steps(plan, state, root, scripts, cancellation, *, a
                     raise
                 active[identifier] = (process, record, record_path, log)
                 record.update(status="running", started_utc=_utc())
+                changed = True
                 next_index += 1
+            if changed:
+                atomic_json(root / "workflow-state.json", state)
             if active:
                 time.sleep(0.05)
         return True

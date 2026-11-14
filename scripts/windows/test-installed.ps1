@@ -6,7 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ExpectedManifestSha256 = 'd6c40349c21bd8218ed348fd286ad2279ac9c5088389d661ce24c0e683a07dc2'
-$installationCommit = ''; $SourceCommit = ''; $installationVersion = '0.8.60'
+$installationCommit = ''; $SourceCommit = ''; $installationVersion = ''
 $filenames = @('installed_suite.py', 'installed_models.py', 'installed_workflows.py', 'fixtures.json')
 $utf8 = New-Object Text.UTF8Encoding($false)
 $session = $null; $failure = $null; $result = 1; $started = [DateTime]::UtcNow.ToString('o')
@@ -30,23 +30,25 @@ function Copy-VerifiedHarnessFile([string] $Name, [string] $ExpectedHash) {
 try {
     if ([string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { throw 'LOCALAPPDATA non disponibile.' }
     $root = Join-Path $env:LOCALAPPDATA 'NIPAT-Desktop\collaudi'
-    $session = Join-Path $root ('0860-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
     if (-not $AppDirectory) { $AppDirectory = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
     $AppDirectory = [IO.Path]::GetFullPath($AppDirectory).TrimEnd('\')
     . (Join-Path $AppDirectory 'installer\windows\bootstrap-common.ps1')
     Assert-NipatWindowsUser
     Assert-NipatInstallationLocation $AppDirectory
     Assert-NipatInstallPathWithoutLinks $root
+    $installationVersion = Get-NipatApplicationVersion
+    $sessionName = $installationVersion + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+    $session = Join-Path $root $sessionName
     [IO.Directory]::CreateDirectory($session) | Out-Null
     Write-Host ("Cartella del collaudo: $session") -ForegroundColor Cyan
     $manifest = Read-NipatInstallerManifest (Join-Path $AppDirectory '.distribution\installer-manifest.json')
     $state = Get-Content -LiteralPath (Join-Path $AppDirectory '.runtime\installer\state.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $backend = Get-Content -LiteralPath (Join-Path $AppDirectory '.runtime\backend.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $installationCommit = $manifest.source_commit; $SourceCommit = $installationCommit
-    if ($manifest.version -cne $installationVersion -or
+    if ($state.version -cne $installationVersion -or
         $state.schema_version -ne 1 -or $state.phase -cne 'ready' -or $state.source_commit -cne $installationCommit -or
         $backend.schema_version -ne 1 -or $backend.backend -cne 'wsl') {
-        throw 'Il collaudo richiede NIPAT Desktop 0.8.60 con preparazione completata.'
+        throw "Il collaudo richiede NIPAT Desktop $installationVersion con preparazione completata."
     }
     Assert-NipatRuntimeBinding $manifest $state $backend
     $python = Join-Path $AppDirectory '.runtime\python\python.exe'

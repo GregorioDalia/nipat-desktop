@@ -128,8 +128,10 @@ revisionato con una PR contenente soltanto i JSON di accettazione. La CI esegue
 su Linux i controlli delle evidenze della build, degli hash e dei rapporti.
 Il successo della stessa verifica su `main` avvia **Publish accepted release**.
 L'integrazione del record accettato autorizza quindi la pubblicazione della
-build indicata: `stable`/`Latest` per versioni senza suffisso, `testing` per
-versioni `a`, `b` o `rc`. Il workflow procede autonomamente su GitHub.
+build indicata. Dalla 0.8.70 il record indica `publication_channel` con
+valore `stable` oppure `testing`. Il canale `stable` imposta la release
+come `Latest` e richiede una versione numerica. GitHub seleziona le
+modifiche ai record prima di accodare la pubblicazione.
 Modifiche miste e pubblicazioni in due fasi mantengono l'avvio manuale.
 
 Il record corrente usa lo **schema 7**, con rapporti separati per i due

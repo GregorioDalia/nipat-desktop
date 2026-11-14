@@ -69,6 +69,13 @@ class ScientificPreflightTests(unittest.TestCase):
         self.assertEqual(path.read_bytes(), original)
         self.assertTrue(all(w["row"] == 2 for w in warnings))
 
+    def test_cpi_rejects_a_total_that_disagrees_with_counts(self):
+        path = self.counts(extra_header="\tREF\tALT\ttotal_count", extra_row="\tAA\tGG\t101")
+        original = path.read_bytes()
+        with self.assertRaisesRegex(ValidationError, "total_count diverso"):
+            require_dnp_input(path)
+        self.assertEqual(path.read_bytes(), original)
+
     def test_missing_supplied_ratio_remains_explicit(self):
         warnings = require_contamination_input(self.counts(extra_header="\tratio_REF_ALT", extra_row="\tNA"))
         self.assertEqual([w["code"] for w in warnings], ["input.missing_ratio"])

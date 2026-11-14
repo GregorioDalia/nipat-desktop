@@ -3,8 +3,8 @@
   "workflow": "contamination",
   "source": {
     "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
-    "sha256": "3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0",
-    "line_count": 300
+    "sha256": "d860ab5fc06cf1c79835d3d6705bc4e5fc30356e11f5dc1a029165354d445854",
+    "line_count": 295
   },
   "public_parameters": [
     {
@@ -151,7 +151,7 @@
       },
       "source_lines": [
         39,
-        83
+        87
       ],
       "description": {
         "it": "Rilevamento del formato del pannello e coordinate dinamiche.",
@@ -168,8 +168,8 @@
         "duplicate_basenames": "rejected ignoring case"
       },
       "source_lines": [
-        85,
-        112
+        89,
+        116
       ],
       "description": {
         "it": "Selezione ricorsiva dei campioni con esclusione del pannello e nomi univoci.",
@@ -190,8 +190,8 @@
         "ratio": "optional"
       },
       "source_lines": [
-        124,
-        184
+        128,
+        179
       ],
       "description": {
         "it": "I conteggi sono validati prima dei filtri.",
@@ -202,17 +202,17 @@
       "id": "reference_ratio",
       "kind": "formula",
       "value": {
-        "supplied_ratio_REF_ALT": "preserved",
-        "otherwise": "N_REF/(N_REF+N_ALT)",
+        "ratio_REF_ALT": "N_REF/(N_REF+N_ALT)",
+        "supplied_ratio_REF_ALT": "advisory only",
         "zero_depth": "excluded"
       },
       "source_lines": [
-        173,
-        205
+        176,
+        178
       ],
       "description": {
-        "it": "Il rapporto fornito prevale; se assente è calcolato dai conteggi.",
-        "en": "A supplied ratio takes precedence; otherwise it is computed from counts."
+        "it": "Il rapporto è ricavato dai conteggi REF e ALT per ogni sito con copertura utile. Il valore fornito viene controllato per segnalare incoerenze.",
+        "en": "The ratio is derived from the REF and ALT counts at each covered site. The supplied value is checked for inconsistencies."
       }
     },
     {
@@ -220,8 +220,8 @@
       "kind": "formula",
       "value": "N_Other/(N_REF+N_ALT+N_Other)",
       "source_lines": [
-        212,
-        221
+        207,
+        216
       ],
       "description": {
         "it": "Il denominatore aggiornato include anche le letture Other; la soglia other_fraction_max è configurabile.",
@@ -233,8 +233,8 @@
       "kind": "filter",
       "value": "ratio>=homozygous_ref_min or ratio<=homozygous_alt_max",
       "source_lines": [
-        223,
-        229
+        218,
+        224
       ],
       "description": {
         "it": "Classificazione omozigote con soglie inclusive configurabili.",
@@ -249,8 +249,8 @@
         "proportion": "N_unexpected/(N_REF+N_ALT)"
       },
       "source_lines": [
-        230,
-        239
+        225,
+        234
       ],
       "description": {
         "it": "Stima per sito in proporzione, non percentuale.",
@@ -262,8 +262,8 @@
       "kind": "filter",
       "value": "include_zero controls per-site rows, site count, mean and SD",
       "source_lines": [
-        238,
-        245
+        233,
+        240
       ],
       "description": {
         "it": "Gli zeri inclusi contribuiscono alle statistiche; NA rimane distinto da zero.",
@@ -280,8 +280,8 @@
         "one_site": "SD NA"
       },
       "source_lines": [
-        258,
-        274
+        253,
+        269
       ],
       "description": {
         "it": "Riduzioni sulla sequenza originale dei siti selezionati.",
@@ -302,8 +302,8 @@
         ]
       },
       "source_lines": [
-        270,
-        300
+        265,
+        295
       ],
       "description": {
         "it": "Tabelle per sito e riepilogo con conteggio indipendente dal tipo di marcatore.",
@@ -321,8 +321,8 @@
         "reduction": "ordered"
       },
       "source_lines": [
-        245,
-        259
+        240,
+        254
       ],
       "description": {
         "it": "Blocchi di righe e campioni usano un budget comune e risultati ordinati.",
@@ -457,18 +457,18 @@
         "dependencies": [
           {
             "path": "src/nipat_scientific/files.py",
-            "sha256": "cb6d5e52658233b8f20f8f86739710a3a7af84d7901d02821f33e1fd182447d0",
+            "sha256": "da59fd1cbc700d1aaf6cabe59a8849907bbf5d469dcaf52e01c033ed497b97a6",
             "source_lines": [
               1,
-              300
+              301
             ]
           },
           {
             "path": "src/nipat_scientific/panels.py",
-            "sha256": "c05735970f78fa4527a195f599dc58d198872b557a64105f191e939e26699c65",
+            "sha256": "4c0b44a4425324906be5988a8684b9e586a0fa393f101988c516f32c2f2303c9",
             "source_lines": [
               1,
-              226
+              240
             ]
           }
         ]
@@ -526,10 +526,10 @@
       },
       "evidence": {
         "path": "src/nipat_scientific/outputs.py",
-        "sha256": "2778f6a453de036bbd1eb73161db6b2d8924cc42d524c757f714b29788cd6651",
+        "sha256": "ead121a303ab7640a59c0ad9fed627236fa7e65934653df2c5c9908b831593c0",
         "source_lines": [
           1,
-          461
+          474
         ]
       }
     },
@@ -576,22 +576,22 @@
     },
     {
       "start": 39,
-      "end": 84,
+      "end": 88,
       "summary": {
         "it": "Formato del pannello SNP/DNP.",
         "en": "SNP/DNP panel format."
       }
     },
     {
-      "start": 85,
-      "end": 123,
+      "start": 89,
+      "end": 127,
       "summary": {
         "it": "Selezione dei file e schema del riepilogo.",
         "en": "File selection and summary schema."
       }
     },
     {
-      "start": 124,
+      "start": 128,
       "end": 172,
       "summary": {
         "it": "Lettura e validazione dei conteggi.",
@@ -600,23 +600,23 @@
     },
     {
       "start": 173,
-      "end": 244,
+      "end": 239,
       "summary": {
         "it": "Rapporto REF, filtri e contaminazione per sito.",
         "en": "REF ratio, filters and per-site contamination."
       }
     },
     {
-      "start": 245,
-      "end": 269,
+      "start": 240,
+      "end": 264,
       "summary": {
         "it": "Blocchi paralleli ordinati e statistiche.",
         "en": "Ordered parallel blocks and statistics."
       }
     },
     {
-      "start": 270,
-      "end": 300,
+      "start": 265,
+      "end": 295,
       "summary": {
         "it": "Output per campione, pool dei campioni e riepilogo.",
         "en": "Per-sample output, sample pool and summary."

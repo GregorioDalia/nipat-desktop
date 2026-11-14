@@ -115,6 +115,51 @@ class NativeREdgeCases(unittest.TestCase):
                         self.assertEqual(summaries[0]["N_sites_father"], "0")
                         self.assertEqual(summaries[0]["Mean_logCPI"], "NA")
 
+    def test_cpi_log_stays_finite_outside_the_raw_product_range(self):
+        for loci, father, expected in ((400, (0, 100), 400.0),
+                                       (200, (100, 0), 200 * math.log10(0.002))):
+            with self.subTest(loci=loci), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                inputs = root / "inputs"
+                inputs.mkdir()
+                header = "chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\n"
+                (inputs / "MotherM1.txt").write_text(header + "".join(
+                    f"01\t{i}\tA\tG\t95\t5\t0\t100\n" for i in range(2, loci + 2)))
+                (inputs / "FatherF1.txt").write_text(header + "".join(
+                    f"01\t{i}\tA\tG\t{father[0]}\t{father[1]}\t0\t100\n" for i in range(2, loci + 2)))
+                alt = 0.1 if loci == 400 else 0.5
+                (inputs / "population.txt").write_text("chr\tpos\tRef_f.pop\tAlt_f.pop\n" + "".join(
+                    f"01\t{i}\t{1-alt}\t{alt}\n" for i in range(2, loci + 2)))
+                process, output = self.run_native(root, "cpi", inputs)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                rows = table(next((output / "curves").glob("*.tsv")))
+                self.assertTrue(rows)
+                for row in rows:
+                    self.assertAlmostEqual(float(row["log_CPI"]), expected, places=8)
+                    self.assertEqual(float(row["CPI"]), math.inf if loci == 400 else 0.0)
+                summary = table(output / "Summary_FetalFraction_CPI.csv", ",")[0]
+                self.assertAlmostEqual(float(summary["CPI_medianFF"]), expected, places=3)
+
+    def test_downstream_joins_preserve_numeric_looking_contigs(self):
+        for workflow in ("cpi", "cpin"):
+            with self.subTest(workflow=workflow), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                inputs = root / "inputs"
+                inputs.mkdir()
+                header = "chr\tpos\tREF\tALT\tN_REF\tN_ALT\tN_Other\ttotal_count\n"
+                (inputs / "MotherM1.txt").write_text(header + "01\t20\tA\tG\t95\t5\t0\t100\n")
+                (inputs / "FatherF1.txt").write_text(header + "1\t20\tA\tG\t0\t100\t0\t100\n")
+                (inputs / "ChildC1.txt").write_text(header + "01\t20\tA\tG\t50\t50\t0\t100\n")
+                (inputs / "population.txt").write_text("chr\tpos\tRef_f.pop\tAlt_f.pop\n01\t20\t0.8\t0.2\n")
+                process, output = self.run_native(root, workflow, inputs)
+                self.assertEqual(process.returncode, 0, process.stderr)
+                if workflow == "cpi":
+                    row = table(output / "Summary_FetalFraction_CPI.csv", ",")[0]
+                    self.assertEqual((row["N_sites_father"], row["CPI_medianFF"]), ("0", "NA"))
+                else:
+                    rows = table(output / "Summary_Postnatal_CPI.txt")
+                    self.assertTrue(all(row["N_sites"] == "0" and row["Log10_CPI"] == "NA" for row in rows))
+
     def test_cpin_tiny_positive_frequencies_preserve_finite_log_cpi(self):
         for marker in ("SNP", "DNP"):
             for frequency in ("1e-310", "0"):

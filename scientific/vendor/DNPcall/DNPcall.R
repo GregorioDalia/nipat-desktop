@@ -99,7 +99,9 @@ source(Sys.getenv("NIPAT_PLOTS_HELPER", unset = "/opt/nipat/lib/nipat_scientific
 
 # read the df
 r_bamlist<-read.table(bamlist,header=F,col.names = "samples")
-r_DNPlist<-read.table(DNPlist,header=F,col.names = c("chr","pos1","pos2","REF","ALT"))
+r_DNPlist <- read.table(DNPlist, header=FALSE, col.names=c("chr","pos1","pos2","REF","ALT"),
+                        colClasses=c("character","integer","integer","character","character"),
+                        na.strings=NULL, quote="", comment.char="")
 
 update_peak()
 
@@ -197,7 +199,16 @@ samplelist <- read_samplelist(bamlist)
 # reading pileup file in r
 cat("\nReading mpileup...\n")
 nipat_progress("start", "pileup-index")
-pileup_index <- nipat_dnp_index(pileup_path)
+pileup_index <- nipat_dnp_index(pileup_path, empty_samples=length(samplelist))
+# Observed reference bases belong to the reference assembly, independent of
+# what the reads carry. A swapped REF/ALT would invert an otherwise plausible call.
+pileup_keys <- paste(pileup_index$chromosomes[pileup_index$chromosome], pileup_index$positions, sep=":")
+panel_keys <- c(paste(r_DNPlist$chr, r_DNPlist$pos1, sep=":"),
+                paste(r_DNPlist$chr, r_DNPlist$pos2, sep=":"))
+expected <- c(substr(r_DNPlist$REF, 1L, 1L), substr(r_DNPlist$REF, 2L, 2L))
+bases <- toupper(pileup_index$reference[match(panel_keys, pileup_keys)])
+mismatch <- which(!is.na(bases) & bases != toupper(expected))
+if (length(mismatch)) stop("DNP panel REF differs from pileup at ", panel_keys[mismatch[[1L]]])
 block_plan <- nipat_dnp_plan(pileup_index, ForUniqReads, RefAltDNP)
 # Persist the strategy before scientific processing, including on later errors.
 nipat_dnp_write_metrics("work/dnp-blocks.json", list(
@@ -284,6 +295,8 @@ prepare_individual <- function(i) {
 
 
   compute_block <- function(pileup_bamlist, ForUniqReads, RefAltDNP) {
+  depth_col <- common_columns + (which(samplelist == i) - 1) * 4 + 1
+  covered <- any(pileup_bamlist[[paste0("V", depth_col)]] > 0L, na.rm=TRUE)
   if (!nrow(pileup_bamlist)) {
     # An uncovered block still occurs in the whole-sample final merge. Supply
     # its missing counts/likelihoods to the unchanged final formatter.
@@ -297,10 +310,10 @@ prepare_individual <- function(i) {
                          indel_reads = integer(), indel_ratio = numeric())
     result <- final_df_elab(missing, grouped, indels)
     result$has_likelihoods <- FALSE
+    result$covered <- FALSE
     return(result)
   }
   # extract sample-specific columns
-  depth_col <- common_columns + (which(samplelist == i) - 1) * 4 + 1
   reads_col <- depth_col + 1
   qual_col <- reads_col + 1
   id_col <- qual_col + 1
@@ -744,6 +757,7 @@ prepare_individual <- function(i) {
 
   result <- final_df_elab(dataframe_final2, df_grouped, dfIND_summary)
   result$has_likelihoods <- !is.null(res) && nrow(res) > 0L
+  result$covered <- covered
   result
   }
 
@@ -756,9 +770,10 @@ prepare_individual <- function(i) {
   peak_ind_mem <<- max(peak_ind_mem,
                        vapply(block_results, function(value) value$peak_mem, numeric(1)))
   rm(processed)
-  # The legacy whole-sample calculation fails when no ref/alt likelihood can
-  # be formed anywhere. Empty blocks must not turn that failure into a result.
-  if (!any(vapply(block_results, function(value) value$has_likelihoods, logical(1)))) {
+  # Distinguish a sample with zero coverage from a covered sample for which
+  # the likelihood calculation failed to yield any usable allele.
+  if (any(vapply(block_results, function(value) value$covered, logical(1))) &&
+      !any(vapply(block_results, function(value) value$has_likelihoods, logical(1)))) {
     stop("DNP sample has no retained reference/alternative likelihoods")
   }
   final <- nipat_dnp_combine(block_results)
