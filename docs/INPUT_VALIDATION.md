@@ -46,8 +46,13 @@ decimale, secondo il formato dello script.
 | Frequenze CPI/CPIN | Tipo di marcatore coerente con le tabelle; loci univoci; `Ref_f.pop` e `Alt_f.pop` finite, strettamente maggiori di 0 e al massimo 1. La tabella deve contenere almeno un locus. |
 
 BAM e FASTA sono verificati per presenza, accessibilità e file di indice
-richiesti; la decodifica effettiva dei dati binari e del riferimento compete
-a samtools. Il controllo del pileup è strutturale e scorre tutte le righe:
+richiesti. Prima del pileup, samtools legge il dizionario dei contig di ogni
+BAM. Tutti i contig del pannello devono comparire nel BAM con la stessa
+lunghezza indicata dall'indice FASTA. DNPcall confronta anche ordine, nomi e
+lunghezze dell'intero dizionario quando usa più BAM, sia con sia senza indici
+BAM. Un contig presente senza letture conserva i risultati a copertura zero;
+un contig assente o discordante rende l'input incompatibile. Il controllo del
+pileup importato è strutturale e scorre tutte le righe:
 non ricostruisce il procedimento di produzione e non verifica l'intera
 grammatica delle basi codificate. Le tabelle di conteggi con sola intestazione
 sono ammesse per rappresentare l'assenza di siti; pannelli e frequenze di
@@ -97,10 +102,14 @@ e indicano l'elemento da verificare. NIPAT non corregge automaticamente una
 stima scientifica e non applica nuovi filtri ai dati CPI in base alla stima
 Contamination.
 
+SNPcall conserva i nomi dei contig come testo anche durante il conteggio
+delle letture. Per esempio, `01` e `1` indicano contig distinti.
 SNPcall 2.0 distingue anche `-Inf` nelle likelihood: una qualità Phred zero
 può produrre `log(0)`, previsto dal modello. `NaN` e `+Inf` nelle colonne GL
 non sono accettati. I conteggi e le coordinate del risultato devono
 corrispondere al pannello; i genotipi sono `0/0`, `0/1`, `1/1` oppure `NA`.
+Il riepilogo dei genotipi DNP deve riportare gli stessi campioni, loci,
+alleli e genotipi delle tabelle individuali.
 
 Tutti i moduli devono produrre `output/scientific-settings.json` coerente
 con i valori richiesti e con il registro distribuito. Un file assente,

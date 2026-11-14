@@ -810,7 +810,12 @@ class EnginePackageTests(unittest.TestCase):
             "with Path(os.environ['SNP_TEST_EVENTS']).open('a') as log:\n"
             "    log.write(json.dumps(sys.argv) + '\\n')\n"
         )
-        for name, body in (("samtools", samtools_body), ("Rscript", r_body)):
+        samtools_header = (
+            "if sys.argv[1] == 'view':\n"
+            "    Path(sys.argv[sys.argv.index('-o') + 1]).write_text('@SQ\\tSN:chr1\\tLN:200\\n')\n"
+            "    sys.exit(0)\n"
+        )
+        for name, body in (("samtools", samtools_header + samtools_body), ("Rscript", r_body)):
             executable = fake_bin / name
             executable.write_text(header + body, encoding="utf-8")
             executable.chmod(0o755)
@@ -859,8 +864,9 @@ class EnginePackageTests(unittest.TestCase):
         self.assertEqual(first["preparation_exit_code"], 0)
         self.assertEqual(first["exit_code"], 37)
         self.assertEqual(first["sample_mapping"], {"sample": "selected", "mode": "bam", "path": request["bam"]})
-        self.assertEqual([Path(command[0]).name for command in self.snp_events()], ["samtools", "Rscript"])
-        self.assertEqual(self.snp_events()[1][1], str(self.root / "scientific" / engine.SCRIPT_PATHS["snp-call"]))
+        self.assertEqual([Path(command[0]).name for command in self.snp_events()],
+                         ["samtools", "samtools", "Rscript"])
+        self.assertEqual(self.snp_events()[2][1], str(self.root / "scientific" / engine.SCRIPT_PATHS["snp-call"]))
         self.assertEqual({item["kind"] for item in first["preparation_artifacts"]}, {"regions-bed", "pileup"})
         for artifact in first["preparation_artifacts"]:
             self.assertEqual(artifact["sha256"], hashlib.sha256((run / artifact["path"]).read_bytes()).hexdigest())
@@ -875,13 +881,15 @@ class EnginePackageTests(unittest.TestCase):
         result = self.run_snp_request(request_file, environment)
         self.assertEqual(result.returncode, 37, result.stderr)
         commands = self.snp_events()
-        self.assertEqual([Path(command[0]).name for command in commands], ["samtools", "Rscript"])
-        self.assertEqual(commands[0][1:], [
+        self.assertEqual([Path(command[0]).name for command in commands], ["samtools", "samtools", "Rscript"])
+        self.assertEqual(commands[0][1:5], ["view", "--no-PG", "-H", "-o"])
+        self.assertEqual(commands[0][-1], request["bam"])
+        self.assertEqual(commands[1][1:], [
             "mpileup", "-f", request["reference"], "-l", request["work_dir"] + "/snp_regions.bed",
             "--output-QNAME", "-d", "0", "--no-output-ins", "--no-output-del", "--no-output-ends",
             "-o", request["work_dir"] + "/pileup.txt", request["bam"],
         ])
-        self.assertEqual(commands[1][1:], [
+        self.assertEqual(commands[2][1:], [
             str(self.root / "scientific" / engine.SCRIPT_PATHS["snp-call"]),
             "--pileup", request["work_dir"] + "/pileup.txt", "--snplist", request["work_dir"] + "/SNPpanel.tsv",
             "--out", request["out_dir"] + "/SNPcall_output.txt",
@@ -930,7 +938,7 @@ class EnginePackageTests(unittest.TestCase):
         request_file, request = self.snp_request()
         result = self.run_snp_request(request_file, self.snp_tools("sys.exit(17)\n"))
         self.assertEqual(result.returncode, 17, result.stderr)
-        self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+        self.assertEqual([c[1] for c in self.snp_events()], ["view", "mpileup"])
         self.assertTrue(Path(request["work_dir"], "snp_regions.bed").is_file())
         self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
 
@@ -943,7 +951,7 @@ class EnginePackageTests(unittest.TestCase):
         result = self.run_snp_request(request_file, environment)
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn("7 colonne", result.stderr)
-        self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+        self.assertEqual([c[1] for c in self.snp_events()], ["view", "mpileup"])
         self.assertTrue(Path(request["work_dir"], "pileup.txt").is_file())
         self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
 
@@ -964,7 +972,7 @@ class EnginePackageTests(unittest.TestCase):
                 result = self.run_snp_request(request_file, environment)
                 self.assertEqual(result.returncode, 37 if mode == "empty" else 2, result.stderr)
                 self.assertEqual([Path(c[0]).name for c in self.snp_events()],
-                                 ["samtools", "Rscript"] if mode == "empty" else ["samtools"])
+                                 ["samtools", "samtools", "Rscript"] if mode == "empty" else ["samtools", "samtools"])
                 self.assertEqual(list(Path(case["out_dir"]).iterdir()), [])
 
     @unittest.skipIf(os.name == "nt", "POSIX signals exercise the Linux container supervisor.")
@@ -994,7 +1002,7 @@ class EnginePackageTests(unittest.TestCase):
             stdout, stderr = process.communicate(timeout=5)
             self.assertEqual(process.returncode, 128 + signal.SIGTERM, stdout + stderr)
             self.assertEqual(Path(environment["SNP_TEST_EVENTS"] + ".signal").read_text(), str(signal.SIGTERM))
-            self.assertEqual([Path(c[0]).name for c in self.snp_events()], ["samtools"])
+            self.assertEqual([c[1] for c in self.snp_events()], ["view", "mpileup"])
             self.assertEqual(list(Path(request["out_dir"]).iterdir()), [])
         finally:
             if process.poll() is None:

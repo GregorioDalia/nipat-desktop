@@ -42,12 +42,20 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
         }, "parameters": {"mode": "bam"}}]}
         self.calls = []
 
+    @staticmethod
+    def write_bam_header(command, log):
+        Path(command[command.index("-o") + 1]).write_text("@SQ\tSN:chr1\tLN:20\n", encoding="utf-8")
+        log.write_text("samtools header\n", encoding="utf-8")
+        return 0
+
     def execute(self, process=None):
         return execute_plan(self.plan, run_dir=self.run, script_paths={"snp-call": self.script},
                             run_process=process or self.fake_process)
 
     def fake_process(self, command, cwd, log):
         self.calls.append(command)
+        if command[:2] == ["samtools", "view"]:
+            return self.write_bam_header(command, log)
         log.write_text("samtools output\n" if command[0] == "samtools" else "R output\n", encoding="utf-8")
         if command[0] == "samtools":
             Path(command[command.index("-o") + 1]).write_bytes(self.pileup.read_bytes())
@@ -74,7 +82,8 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
         before = {path.name: path.read_bytes() for path in self.inputs.iterdir()}
         result = self.execute()
         self.assertEqual(result["status"], "succeeded")
-        self.assertEqual([call[0] for call in self.calls], ["samtools", "Rscript"])
+        self.assertEqual([call[0] for call in self.calls], ["samtools", "samtools", "Rscript"])
+        self.assertEqual(self.calls[0][:4], ["samtools", "view", "--no-PG", "-H"])
         self.assertEqual(self.calls[0][-1], str(self.bam))
         self.assertEqual(result, json.loads((self.run / "workflow-state.json").read_text()))
         record = result["steps"][0]
@@ -173,19 +182,31 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
 
     def test_samtools_failure_preserves_log_without_running_r_or_next_step(self):
         self.add_independent_step()
-        def fail(command, cwd, log):
-            self.calls.append(command)
-            log.write_text("reference mismatch", encoding="utf-8")
-            return 23
-        result = self.execute(fail)
-        self.assertEqual(result["status"], "failed")
-        self.assertEqual(result["exit_code"], 23)
-        self.assertEqual([s["status"] for s in result["steps"]], ["failed", "blocked"])
-        self.assertEqual([call[0] for call in self.calls], ["samtools"])
-        self.assertEqual(result["steps"][0]["preparation_exit_code"], 23)
-        self.assertTrue((self.run / "steps/snp/request.json").exists())
-        self.assertFalse((self.run / "steps/snp/command.log").exists())
-        self.assertFalse((self.run / "steps/zzz_snp").exists())
+        for failing_command, expected_calls in (("view", ["view"]), ("mpileup", ["view", "mpileup"])):
+            with self.subTest(command=failing_command):
+                self.calls.clear()
+                self.run = self.root / f"failure_{failing_command}"
+
+                def fail(command, cwd, log):
+                    if command[:2] == ["samtools", failing_command]:
+                        self.calls.append(command)
+                        log.write_text("samtools failed", encoding="utf-8")
+                        return 23
+                    return self.fake_process(command, cwd, log)
+
+                result = self.execute(fail)
+                self.assertEqual(result, json.loads((self.run / "workflow-state.json").read_text()))
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(result["exit_code"], 23)
+                self.assertEqual([s["status"] for s in result["steps"]], ["failed", "blocked"])
+                self.assertEqual([call[1] for call in self.calls], expected_calls)
+                failed = result["steps"][0]
+                self.assertEqual(failed["preparation_exit_code"], 23)
+                self.assertEqual(failed["preparation_command"], self.calls[-1])
+                self.assertEqual((self.run / failed["preparation_log"]).read_text(), "samtools failed")
+                self.assertTrue((self.run / failed["request"]).exists())
+                self.assertFalse((self.run / failed["log"]).exists())
+                self.assertFalse((self.run / "steps/zzz_snp").exists())
 
     def test_zero_exit_with_missing_or_invalid_generated_pileup_prevents_r(self):
         for content in (None, "chr1\t10\tA\t1\t.\tI\n"):
@@ -193,6 +214,8 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
                 self.run = self.root / f"invalid_{len(self.calls)}"
                 def invalid(command, cwd, log):
                     self.calls.append(command)
+                    if command[:2] == ["samtools", "view"]:
+                        return self.write_bam_header(command, log)
                     log.write_text("preparation finished", encoding="utf-8")
                     if content is not None:
                         Path(command[command.index("-o") + 1]).write_text(content, encoding="utf-8")
@@ -206,9 +229,9 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
     def test_empty_generated_pileup_retains_every_panel_locus_as_unassigned(self):
         def empty(command, cwd, log):
             code = self.fake_process(command, cwd, log)
-            if command[0] == "samtools":
+            if command[:2] == ["samtools", "mpileup"]:
                 Path(command[command.index("-o") + 1]).write_text("")
-            else:
+            elif command[0] == "Rscript":
                 table = Path(command[command.index("--out") + 1])
                 header = table.read_text().splitlines()[0]
                 table.write_text(header + "\n" + "\n".join(
@@ -218,21 +241,22 @@ class SnpWorkflowExecutionTests(unittest.TestCase):
             return code
         result = self.execute(empty)
         self.assertEqual(result["status"], "succeeded", result.get("error"))
-        self.assertEqual([call[0] for call in self.calls], ["samtools", "Rscript"])
+        self.assertEqual([call[0] for call in self.calls], ["samtools", "samtools", "Rscript"])
         self.assertEqual(result["steps"][0]["artifacts"]["quality_warnings"], [])
         self.assertEqual((self.run / "steps/snp/work/pileup.txt").stat().st_size, 0)
 
     def test_preparation_cancellation_blocks_other_independent_steps(self):
         self.add_independent_step()
         def cancel(command, cwd, log):
-            self.fake_process(command, cwd, log)
-            signal.raise_signal(signal.SIGTERM)
-            return 0
+            code = self.fake_process(command, cwd, log)
+            if command[:2] == ["samtools", "mpileup"]:
+                signal.raise_signal(signal.SIGTERM)
+            return code
         result = self.execute(cancel)
         self.assertEqual(result["status"], "cancelled")
         self.assertEqual(result["exit_code"], 143)
         self.assertEqual([s["status"] for s in result["steps"]], ["cancelled", "blocked"])
-        self.assertEqual(len(self.calls), 1)
+        self.assertEqual([call[1] for call in self.calls], ["view", "mpileup"])
         self.assertFalse((self.run / "steps/snp/command.log").exists())
 
     def test_r_failure_keeps_generated_artifacts_and_does_not_start_next_step(self):

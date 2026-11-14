@@ -79,7 +79,7 @@ cat(">> reading snp list...\n")
 snp_input <- readr::read_tsv(
   snplist_file,
   col_types = readr::cols(.default = readr::col_character()),
-  show_col_types = FALSE, num_threads = 1L
+  na = character(), show_col_types = FALSE, num_threads = 1L
 )
 # Retain the historical NIPAT three-column panel as an input adapter only.
 if (identical(names(snp_input), c("pos", "ref", "alt"))) {
@@ -229,17 +229,11 @@ df3 <- df2 %>%
 }
 rm(df, df2, base_parts, name_parts, quality_parts, marked_bases, sizes)
 # Assign each SNP an identifier and its three expected positions.
-snp_coordinates <- fake_DNP %>%
-  transmute(
-    SNP_id = row_number(),
-    SNP_key = pos
-  ) %>%
-  separate(
-    SNP_key,
-    into = c("snp_chr", "snp_pos"),
-    sep = ":",
-    convert = TRUE
-  )
+snp_coordinates <- tibble(
+  SNP_id = seq_len(nrow(snp_input)),
+  snp_chr = snp_input$chr,
+  snp_pos = as.integer(positions_numeric)
+)
 position_map <- bind_rows(
   snp_coordinates %>%
     transmute(

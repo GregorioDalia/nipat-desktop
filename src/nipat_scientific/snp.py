@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unicodedata
 
 from nipat_scientific.errors import ValidationError
 from nipat_scientific.presentation import validate_request_presentation
 from nipat_scientific.files import require_file, require_sidecar, require_snp_pileup, write_input_report
-from nipat_scientific.panels import read_snp_list, require_reference_windows, write_snp_bed, write_snp_list
+from nipat_scientific.panels import (
+    read_bam_dictionary, read_snp_list, require_bam_targets, require_reference_windows,
+    write_snp_bed, write_snp_list,
+)
 from nipat_scientific.settings import defaults, normalize_settings, samtools_options, settings_from_environment
 
 
@@ -24,6 +29,21 @@ class SnpPreparation:
     preparation_command: list[str] | None
     native_arguments: list[str]
     generated_pileup: Path | None
+    bam: Path | None
+    target_lengths: dict[str, int]
+
+    def validate_bam(self, run_command: Callable[[list[str]], int], work_dir: Path) -> int:
+        """Read the BAM header before acquisition, using the caller's process supervisor."""
+        if self.bam is None:
+            return 0
+        with TemporaryDirectory(prefix=".bam-header-", dir=work_dir) as directory:
+            header = Path(directory) / "header.sam"
+            code = run_command(["samtools", "view", "--no-PG", "-H", "-o", str(header), str(self.bam)])
+            if code != 0:
+                return code
+            sequences, _ = read_bam_dictionary(header, self.bam)
+            require_bam_targets(self.bam, sequences, self.target_lengths)
+        return 0
 
 
 def _absolute_path(value: object, label: str) -> Path:
@@ -68,6 +88,7 @@ def prepare_snp(request: object) -> SnpPreparation:
     positions = [(row.chromosome, row.position) for row in panel_rows]
     sources = [panel]
     bam = reference = None
+    target_lengths = {}
     if mode == "bam":
         bam = require_file(_absolute_path(request["bam"], "BAM"), "BAM")
         reference = require_file(_absolute_path(request["reference"], "FASTA"), "FASTA")
@@ -75,7 +96,7 @@ def prepare_snp(request: object) -> SnpPreparation:
         sources.extend([bam, reference, fasta_index])
         if reference.suffix.lower() in {".gz", ".bgz", ".bgzf"}:
             sources.append(require_sidecar(reference, ".gzi", "Indice FASTA BGZF").resolve())
-        require_reference_windows(fasta_index, (
+        target_lengths = require_reference_windows(fasta_index, (
             (chromosome, position - 1, position + 1) for chromosome, position in positions
         ))
         for suffix in (".bai", ".csi"):
@@ -131,4 +152,4 @@ def prepare_snp(request: object) -> SnpPreparation:
     return SnpPreparation(command, [
         "--pileup", str(pileup), "--snplist", str(normalized_panel),
         "--out", str(out_dir / "SNPcall_output.txt"),
-    ], generated_pileup if mode == "bam" else None)
+    ], generated_pileup if mode == "bam" else None, bam, target_lengths)

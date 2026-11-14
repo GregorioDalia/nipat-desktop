@@ -420,8 +420,16 @@ nome interno, percorso relativo alla destinazione e SHA-256. Per Contamination
 percorso e un checksum distinti. Questi riferimenti evitano la deduzione
 dell'identità dei campioni dai soli nomi dei file.
 
-Per SNPcall da BAM, `preparation_command` e `preparation_log` identificano
-il comando samtools e il suo log. Dopo la preparazione valida, il campo
+Per DNPcall, `artifacts.dnp-summary.genotypes` identifica il riepilogo
+aggregato verificato, con percorso e SHA-256. Il motore controlla che gli
+alleli e i genotipi corrispondano alle tabelle individuali per tutti i loci
+e i campioni. Il campo può essere assente nei run creati con versioni
+precedenti.
+
+Per SNPcall da BAM, `preparation_command`, `preparation_log` e
+`preparation_exit_code` registrano l'ultimo comando samtools avviato, il suo
+log e il suo codice di uscita. Il comando legge l'intestazione BAM prima di
+generare il pileup. Dopo la preparazione valida, il campo
 `preparation_artifacts` conserva BED e pileup prima dell'avvio R. Queste
 evidenze rimangono consultabili anche se R non completa il passaggio.
 

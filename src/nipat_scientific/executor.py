@@ -313,15 +313,17 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
                 if prepared.preparation_command is not None:
                     if cancellation.signum is not None:
                         raise KeyboardInterrupt
-                    record["preparation_command"] = prepared.preparation_command
-                    record["preparation_log"] = f"steps/{step['id']}/preparation.log"
-                    persist()
-                    print(f"Workflow step {step['id']}: samtools preparation (log: {record['preparation_log']})",
-                          file=sys.stderr, flush=True)
-                    with phase("pileup", workflow=step["workflow"], step=step["id"]):
-                        code = (run_process(prepared.preparation_command, cwd, directory / "preparation.log")
-                                if run_process is not None else
-                                _run_process(prepared.preparation_command, cwd, directory / "preparation.log", cancellation))
+
+                    def run_snp_preparation(command, log_name):
+                        log_path = directory / log_name
+                        record["preparation_command"] = command
+                        record["preparation_log"] = log_path.relative_to(root).as_posix()
+                        record["preparation_exit_code"] = None
+                        persist()
+                        print(f"Workflow step {step['id']}: samtools {command[1]} "
+                              f"(log: {record['preparation_log']})", file=sys.stderr, flush=True)
+                        code = (run_process(command, cwd, log_path) if run_process is not None else
+                                _run_process(command, cwd, log_path, cancellation))
                         if cancellation.signum is not None:
                             raise KeyboardInterrupt
                         if type(code) is not int or code < 0:
@@ -331,6 +333,11 @@ def _execute_step(plan, step, record, root, scripts, samples, outputs, cancellat
                             record["exit_code"] = code
                             raise PlanExecutionError("execution.process",
                                                      f"{step['id']} preparation exited with code {code}; see {record['preparation_log']}.")
+                        return code
+
+                    prepared.validate_bam(lambda command: run_snp_preparation(command, "bam-header.log"), work)
+                    with phase("pileup", workflow=step["workflow"], step=step["id"]):
+                        run_snp_preparation(prepared.preparation_command, "preparation.log")
                     # A zero exit from samtools does not guarantee usable data.
                     # Empty generated pileups represent zero coverage in
                     # SNPcall 2.0; malformed or missing files still fail.

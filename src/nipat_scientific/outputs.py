@@ -11,7 +11,7 @@ from pathlib import Path
 from nipat_scientific.errors import PlanExecutionError, ValidationError
 from nipat_scientific.files import (
     DNP_OUTPUT_COLUMNS, locus_key, nonnegative_integer, require_columns,
-    require_dnp_input, table_rows,
+    require_dnp_input, table_rows, tabular_header,
 )
 from nipat_scientific.panels import read_dnp_list, read_snp_list
 from nipat_scientific.settings import normalize_settings, validate_settings_document
@@ -32,6 +32,7 @@ _SNP_COLUMNS = {
     "GL0", "GL1", "GL2", "GT", "reads_discarded_for_indels",
     "ratio_reads_discarded_for_indels", "combined_bases", "combined_counts",
 }
+_DNP_LOCI = {"chr", "pos1", "pos2", "REF", "ALT"}
 
 
 def _artifact(path: Path, root: Path, output_dir: Path) -> dict:
@@ -199,6 +200,26 @@ def _collect_snp_auxiliary(output_dir: Path, root: Path, genotypes: dict) -> dic
              for name in ("N_genotypes", "Ref_read_count", "Alt_read_count", "Other_read_count")]
     plots.append(_pdf_artifact(summary / "Unassigned_genotypes.pdf", root, output_dir))
     return {"genotypes": genotype_artifact, "resources": resource_artifact, "plots": plots}
+
+
+def _dnp_genotypes(output_dir: Path, root: Path, sample_names: list[str], loci: dict) -> tuple[dict, dict]:
+    path = output_dir / "summary" / "output_AllGenotypes.txt"
+    artifact = _artifact(path, root, output_dir)
+    genotype_columns = [f"GT_{sample}" for sample in sample_names]
+    columns = _DNP_LOCI | set(genotype_columns)
+    if set(tabular_header(path)) != columns:
+        raise PlanExecutionError("execution.output", "DNP genotype summary columns differ from the selected samples.")
+    genotypes = {}
+    for line, row in table_rows(path, columns, "DNP genotype summary"):
+        key = locus_key(row, path, line, "DNP")
+        if key in genotypes:
+            raise PlanExecutionError("execution.output", "DNP genotype summary contains duplicate loci.")
+        if loci.get(key) != (row["REF"], row["ALT"]):
+            raise PlanExecutionError("execution.output", "DNP genotype summary loci or alleles differ from the panel.")
+        genotypes[key] = tuple(row[column] for column in genotype_columns)
+    if genotypes.keys() != loci.keys():
+        raise PlanExecutionError("execution.output", "DNP genotype summary loci differ from the panel.")
+    return artifact, genotypes
 
 
 def _collect_cpi_outputs(step: dict, request: dict, root: Path, output_dir: Path) -> dict:
@@ -370,23 +391,28 @@ def _collect_outputs_unchecked(step: dict, request: dict, root: Path, output_dir
         all_warnings = []
         expected_loci = {(row.chromosome, row.pos1, row.pos2): (row.reference, row.alternative)
                          for row in read_dnp_list(Path(request["panel"]))}
-        for number, identifier in enumerate(step["inputs"]["samples"], 1):
-            name = f"sample_{number:04d}"
+        sample_names = [item["sample_id"] for item in request["samples"]]
+        summary, genotypes = _dnp_genotypes(output_dir, root, sample_names, expected_loci)
+        columns = DNP_OUTPUT_COLUMNS | {"GT"}
+        for index, (identifier, name) in enumerate(zip(step["inputs"]["samples"], sample_names, strict=True)):
             path = directory / f"full_output_{name}.txt"
             artifact = _artifact(path, root, output_dir)
-            _output_columns(path, DNP_OUTPUT_COLUMNS)
-            try:
-                warnings = require_dnp_input(path)
-            except ValidationError as exc:
-                raise PlanExecutionError("execution.output", str(exc)) from exc
-            loci = {locus_key(row, path, line): (row["REF"], row["ALT"])
-                    for line, row in table_rows(path, DNP_OUTPUT_COLUMNS, "DNPcall output", whitespace=True)}
-            if loci != expected_loci:
+            warnings = require_dnp_input(path)
+            seen = set()
+            for line, row in table_rows(path, columns, "DNPcall output"):
+                key = locus_key(row, path, line, "DNP")
+                if expected_loci.get(key) != (row["REF"], row["ALT"]):
+                    raise PlanExecutionError("execution.output", "DNPcall result loci or alleles do not match the selected panel.")
+                if row["GT"] != genotypes[key][index]:
+                    raise PlanExecutionError("execution.output", f"DNP genotype summary differs from sample {name}.")
+                seen.add(key)
+            if seen != expected_loci.keys():
                 raise PlanExecutionError("execution.output", "DNPcall result loci or alleles do not match the selected panel.")
             all_warnings.extend({**warning, "code": warning["code"].replace("input.", "output.", 1)}
                                 for warning in warnings)
             tables.append({"sample": identifier, "native_name": name, **artifact})
-        return {"dnp-tables": tables, "quality_warnings": all_warnings}
+        return {"dnp-tables": tables, "dnp-summary": {"genotypes": summary},
+                "quality_warnings": all_warnings}
 
     summary = output_dir / "contamination_summary.txt"
     artifact = _artifact(summary, root, output_dir)

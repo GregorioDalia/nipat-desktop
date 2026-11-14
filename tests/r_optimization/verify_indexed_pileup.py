@@ -230,7 +230,7 @@ def audit(project: Path, root: Path, samtools: str) -> dict:
 
     def compare_budget(name, bams, workers, *, mode="auto", panel=None, reference=None,
                        strategy="indexed-chromosomes", reason=None, expected_contigs=None,
-                       require_overlap=False, allow_empty=False):
+                       require_overlap=False):
         work, bamlist, output, metadata, command = arguments(
             name, bams, budget=process_budget(workers, mode), panel=panel, reference=reference)
         oracle = [samtools, "mpileup", "-l", str(panel or paths["bed"]),
@@ -239,7 +239,7 @@ def audit(project: Path, root: Path, samtools: str) -> dict:
         observed = observe_helper(command, work, workers)
         actual = output.read_bytes()
         details = json.loads(metadata.read_text())
-        if (not expected and not allow_empty) or expected != actual:
+        if not expected or expected != actual:
             raise AssertionError(f"Exact budgeted pileup comparison failed: {name}")
         if details.get("status") != "succeeded" or details.get("strategy") != strategy:
             raise AssertionError(f"Unexpected budgeted helper path: {name}: {details}")
@@ -289,28 +289,39 @@ def audit(project: Path, root: Path, samtools: str) -> dict:
 
     unknown_panel = root / "unknown-panel.bed"
     unknown_panel.write_text(paths["bed"].read_text() + "not_in_bam\t10\t20\n", encoding="utf-8")
-    compare_budget("chromosomes-unknown-panel-contig", [paths["dense"]], 2,
-                   panel=unknown_panel, expected_contigs=contigs, require_overlap=True)
+
+    def reject_budget(name, bams, diagnostic, *, panel=None):
+        work, _, output, metadata, command = arguments(
+            name, bams, budget=process_budget(4), panel=panel)
+        failed = subprocess.run(command, capture_output=True, timeout=30)
+        details = json.loads(metadata.read_text())
+        if failed.returncode == 0 or diagnostic not in failed.stderr.decode() or output.exists() or details["status"] != "failed":
+            raise AssertionError(f"Invalid input accepted: {name}: {failed.stderr.decode()}")
+        if any(item["stage"].startswith("mpileup") for item in details["processes"]):
+            raise AssertionError(f"Started pileup for invalid input: {name}")
+        if list(work.glob(".pileup-*.partial")) or list(work.glob("indexed-*")):
+            raise AssertionError(f"Failed validation left staged intermediates: {name}")
+        scenarios.append({"case": name, "status": "passed", "behavior": "rejects incompatible targets before pileup"})
+
+    reject_budget("chromosomes-unknown-panel-contig", [paths["dense"]], "fuori dal riferimento",
+                  panel=unknown_panel)
     single_panel = root / "single-contig.bed"
     single_panel.write_text("chr10\t48\t53\n", encoding="utf-8")
     compare_budget("chromosomes-single-task", [paths["dense"]], 4,
                    panel=single_panel, expected_contigs=["chr10"])
     empty_panel = root / "empty-selection.bed"
     empty_panel.write_text("not_in_bam\t10\t20\n", encoding="utf-8")
-    compare_budget("chromosomes-empty-selection", [paths["dense"]], 4, panel=empty_panel,
-                   strategy="sequential-budgeted", reason="no-panel-contigs", allow_empty=True)
+    reject_budget("chromosomes-empty-selection", [paths["dense"]], "fuori dal riferimento",
+                  panel=empty_panel)
 
-    # The old whole-file mpileup accepts a different length declaration in a
-    # second BAM. The partition planner must retain that behavior via fallback,
-    # rather than silently choosing one of two incompatible dictionaries.
+    # Joint mpileup requires identical BAM target IDs and lengths.
     changed_header = root / "different-dictionary.sam"
     header = execute([samtools, "view", "-H", str(paths["sparse"])]).decode()
     changed_header.write_text(header.replace("LN:1000", "LN:1001", 1), encoding="utf-8")
     changed_bam = root / "different-dictionary.bam"
     execute([samtools, "reheader", str(changed_header), str(paths["sparse"])], output=changed_bam)
     execute([samtools, "index", str(changed_bam)])
-    compare_budget("budgeted-incompatible-dictionaries", [paths["dense"], changed_bam], 4,
-                   strategy="sequential-budgeted", reason="incompatible-dictionaries")
+    reject_budget("budgeted-incompatible-dictionaries", [paths["dense"], changed_bam], "lunghezza discordante")
 
     unknown_order_header = root / "non-coordinate-header.sam"
     unknown_order_header.write_text(header.replace("SO:coordinate", "SO:unknown"), encoding="utf-8")
@@ -352,8 +363,7 @@ def audit(project: Path, root: Path, samtools: str) -> dict:
     scenarios.append({"case": "corrupt-index", "status": "passed", "behavior": "fails without sequential fallback"})
 
     for name, bams in (("budgeted-corrupt-index", [corrupt]),
-                       ("budgeted-mixed-corrupt-index", [missing, corrupt]),
-                       ("budgeted-dictionary-corrupt-index", [corrupt, changed_bam])):
+                       ("budgeted-mixed-corrupt-index", [missing, corrupt])):
         work, bamlist, output, metadata, command = arguments(name, bams, budget=process_budget(4))
         failed = subprocess.run(command, capture_output=True, timeout=30)
         if failed.returncode == 0 or output.exists() or json.loads(metadata.read_text())["status"] != "failed":
@@ -411,7 +421,8 @@ def audit(project: Path, root: Path, samtools: str) -> dict:
     cancel_case("parallel-cancellation", budget=process_budget(4), minimum_children=2)
     if hashlib.sha256(helper.read_bytes()).hexdigest() != helper_sha256:
         raise AssertionError("The acquisition helper changed during qualification")
-    return {"schema_version": 1, "status": "passed", "samtools_version": execute([samtools, "--version"]).decode().splitlines()[0],
+    version = execute([samtools, "--version"]).splitlines()[0].decode("ascii")
+    return {"schema_version": 1, "status": "passed", "samtools_version": version,
             "helper_sha256": helper_sha256, "exact_alignment_stream": True,
             "scientific_options": "unchanged samtools mpileup defaults; BAQ and depth limit preserved",
             "coverage": ["overlapping BED intervals", "unsorted panel", "nonlexical contigs", "read crossing disjoint windows",

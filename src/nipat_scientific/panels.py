@@ -26,8 +26,7 @@ class SnpRecord:
     alternative: str
 
 
-def require_reference_windows(index: Path, windows) -> None:
-    """Check one-based window bounds against the mounted FASTA index."""
+def reference_lengths(index: Path) -> dict[str, int]:
     lengths: dict[str, int] = {}
     with input_text(index) as handle:
         for number, line in enumerate(handle, 1):
@@ -35,9 +34,48 @@ def require_reference_windows(index: Path, windows) -> None:
             if len(columns) < 5 or not columns[0] or columns[0] in lengths:
                 raise ValidationError(f"{index.name}: riga {number}, indice FASTA non valido.")
             lengths[columns[0]] = nonnegative_integer(columns[1], index, number, "length")
+    return lengths
+
+
+def require_reference_windows(index: Path, windows) -> dict[str, int]:
+    """Check one-based window bounds and return the lengths of targeted contigs."""
+    lengths = reference_lengths(index)
+    targets = {}
     for chromosome, first, last in windows:
         if chromosome not in lengths or first < 1 or last > lengths[chromosome]:
             raise ValidationError(f"Finestra del pannello fuori dal riferimento FASTA: {chromosome}:{first}-{last}.")
+        targets[chromosome] = lengths[chromosome]
+    return targets
+
+
+def read_bam_dictionary(header: Path, bam: Path) -> tuple[dict[str, int], bool]:
+    """Read the sequence dictionary in BAM target order from samtools view -H."""
+    sequences: dict[str, int] = {}
+    coordinate_sorted = False
+    with input_text(header) as handle:
+        for line in handle:
+            fields = line.rstrip("\r\n").split("\t")
+            if fields[0] == "@HD":
+                coordinate_sorted = "SO:coordinate" in fields[1:]
+            if fields[0] != "@SQ":
+                continue
+            tags = dict(field.split(":", 1) for field in fields[1:] if ":" in field)
+            name, length = tags.get("SN"), tags.get("LN", "")
+            if not name or name in sequences or not length.isdecimal() or int(length) <= 0:
+                raise ValidationError(f"{bam.name}: voce @SQ non valida o duplicata.")
+            sequences[name] = int(length)
+    return sequences, coordinate_sorted
+
+
+def require_bam_targets(bam: Path, sequences: dict[str, int], targets: dict[str, int]) -> None:
+    for name, length in targets.items():
+        if name not in sequences:
+            raise ValidationError(f"{bam.name}: contig del pannello assente dal dizionario BAM: {name}.")
+        if sequences[name] != length:
+            raise ValidationError(
+                f"{bam.name}: lunghezza discordante per {name} "
+                f"(BAM {sequences[name]}, FASTA {length})."
+            )
 
 
 def read_dnp_list(path: Path) -> list[DnpRecord]:

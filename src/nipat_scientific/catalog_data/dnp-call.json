@@ -828,9 +828,9 @@
         "path": "src/nipat_scientific/panels.py",
         "source_lines": [
           1,
-          240
+          278
         ],
-        "sha256": "4c0b44a4425324906be5988a8684b9e586a0fa393f101988c516f32c2f2303c9"
+        "sha256": "a22cbc37601c4cd79dca6ad69d20b4cc2a21a568a89ba3034a33dbf53fc23905"
       }
     },
     {
@@ -959,26 +959,26 @@
       "evidence": {
         "path": "src/nipat_scientific/dnp_pileup.py",
         "source_lines": [
-          366,
-          405
+          354,
+          394
         ],
-        "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762",
+        "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9",
         "dependencies": [
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              35,
-              35
+              38,
+              38
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              290,
-              363
+              278,
+              351
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "docker/scientific-runtime/Dockerfile",
@@ -1052,9 +1052,9 @@
         "path": "src/nipat_scientific/outputs.py",
         "source_lines": [
           1,
-          474
+          500
         ],
-        "sha256": "ead121a303ab7640a59c0ad9fed627236fa7e65934653df2c5c9908b831593c0"
+        "sha256": "405f1be20b5475451d39c7088b8cd5d720c419bf9c5d756eb23fcac3e058c8d6"
       }
     },
     {
@@ -1107,53 +1107,54 @@
         "result_order": "BAM @SQ dictionary order, independent of task completion",
         "fallback": "sequential-budgeted: indexed inputs selected to disk sequentially, then one whole mpileup; original unindexed inputs retained",
         "failed_indexed_read": "execution failure; no silent sequential retry",
-        "internal_unbudgeted_legacy": "0.8.12 view -u -M -L pipe/disk path retained for regression comparison"
+        "internal_unbudgeted_legacy": "0.8.12 view -u -M -L pipe/disk path retained for regression comparison",
+        "dictionary_requirements": "identical ordered BAM @SQ names and lengths; every target matches the FASTA index"
       },
       "applies_to": "dnp-call",
       "origin": "NIPAT scientific engine",
       "description": {
-        "it": "Il coordinatore R passa il budget comune all’helper. Per BAM indicizzati con dizionari compatibili e partizione non ambigua, ciascun task esegue un solo samtools mpileup su un cromosoma completo, con lo stesso BED e gli stessi input originali. L’indice seleziona il cromosoma; il BED filtra le posizioni durante la scansione. Questo non conserva l’accesso multi-regione view -M -L e può leggere più allineamenti, soprattutto con pannelli sparsi su BAM genomici; il beneficio prestazionale richiede un confronto reale. Il limite riguarda i processi samtools contemporanei; serial ne usa uno alla volta. Le porzioni sono concatenate nell’ordine @SQ del BAM prima dell’indice globale R. Per input non partizionabili, le selezioni indicizzate vengono preparate su disco una alla volta e poi passate, nell’ordine originale e insieme ai BAM senza indice, a un singolo mpileup. Un indice presente ma danneggiato resta un errore; non è ignorato dal ripiego. Il percorso interno senza budget conserva la selezione indicizzata 0.8.12 per il confronto differenziale e non è quello invocato dal DNP R distribuito.",
-        "en": "The R coordinator passes the shared budget to the helper. For indexed BAMs with compatible dictionaries and an unambiguous partition, each task runs one samtools mpileup on a complete chromosome, using the same BED and original inputs. The index selects the chromosome; the BED filters positions during streaming. This does not retain view -M -L multi-region access and can read more alignments, especially for sparse panels over whole-genome BAMs; performance benefits require a real comparison. The limit bounds concurrent samtools processes; serial mode runs one at a time. Pieces are concatenated in BAM @SQ order before the global R index. For unpartitionable input, indexed selections are staged onto disk one at a time, then passed in original order with unindexed BAMs to a single mpileup. An existing corrupt index remains an error and is not ignored by fallback. The internal path without a budget retains 0.8.12 indexed selection for differential comparison and is not invoked by the distributed DNP R script."
+        "it": "Il coordinatore R passa il budget comune all’helper. Per BAM indicizzati con dizionari compatibili e partizione non ambigua, ciascun task esegue un solo samtools mpileup su un cromosoma completo, con lo stesso BED e gli stessi input originali. L’indice seleziona il cromosoma; il BED filtra le posizioni durante la scansione. Questo non conserva l’accesso multi-regione view -M -L e può leggere più allineamenti, soprattutto con pannelli sparsi su BAM genomici; il beneficio prestazionale richiede un confronto reale. Il limite riguarda i processi samtools contemporanei; serial ne usa uno alla volta. Le porzioni sono concatenate nell’ordine @SQ del BAM prima dell’indice globale R. Per input non partizionabili, le selezioni indicizzate vengono preparate su disco una alla volta e poi passate, nell’ordine originale e insieme ai BAM senza indice, a un singolo mpileup. Un indice presente ma danneggiato resta un errore; non è ignorato dal ripiego. Il percorso interno senza budget conserva la selezione indicizzata 0.8.12 per il confronto differenziale e non è quello invocato dal DNP R distribuito. Prima di ogni acquisizione tutti i dizionari BAM devono coincidere per nomi, lunghezze e ordine. I contig del pannello devono corrispondere in ogni BAM al FASTA indicizzato.",
+        "en": "The R coordinator passes the shared budget to the helper. For indexed BAMs with compatible dictionaries and an unambiguous partition, each task runs one samtools mpileup on a complete chromosome, using the same BED and original inputs. The index selects the chromosome; the BED filters positions during streaming. This does not retain view -M -L multi-region access and can read more alignments, especially for sparse panels over whole-genome BAMs; performance benefits require a real comparison. The limit bounds concurrent samtools processes; serial mode runs one at a time. Pieces are concatenated in BAM @SQ order before the global R index. For unpartitionable input, indexed selections are staged onto disk one at a time, then passed in original order with unindexed BAMs to a single mpileup. An existing corrupt index remains an error and is not ignored by fallback. The internal path without a budget retains 0.8.12 indexed selection for differential comparison and is not invoked by the distributed DNP R script. All BAM dictionaries must have identical names, lengths and order before acquisition. The target contigs in each BAM must match the indexed FASTA."
       },
       "evidence": {
         "path": "src/nipat_scientific/dnp_pileup.py",
         "source_lines": [
-          228,
-          287
+          232,
+          275
         ],
-        "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762",
+        "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9",
         "dependencies": [
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              366,
-              405
+              354,
+              394
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              290,
-              363
+              278,
+              351
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              168,
-              194
+              171,
+              197
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              74,
-              90
+              77,
+              93
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "scientific/vendor/DNPcall/DNPcall.R",
@@ -1313,34 +1314,34 @@
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              366,
-              405
+              354,
+              394
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              290,
-              363
+              278,
+              351
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              205,
-              225
+              208,
+              229
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              408,
-              544
+              397,
+              534
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_blocks.R",
@@ -1491,18 +1492,18 @@
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              168,
-              194
+              171,
+              197
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/dnp_pileup.py",
             "source_lines": [
-              290,
-              363
+              278,
+              351
             ],
-            "sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762"
+            "sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
           },
           {
             "path": "src/nipat_scientific/parallel.py",
@@ -1515,10 +1516,10 @@
           {
             "path": "engine/main.py",
             "source_lines": [
-              450,
-              457
+              454,
+              461
             ],
-            "sha256": "5667313e61ee8f13eedc026e0fd374f98a96fc6a852f77f234d53ff215417532"
+            "sha256": "860cc0646dbdc8494c08d91a3fce83bc4bbfc36accfc17b1b7193785779f103b"
           },
           {
             "path": "src/nipat_scientific/dnp_blocks.R",
