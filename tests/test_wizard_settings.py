@@ -1,11 +1,13 @@
 """The guided settings persist only deliberate choices and never execute a workflow."""
 
 from contextlib import chdir
+from dataclasses import replace
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import Mock
 
+from nipat.errors import ValidationError
 from nipat.cli import DEFAULT_ERR_CONST
 from nipat.paths import ProjectLayout
 from nipat.preferences import Preferences, PreferencesStore
@@ -56,6 +58,45 @@ class WizardSettingsTests(unittest.TestCase):
         for method in ("dnp_call", "snp_call", "contamination", "cpi"):
             getattr(self.workflows, method).assert_not_called()
         self.workflows.runner.doctor.assert_not_called()
+
+    def test_two_windows_preserve_disjoint_changes_and_adopt_merged_preferences(self):
+        first = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        second = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        first._save(replace(first.preferences, execution={"execution_mode": "serial"}))
+        second._save(replace(second.preferences, update_channel="testing"))
+        self.assertEqual(self.store.load().execution, {"execution_mode": "serial"})
+        self.assertEqual(self.store.load().update_channel, "testing")
+        self.assertEqual(second.preferences, self.store.load())
+        self.assertEqual(second.execution_options().execution_mode, "serial")
+
+    def test_merged_directory_configuration_is_validated_before_write(self):
+        first = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        second = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        first._save(first.preferences.with_directories(data_dir=self.root / "shared"))
+        original = self.store.path.read_bytes()
+        with self.assertRaisesRegex(ValidationError, "sovrapporsi"):
+            second._save(second.preferences.with_directories(runs_dir=self.root / "shared" / "runs"))
+        self.assertEqual(self.store.path.read_bytes(), original)
+        self.assertEqual(second.preferences, Preferences())
+        self.assertFalse((self.root / "shared" / "runs").exists())
+
+    def test_execution_form_does_not_overwrite_another_windows_unchanged_fields(self):
+        first = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        second = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        first._save(replace(first.preferences, execution={"execution_mode": "serial"}))
+        ui = Terminal(read=Mock(side_effect=["2", "2", "9"]), write=lambda text: None)
+        second._execution(ui)
+        self.assertEqual(self.store.load().execution, {"execution_mode": "serial", "cpus": 2.0})
+
+    def test_conflicting_window_save_keeps_its_effective_preferences(self):
+        first = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        second = GuidedSettings(self.layout, PreferencesStore(self.store.path))
+        first._save(first.preferences.with_directories(runs_dir=self.root / "first"))
+        with self.assertRaisesRegex(ValidationError, "runs_dir.*altra sessione"):
+            second._save(second.preferences.with_directories(runs_dir=self.root / "second"))
+        self.assertEqual(second.layout, self.layout)
+        self.assertEqual(second.preferences, Preferences())
+        self.assertFalse((self.root / "second").exists())
 
     def test_view_configuration_is_read_only_and_help_has_distinct_purpose(self):
         status, output = self.invoke(["5", "6", "0", "7", "2", "3", "4", "5", "0", "0"])

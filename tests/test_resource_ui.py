@@ -217,6 +217,35 @@ class ResourceCLITests(unittest.TestCase):
         self.invoke(arguments + ["--apply", "--yes", "--restart", "--json"])
         self.backend.apply.assert_called_once_with(self.backend.preview.return_value, confirmed=True, restart_confirmed=True)
 
+    def test_exit_status_matches_requested_resource_operation(self):
+        arguments = ["resources", "configure", "--memory-mib", "8192", "--vm-cpus", "4",
+                     "--apply", "--yes", "--json"]
+        for restart in (False, True):
+            for status, expected in (("applied", 0),
+                                     ("saved-restart-required", 2 if restart else 0),
+                                     ("verification-required", 2)):
+                with self.subTest(restart=restart, status=status):
+                    result = {"status": status, "backup": "/user/.wslconfig.backup",
+                              "warnings": ["Check effective resources"]}
+                    self.backend.apply.return_value = result
+                    code, report = self.invoke(arguments + (["--restart"] if restart else []))
+                    self.assertEqual(code, expected)
+                    self.assertEqual(report["result"], result)
+                    self.backend.apply.assert_called_with(self.backend.preview.return_value,
+                                                          confirmed=True, restart_confirmed=restart)
+
+    def test_failed_resource_restart_preserves_diagnostics_without_json(self):
+        self.backend.apply.return_value = {"status": "verification-required", "warnings": ["restart failed"]}
+        output = io.StringIO()
+        with patch("nipat.cli.ProjectLayout.discover", return_value=self.layout), \
+             patch("nipat.cli.activity_session", return_value=nullcontext()), \
+             patch("nipat.resources.ResourceManager.from_environment", return_value=self.backend), \
+             redirect_stdout(output):
+            code = main(["resources", "configure", "--memory-mib", "8192", "--vm-cpus", "4",
+                         "--apply", "--yes", "--restart"])
+        self.assertEqual(code, 2)
+        self.assertIn("restart failed", output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

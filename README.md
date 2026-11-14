@@ -11,6 +11,9 @@ Si usa da un **menu testuale guidato** o da **riga di comando**. Le analisi
 usano il runtime scientifico locale con R e samtools. Dopo la preparazione
 dell'ambiente, i calcoli si possono eseguire offline.
 
+La [0.8.80](docs/RELEASE_0.8.80.md) è la versione stabile conclusiva della fase
+con menu testuale e CLI, base funzionale per la successiva interfaccia grafica.
+
 ## Download
 
 Scarica il pacchetto per il tuo sistema. La

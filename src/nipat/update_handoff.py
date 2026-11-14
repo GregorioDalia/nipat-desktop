@@ -159,15 +159,17 @@ def begin_update(offer, downloaded: Path, project_dir: Path) -> bool:
     """Launch an independent worker only after explicit UI consent; caller then exits 85."""
     package = _canonical_package(downloaded)
     project_dir = Path(project_dir).resolve()
-    _verify_package(package, offer.asset.sha256, offer.asset.size)
     if sys.platform == "win32":
         if offer.asset.platform != "windows-x86_64":
             raise NipatError("Il pacchetto selezionato non e destinato a Windows x64.")
+        _verify_package(package, offer.asset.sha256, offer.asset.size)
         return _start_windows_update(offer, package, project_dir)
     from .linux_update import LinuxUpdateError, start_linux_update
     if offer.asset.platform != "linux-x86_64":
         raise NipatError("Il pacchetto selezionato non e destinato a Linux x86_64.")
     try:
+        # The Linux entry point verifies the file itself, including regular-file
+        # and hardlink checks. Do not hash the same package twice in this process.
         return start_linux_update(package, offer.asset.sha256, offer.asset.size,
                                   parent_pid=os.getpid(), project_dir=project_dir)
     except LinuxUpdateError as exc:

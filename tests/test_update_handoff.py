@@ -164,7 +164,9 @@ class HandoffTests(unittest.TestCase):
     def test_linux_dispatches_explicit_offer_without_shell(self):
         self.offer.asset.platform = 'linux-x86_64'
         with patch('nipat.update_handoff.sys.platform', 'linux'), \
+                patch('nipat.update_handoff._verify_package') as duplicate_verification, \
                 patch('nipat.linux_update.start_linux_update', return_value=True) as launch:
             self.assertTrue(begin_update(self.offer, self.package, self.project))
             self.assertEqual(launch.call_args.kwargs['parent_pid'], os.getpid())
             self.assertEqual(launch.call_args.kwargs['project_dir'], self.project)
+        duplicate_verification.assert_not_called()

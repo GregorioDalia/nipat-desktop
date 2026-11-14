@@ -2,10 +2,13 @@ import tempfile
 import unittest
 from contextlib import chdir
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 from nipat.cli import DEFAULT_ERR_CONST
 from nipat.paths import ProjectLayout
 from nipat.errors import ValidationError
+from nipat.preferences import Preferences, PreferencesStore
+from nipat.wizard import run_wizard
 from nipat.wizard_forms import Cancelled, Field, WorkflowForm, check_reference
 from nipat.workflow_forms import DnpContaminationForm, DnpCpiForm, SnpBatchForm
 
@@ -59,6 +62,35 @@ class WizardGuidanceTests(unittest.TestCase):
 
     def assert_no_errors(self, ui):
         self.assertEqual([text for kind, text in ui.events if kind == "error"], [])
+
+    def test_help_matches_saved_update_channel_and_experimental_policy_without_actions(self):
+        store = PreferencesStore(self.root / "settings.json")
+        for version, channel, expected in (
+            ("0.8.80", "stable", "Canale aggiornamenti selezionato: Stabile"),
+            ("0.8.80", "testing", "Canale aggiornamenti selezionato: Testing"),
+            ("0.8.80rc1", "stable", "gli aggiornamenti automatici sono disabilitati"),
+        ):
+            with self.subTest(version=version, channel=channel):
+                store.save(Preferences(update_channel=channel))
+                workflows = Mock()
+                messages = []
+                with patch("nipat.wizard.__version__", version), patch("nipat.wizard.run_updates") as updates:
+                    status = run_wizard(
+                        workflows, self.layout, err_const=DEFAULT_ERR_CONST,
+                        preferences_store=store,
+                        read=Mock(side_effect=["7", "2", "5", "0", "0"]), write=messages.append,
+                    )
+                output = "\n".join(messages)
+                self.assertEqual(status, 0)
+                self.assertIn(expected, output)
+                self.assertIn("W -> 5 collega DNPcall e/o SNPcall", output)
+                self.assertIn("CPIN postnatale, anche partendo da tabelle esistenti", output)
+                if version == "0.8.80":
+                    self.assertNotIn("versione sperimentale", output)
+                else:
+                    self.assertNotIn("Canale aggiornamenti selezionato:", output)
+                updates.assert_not_called()
+                self.assertEqual(workflows.mock_calls, [])
 
     def test_empty_enter_keeps_first_bam_prompt_and_does_not_finish_list(self):
         form, ui = self.collect("1", ["1", "", "", f'"{self.bam}"', "",

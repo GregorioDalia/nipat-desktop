@@ -144,13 +144,17 @@ class GuidedSettings:
     def _save(self, preferences: Preferences) -> None:
         if self.load_error:
             raise ValidationError("Il file delle impostazioni non e' leggibile. Usare Ripristina impostazioni per sostituirlo esplicitamente.")
-        # Validate the saved layout even when a command-line override masks it.
-        preferences.effective_layout(self.base_layout)
-        effective = preferences.effective_layout(self.base_layout, self.directory_overrides)
-        effective.ensure_storage_dirs()
+        def validate(candidate: Preferences) -> None:
+            # Validate the merged layout even when a CLI override masks it.
+            candidate.effective_layout(self.base_layout)
+            candidate.effective_layout(self.base_layout, self.directory_overrides).ensure_storage_dirs()
+
         if self.store is not None:
-            self.store.save(preferences)
-        self.preferences, self.layout = preferences, effective
+            preferences = self.store.save(preferences, baseline=self.preferences, validate=validate)
+        else:
+            validate(preferences)
+        self.preferences = preferences
+        self.layout = preferences.effective_layout(self.base_layout, self.directory_overrides)
         self.layout_error = None
 
     def _saved_message(self, ui: Terminal) -> None:
@@ -161,6 +165,7 @@ class GuidedSettings:
     def _directories(self, ui: Terminal) -> None:
         values = {"data_dir": self.preferences.data_dir or self.base_layout.data_dir,
                   "runs_dir": self.preferences.runs_dir or self.base_layout.runs_dir}
+        initial = values.copy()
         while True:
             ui.message("Le cartelle impostate vengono utilizzate dalle prossime analisi guidate. I file esistenti non vengono spostati o eliminati.", kind="muted")
             ui.message("La cartella dati e' una destinazione di lavoro indicata da NIPAT; i file di input possono essere scelti anche altrove. I percorsi relativi partono dalla cartella corrente.", kind="muted")
@@ -175,7 +180,8 @@ class GuidedSettings:
                 return
             if action == "9":
                 try:
-                    self._save(self.preferences.with_directories(**values))
+                    self._save(self.preferences.with_directories(
+                        **{key: value for key, value in values.items() if value != initial[key]}))
                 except (NipatError, OSError, ValueError) as exc:
                     ui.message(str(exc), kind="error")
                     continue
@@ -318,6 +324,7 @@ class GuidedSettings:
         # One-run diagnostics must not become a persistent execution default.
         values = {key: value for key, value in asdict(self.preferences.execution_options()).items()
                   if key != "performance_diagnostics"}
+        initial = values.copy()
         labels = {"cpus": "Quota CPU per analisi", "memory_mb": "Limite RAM per analisi (MiB)",
                   "pids_limit": "Limite processi del container"}
         while True:
@@ -338,7 +345,9 @@ class GuidedSettings:
             if action in {"0", ":indietro"}:
                 return
             if action == "9":
-                self._save(replace(self.preferences, execution=values))
+                execution = dict(self.preferences.execution)
+                execution.update({key: value for key, value in values.items() if value != initial[key]})
+                self._save(replace(self.preferences, execution=execution))
                 self._saved_message(ui)
                 return
             if action == "1":

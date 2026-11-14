@@ -362,6 +362,12 @@ def main(argv: list[str] | None = None) -> int:
                     print(line)
                 if "result" in report:
                     print(json.dumps(report["result"], ensure_ascii=True, indent=2))
+            if args.resource_operation == "configure" and args.apply:
+                # Saving for a later restart fulfils --apply alone. When a
+                # restart was requested, success also requires verified limits.
+                completed = {"applied"} if args.restart else {"applied", "saved-restart-required"}
+                if report["result"].get("status") not in completed:
+                    return 2
             return 0
         runner = DockerComposeRunner(layout, dry_run=args.dry_run,
                                      options=ExecutionOptions(**execution_overrides))
@@ -408,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
                     if stop_requested:
                         ui.message(translate("stop_requested", args.lang))
             if stop_requested and any(
-                item.get("cleanup", {}).get("status") == "not_confirmed"
+                item.get("cleanup", {}).get("status", item.get("state")) not in {"removed", "absent"}
                 for report in reports for item in report.get("containers", [])
             ):
                 return 2

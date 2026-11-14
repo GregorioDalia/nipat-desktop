@@ -186,8 +186,9 @@ d'ingresso nel repository.
 | R1–R5 | Classificazione esplicita del probe senza conferma OOM, canale nel record, coda riservata alle pubblicazioni, controllo di tag e hash sul rilancio, livelli CI per script Windows e collaudo. | Controlli locali dei guard e successiva qualificazione su GitHub. |
 | Prestazioni | Tipi di pileup dichiarati prima dell'indice DNP, controllo lineare dei BAM duplicati, scrittura dello stato SNP quando cambia. | Misure isolate dell'indice e confronto dei risultati. Durata end-to-end della candidata sui BAM reali da rilevare sul PC. |
 
-Restano da affrontare i rilievi D4–D10, l'ottimizzazione del calcolo dei blocchi
-DNP e il controllo di coerenza del riepilogo DNP complessivo. Le misure di
+Alla chiusura della 0.8.70 restavano i rilievi D4–D10, l'ottimizzazione del
+calcolo dei blocchi DNP e il controllo di coerenza del riepilogo DNP complessivo.
+Le correzioni successive sono descritte nel [consolidamento 0.8.80](AUDIT_0.8.80.md). Le misure di
 0.8.60 sui dati reali restano il riferimento per la prova con la 0.8.70.
 
 

@@ -455,3 +455,5 @@ docs/COLLAUDO_INSTALLAZIONE.md
 
 # Release-specific notes.
 docs/RELEASE_0.8.70.md
+docs/RELEASE_0.8.80.md
+docs/AUDIT_0.8.80.md

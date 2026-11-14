@@ -200,6 +200,81 @@ try {
     Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.stdout.log')) -ceq ('o' * 70000)) 'failed setup check retains all stdout'
     Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.stderr.log')) -ceq ('e' * 70000)) 'failed setup check retains all stderr'
     Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.exit-code.txt')).Trim() -ceq '7') 'failed setup exit code is saved separately'
+    # The child waits for its own partial diagnostics to reach disk. Buffering
+    # until exit makes this fail even though the process itself never blocks.
+    $livePath = (Join-Path $checkLogs 'doctor.stdout.log').Replace("'", "''")
+    $checkScript = @"
+[Console]::Out.Write('live diagnostic'); [Console]::Out.Flush()
+`$watch = [Diagnostics.Stopwatch]::StartNew()
+`$seen = `$false
+while (`$watch.Elapsed.TotalSeconds -lt 5) {
+    `$stream = [IO.FileStream]::new('$livePath', [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    `$reader = [IO.StreamReader]::new(`$stream)
+    try { `$seen = `$reader.ReadToEnd().Contains('live diagnostic') } finally { `$reader.Dispose() }
+    if (`$seen) { break }
+    Start-Sleep -Milliseconds 20
+}
+if (-not `$seen) { exit 8 }; exit 0
+"@
+    Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', $checkScript) $checkLogs 'doctor' -TimeoutSeconds 10 6> $null
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'doctor.stdout.log')) -ceq 'live diagnostic') 'setup diagnostics are visible before exit without a newline'
+    $other = [Diagnostics.Process]::Start($checkExecutable, '-NoLogo -NoProfile -Command "Start-Sleep -Seconds 30"')
+    try {
+        $checkScript = "[Console]::WriteLine('before deadline'); Start-Sleep -Seconds 30; [Console]::WriteLine('too late')"
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        $checkError = ''
+        try {
+            Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', $checkScript) $checkLogs 'self-test' -TimeoutSeconds 2 6> $null
+        } catch { $checkError = $_.Exception.Message }
+        Assert-Test ($checkError.Contains('scaduto') -and $checkError.Contains('self-test.stderr.log')) 'blocked setup reports a deadline and diagnostic paths'
+        Assert-Test ($watch.Elapsed.TotalSeconds -lt 15) 'setup deadline returns after bounded cleanup'
+        Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.exit-code.txt')).Trim() -ceq '124') 'timed-out setup cannot reuse success evidence'
+        Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.stdout.log')).Trim() -ceq 'before deadline') 'partial diagnostics survive timeout'
+        Assert-Test (-not $other.HasExited) 'setup timeout does not stop another session'
+    } finally {
+        if (-not $other.HasExited) { $other.Kill(); $other.WaitForExit() }
+        $other.Dispose()
+    }
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
+        # The immediate child exits, but its descendant inherits the output
+        # pipe. The job must still be able to stop that descendant by ownership.
+        $pidPath = Join-Path $temporary 'setup-descendant.pid'
+        $childCode = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('Start-Sleep -Seconds 30'))
+        $exeLiteral = $checkExecutable.Replace("'", "''")
+        $pidLiteral = $pidPath.Replace("'", "''")
+        $checkScript = @"
+`$start = New-Object Diagnostics.ProcessStartInfo
+`$start.FileName = '$exeLiteral'
+`$start.Arguments = '-NoLogo -NoProfile -EncodedCommand $childCode'
+`$start.UseShellExecute = `$false
+`$start.CreateNoWindow = `$true
+`$child = [Diagnostics.Process]::Start(`$start)
+[IO.File]::WriteAllText('$pidLiteral', [string]`$child.Id)
+[Console]::WriteLine('parent exited'); exit 0
+"@
+        $checkError = ''
+        try {
+            Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', $checkScript) $checkLogs 'doctor' -TimeoutSeconds 3 6> $null
+        } catch { $checkError = $_.Exception.Message }
+        Assert-Test ($checkError.Contains('scaduto')) 'inherited setup pipes remain bounded after parent exit'
+        $descendant = [int][IO.File]::ReadAllText($pidPath)
+        $alive = $true
+        $watch = [Diagnostics.Stopwatch]::StartNew()
+        while ($alive -and $watch.Elapsed.TotalSeconds -lt 5) {
+            try {
+                $child = [Diagnostics.Process]::GetProcessById($descendant)
+                try { $alive = -not $child.HasExited } finally { $child.Dispose() }
+            } catch [ArgumentException] { $alive = $false }
+            if ($alive) { Start-Sleep -Milliseconds 20 }
+        }
+        Assert-Test (-not $alive) 'setup job stops owned descendants after their parent exited'
+    }
+    Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', 'exit 0') $checkLogs 'self-test' -TimeoutSeconds 10 6> $null
+    Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'self-test.exit-code.txt')).Trim() -ceq '0') 'setup check can be retried after timeout'
+    for ($attempt = 0; $attempt -lt 3; $attempt++) {
+        Invoke-NipatSetupCheck $checkExecutable @('-NoLogo', '-NoProfile', '-Command', 'exit 0') $checkLogs 'doctor' -TimeoutSeconds 10 6> $null
+        Assert-Test ([IO.File]::ReadAllText((Join-Path $checkLogs 'doctor.exit-code.txt')).Trim() -ceq '0') 'short-lived setup check retains its success code'
+    }
     Assert-Rejected {
         Invoke-NipatSetupCheck (Join-Path $temporary 'missing.exe') @() $checkLogs 'doctor' 6> $null
     } 'setup launch failure cannot reuse a successful prior exit code'

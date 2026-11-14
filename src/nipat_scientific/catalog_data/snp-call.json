@@ -765,10 +765,10 @@
       "evidence": {
         "path": "src/nipat/preferences.py",
         "source_lines": [
-          28,
-          35
+          31,
+          38
         ],
-        "sha256": "f79e130b9da8f321fb1445d86727e82064dbc29e29060d77165590e7541f8a7d"
+        "sha256": "467d39133493b0ff126671a28ee93f32cce50c492e90d96d1b5735fd3643745c"
       }
     },
     {
