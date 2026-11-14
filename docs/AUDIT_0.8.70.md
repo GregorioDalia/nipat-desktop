@@ -61,9 +61,59 @@ separate delle Actions e degli strumenti di qualità.
 
 ## Prestazioni e misure
 
+### Benchmark sul client Windows 0.8.60
+
+Il profilo esteso sul pacchetto stabile ha completato **51 run su 51 in
+18m 08s**, con 3 casi sui file della Sapienza e 48 sintetici. I casi reali
+hanno usato il parallelismo automatico, blocchi da 32 MiB e 64 loci e
+diagnostica attiva. L'alimentazione a corrente è stata rilevata all'inizio
+e alla fine di ogni run. WSL riportava 32 CPU logiche e 15.858 MiB di memoria.
+
+| Caso sui file reali | Tempo del run (s) | Tempo dal lancio della CLI (s) | Picco del container (MiB) |
+| --- | ---: | ---: | ---: |
+| DNPcall → Contamination | 235,01 | 236,61 | 3.458 |
+| DNPcall | 232,65 | 234,16 | 3.315 |
+| Contamination dalle tabelle DNP | 5,58 | 7,03 | 159 |
+
+Nel workflow completo DNPcall ha impiegato **227,23 s**, pari al **97%**
+del tempo del run. Il calcolo dei blocchi (107,92 s), la produzione del
+pileup (78,71 s) e l'indice (29,78 s) coprono insieme il 92% del totale.
+Blocchi e indice valgono circa il 59% e sono il primo punto da misurare.
+Le tre fasi del run DNPcall autonomo hanno durate analoghe. Nel run breve
+di Contamination il processo R dura 0,77 s a fronte di 7,03 s dal lancio.
+Per individuare il costo fisso occorre distinguere launcher, preparazione
+del runtime, controlli e scrittura degli output.
+
+Nelle ultime tre prove archiviate della 0.8.30, il workflow DNPcall →
+Contamination aveva mediana 210,88 s. Il nuovo run dura **24,13 s in più
+(11,4%)**. Le sei misure storiche su due sessioni vanno da 203,39 a 228,96 s.
+I rapporti coincidono per metadati dei sette input, digest dei quattro file
+piccoli, modalità, dimensione dei blocchi e risorse WSL rilevate. Per BAM e
+FASTA l'identità è basata sui metadati. Una sola ripetizione della 0.8.60 in
+una sessione separata lascia aperta l'attribuzione dello scarto alla versione.
+
+| Modulo autonomo su input sintetici | Casi | Tempo del run (s) |
+| --- | ---: | ---: |
+| DNPcall | 2 | 9,79–10,32 |
+| SNPcall | 2 | 6,43–8,11 |
+| Contamination | 10 | 4,71–5,90 |
+| CPI prenatale | 16 | 6,41–11,26 |
+| CPIN postnatale | 8 | 7,03–12,89 |
+
+Gli intervalli aggregano input e opzioni diverse. Nei 10 casi sintetici
+combinati, il workflow sui cinque moduli ha impiegato 46,20 s in seriale,
+36,74 s in automatico e 40,10 s con un massimo di due processi. I picchi
+del container sono rispettivamente 185, 553 e 375 MiB. È stata eseguita una
+prova per modalità. Tutti i 9 confronti di parità delle tabelle nel
+benchmark riguardano casi sintetici e hanno avuto esito positivo. Gli esiti
+dei casi reali attestano il completamento dei run. La parità su quei file
+resta da misurare con le tabelle di riferimento della 0.8.60.
+
+### Interventi da misurare
+
 | Area | Evidenza disponibile | Prova o modifica da valutare |
 | --- | --- | --- |
-| **DNP sui due BAM reali** | Nelle tre prove automatiche a corrente della 0.8.30, mediana complessiva 210,88 s. Mediane di acquisizione, indicizzazione e calcolo blocchi circa 72, 28 e 95 s su un pileup di 757 MB. Sono misure storiche con lo stesso dataset. | Usare i tempi della 0.8.60 per ordinare le priorità. Nel codice attuale esaminare tokenizer e indice seriali, scansioni e GC per task e merge progressivi del riepilogo. [dnp_blocks.R:25–69, 247–263](../src/nipat_scientific/dnp_blocks.R#L25), [DNPcall.R:794–837](../scientific/vendor/DNPcall/DNPcall.R#L794) |
+| **DNP sui due BAM reali** | Il calcolo dei blocchi e l'indice totalizzano 137,70 s nel workflow della 0.8.60. Il pileup richiede altri 78,71 s. | Misurare tokenizer e indice seriali, scansioni e GC per task e merge progressivi del riepilogo. Verificare il guadagno sui due BAM e confrontare le tabelle prima di intervenire sul pileup. [dnp_blocks.R:25–69, 247–263](../src/nipat_scientific/dnp_blocks.R#L25), [DNPcall.R:794–837](../scientific/vendor/DNPcall/DNPcall.R#L794) |
 | **CPI ad alta profondità** | Lo script alloca sequenze e vettori per ogni soglia di read fino al massimo osservato. Conserva le curve delle coppie e dei cutoff prima dell'esportazione. Analisi del codice. | Valutare intervalli compatti e statistiche ponderate con equivalenza sul riferimento denso. Misurare picco memoria e durata con profondità crescente. [cfDNA_CPI_estimator.R:382–454, 728–744](../scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R#L382) |
 | **Analisi brevi e avvio a caldo** | In 48 casi sintetici archiviati della 0.8.50 riparata, mediana run 8,563 s. La mediana della preparazione prima del comando scientifico è 3,402 s e la mediana delle quote per caso è circa 40%. I due probe dell'immagine sono circa 1 s in mediana. Su macOS il launcher valida e prepara Lima anche prima di comandi informativi, con ulteriore verifica nel runner. | Misurare avvio freddo/caldo per piattaforma. Accorpare probe, memorizzare la descrizione per immagine immutabile nella stessa sessione e mantenere la verifica di identità prima del calcolo. [runner.py:384–420, 505–550, 617–627](../src/nipat/execution/runner.py#L384), [macOS launch.py:103–127](../installer/macos/launch.py#L103) |
 | **Preparazione Windows** | Sul ripristino dopo un errore successivo all'importazione, lo script può ricalcolare l'hash e ricaricare l'archivio scientifico da circa 602 MB. Percorso verificato nel codice, risparmio da misurare. | Conservare la ricevuta di importazione legata a digest, distro e immagine risolta, poi ispezionare l'immagine a ogni ripresa e ricaricare quando serve. [bootstrap-common.ps1:278–296](../installer/windows/bootstrap-common.ps1#L278) |
@@ -99,9 +149,10 @@ d'ingresso nel repository.
 3. Ripristinare l'esito completo di CI e qualificare la pubblicazione con
    R1–R3. Costruire dal commit di `main` integrato o conservare l'esatto
    commit costruito se il branch viene integrato successivamente.
-4. Usare il benchmark 0.8.60 per decidere su quali fasi intervenire.
-   Richiedere tempi per modulo, tempi end-to-end, memoria, output di
-   riferimento e percorso di avvio equivalente prima e dopo.
+4. Misurare prima calcolo dei blocchi e indice DNP, poi il pileup. Ripetere
+   il workflow reale sulla stabile e sulla candidata nelle stesse condizioni,
+   registrando tempi per fase, durata totale, memoria e tabelle di riferimento.
+   Profilare l'avvio per i workflow brevi con misure dedicate.
 5. Chiudere i rilievi P2 che incidono sugli scenari scelti per la release e
    aggiornare la guida incorporata con D9.
 
@@ -118,8 +169,7 @@ d'ingresso nel repository.
   regressioni. Prova mirata di rollback dpkg, lettura manifest Windows con
   PowerShell 7 e verifiche sui record precedenti.
 - Il collaudo sintetico 0.8.60 sul PC Windows è stato riportato come 70 esiti
-  positivi. Questa revisione non ha riqualificato setup nativo, aggiornamento
-  con riavvio, app macOS su dispositivi fisici o prestazioni 0.8.60 sui file
-  reali. I prossimi risultati del benchmark serviranno a verificare le ipotesi
-  sulle prestazioni. I test locali, il collaudo e la validazione di dominio
-  rispondono a domande diverse.
+  positivi. Il benchmark successivo misura il client già installato. Setup
+  nativo, aggiornamento con riavvio e app macOS su dispositivi fisici restano
+  da riqualificare. Per ogni correzione scientifica occorrono i casi di
+  regressione specifici e un riferimento numerico indipendente.
