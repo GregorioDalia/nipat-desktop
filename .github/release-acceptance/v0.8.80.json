@@ -1,0 +1,430 @@
+{
+  "schema_version": 7,
+  "version": "0.8.80",
+  "source_commit": "8a5ee88b5c819828028f24f1ecbc1583ac4ab663",
+  "installer_manifest_sha256": "e68ddc14c85152047e5b75402cc7e9006f4ddd8268c564ceadb67a39f643b1a6",
+  "scientific_archive_sha256": "ffdb18dca52ea962813f65b848aed41568bfe180c572441b33c43bf5935ad686",
+  "windows_installer_sha256": "0c13f72ac4bae497bbded11953c3fa1179d8cc2b0e713f1b2ac32f587f988bdc",
+  "linux_installer_sha256": "aefba04da13cd1fca990a50f06784b1595c244e051c3d80f618bdce283ba7055",
+  "macos_arm64_installer_sha256": "d7004cb028a1604ee52f18aaa0eb326a10e40463b496a378669836ffc0f6fbc3",
+  "macos_x86_64_installer_sha256": "453bf408f14162b5ffb10d1167dd9ee84b0fdac55c10e393046e893dddfc87ab",
+  "build_run_id": 43611154721,
+  "decision": "accepted-for-research",
+  "scope": "pre-1.0-research",
+  "review": {
+    "reviewer": "Codex (authorized by GregorioDalia)",
+    "reviewed_at": "2026-11-14T16:14:28Z",
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/43611154721",
+      "https://github.com/GregorioDalia/nipat-desktop/actions/runs/43609715180",
+      "https://github.com/GregorioDalia/nipat-desktop/blob/8a5ee88b5c819828028f24f1ecbc1583ac4ab663/docs/AUDIT_0.8.80.md"
+    ]
+  },
+  "observed_baseline": {
+    "source_commit": "d19e6bf58941a349d26d2f32ebb79bd24b6b7fcc",
+    "observations": [
+      "installation_ready",
+      "runtime_diagnostics",
+      "scientific_self_tests",
+      "dnp_sample_analysis",
+      "automatic_workflow_sample_analysis"
+    ],
+    "evidence": [
+      "https://github.com/GregorioDalia/nipat-desktop/blob/ea7029742afcb3e376968e1d360202915fa88248/docs/AUDIT_0.8.70.md",
+      "https://github.com/GregorioDalia/nipat-desktop/releases/tag/v0.8.60"
+    ],
+    "role": "historical-platform-evidence",
+    "source_comparison_scope": "reviewed-operative-changes-with-versioned-scientific-models-v1"
+  },
+  "reviewed_source_changes": [
+    {
+      "path": "engine/main.py",
+      "before_sha256": "5667313e61ee8f13eedc026e0fd374f98a96fc6a852f77f234d53ff215417532",
+      "after_sha256": "860cc0646dbdc8494c08d91a3fce83bc4bbfc36accfc17b1b7193785779f103b"
+    },
+    {
+      "path": "installer/linux/launch.py",
+      "before_sha256": "251ce2f17aaff1f8c97f3bb7514d4f5f4ca9845c46e7767bfdcf322ea5d2d07d",
+      "after_sha256": "c8759008266a8479f5ce2694488edf390556dac5ab5c9e49bd1dc9c865345e44"
+    },
+    {
+      "path": "installer/windows/ActivityNative.cs",
+      "before_sha256": "1e51148137047ec2dc999508e93f2a13099261b7a70f6a2efa9dd0d41d50492c",
+      "after_sha256": "7ed1a1f1aa544263cb21a8b2f68da09489e1269f4148855d1cd4a5a54775809b"
+    },
+    {
+      "path": "installer/windows/NIPAT.iss",
+      "before_sha256": "b14f6b8b88c5e6f8c823d93ae6de8c592940df26c4a3a2f7ddb1bbdb8b244589",
+      "after_sha256": "ef5e89a90a066c361fce6ff5d4a2496417b3244f06d9999f8a9a92e71e948ce9"
+    },
+    {
+      "path": "installer/windows/bootstrap-common.ps1",
+      "before_sha256": "150671b1e1a037e87b830eb84218a245d666a18c0bba6ec364701834367580b6",
+      "after_sha256": "e036a5c5550c1c1f1f4e490e35895854d1dea7f25b70c45fd6460980ed1bbf40"
+    },
+    {
+      "path": "installer/windows/test-bootstrap.ps1",
+      "before_sha256": "43a1871cfcaf6e8ec35010091f19da071009a060e142610cb39872716d5faa10",
+      "after_sha256": "91f4e27fdb5ea6ad03a37e9a00f9812d388d4d52232e7aeed49355ed88ed4efb"
+    },
+    {
+      "path": "installer/windows/test-compiled-installer.ps1",
+      "before_sha256": "cbf126130889a1c18a003691b317701859cab8c377767111b347d7dc70a2ea66",
+      "after_sha256": "1b5f0940f3fa5d5fe6f50e3483171d08a6598211ab7ffd5d9a86913d347b59f8"
+    },
+    {
+      "path": "installer/windows/test-launcher.ps1",
+      "before_sha256": "0cbd78a73f023ecfe1d7d086ae41f012f0d6b3ba2eb02a9e4649052372fd42f1",
+      "after_sha256": "60f49fa6542038b412918ac4d0c64bbb6f5d8caffb016c726f398ccd0039fc5b"
+    },
+    {
+      "path": "installer/windows/update-handoff.ps1",
+      "before_sha256": "8a66b9befc9fe6bcf7924a8e4213a8832f72bb82b1303b68f75e3cf98b6faacc",
+      "after_sha256": "ae4ae2da1cfc455907f29af27fff29c36417656fb8a82a8c9a5f0cd76b873537"
+    },
+    {
+      "path": "pyproject.toml",
+      "before_sha256": "b3868e9837eb0decc5e2002e7b87f3e922751928ffd3c63ae07edb9e5c15cba2",
+      "after_sha256": "4a4c7a5aa0501b7c685f27866607fc260a696e226a2ba1e4cfc4cd3f43da7e93"
+    },
+    {
+      "path": "scientific/SHA256SUMS",
+      "before_sha256": "22500bebef02c717cb8e31abef4963be0a37dc7100849695b303269bae94d5b6",
+      "after_sha256": "1c701d20a8b3bdcd7cf0903399220eb052feb311045953e7e42fda198cbbe8a8"
+    },
+    {
+      "path": "scientific/vendor/DNPcall/DNPcall.R",
+      "before_sha256": "4904721e258190ace5cb0fc7df367c0d6f2f68abfc5d794aea83ed0a43db2088",
+      "after_sha256": "ee538a3a0238524642b1e12e4b1bf85901155ad641ea7e1416a71191a2e3b182"
+    },
+    {
+      "path": "scientific/vendor/NEWPAT/CPI_from_cffDNA/cfDNA_CPI_estimator.R",
+      "before_sha256": "d5a7518e5d4b41a2c1b2a780c186595edc617a0963ff7cdb63843f202f1c4f10",
+      "after_sha256": "719ecf368c6375fda8ad0d17021a1ac9e195c6fc70e8ca57b878e84c8273b17b"
+    },
+    {
+      "path": "scientific/vendor/NEWPAT/CPI_postnatal/Postnatal_CPI.R",
+      "before_sha256": "947723633cbd9563fee34d638522fe0edb37498ca0e3eb00aef1b21900f4d10c",
+      "after_sha256": "b23bc0a0a7b16fbffe44f449306cc20610c5aa3097d6466218e24051327ff37d"
+    },
+    {
+      "path": "scientific/vendor/NEWPAT/SNPcall/SNPcall.R",
+      "before_sha256": "e27981da3e4c061068f1d17751e45223674b1a1fa01c177f1c5f858162f62c73",
+      "after_sha256": "6548b94cf812de18ec97826ffab61583ab309be4ba36d11a4b522324d61121a3"
+    },
+    {
+      "path": "scientific/vendor/NEWPAT/contamination/detect_contamination.R",
+      "before_sha256": "3660122faa2a07984ef26c2adbb6c3407928976c634c21fa8574c3630371dca0",
+      "after_sha256": "d860ab5fc06cf1c79835d3d6705bc4e5fc30356e11f5dc1a029165354d445854"
+    },
+    {
+      "path": "scripts/build_linux_installer.py",
+      "before_sha256": "bc5dc50ab26624b3efd02a52f30592301310eee71d2246953ef58d867a4f0f19",
+      "after_sha256": "89bb8fb4facc2e0a8f06c02665c51263a9a89a21774107394187be19b765d71e"
+    },
+    {
+      "path": "scripts/verify_performance.py",
+      "before_sha256": "974452ee8b5010110c322f35f0afd95e65a035d4a6e5defb8e6d1f94691c6886",
+      "after_sha256": "c9114ee449251518ad16999657d28243432ac8f3413c20df6117ca5096d2e345"
+    },
+    {
+      "path": "scripts/windows/test-installed.ps1",
+      "before_sha256": "fb234a00ada9cd87858da5e0c34c43d3132b4af5116b009adc25a0259ed4ddf9",
+      "after_sha256": "ae95bcf0607cfb05d2e67ab1c906add1a74ca74e86d47d559b6501c6f4c3680e"
+    },
+    {
+      "path": "src/nipat/__init__.py",
+      "before_sha256": "647afed1865dff3f937029baca1aca21c181910f79cdb8181514dbc0a4e8d349",
+      "after_sha256": "0c8c66cfd9fd5adadb57b264573788cc420cafa34b2763ef4fea797d292cfa9a"
+    },
+    {
+      "path": "src/nipat/analysis_forms.py",
+      "before_sha256": "efd34307b4c416d32b420d84d6cf79cca360acdd66fcc03fa62093eaa9361c28",
+      "after_sha256": "ee6a8e0a6fef6215f87fd83ed11c1cc3708d9fd9a00b777b390de601da4007c2"
+    },
+    {
+      "path": "src/nipat/cli.py",
+      "before_sha256": "1c64c65cf1020a00e654c98c0d1d5e17804b721514ecc86ea852a69c2f7652c7",
+      "after_sha256": "1a002ad299098e6fb30ea39802544c0a097d677b9154e00609344eff211f931d"
+    },
+    {
+      "path": "src/nipat/execution/analysis_plan.py",
+      "before_sha256": "dfbc6980618474e584a534db95bcd7cfc958d87ee9089f45e84027e9e3d3bd20",
+      "after_sha256": "c5b98121898c15d1b9c830ecd9bed711d010502034a57fd36df8412ae9c9947e"
+    },
+    {
+      "path": "src/nipat/execution/progress.py",
+      "before_sha256": "2e12b564c0e945bf8a28f1311659ffa9b612ade2e81c5c388cc95c907a0f7d6e",
+      "after_sha256": "6ccbb653d4cdca6dcf1f6169984a9e45a313da6992b20742e705bfa3011a51bf"
+    },
+    {
+      "path": "src/nipat/execution/recovery.py",
+      "before_sha256": "5d8a9d0d4a0e0c6cceaaac7009bdad9f475b6c5193e44610af30e9677514823c",
+      "after_sha256": "58e471121f1c0f9dd942144117cc98da26519354f26ff27a694edd82e3c4a36f"
+    },
+    {
+      "path": "src/nipat/execution/runner.py",
+      "before_sha256": "b10793c827f0892556ea075ff2bc49f11d96cf46ddbb23b040e78c055cc09830",
+      "after_sha256": "b99f5b6776e4bb6c9338906d8669c2408525ea877240140188344ee91358c1c2"
+    },
+    {
+      "path": "src/nipat/execution/tracking.py",
+      "before_sha256": "3b3c0e979df17391cc300ea186fd11e7aee0b5d47346b54ff16461987a531001",
+      "after_sha256": "f7c9765fc729daf77988c4d74037eec55ec33c0f6464fa90f12eb551916303f2"
+    },
+    {
+      "path": "src/nipat/execution/workflows.py",
+      "before_sha256": "2bd16b0ee2e20c38ac6d43828ae4598951e83dcdd9a9535138de11988877a034",
+      "after_sha256": "577ffc46d05b1be93d2cefd73afa27074145bbf9e3ff390cdf9ce6f770f4b8c5"
+    },
+    {
+      "path": "src/nipat/linux_update.py",
+      "before_sha256": "be274d30d566ad91f287288c34b1b34f2ecec839248f3d8e1edca2e56d02c6c3",
+      "after_sha256": "4b84d139899ab34cabf87a933d38b9e91d3c5285a81142c2399ad7482d5aec38"
+    },
+    {
+      "path": "src/nipat/preferences.py",
+      "before_sha256": "f79e130b9da8f321fb1445d86727e82064dbc29e29060d77165590e7541f8a7d",
+      "after_sha256": "467d39133493b0ff126671a28ee93f32cce50c492e90d96d1b5735fd3643745c"
+    },
+    {
+      "path": "src/nipat/results.py",
+      "before_sha256": "15e36644cf2620e776a4b83075586b21a174ae7bc4894a0b0a22ab343a84b8f5",
+      "after_sha256": "c812514d4e2f53ac2a4524c3a6ba1cf4183a7655e0d00438bfcdbb17068dcbf9"
+    },
+    {
+      "path": "src/nipat/run_report.py",
+      "before_sha256": "45394eabf4cdeef60fe56c253405e6452933accbb0cd3f45222c2d6ed523fa0b",
+      "after_sha256": "e52bb78bcfe4d465f43842d9d11d11e187cd9b9b8de3cf1c2a02b694c7fb3b16"
+    },
+    {
+      "path": "src/nipat/update_handoff.py",
+      "before_sha256": "cc73c33c42e12fe1f2db28b05434228dee3f40f97aad03c4be2e00c2dace4616",
+      "after_sha256": "14927ef2dff2f1b8040ea016283b9fbeccc87efececbd5dbbf2c95f5ccbe46a2"
+    },
+    {
+      "path": "src/nipat/wizard.py",
+      "before_sha256": "410422e72069f24387825eefeca04afb25875c146fa8c46bb316aceedcd21ac9",
+      "after_sha256": "902890ea3a91f19160256dd34a18fe64eb680ff73879fd05e2e0fac1d42a1d57"
+    },
+    {
+      "path": "src/nipat/wizard_forms.py",
+      "before_sha256": "bdf58420c79a921e7571769e0092a5e18d3aa1a5ebc556bdc25cc3c47a722e94",
+      "after_sha256": "28d4f9320cd9101351b90a3f3e6f3ba6a3ecc69ca3f21f51aa64d81551c88beb"
+    },
+    {
+      "path": "src/nipat/wizard_settings.py",
+      "before_sha256": "74ca539d80ad80f3a106f5d7a20df991ec69117c970d753c5be008fa13061e3a",
+      "after_sha256": "c124e003b75f3d00aead293297116d724b213b0b1d8626460777563fb2949eb1"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/contamination.json",
+      "before_sha256": "9727f1b8d7167e21c3d25382b631fd2afcf300a933d4ee104602c9b9a2a1acff",
+      "after_sha256": "24fc33f745f6bdc123c324e8d4686be57901148c4ee989479c9909c8cecbc87f"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/cpi.json",
+      "before_sha256": "0cf06e791acc62e3324897872349103c5c82fd8facaad2869d8e0e55ecfeb7f8",
+      "after_sha256": "df27e65cdc8efc78879b8a43e637b02ec2c521bef37c10de09ec869c00c17aac"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/cpin.json",
+      "before_sha256": "45325482725641b0b21ff14e071543c6065d8caf0c25c41fbe7392c266189add",
+      "after_sha256": "d294e953ff366ed8d1011f438b624f36fd0f3d7036fbca66c39db22fd4f5e702"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/dnp-call.json",
+      "before_sha256": "b3a90b32f89d42834940524111e69434c63c001f244f10cd2e9a0fba4f0816be",
+      "after_sha256": "e32f7f5a7310a9f862836aa8890428129fe836027d83d3149de810bab2b201e5"
+    },
+    {
+      "path": "src/nipat_scientific/catalog_data/snp-call.json",
+      "before_sha256": "af7b856fb72a3df4804e8a0f006b130277a615af6dfb1b5d9150cce9f919681a",
+      "after_sha256": "1e6331a1e2ffa74a8614174ac7f12587c47fb69ff066e0112955dbc93319886b"
+    },
+    {
+      "path": "src/nipat_scientific/dnp.py",
+      "before_sha256": "33684104949046d2726d749971e9a19c17bcba0f54269948172668035adf8b46",
+      "after_sha256": "f2727422db7b92ad4608f274d0a379452181426eee500b578dc44896c1b78f08"
+    },
+    {
+      "path": "src/nipat_scientific/dnp_blocks.R",
+      "before_sha256": "717fbe409caf1b80f1a6fa1734b454ea5e31da910b67fcf0db8b7e72294441ca",
+      "after_sha256": "f42fd4980126db33a699dd83599e22a2eefd7f68f7c7db1abf1ac38c4ca70a34"
+    },
+    {
+      "path": "src/nipat_scientific/dnp_pileup.py",
+      "before_sha256": "8f0da5988f7b203ae2d37057e38c2ab4f6c15c434757b3dd0ae7f021b5a7b762",
+      "after_sha256": "4accf93fc25ddf5c02f15f2562a4294f0e7592e36cff199b9ab6df7289af8eb9"
+    },
+    {
+      "path": "src/nipat_scientific/executor.py",
+      "before_sha256": "452bcfbeadbf725b886e0768f2cccdea5178a7fd6df8bc92afc8ac7490f00665",
+      "after_sha256": "7594b9ac8173890f788ee627d56db3c33c775d4347dcb2d5329734c63035c871"
+    },
+    {
+      "path": "src/nipat_scientific/files.py",
+      "before_sha256": "cb6d5e52658233b8f20f8f86739710a3a7af84d7901d02821f33e1fd182447d0",
+      "after_sha256": "da59fd1cbc700d1aaf6cabe59a8849907bbf5d469dcaf52e01c033ed497b97a6"
+    },
+    {
+      "path": "src/nipat_scientific/outputs.py",
+      "before_sha256": "2778f6a453de036bbd1eb73161db6b2d8924cc42d524c757f714b29788cd6651",
+      "after_sha256": "405f1be20b5475451d39c7088b8cd5d720c419bf9c5d756eb23fcac3e058c8d6"
+    },
+    {
+      "path": "src/nipat_scientific/panels.py",
+      "before_sha256": "c05735970f78fa4527a195f599dc58d198872b557a64105f191e939e26699c65",
+      "after_sha256": "a22cbc37601c4cd79dca6ad69d20b4cc2a21a568a89ba3034a33dbf53fc23905"
+    },
+    {
+      "path": "src/nipat_scientific/snp.py",
+      "before_sha256": "d508ce9ad617f27976941c870ff41edb9fea950a1dc3514fab5be53d8cd2541c",
+      "after_sha256": "b90b3ece572374c0c9241e1aae2beaf678edb3df13e6b6a2f852242c02f5b7c0"
+    },
+    {
+      "path": "src/nipat_scientific/snp_parallel.py",
+      "before_sha256": "f8493ce29953ce44c0fbad945305ede8afdd20bd7bcabb4d089e151bf49b2ae1",
+      "after_sha256": "7e500a386a9cf85b5f29c2e22889aaaeca59ce8b8d429ab516e9e2a08e1069ad"
+    },
+    {
+      "path": "tests/test_client_reliability.py",
+      "before_sha256": "dd1722b30e66c5393f395bb664e763621774955d7451aea966052dfd33e59e16",
+      "after_sha256": "e0ded3d6dfad22620cf294e05780f77afd483eda7830629d23b2f6e76e397fdd"
+    },
+    {
+      "path": "tests/test_dnp_engine.py",
+      "before_sha256": "19b11d67963955b2fda152ca466efb4b1e46211f20a6e6e26cf5d8e1a7bb4079",
+      "after_sha256": "a1c06b78835c474108981d840a2a1efe48992831742ed9a59a421111e27211a3"
+    },
+    {
+      "path": "tests/test_dnp_pileup.py",
+      "before_sha256": "2f08a6cfcef1df8eca6f245feaf4a9a95270f96f5292e77f2d2540b2cbd21fd5",
+      "after_sha256": "e162cbb350b57bbfc180437ffbbb841702e84a8e0d5a6893636bc85e50692583"
+    },
+    {
+      "path": "tests/test_engine_package.py",
+      "before_sha256": "5a59fc6690284f8282a808ddc1d09ff1e82653c9d56b3559718dcc0adc673fec",
+      "after_sha256": "71d57dbaa1ac866bc0424ed68a6ea3bc2e636aad36afde7fc5d551dc9438396e"
+    },
+    {
+      "path": "tests/test_installer_assets.py",
+      "before_sha256": "36e329300c82925d10ba4940bb0c41dc238ecf9d0cd19ec3859350e7832ce550",
+      "after_sha256": "db4eab6c33f364bd806a24332b4b38d7fd3c4ea35051eafdc716089fe664ab9d"
+    },
+    {
+      "path": "tests/test_linux_launcher.py",
+      "before_sha256": "5bddd22da875a124b88733d3c3e982e3a8b9df30aa7b7117768865d1cf1e21e1",
+      "after_sha256": "b86407fd4aed1819e503509235a9fc59ba796f88cd8301c850d086727e96bdcc"
+    },
+    {
+      "path": "tests/test_linux_updates.py",
+      "before_sha256": "c753c60d84b2e93d5e534e6d3d5ecd6b95aea54c21068e96445fdd03a1aa2646",
+      "after_sha256": "4f3128a97ada4a78e8f9a6cc479a200528c58176fc5db5d3b113d3bac2c8bb77"
+    },
+    {
+      "path": "tests/test_preferences.py",
+      "before_sha256": "e444f777ac196eb968ae482a1e76af972cb94494f6ce87580a37c44703d5b1dc",
+      "after_sha256": "a325a7d9bd1d1e83c11504d084130704c1d30f3160a9e4d4da016c3ce916f7e2"
+    },
+    {
+      "path": "tests/test_resource_ui.py",
+      "before_sha256": "b5fea34eef626ae71e06be69aa30415da0fb759ce10bf8ed6df211e345f40432",
+      "after_sha256": "90edc89aa6d77ed6a3256a5e6309d6e53d0df38d6877696243995d93d3d3338f"
+    },
+    {
+      "path": "tests/test_results.py",
+      "before_sha256": "de9786a83dd995ae9613328533ec43f7617c1bdd1a8ae6695bdf5ce074421d94",
+      "after_sha256": "380aab3b1774b401cbb50203a4ac176e65028212140e4ef1f0f9cfda941987dc"
+    },
+    {
+      "path": "tests/test_run_recovery.py",
+      "before_sha256": "b4d0c35e5a39368ff58338344fd8918b18cda48aa1790fb63e0df4e0d0d6b0de",
+      "after_sha256": "62cbd3302a3ac3ef4b98844cfd2adba2215ad36a63ee68cbaece15ce1f7e24c6"
+    },
+    {
+      "path": "tests/test_run_report.py",
+      "before_sha256": "dba79e62d3909f2a06c9a6098183e4d7adf4745ac6d18e5126478a01a021dfc8",
+      "after_sha256": "e498669d092cba4de3c1733fcae9e2b61ee7e175071afa8ef44cda4b35688229"
+    },
+    {
+      "path": "tests/test_run_tracking.py",
+      "before_sha256": "0a53e37085a0f40d68409a7b7280948a9c5e280165847e7e22b638eaef9cca33",
+      "after_sha256": "32078d7730c8f964de4586f9cbb99e42c0f1cee9b16b4cde60df245258d752f4"
+    },
+    {
+      "path": "tests/test_scientific_outputs.py",
+      "before_sha256": "f2171637b9a961655006b6c42c05c089fbb9f5532bfdd6149598db5c1f6c3288",
+      "after_sha256": "d2ab892f858d9ea419f6f21e192ffb4e6c41b751290e090844ce8b64efc1158e"
+    },
+    {
+      "path": "tests/test_scientific_preflight.py",
+      "before_sha256": "0b42c411ac5fd4d14737addf7e5701176b9dc4ee4512b6c3f89ceedf2e4ddaae",
+      "after_sha256": "2f1d0ae001c50de19a1addf570247263e188fbd601f421b12a42462809fe939b"
+    },
+    {
+      "path": "tests/test_snp_engine.py",
+      "before_sha256": "d54ebbebf53f8afb0316d48cd5e967e93f60dd24670389b752879e3953aea12b",
+      "after_sha256": "327333d8b03a50dd875b05d353e57f5283728fcc6b1c04af43ca5b896d9b02c5"
+    },
+    {
+      "path": "tests/test_snp_workflow_execution.py",
+      "before_sha256": "db43ec1dd54f7a539f1cc5783db44e4a923e0ba2516bcd4706b99c56e1361365",
+      "after_sha256": "dc559d818fe1ce0519886f04b48221c2d64ab10f3dc1ff785528ec0a40401786"
+    },
+    {
+      "path": "tests/test_update_handoff.py",
+      "before_sha256": "3fe01c9e96ced16f48fec61af1914ed7881e16425d2e39ce9eabcd412a823c73",
+      "after_sha256": "370d8611c610c805a77bedbec57a576d90d0bb52ec35b314c168827db8228681"
+    },
+    {
+      "path": "tests/test_wizard_guidance.py",
+      "before_sha256": "81c1084c1c56b53636f31d7b1b386678d4da6d34f5bba80eb86b857ccbaddefa",
+      "after_sha256": "1e6499fb2b5aba8a4d155cffcbb65c171641841cf0b36688f5f81dd25f0b7016"
+    },
+    {
+      "path": "tests/test_wizard_settings.py",
+      "before_sha256": "cf9b5ce6924e17d2bd28ce3497b0dfc887bdacd5601a390ea8ca79869d09445d",
+      "after_sha256": "b65a201a70bb2681f924a04fb75aa1cca40db72f72d882d4e82d4f4be51a176d"
+    },
+    {
+      "path": "tests/test_workflow_execution.py",
+      "before_sha256": "59ee58490bdb7bdadac4720af3956beeb90b4be6987b7d5dc69ad941c91cd46c",
+      "after_sha256": "98f03ecc3d18724678fa0102ca7e27e09f7b3fbc18be78449178e34af0d7283d"
+    }
+  ],
+  "deferred_desktop_scenarios": [
+    "ubuntu_clean_dependencies",
+    "ubuntu_existing_docker",
+    "ubuntu_reinstall_removal",
+    "windows_clean_wsl",
+    "windows_reinstall_removal",
+    "windows_stable_coexistence"
+  ],
+  "domain_validation": "pending-domain-researchers",
+  "qualification_evidence_sha256": "5c6219936406373538418f407e5f93820862e4165cde6e47c351cb952f859cb5",
+  "linux_upgrade_check_sha256": "5b2efcbd40c13a26d7c0c1b20c26386db2b7553f622cb854cf71f13ed95a5c3a",
+  "macos_validation": {
+    "arm64": {
+      "status": "not-performed",
+      "evidence": []
+    },
+    "x86_64": {
+      "status": "not-performed",
+      "evidence": []
+    }
+  },
+  "scientific_equivalence": {
+    "reference_source_commit": "eafadf7002a9c7d7c1b9af9ccafc47d698a059e5",
+    "report_path": "scientific/_temp/nipat-r-equivalence-check/artifacts/r-equivalence.json",
+    "report_sha256": "600ad7dc19821123b5378b5747558bf00864a1412526acc5212f9a0b5b598189",
+    "runtime_image": "sha256:a39d5a9eb6755b258b0f3356834256e47da60724e2c1ea5d62defbfed8596f4f"
+  },
+  "scientific_analysis_qualification": {
+    "reference_source_commit": "9c2a8be60afcb944153710da6a61cd0559e2b4cf",
+    "report_path": "scientific/_temp/nipat-five-modules-check/artifacts/five-module-qualification.json",
+    "report_sha256": "387227845aafae2dbda1ab98342600338b63ede365c03700de40574878d262cd",
+    "runtime_image": "sha256:a39d5a9eb6755b258b0f3356834256e47da60724e2c1ea5d62defbfed8596f4f"
+  },
+  "publication_channel": "stable"
+}
